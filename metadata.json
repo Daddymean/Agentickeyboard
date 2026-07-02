@@ -1,0 +1,6 @@
+{
+  "name": "Agentic Keyboard",
+  "description": "Agentic AI Keyboard with real-time grammar fix, smart replies, translation, gesture control, and offline privacy.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
