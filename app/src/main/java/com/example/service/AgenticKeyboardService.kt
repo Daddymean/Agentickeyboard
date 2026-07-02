@@ -3,6 +3,7 @@ package com.example.service
 import android.inputmethodservice.InputMethodService
 import android.view.KeyEvent
 import android.view.View
+import android.view.inputmethod.EditorInfo
 import androidx.compose.ui.platform.ComposeView
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleOwner
@@ -22,6 +23,10 @@ import com.example.ui.KeyboardViewModel
 import com.example.ui.KeyboardViewModelFactory
 
 class AgenticKeyboardService : InputMethodService(), LifecycleOwner, ViewModelStoreOwner, SavedStateRegistryOwner {
+
+    private companion object {
+        const val CONTEXT_CHARS = 1000
+    }
 
     private val lifecycleRegistry = LifecycleRegistry(this)
     private val store = ViewModelStore()
@@ -58,24 +63,73 @@ class AgenticKeyboardService : InputMethodService(), LifecycleOwner, ViewModelSt
                 onDelete = {
                     currentInputConnection?.deleteSurroundingText(1, 0)
                 },
-                onAction = {
-                    currentInputConnection?.sendKeyEvent(
-                        KeyEvent(KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_ENTER)
-                    )
-                },
-                currentInputConnection = currentInputConnection
+                onAction = { performEnterAction() },
+                // Resolved lazily on every use: the active InputConnection changes
+                // whenever the user switches editors, so it must never be captured.
+                inputConnectionProvider = { currentInputConnection }
             )
         }
         return composeView
     }
 
-    override fun onStartInput(info: android.view.inputmethod.EditorInfo?, restarting: Boolean) {
+    /**
+     * Triggers the editor-defined IME action (Send, Search, Done, ...) when one
+     * exists, otherwise synthesizes a full Enter key press/release pair.
+     */
+    private fun performEnterAction() {
+        val ic = currentInputConnection ?: return
+        val options = currentInputEditorInfo?.imeOptions ?: EditorInfo.IME_NULL
+        val action = options and EditorInfo.IME_MASK_ACTION
+        val hasAction = action != EditorInfo.IME_ACTION_NONE &&
+            action != EditorInfo.IME_ACTION_UNSPECIFIED &&
+            (options and EditorInfo.IME_FLAG_NO_ENTER_ACTION) == 0
+        if (hasAction) {
+            ic.performEditorAction(action)
+        } else {
+            ic.sendKeyEvent(KeyEvent(KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_ENTER))
+            ic.sendKeyEvent(KeyEvent(KeyEvent.ACTION_UP, KeyEvent.KEYCODE_ENTER))
+        }
+    }
+
+    private fun syncEditorText() {
+        val textBefore = currentInputConnection?.getTextBeforeCursor(CONTEXT_CHARS, 0)?.toString() ?: ""
+        viewModel.setInputText(textBefore)
+    }
+
+    override fun onStartInput(info: EditorInfo?, restarting: Boolean) {
         super.onStartInput(info, restarting)
         lifecycleRegistry.handleLifecycleEvent(Lifecycle.Event.ON_START)
-        
-        // Fetch active editor contents to initialize suggestions/state
-        val textBefore = currentInputConnection?.getTextBeforeCursor(200, 0)?.toString() ?: ""
-        viewModel.setInputText(textBefore)
+
+        // Fetch active editor contents to initialize suggestions/state, and drop
+        // any AI result that referred to the previous editor.
+        if (!restarting) {
+            viewModel.dismissResults()
+        }
+        syncEditorText()
+    }
+
+    override fun onUpdateSelection(
+        oldSelStart: Int,
+        oldSelEnd: Int,
+        newSelStart: Int,
+        newSelEnd: Int,
+        candidatesStart: Int,
+        candidatesEnd: Int
+    ) {
+        super.onUpdateSelection(oldSelStart, oldSelEnd, newSelStart, newSelEnd, candidatesStart, candidatesEnd)
+        // Keeps ViewModel state (and therefore the suggestion shelf) in sync with
+        // whatever the user types or where they move the cursor.
+        syncEditorText()
+    }
+
+    override fun onWindowShown() {
+        super.onWindowShown()
+        lifecycleRegistry.handleLifecycleEvent(Lifecycle.Event.ON_RESUME)
+    }
+
+    override fun onWindowHidden() {
+        lifecycleRegistry.handleLifecycleEvent(Lifecycle.Event.ON_PAUSE)
+        super.onWindowHidden()
     }
 
     override fun onFinishInput() {

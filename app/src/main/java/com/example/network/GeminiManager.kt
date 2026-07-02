@@ -22,6 +22,19 @@ object GeminiManager {
     }
 
     /**
+     * Models occasionally wrap structured output in markdown code fences even when
+     * a JSON mime type is requested; strip them before parsing.
+     */
+    private fun extractJson(raw: String): String {
+        var text = raw.trim()
+        if (text.startsWith("```")) {
+            text = text.removePrefix("```json").removePrefix("```").trim()
+            text = text.removeSuffix("```").trim()
+        }
+        return text
+    }
+
+    /**
      * Corrects grammar and spelling errors. Returns a structured GrammarCorrectionResponse.
      */
     suspend fun fixGrammar(text: String, personalizationContext: String = ""): GrammarCorrectionResponse = withContext(Dispatchers.IO) {
@@ -58,7 +71,7 @@ object GeminiManager {
             val jsonText = response.candidates?.firstOrNull()?.content?.parts?.firstOrNull()?.text
             if (jsonText != null) {
                 val adapter = moshi.adapter(GrammarCorrectionResponse::class.java)
-                adapter.fromJson(jsonText) ?: getOfflineGrammarFix(text)
+                adapter.fromJson(extractJson(jsonText)) ?: getOfflineGrammarFix(text)
             } else {
                 getOfflineGrammarFix(text)
             }
@@ -103,7 +116,7 @@ object GeminiManager {
             val jsonText = response.candidates?.firstOrNull()?.content?.parts?.firstOrNull()?.text
             if (jsonText != null) {
                 val adapter = moshi.adapter(SuggestionsResponse::class.java)
-                adapter.fromJson(jsonText) ?: getOfflineSuggestions(contextMessage, personalizationContext)
+                adapter.fromJson(extractJson(jsonText)) ?: getOfflineSuggestions(contextMessage, personalizationContext)
             } else {
                 getOfflineSuggestions(contextMessage, personalizationContext)
             }
@@ -180,6 +193,39 @@ object GeminiManager {
     }
 
     /**
+     * Rewrites text to match a target tone/persona while preserving meaning.
+     */
+    suspend fun rewriteWithTone(text: String, targetTone: String, personalizationContext: String = ""): String = withContext(Dispatchers.IO) {
+        if (text.isBlank()) return@withContext ""
+
+        if (!isApiKeyAvailable()) {
+            return@withContext getOfflineRewrite(text, targetTone)
+        }
+
+        val prompt = """
+            Rewrite the following text so it reads in a "$targetTone" tone. Preserve the original meaning and approximate length.
+            Return ONLY the rewritten text with absolutely no introductory or extra text.
+            ${if (personalizationContext.isNotEmpty()) "Blend in the user's habitual vocabulary where natural:\n$personalizationContext\n" else ""}
+
+            Text:
+            $text
+        """.trimIndent()
+
+        try {
+            val request = GenerateContentRequest(
+                contents = listOf(Content(parts = listOf(Part(text = prompt)))),
+                generationConfig = GenerationConfig(temperature = 0.6f)
+            )
+            val response = RetrofitClient.service.generateContent(apiKey, request)
+            response.candidates?.firstOrNull()?.content?.parts?.firstOrNull()?.text?.trim()
+                ?: getOfflineRewrite(text, targetTone)
+        } catch (e: Exception) {
+            Log.e(TAG, "Error in rewriteWithTone", e)
+            getOfflineRewrite(text, targetTone)
+        }
+    }
+
+    /**
      * Distills the sentiment and analyzes the tone.
      */
     suspend fun analyzeTone(text: String, personalizationContext: String = ""): ToneAnalysisResponse = withContext(Dispatchers.IO) {
@@ -224,7 +270,7 @@ object GeminiManager {
             val jsonText = response.candidates?.firstOrNull()?.content?.parts?.firstOrNull()?.text
             if (jsonText != null) {
                 val adapter = moshi.adapter(ToneAnalysisResponse::class.java)
-                adapter.fromJson(jsonText) ?: getOfflineToneAnalysis(text)
+                adapter.fromJson(extractJson(jsonText)) ?: getOfflineToneAnalysis(text)
             } else {
                 getOfflineToneAnalysis(text)
             }
@@ -325,13 +371,19 @@ object GeminiManager {
         }
     }
 
+    private fun getOfflineRewrite(text: String, targetTone: String): String {
+        // Best-effort local fallback: cannot restyle without a model, so return the
+        // original text so the user never loses what they typed.
+        return "[Offline: $targetTone rewrite unavailable] $text"
+    }
+
     private fun getOfflineToneAnalysis(text: String): ToneAnalysisResponse {
         val lowercaseText = text.lowercase()
-        
-        var isJoyful = lowercaseText.contains("great") || lowercaseText.contains("love") || lowercaseText.contains("thanks") || lowercaseText.contains("awesome") || lowercaseText.contains("happy")
-        var isProfessional = lowercaseText.contains("please") || lowercaseText.contains("regards") || lowercaseText.contains("sincerely") || lowercaseText.contains("confirm") || lowercaseText.contains("as discussed")
-        var isUrgent = lowercaseText.contains("asap") || lowercaseText.contains("need") || lowercaseText.contains("now") || lowercaseText.contains("hurry") || lowercaseText.contains("urgent")
-        var isApologetic = lowercaseText.contains("sorry") || lowercaseText.contains("apologize") || lowercaseText.contains("pardon") || lowercaseText.contains("fault")
+
+        val isJoyful = lowercaseText.contains("great") || lowercaseText.contains("love") || lowercaseText.contains("thanks") || lowercaseText.contains("awesome") || lowercaseText.contains("happy")
+        val isProfessional = lowercaseText.contains("please") || lowercaseText.contains("regards") || lowercaseText.contains("sincerely") || lowercaseText.contains("confirm") || lowercaseText.contains("as discussed")
+        val isUrgent = lowercaseText.contains("asap") || lowercaseText.contains("need") || lowercaseText.contains("now") || lowercaseText.contains("hurry") || lowercaseText.contains("urgent")
+        val isApologetic = lowercaseText.contains("sorry") || lowercaseText.contains("apologize") || lowercaseText.contains("pardon") || lowercaseText.contains("fault")
 
         return when {
             isApologetic -> ToneAnalysisResponse(

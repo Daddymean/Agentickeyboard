@@ -89,6 +89,7 @@ import com.example.db.ShortcutTemplate
 import com.example.ui.AgenticKeyboardLayout
 import com.example.ui.KeyboardViewModel
 import com.example.ui.KeyboardViewModelFactory
+import com.example.ui.RowDefaultsButtonPadding
 import com.example.ui.theme.MyApplicationTheme
 
 class MainActivity : ComponentActivity() {
@@ -849,10 +850,6 @@ fun ExportTab(viewModel: KeyboardViewModel) {
     val userPersonaPreference by viewModel.userPersonaPreference.collectAsState()
     val clipboardManager = LocalClipboardManager.current
     val context = LocalContext.current
-    val RowDefaultsButtonPadding = androidx.compose.foundation.layout.PaddingValues(
-        horizontal = 12.dp,
-        vertical = 0.dp
-    )
 
     var stripSensitive by remember { mutableStateOf(true) }
     var exportFormat by remember { mutableStateOf("JSON Structure") }

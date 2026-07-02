@@ -110,6 +110,38 @@ class ExampleUnitTest {
     }
 
     @Test
+    fun testJsonEscapingOfControlAndSpecialCharacters() {
+        val logs = listOf(
+            WritingLog(
+                originalText = "Line one\nLine \"two\" with a \\ backslash\tand tab",
+                sentiment = "Casual",
+                toneScore = 0.5f,
+                wordCount = 9
+            )
+        )
+
+        val result = PersonalModelSerializer.serialize(
+            vocabulary = emptyList(),
+            corrections = emptyList(),
+            logs = logs,
+            personaPreference = "Casual",
+            stripSensitive = false,
+            exportFormat = "JSON Structure"
+        )
+
+        // The payload must remain valid, parseable JSON despite the special characters.
+        val moshi = com.squareup.moshi.Moshi.Builder().build()
+        val parsed = moshi.adapter(Any::class.java).fromJson(result.serializedContent)
+        assertNotNull(parsed)
+
+        @Suppress("UNCHECKED_CAST")
+        val root = parsed as Map<String, Any?>
+        @Suppress("UNCHECKED_CAST")
+        val writingLogs = root["writingLogs"] as List<Map<String, Any?>>
+        assertEquals("Line one\nLine \"two\" with a \\ backslash\tand tab", writingLogs[0]["text"])
+    }
+
+    @Test
     fun testSwipeToTypeHello() {
         val hCoord = com.example.util.SwipePoint(6.0f, 1.5f)
         val eCoord = com.example.util.SwipePoint(2.5f, 0.5f)

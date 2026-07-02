@@ -37,6 +37,25 @@ object PersonalModelSerializer {
     )
 
     /**
+     * Escapes a string for embedding inside a JSON string literal. Quotes alone are
+     * not enough: backslashes, newlines, and other control characters in typed text
+     * would otherwise produce invalid JSON.
+     */
+    internal fun String.jsonEscape(): String = buildString {
+        for (c in this@jsonEscape) {
+            when (c) {
+                '\\' -> append("\\\\")
+                '"' -> append("\\\"")
+                '\n' -> append("\\n")
+                '\r' -> append("\\r")
+                '\t' -> append("\\t")
+                '\b' -> append("\\b")
+                else -> if (c < ' ') append("\\u%04x".format(c.code)) else append(c)
+            }
+        }
+    }
+
+    /**
      * Sanitizes input text by redacting emails, phone numbers, financial markers, IP addresses, URLs,
      * and long generic numeric IDs to prevent sensitive credential leakage.
      */
@@ -137,7 +156,7 @@ object PersonalModelSerializer {
         val vocabList = vocabulary.map { item ->
             val (sanitizedWord, wordStats) = if (stripSensitive) sanitizeText(item.word) else Pair(item.word, AnonymizationStats())
             runningStats += wordStats
-            """      { "word": "${sanitizedWord.replace("\"", "\\\"")}", "count": ${item.count}, "lastUsed": ${item.lastUsed} }"""
+            """      { "word": "${sanitizedWord.jsonEscape()}", "count": ${item.count}, "lastUsed": ${item.lastUsed} }"""
         }
 
         // 2. Process and sanitize spelling corrections
@@ -146,14 +165,14 @@ object PersonalModelSerializer {
             val (sanitizedCorrection, corrStats) = if (stripSensitive) sanitizeText(item.correction) else Pair(item.correction, AnonymizationStats())
             runningStats += typoStats
             runningStats += corrStats
-            """      { "typo": "${sanitizedTypo.replace("\"", "\\\"")}", "correction": "${sanitizedCorrection.replace("\"", "\\\"")}", "count": ${item.count} }"""
+            """      { "typo": "${sanitizedTypo.jsonEscape()}", "correction": "${sanitizedCorrection.jsonEscape()}", "count": ${item.count} }"""
         }
 
         // 3. Process and sanitize writing logs
         val logList = logs.map { item ->
             val (sanitizedText, logStats) = if (stripSensitive) sanitizeText(item.originalText) else Pair(item.originalText, AnonymizationStats())
             runningStats += logStats
-            """      { "text": "${sanitizedText.replace("\"", "\\\"")}", "sentiment": "${item.sentiment}", "toneScore": ${item.toneScore}, "timestamp": ${item.timestamp} }"""
+            """      { "text": "${sanitizedText.jsonEscape()}", "sentiment": "${item.sentiment.jsonEscape()}", "toneScore": ${item.toneScore}, "timestamp": ${item.timestamp} }"""
         }
 
         val totalRecords = vocabulary.size + corrections.size + logs.size
@@ -164,7 +183,7 @@ object PersonalModelSerializer {
             append("  \"exportMetadata\": {\n")
             append("    \"exportVersion\": \"1.0.0\",\n")
             append("    \"exportedAt\": ${System.currentTimeMillis()},\n")
-            append("    \"userPersonaPreference\": \"$personaPreference\",\n")
+            append("    \"userPersonaPreference\": \"${personaPreference.jsonEscape()}\",\n")
             append("    \"anonymizationApplied\": $stripSensitive,\n")
             append("    \"totalRecordsExported\": $totalRecords,\n")
             append("    \"redactionsSummary\": {\n")
