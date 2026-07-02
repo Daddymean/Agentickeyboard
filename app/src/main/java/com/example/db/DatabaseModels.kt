@@ -101,6 +101,9 @@ interface UserVocabularyDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertWord(word: UserVocabulary)
 
+    @Query("UPDATE user_vocabulary SET count = count + 1, lastUsed = :now WHERE word = :word")
+    suspend fun incrementWordCount(word: String, now: Long): Int
+
     @Query("DELETE FROM user_vocabulary")
     suspend fun clearAll()
 }
@@ -186,6 +189,14 @@ class KeyboardRepository(private val db: AppDatabase) {
 
     suspend fun insertWord(word: UserVocabulary) {
         db.userVocabularyDao().insertWord(word)
+    }
+
+    /** Atomically bumps a word's usage count, inserting it on first use. */
+    suspend fun recordWordUsage(word: String) {
+        val updated = db.userVocabularyDao().incrementWordCount(word, System.currentTimeMillis())
+        if (updated == 0) {
+            db.userVocabularyDao().insertWord(UserVocabulary(word = word, count = 1))
+        }
     }
 
     suspend fun getWord(word: String): UserVocabulary? {

@@ -14,6 +14,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
@@ -61,6 +62,9 @@ class KeyboardViewModel(private val repository: KeyboardRepository) : ViewModel(
     private val _translation = MutableStateFlow<String?>(null)
     val translation = _translation.asStateFlow()
 
+    private val _rewrite = MutableStateFlow<String?>(null)
+    val rewrite = _rewrite.asStateFlow()
+
     private val _isLoading = MutableStateFlow(false)
     val isLoading = _isLoading.asStateFlow()
 
@@ -75,41 +79,38 @@ class KeyboardViewModel(private val repository: KeyboardRepository) : ViewModel(
     val targetLanguage = _targetLanguage.asStateFlow()
 
     init {
-        // Seed default templates if database is empty
+        // Seed defaults exactly once when the database is empty. Using first()
+        // instead of collect{} means the "Clear" actions in the Style Hub are not
+        // immediately undone by a re-seeding collector.
         viewModelScope.launch {
-            repository.allShortcuts.collect { list ->
-                if (list.isEmpty()) {
-                    repository.insertShortcut(ShortcutTemplate(shortcut = "omw", template = "On my way! Running late."))
-                    repository.insertShortcut(ShortcutTemplate(shortcut = "gr", template = "Great! Talk to you soon."))
-                    repository.insertShortcut(ShortcutTemplate(shortcut = "ty", template = "Thank you so much! Really appreciate it."))
-                    repository.insertShortcut(ShortcutTemplate(shortcut = "brb", template = "Be right back! Just in a quick meeting."))
-                }
+            if (repository.allShortcuts.first().isEmpty()) {
+                repository.insertShortcut(ShortcutTemplate(shortcut = "omw", template = "On my way! Running late."))
+                repository.insertShortcut(ShortcutTemplate(shortcut = "gr", template = "Great! Talk to you soon."))
+                repository.insertShortcut(ShortcutTemplate(shortcut = "ty", template = "Thank you so much! Really appreciate it."))
+                repository.insertShortcut(ShortcutTemplate(shortcut = "brb", template = "Be right back! Just in a quick meeting."))
             }
         }
 
-        // Seed default vocabulary for on-device personalized stats display
         viewModelScope.launch {
-            repository.topVocabulary.collect { list ->
-                if (list.isEmpty()) {
-                    repository.insertWord(com.example.db.UserVocabulary(word = "fantastic", count = 12))
-                    repository.insertWord(com.example.db.UserVocabulary(word = "awesome", count = 9))
-                    repository.insertWord(com.example.db.UserVocabulary(word = "absolutely", count = 7))
-                    repository.insertWord(com.example.db.UserVocabulary(word = "cheers", count = 5))
-                    repository.insertWord(com.example.db.UserVocabulary(word = "meeting", count = 4))
-                }
+            if (repository.allCorrections.first().isEmpty()) {
+                repository.insertCorrection(com.example.db.LearnedCorrection(typo = "teh", correction = "the", count = 15))
+                repository.insertCorrection(com.example.db.LearnedCorrection(typo = "tomorow", correction = "tomorrow", count = 8))
+                repository.insertCorrection(com.example.db.LearnedCorrection(typo = "definately", correction = "definitely", count = 5))
             }
         }
+    }
 
-        // Seed default learned corrections
-        viewModelScope.launch {
-            repository.allCorrections.collect { list ->
-                if (list.isEmpty()) {
-                    repository.insertCorrection(com.example.db.LearnedCorrection(typo = "teh", correction = "the", count = 15))
-                    repository.insertCorrection(com.example.db.LearnedCorrection(typo = "tomorow", correction = "tomorrow", count = 8))
-                    repository.insertCorrection(com.example.db.LearnedCorrection(typo = "definately", correction = "definitely", count = 5))
-                }
-            }
-        }
+    /**
+     * Clears every pending AI result panel (grammar, tone, summary, translation,
+     * rewrite, and reply suggestions).
+     */
+    fun dismissResults() {
+        _grammarCorrection.value = null
+        _toneAnalysis.value = null
+        _summary.value = null
+        _translation.value = null
+        _rewrite.value = null
+        _suggestions.value = emptyList()
     }
 
     fun setInputText(text: String) {
@@ -131,22 +132,25 @@ class KeyboardViewModel(private val repository: KeyboardRepository) : ViewModel(
     }
 
     /**
+     * The persona the AI should write as: the explicit user choice, or the dominant
+     * tone observed in the writing history when set to "Match my history".
+     */
+    fun effectivePersona(): String {
+        val personaPref = _userPersonaPreference.value
+        if (personaPref != "Match my history") return personaPref
+        return logs.value
+            .filter { it.sentiment != "Corrected" && it.sentiment.isNotEmpty() }
+            .groupBy { it.sentiment }
+            .maxByOrNull { it.value.size }?.key ?: "Casual"
+    }
+
+    /**
      * Compute dynamic personalization context to inject into AI requests
      */
     fun getPersonalizationContext(): String {
-        val logList = logs.value
-        val dominantTone = if (logList.isNotEmpty()) {
-            logList.filter { it.sentiment != "Corrected" && it.sentiment.isNotEmpty() }
-                .groupBy { it.sentiment }
-                .maxByOrNull { it.value.size }?.key ?: "Casual"
-        } else {
-            "Casual"
-        }
-        
         val vocabularyList = topVocabulary.value.take(5).joinToString(", ") { it.word }
-        val personaPref = _userPersonaPreference.value
-        val selectedPersona = if (personaPref == "Match my history") dominantTone else personaPref
-        
+        val selectedPersona = effectivePersona()
+
         return buildString {
             append("User selected style persona: $selectedPersona. ")
             if (vocabularyList.isNotEmpty()) {
@@ -167,15 +171,30 @@ class KeyboardViewModel(private val repository: KeyboardRepository) : ViewModel(
             for (w in words) {
                 val cleaned = w.replace("[^a-zA-Z]".toRegex(), "").lowercase().trim()
                 if (cleaned.length > 2 && !stopWords.contains(cleaned)) {
-                    val existing = repository.getWord(cleaned)
-                    if (existing != null) {
-                        repository.insertWord(existing.copy(count = existing.count + 1, lastUsed = System.currentTimeMillis()))
-                    } else {
-                        repository.insertWord(com.example.db.UserVocabulary(word = cleaned, count = 1))
-                    }
+                    repository.recordWordUsage(cleaned)
                 }
             }
         }
+    }
+
+    /**
+     * Resolves what a just-typed word should be replaced with when the user commits
+     * it (presses space): a shortcut template expansion first, then a learned
+     * spelling auto-correction. Returns null when the word should stand as typed.
+     */
+    fun resolveWordCommit(word: String): String? {
+        val normalized = word.lowercase().trim()
+        if (normalized.isEmpty()) return null
+        shortcuts.value.find { it.shortcut == normalized }?.let { return it.template }
+        learnedCorrections.value.find { it.typo == normalized }?.let { correction ->
+            // Preserve leading capitalization of the typed word
+            return if (word.firstOrNull()?.isUpperCase() == true) {
+                correction.correction.replaceFirstChar { it.uppercase() }
+            } else {
+                correction.correction
+            }
+        }
+        return null
     }
 
     /**
@@ -386,6 +405,30 @@ class KeyboardViewModel(private val repository: KeyboardRepository) : ViewModel(
                 _translation.value = result
             } catch (e: Exception) {
                 _translation.value = "Translation error: ${e.localizedMessage}"
+            } finally {
+                _isLoading.value = false
+            }
+        }
+    }
+
+    /**
+     * Rewrite text to match the selected style persona
+     */
+    fun rewriteTone(text: String) {
+        if (text.isBlank()) return
+        viewModelScope.launch {
+            _isLoading.value = true
+            _rewrite.value = null
+            try {
+                val targetTone = effectivePersona()
+                val result = if (_isOfflineMode.value) {
+                    "[Offline: rewrite needs cloud mode] $text"
+                } else {
+                    GeminiManager.rewriteWithTone(text, targetTone, getPersonalizationContext())
+                }
+                _rewrite.value = result
+            } catch (e: Exception) {
+                _rewrite.value = "Rewrite error: ${e.localizedMessage}"
             } finally {
                 _isLoading.value = false
             }
