@@ -4,7 +4,34 @@ import android.util.Base64
 import com.example.db.LearnedCorrection
 import com.example.db.UserVocabulary
 import com.example.db.WritingLog
+import com.squareup.moshi.JsonClass
+import com.squareup.moshi.Moshi
 import java.nio.charset.StandardCharsets
+
+// --- Import schema (mirrors the export payload written by serialize()) ---
+
+@JsonClass(generateAdapter = true)
+data class ImportedVocabulary(val word: String, val count: Int = 1, val lastUsed: Long = 0L)
+
+@JsonClass(generateAdapter = true)
+data class ImportedCorrection(val typo: String, val correction: String, val count: Int = 1)
+
+@JsonClass(generateAdapter = true)
+data class ImportedLog(val text: String, val sentiment: String = "", val toneScore: Float = 0f, val timestamp: Long = 0L)
+
+@JsonClass(generateAdapter = true)
+data class ImportedTypingPatterns(val vocabulary: List<ImportedVocabulary> = emptyList())
+
+@JsonClass(generateAdapter = true)
+data class ImportedMetadata(val userPersonaPreference: String? = null)
+
+@JsonClass(generateAdapter = true)
+data class ImportedModel(
+    val exportMetadata: ImportedMetadata? = null,
+    val typingPatterns: ImportedTypingPatterns? = null,
+    val correctionHistory: List<ImportedCorrection> = emptyList(),
+    val writingLogs: List<ImportedLog> = emptyList()
+)
 
 object PersonalModelSerializer {
 
@@ -228,5 +255,30 @@ object PersonalModelSerializer {
             stats = runningStats,
             totalRecords = totalRecords
         )
+    }
+
+    /**
+     * Parses a previously exported personalization payload — either raw JSON or a
+     * Base64 Cipher Block. Returns null when the content is not a valid export.
+     */
+    fun parseImport(content: String): ImportedModel? {
+        val trimmed = content.trim()
+        if (trimmed.isEmpty()) return null
+
+        val json = if (trimmed.startsWith("{")) {
+            trimmed
+        } else {
+            try {
+                String(Base64.decode(trimmed, Base64.NO_WRAP), StandardCharsets.UTF_8)
+            } catch (e: Exception) {
+                return null
+            }
+        }
+
+        return try {
+            Moshi.Builder().build().adapter(ImportedModel::class.java).fromJson(json)
+        } catch (e: Exception) {
+            null
+        }
     }
 }

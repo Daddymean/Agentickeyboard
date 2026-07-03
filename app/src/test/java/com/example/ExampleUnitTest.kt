@@ -142,6 +142,58 @@ class ExampleUnitTest {
     }
 
     @Test
+    fun testExportImportRoundtrip() {
+        val vocab = listOf(UserVocabulary(word = "fantastic", count = 3, lastUsed = 123L))
+        val corrections = listOf(LearnedCorrection(typo = "teh", correction = "the", count = 5))
+        val logs = listOf(WritingLog(originalText = "Hello there, world!", sentiment = "Joyful", toneScore = 0.9f, wordCount = 3, timestamp = 456L))
+
+        val result = PersonalModelSerializer.serialize(
+            vocabulary = vocab,
+            corrections = corrections,
+            logs = logs,
+            personaPreference = "Casual",
+            stripSensitive = false,
+            exportFormat = "JSON Structure"
+        )
+
+        val imported = PersonalModelSerializer.parseImport(result.serializedContent)
+        assertNotNull(imported)
+        assertEquals("Casual", imported!!.exportMetadata?.userPersonaPreference)
+        assertEquals(1, imported.typingPatterns?.vocabulary?.size)
+        assertEquals("fantastic", imported.typingPatterns?.vocabulary?.first()?.word)
+        assertEquals(3, imported.typingPatterns?.vocabulary?.first()?.count)
+        assertEquals("teh", imported.correctionHistory.first().typo)
+        assertEquals("the", imported.correctionHistory.first().correction)
+        assertEquals("Hello there, world!", imported.writingLogs.first().text)
+        assertEquals(456L, imported.writingLogs.first().timestamp)
+    }
+
+    @Test
+    fun testParseImportRejectsInvalidContent() {
+        assertNull(PersonalModelSerializer.parseImport(""))
+        assertNull(PersonalModelSerializer.parseImport("{\"broken\": "))
+        assertNull(PersonalModelSerializer.parseImport("!!! definitely not an export !!!"))
+    }
+
+    @Test
+    fun testSwipeDictionaryLoadAndReset() {
+        try {
+            com.example.util.SwipeToTypeEngine.loadDictionary(listOf("hello", "help", "hero"))
+            val path = listOf(
+                com.example.util.SwipePoint(6.0f, 1.5f),
+                com.example.util.SwipePoint(2.5f, 0.5f),
+                com.example.util.SwipePoint(9.0f, 1.5f),
+                com.example.util.SwipePoint(8.5f, 0.5f)
+            )
+            val matches = com.example.util.SwipeToTypeEngine.getSwipeWordMatches(path)
+            assertEquals("hello", matches.firstOrNull())
+        } finally {
+            // Restore the built-in fallback so other tests stay hermetic
+            com.example.util.SwipeToTypeEngine.loadDictionary(emptyList())
+        }
+    }
+
+    @Test
     fun testSwipeToTypeHello() {
         val hCoord = com.example.util.SwipePoint(6.0f, 1.5f)
         val eCoord = com.example.util.SwipePoint(2.5f, 0.5f)

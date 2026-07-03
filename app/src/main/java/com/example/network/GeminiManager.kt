@@ -34,6 +34,27 @@ object GeminiManager {
         return text
     }
 
+    // Small LRU cache so repeated identical requests (double-tapped actions,
+    // debounced background proofreads of unchanged text) don't re-bill the API.
+    private val responseCache = object : LinkedHashMap<String, Any>(32, 0.75f, true) {
+        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, Any>): Boolean = size > 48
+    }
+
+    private fun cacheGet(key: String): Any? = synchronized(responseCache) { responseCache[key] }
+
+    private fun cachePut(key: String, value: Any) {
+        synchronized(responseCache) { responseCache[key] = value }
+    }
+
+    /** Runs a plain-text generation request, returning the trimmed reply or null. */
+    private suspend fun generateText(prompt: String): String? {
+        val request = GenerateContentRequest(
+            contents = listOf(Content(parts = listOf(Part(text = prompt))))
+        )
+        val response = RetrofitClient.service.generateContent(apiKey, request)
+        return response.candidates?.firstOrNull()?.content?.parts?.firstOrNull()?.text?.trim()
+    }
+
     /**
      * Corrects grammar and spelling errors. Returns a structured GrammarCorrectionResponse.
      */
@@ -59,6 +80,9 @@ object GeminiManager {
             }
         """.trimIndent()
 
+        val cacheKey = "grammar|$personalizationContext|$text"
+        (cacheGet(cacheKey) as? GrammarCorrectionResponse)?.let { return@withContext it }
+
         try {
             val request = GenerateContentRequest(
                 contents = listOf(Content(parts = listOf(Part(text = prompt)))),
@@ -68,9 +92,10 @@ object GeminiManager {
             )
             val response = RetrofitClient.service.generateContent(apiKey, request)
             val jsonText = response.candidates?.firstOrNull()?.content?.parts?.firstOrNull()?.text
-            if (jsonText != null) {
-                val adapter = moshi.adapter(GrammarCorrectionResponse::class.java)
-                adapter.fromJson(extractJson(jsonText)) ?: getOfflineGrammarFix(text)
+            val parsed = jsonText?.let { moshi.adapter(GrammarCorrectionResponse::class.java).fromJson(extractJson(it)) }
+            if (parsed != null) {
+                cachePut(cacheKey, parsed)
+                parsed
             } else {
                 getOfflineGrammarFix(text)
             }
@@ -94,14 +119,20 @@ object GeminiManager {
             
             ${if (personalizationContext.isNotEmpty()) "Personalization Context (match user's writing habits):\n$personalizationContext\n" else ""}
             
-            Generate exactly 3 smart, natural, conversational, and highly context-appropriate replies. Keep each suggestion under 5 words.
+            Generate exactly 3 smart, natural, conversational, and highly context-appropriate replies, at three lengths:
+            1. Very short (4 words or fewer)
+            2. Medium (roughly 8-12 words)
+            3. Detailed (1-2 full sentences)
             ${if (personalizationContext.isNotEmpty()) "Ensure the replies naturally blend with the user's habitual vocabulary, tone, or style of expression if indicated in the personalization context." else ""}
-            
+
             Return raw JSON with this exact structure:
             {
-              "suggestions": ["suggestion 1", "suggestion 2", "suggestion 3"]
+              "suggestions": ["short reply", "medium reply", "detailed reply"]
             }
         """.trimIndent()
+
+        val cacheKey = "replies|$personalizationContext|$contextMessage"
+        (cacheGet(cacheKey) as? SuggestionsResponse)?.let { return@withContext it }
 
         try {
             val request = GenerateContentRequest(
@@ -110,9 +141,10 @@ object GeminiManager {
             )
             val response = RetrofitClient.service.generateContent(apiKey, request)
             val jsonText = response.candidates?.firstOrNull()?.content?.parts?.firstOrNull()?.text
-            if (jsonText != null) {
-                val adapter = moshi.adapter(SuggestionsResponse::class.java)
-                adapter.fromJson(extractJson(jsonText)) ?: getOfflineSuggestions(contextMessage, personalizationContext)
+            val parsed = jsonText?.let { moshi.adapter(SuggestionsResponse::class.java).fromJson(extractJson(it)) }
+            if (parsed != null) {
+                cachePut(cacheKey, parsed)
+                parsed
             } else {
                 getOfflineSuggestions(contextMessage, personalizationContext)
             }
@@ -142,13 +174,13 @@ object GeminiManager {
             $text
         """.trimIndent()
 
+        val cacheKey = "summary|$text"
+        (cacheGet(cacheKey) as? String)?.let { return@withContext it }
+
         try {
-            val request = GenerateContentRequest(
-                contents = listOf(Content(parts = listOf(Part(text = prompt))))
-            )
-            val response = RetrofitClient.service.generateContent(apiKey, request)
-            response.candidates?.firstOrNull()?.content?.parts?.firstOrNull()?.text?.trim()
-                ?: getOfflineSummary(text)
+            val result = generateText(prompt)
+            if (result != null) cachePut(cacheKey, result)
+            result ?: getOfflineSummary(text)
         } catch (e: Exception) {
             Log.e(TAG, "Error in summarizeMessage", e)
             getOfflineSummary(text)
@@ -173,13 +205,13 @@ object GeminiManager {
             $text
         """.trimIndent()
 
+        val cacheKey = "translate|$sourceLang|$targetLang|$text"
+        (cacheGet(cacheKey) as? String)?.let { return@withContext it }
+
         try {
-            val request = GenerateContentRequest(
-                contents = listOf(Content(parts = listOf(Part(text = prompt))))
-            )
-            val response = RetrofitClient.service.generateContent(apiKey, request)
-            response.candidates?.firstOrNull()?.content?.parts?.firstOrNull()?.text?.trim()
-                ?: "[Translation Failed] $text"
+            val result = generateText(prompt)
+            if (result != null) cachePut(cacheKey, result)
+            result ?: "[Translation Failed] $text"
         } catch (e: Exception) {
             Log.e(TAG, "Error in translateText", e)
             "[Translation Error] $text"
@@ -205,16 +237,112 @@ object GeminiManager {
             $text
         """.trimIndent()
 
+        val cacheKey = "rewrite|$targetTone|$personalizationContext|$text"
+        (cacheGet(cacheKey) as? String)?.let { return@withContext it }
+
         try {
-            val request = GenerateContentRequest(
-                contents = listOf(Content(parts = listOf(Part(text = prompt))))
-            )
-            val response = RetrofitClient.service.generateContent(apiKey, request)
-            response.candidates?.firstOrNull()?.content?.parts?.firstOrNull()?.text?.trim()
-                ?: getOfflineRewrite(text, targetTone)
+            val result = generateText(prompt)
+            if (result != null) cachePut(cacheKey, result)
+            result ?: getOfflineRewrite(text, targetTone)
         } catch (e: Exception) {
             Log.e(TAG, "Error in rewriteWithTone", e)
             getOfflineRewrite(text, targetTone)
+        }
+    }
+
+    /**
+     * Drafts a complete message from a short instruction the user typed, e.g.
+     * "tell her I'll be 20 minutes late, apologetic" -> an actual message.
+     */
+    suspend fun composeMessage(instruction: String, targetTone: String, personalizationContext: String = ""): String = withContext(Dispatchers.IO) {
+        if (instruction.isBlank()) return@withContext ""
+
+        if (!isApiKeyAvailable()) {
+            return@withContext "[Offline: compose needs cloud mode] $instruction"
+        }
+
+        val prompt = """
+            The user wants you to write a message on their behalf. Their instruction describes what the message should say:
+            "$instruction"
+
+            Write the actual message they should send, in a "$targetTone" tone, suitable for a mobile chat. Keep it natural and concise.
+            Return ONLY the message text with absolutely no introductory or extra text.
+            ${if (personalizationContext.isNotEmpty()) "Match the user's habitual voice:\n$personalizationContext\n" else ""}
+        """.trimIndent()
+
+        val cacheKey = "compose|$targetTone|$personalizationContext|$instruction"
+        (cacheGet(cacheKey) as? String)?.let { return@withContext it }
+
+        try {
+            val result = generateText(prompt)
+            if (result != null) cachePut(cacheKey, result)
+            result ?: "[Compose failed] $instruction"
+        } catch (e: Exception) {
+            Log.e(TAG, "Error in composeMessage", e)
+            "[Compose error] ${e.localizedMessage}"
+        }
+    }
+
+    /**
+     * Explains dense or jargon-heavy text (e.g. from the clipboard) in plain language.
+     */
+    suspend fun explainText(text: String): String = withContext(Dispatchers.IO) {
+        if (text.isBlank()) return@withContext ""
+
+        if (!isApiKeyAvailable()) {
+            return@withContext "[Offline: explanations need cloud mode]"
+        }
+
+        val prompt = """
+            Explain the following text in plain, simple language a layperson would understand.
+            Keep the explanation to 1-3 short sentences suitable for a phone screen. Return ONLY the explanation.
+
+            Text:
+            $text
+        """.trimIndent()
+
+        val cacheKey = "explain|$text"
+        (cacheGet(cacheKey) as? String)?.let { return@withContext it }
+
+        try {
+            val result = generateText(prompt)
+            if (result != null) cachePut(cacheKey, result)
+            result ?: "[Explanation failed]"
+        } catch (e: Exception) {
+            Log.e(TAG, "Error in explainText", e)
+            "[Explanation error] ${e.localizedMessage}"
+        }
+    }
+
+    /**
+     * Continues the user's draft mid-thought in their own voice. Returns only the
+     * continuation (not the original text).
+     */
+    suspend fun continueText(text: String, personalizationContext: String = ""): String = withContext(Dispatchers.IO) {
+        if (text.isBlank()) return@withContext ""
+
+        if (!isApiKeyAvailable()) {
+            return@withContext "[Offline: continue needs cloud mode]"
+        }
+
+        val prompt = """
+            The user is drafting a message and wants you to continue it naturally in their voice:
+            "$text"
+
+            Write the next 5-20 words that continue the draft. Return ONLY the continuation text - do NOT repeat the original draft, do not add quotes or commentary. If the draft ends mid-word, complete that word first.
+            ${if (personalizationContext.isNotEmpty()) "Match the user's habitual voice:\n$personalizationContext\n" else ""}
+        """.trimIndent()
+
+        val cacheKey = "continue|$personalizationContext|$text"
+        (cacheGet(cacheKey) as? String)?.let { return@withContext it }
+
+        try {
+            val result = generateText(prompt)
+            if (result != null) cachePut(cacheKey, result)
+            result ?: ""
+        } catch (e: Exception) {
+            Log.e(TAG, "Error in continueText", e)
+            ""
         }
     }
 
@@ -251,6 +379,9 @@ object GeminiManager {
             }
         """.trimIndent()
 
+        val cacheKey = "tone|$personalizationContext|$text"
+        (cacheGet(cacheKey) as? ToneAnalysisResponse)?.let { return@withContext it }
+
         try {
             val request = GenerateContentRequest(
                 contents = listOf(Content(parts = listOf(Part(text = prompt)))),
@@ -258,9 +389,10 @@ object GeminiManager {
             )
             val response = RetrofitClient.service.generateContent(apiKey, request)
             val jsonText = response.candidates?.firstOrNull()?.content?.parts?.firstOrNull()?.text
-            if (jsonText != null) {
-                val adapter = moshi.adapter(ToneAnalysisResponse::class.java)
-                adapter.fromJson(extractJson(jsonText)) ?: getOfflineToneAnalysis(text)
+            val parsed = jsonText?.let { moshi.adapter(ToneAnalysisResponse::class.java).fromJson(extractJson(it)) }
+            if (parsed != null) {
+                cachePut(cacheKey, parsed)
+                parsed
             } else {
                 getOfflineToneAnalysis(text)
             }

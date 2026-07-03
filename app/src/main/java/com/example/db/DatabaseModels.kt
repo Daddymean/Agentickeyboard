@@ -45,6 +45,21 @@ data class UserVocabulary(
     val lastUsed: Long = System.currentTimeMillis()
 )
 
+/** Word-pair frequencies powering on-device next-word prediction. */
+@Entity(tableName = "word_bigrams", primaryKeys = ["firstWord", "secondWord"])
+data class WordBigram(
+    val firstWord: String,
+    val secondWord: String,
+    val count: Int = 1
+)
+
+/** Remembers which style persona the user prefers in each target app. */
+@Entity(tableName = "app_personas")
+data class AppPersona(
+    @PrimaryKey val packageName: String,
+    val persona: String
+)
+
 @Dao
 interface ShortcutDao {
     @Query("SELECT * FROM shortcut_templates ORDER BY shortcut ASC")
@@ -68,8 +83,35 @@ interface WritingLogDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertLog(log: WritingLog)
 
+    @Query("DELETE FROM writing_logs WHERE timestamp < :cutoff")
+    suspend fun deleteOlderThan(cutoff: Long)
+
     @Query("DELETE FROM writing_logs")
     suspend fun clearAll()
+}
+
+@Dao
+interface WordBigramDao {
+    @Query("SELECT * FROM word_bigrams WHERE firstWord = :word ORDER BY count DESC LIMIT :limit")
+    suspend fun nextWords(word: String, limit: Int): List<WordBigram>
+
+    @Query("UPDATE word_bigrams SET count = count + 1 WHERE firstWord = :first AND secondWord = :second")
+    suspend fun increment(first: String, second: String): Int
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insert(bigram: WordBigram)
+
+    @Query("DELETE FROM word_bigrams")
+    suspend fun clearAll()
+}
+
+@Dao
+interface AppPersonaDao {
+    @Query("SELECT * FROM app_personas WHERE packageName = :packageName LIMIT 1")
+    suspend fun getForApp(packageName: String): AppPersona?
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsert(persona: AppPersona)
 }
 
 @Dao
@@ -113,9 +155,11 @@ interface UserVocabularyDao {
         ShortcutTemplate::class,
         WritingLog::class,
         LearnedCorrection::class,
-        UserVocabulary::class
+        UserVocabulary::class,
+        WordBigram::class,
+        AppPersona::class
     ],
-    version = 2,
+    version = 3,
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -123,6 +167,8 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun writingLogDao(): WritingLogDao
     abstract fun learnedCorrectionDao(): LearnedCorrectionDao
     abstract fun userVocabularyDao(): UserVocabularyDao
+    abstract fun wordBigramDao(): WordBigramDao
+    abstract fun appPersonaDao(): AppPersonaDao
 
     companion object {
         @Volatile
@@ -166,8 +212,40 @@ class KeyboardRepository(private val db: AppDatabase) {
         db.writingLogDao().insertLog(log)
     }
 
+    suspend fun deleteLogsOlderThan(cutoff: Long) {
+        db.writingLogDao().deleteOlderThan(cutoff)
+    }
+
     suspend fun clearLogs() {
         db.writingLogDao().clearAll()
+    }
+
+    // --- Next-word prediction (bigrams) ---
+
+    /** Atomically bumps a word-pair count, inserting it on first use. */
+    suspend fun recordBigram(first: String, second: String) {
+        val updated = db.wordBigramDao().increment(first, second)
+        if (updated == 0) {
+            db.wordBigramDao().insert(WordBigram(firstWord = first, secondWord = second))
+        }
+    }
+
+    suspend fun nextWords(word: String, limit: Int = 3): List<String> {
+        return db.wordBigramDao().nextWords(word, limit).map { it.secondWord }
+    }
+
+    suspend fun clearBigrams() {
+        db.wordBigramDao().clearAll()
+    }
+
+    // --- Per-app persona memory ---
+
+    suspend fun getAppPersona(packageName: String): String? {
+        return db.appPersonaDao().getForApp(packageName)?.persona
+    }
+
+    suspend fun setAppPersona(packageName: String, persona: String) {
+        db.appPersonaDao().upsert(AppPersona(packageName = packageName, persona = persona))
     }
 
     // New on-device personalization repository functions

@@ -98,7 +98,7 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
 
         val app = application as AgenticKeyboardApplication
-        val factory = KeyboardViewModelFactory(app.repository)
+        val factory = KeyboardViewModelFactory(app.repository, app.settings)
         val viewModel = ViewModelProvider(this, factory)[KeyboardViewModel::class.java]
 
         setContent {
@@ -848,11 +848,18 @@ fun ExportTab(viewModel: KeyboardViewModel) {
     val topVocabulary by viewModel.topVocabulary.collectAsState()
     val learnedCorrections by viewModel.learnedCorrections.collectAsState()
     val userPersonaPreference by viewModel.userPersonaPreference.collectAsState()
+    val usageStats by viewModel.usageStats.collectAsState()
+    val isAutoCapitalize by viewModel.isAutoCapitalizeEnabled.collectAsState()
+    val isNumberRow by viewModel.isNumberRowEnabled.collectAsState()
+    val isProofread by viewModel.isProofreadEnabled.collectAsState()
+    val isLearningPaused by viewModel.isLearningPaused.collectAsState()
+    val isHaptics by viewModel.isHapticsEnabled.collectAsState()
     val clipboardManager = LocalClipboardManager.current
     val context = LocalContext.current
 
     var stripSensitive by remember { mutableStateOf(true) }
     var exportFormat by remember { mutableStateOf("JSON Structure") }
+    var retentionDays by remember { mutableStateOf(viewModel.getLogRetentionDays()) }
 
     val exportResult = remember(logs, topVocabulary, learnedCorrections, userPersonaPreference, stripSensitive, exportFormat) {
         com.example.util.PersonalModelSerializer.serialize(
@@ -967,6 +974,132 @@ fun ExportTab(viewModel: KeyboardViewModel) {
                                 )
                             }
                         }
+                    }
+                }
+            }
+        }
+
+        // Keyboard behavior settings (persisted across restarts)
+        item {
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .shadow(1.dp, RoundedCornerShape(24.dp)),
+                colors = CardDefaults.cardColors(containerColor = Color.White),
+                shape = RoundedCornerShape(24.dp),
+                border = BorderStroke(1.dp, Color(0xFFE2E8F0))
+            ) {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    Text(
+                        "⌨️ Keyboard Settings",
+                        color = Color(0xFF1C1B1F),
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 14.sp
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    SettingSwitchRow(
+                        title = "Auto-capitalize sentences",
+                        description = "Shift arms itself after . ! ? and at the start of a field.",
+                        checked = isAutoCapitalize,
+                        onCheckedChange = { viewModel.setAutoCapitalizeEnabled(it) }
+                    )
+                    SettingSwitchRow(
+                        title = "Number row",
+                        description = "Show a dedicated 1-0 row above the letters.",
+                        checked = isNumberRow,
+                        onCheckedChange = { viewModel.setNumberRowEnabled(it) }
+                    )
+                    SettingSwitchRow(
+                        title = "Proofread as you type",
+                        description = "Quietly checks grammar in the background and offers one-tap fixes. Sends drafts to the cloud, so it is off by default.",
+                        checked = isProofread,
+                        onCheckedChange = { viewModel.setProofreadEnabled(it) }
+                    )
+                    SettingSwitchRow(
+                        title = "Pause learning",
+                        description = "Incognito for the personalization engine: stop learning vocabulary, word pairs, and corrections.",
+                        checked = isLearningPaused,
+                        onCheckedChange = { viewModel.setLearningPaused(it) }
+                    )
+                    SettingSwitchRow(
+                        title = "Haptic feedback",
+                        description = "Vibrate on key presses and gestures.",
+                        checked = isHaptics,
+                        onCheckedChange = { viewModel.setHapticsEnabled(it) }
+                    )
+
+                    Spacer(modifier = Modifier.height(10.dp))
+                    Text(
+                        "Writing-log retention",
+                        color = Color(0xFF1C1B1F),
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 12.sp
+                    )
+                    Text(
+                        "Logs older than this are deleted automatically.",
+                        color = Color(0xFF5F5D6B),
+                        fontSize = 10.sp
+                    )
+                    Spacer(modifier = Modifier.height(6.dp))
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        listOf(7, 30, 90).forEach { days ->
+                            val isSelected = retentionDays == days
+                            Box(
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .clip(RoundedCornerShape(12.dp))
+                                    .background(if (isSelected) Color(0xFFE8DEF8) else Color(0xFFF1F5F9))
+                                    .clickable {
+                                        retentionDays = days
+                                        viewModel.setLogRetentionDays(days)
+                                    }
+                                    .border(1.dp, if (isSelected) Color(0xFF6750A4) else Color.Transparent, RoundedCornerShape(12.dp))
+                                    .padding(vertical = 8.dp),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text(
+                                    "$days days",
+                                    color = if (isSelected) Color(0xFF21005D) else Color(0xFF49454F),
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // Local usage dashboard
+        item {
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .shadow(1.dp, RoundedCornerShape(24.dp)),
+                colors = CardDefaults.cardColors(containerColor = Color(0xFF1C1B1F)),
+                shape = RoundedCornerShape(24.dp)
+            ) {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    Text(
+                        "📊 USAGE DASHBOARD (ON-DEVICE)",
+                        color = Color.White.copy(alpha = 0.6f),
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.Bold,
+                        letterSpacing = 0.5.sp
+                    )
+                    Spacer(modifier = Modifier.height(10.dp))
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        DashboardStat("Auto-fixes", usageStats.autoCorrections)
+                        DashboardStat("Swipes", usageStats.swipeWords)
+                        DashboardStat("AI applies", usageStats.aiApplies)
+                        DashboardStat("Shortcuts", usageStats.shortcutExpansions)
                     }
                 }
             }
@@ -1434,6 +1567,35 @@ fun ExportTab(viewModel: KeyboardViewModel) {
                             Text("Clear Logs", color = Color.White)
                         }
                     }
+
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    // Restore a previous export (device migration / backup)
+                    Button(
+                        onClick = {
+                            val clip = clipboardManager.getText()?.text
+                            if (clip.isNullOrBlank()) {
+                                Toast.makeText(context, "Copy an exported payload to the clipboard first.", Toast.LENGTH_SHORT).show()
+                            } else {
+                                viewModel.importPersonalModel(clip) { imported ->
+                                    val message = if (imported < 0) {
+                                        "Clipboard does not contain a valid export."
+                                    } else {
+                                        "Imported $imported personalization record(s)!"
+                                    }
+                                    Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
+                                }
+                            }
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFF1F5F9)),
+                        shape = RoundedCornerShape(12.dp),
+                        border = BorderStroke(1.dp, Color(0xFFCBD5E1)),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .testTag("import_button")
+                    ) {
+                        Text("Import from Clipboard", color = Color(0xFF6750A4), fontWeight = FontWeight.Bold)
+                    }
                 }
             }
         }
@@ -1520,6 +1682,62 @@ fun SetupTab() {
         item {
             Spacer(modifier = Modifier.height(16.dp))
         }
+    }
+}
+
+@Composable
+fun SettingSwitchRow(
+    title: String,
+    description: String,
+    checked: Boolean,
+    onCheckedChange: (Boolean) -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 4.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                title,
+                color = Color(0xFF1C1B1F),
+                fontWeight = FontWeight.Bold,
+                fontSize = 12.sp
+            )
+            Text(
+                description,
+                color = Color(0xFF5F5D6B),
+                fontSize = 10.sp,
+                lineHeight = 12.sp
+            )
+        }
+        Switch(
+            checked = checked,
+            onCheckedChange = onCheckedChange,
+            colors = SwitchDefaults.colors(
+                checkedThumbColor = Color.White,
+                checkedTrackColor = Color(0xFF6750A4)
+            )
+        )
+    }
+}
+
+@Composable
+fun DashboardStat(label: String, value: Int) {
+    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+        Text(
+            "$value",
+            color = Color(0xFF4ADE80),
+            fontSize = 18.sp,
+            fontWeight = FontWeight.Bold
+        )
+        Text(
+            label,
+            color = Color.White.copy(alpha = 0.7f),
+            fontSize = 10.sp
+        )
     }
 }
 
