@@ -1,0 +1,38 @@
+name: Android CI
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+      - 'ai/**'
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: Unit tests and lint
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up JDK
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Ensure Gradle wrapper is executable
+        run: chmod +x ./gradlew
+
+      - name: Run debug unit tests
+        run: ./gradlew testDebugUnitTest --stacktrace
+
+      - name: Run debug lint
+        run: ./gradlew lintDebug --stacktrace
