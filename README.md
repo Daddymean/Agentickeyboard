@@ -30,6 +30,8 @@ Every request is enriched with a locally computed personalization context
 - **Offline mode toggle** blocks all cloud calls; local fallbacks keep the tools functional.
 - **Cloud backup disabled** — your typing history never leaves the device via Android backup.
 - **No request logging in release builds**; the API key is sent as a header and redacted from debug logs.
+- **Cloud redaction guard** sanitizes sensitive-looking text before Gemini requests.
+- **Local retention guard** sanitizes and prunes writing logs before persistence.
 - **Style Hub export** serializes your personalization model to JSON (or Base64) with optional redaction of emails, phone numbers, financial numbers, IPs, URLs, and numeric IDs.
 
 ## Project layout
@@ -42,10 +44,11 @@ app/src/main/java/com/example/
 ├── ui/
 │   ├── AgenticKeyboardLayout.kt    # Keyboard UI: keys, AI shelf, gestures, swipe-to-type
 │   └── KeyboardViewModel.kt        # State + AI orchestration + on-device learning
-├── network/                        # Retrofit client + Gemini request/response models
-├── db/DatabaseModels.kt            # Room entities, DAOs, repository
+├── network/                        # Retrofit client + Gemini request/response models/config
+├── db/DatabaseModels.kt            # Room entities, DAOs, repository, migrations
 └── util/
     ├── SwipeToTypeEngine.kt        # Path-matching swipe decoder
+    ├── PrivacyTextSanitizer.kt     # Shared redaction helper for local/cloud text
     └── PersonalModelSerializer.kt  # Privacy-aware personalization export
 ```
 
@@ -75,3 +78,9 @@ Unit tests (Robolectric, Roborazzi screenshots, and plain JUnit) live in
 
 Covered areas: privacy redaction/sanitization, JSON export integrity,
 swipe-to-type decoding, and a keyboard layout screenshot test.
+
+CI runs `testDebugUnitTest` and `lintDebug` through `.github/workflows/android-ci.yml`.
+
+## Comparison branches
+
+See `docs/trust-hardening-comparison.md` for the AI-assisted trust-hardening pass and the deliberately separated follow-up items, including package rename and Compose modularization.
