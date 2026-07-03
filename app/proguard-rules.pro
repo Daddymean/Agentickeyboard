@@ -1,21 +1,24 @@
-# Add project specific ProGuard rules here.
-# You can control the set of applied configuration files using the
-# proguardFiles setting in build.gradle.
-#
-# For more details, see
-#   http://developer.android.com/guide/developing/tools/proguard.html
+# Project-specific release hardening rules.
 
-# If your project uses WebView with JS, uncomment the following
-# and specify the fully qualified class name to the JavaScript interface
-# class:
-#-keepclassmembers class fqcn.of.javascript.interface.for.webview {
-#   public *;
-#}
+# Keep Moshi models and generated adapters stable for Retrofit parsing.
+-keep class com.example.network.**JsonAdapter { *; }
+-keep class com.example.network.GenerateContentRequest { *; }
+-keep class com.example.network.GenerateContentResponse { *; }
+-keep class com.example.network.Content { *; }
+-keep class com.example.network.Part { *; }
+-keep class com.example.network.Candidate { *; }
+-keep class com.example.network.GenerationConfig { *; }
+-keep class com.example.network.GrammarCorrectionResponse { *; }
+-keep class com.example.network.SuggestionsResponse { *; }
+-keep class com.example.network.ToneAnalysisResponse { *; }
 
-# Uncomment this to preserve the line number information for
-# debugging stack traces.
-#-keepattributes SourceFile,LineNumberTable
+# Retrofit interfaces are invoked reflectively by Retrofit.
+-keep interface com.example.network.GeminiApiService { *; }
+-keepattributes Signature, InnerClasses, EnclosingMethod, RuntimeVisibleAnnotations, RuntimeVisibleParameterAnnotations, AnnotationDefault
 
-# If you keep the line number information, uncomment this to
-# hide the original source file name.
-#-renamesourcefileattribute SourceFile
+# Keep Room entities clear for migrations and schema validation.
+-keep class com.example.db.** { *; }
+
+# Preserve source line numbers for crash diagnosis while still allowing shrinking.
+-keepattributes SourceFile,LineNumberTable
+-renamesourcefileattribute SourceFile
