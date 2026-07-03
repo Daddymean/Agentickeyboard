@@ -62,10 +62,9 @@ object GeminiManager {
         try {
             val request = GenerateContentRequest(
                 contents = listOf(Content(parts = listOf(Part(text = prompt)))),
-                generationConfig = GenerationConfig(
-                    responseMimeType = "application/json",
-                    temperature = 0.2f
-                )
+                // Gemini 3 models are tuned for default sampling settings; only the
+                // response mime type is pinned for structured output.
+                generationConfig = GenerationConfig(responseMimeType = "application/json")
             )
             val response = RetrofitClient.service.generateContent(apiKey, request)
             val jsonText = response.candidates?.firstOrNull()?.content?.parts?.firstOrNull()?.text
@@ -107,10 +106,7 @@ object GeminiManager {
         try {
             val request = GenerateContentRequest(
                 contents = listOf(Content(parts = listOf(Part(text = prompt)))),
-                generationConfig = GenerationConfig(
-                    responseMimeType = "application/json",
-                    temperature = 0.7f
-                )
+                generationConfig = GenerationConfig(responseMimeType = "application/json")
             )
             val response = RetrofitClient.service.generateContent(apiKey, request)
             val jsonText = response.candidates?.firstOrNull()?.content?.parts?.firstOrNull()?.text
@@ -148,8 +144,7 @@ object GeminiManager {
 
         try {
             val request = GenerateContentRequest(
-                contents = listOf(Content(parts = listOf(Part(text = prompt)))),
-                generationConfig = GenerationConfig(temperature = 0.5f)
+                contents = listOf(Content(parts = listOf(Part(text = prompt))))
             )
             val response = RetrofitClient.service.generateContent(apiKey, request)
             response.candidates?.firstOrNull()?.content?.parts?.firstOrNull()?.text?.trim()
@@ -180,8 +175,7 @@ object GeminiManager {
 
         try {
             val request = GenerateContentRequest(
-                contents = listOf(Content(parts = listOf(Part(text = prompt)))),
-                generationConfig = GenerationConfig(temperature = 0.3f)
+                contents = listOf(Content(parts = listOf(Part(text = prompt))))
             )
             val response = RetrofitClient.service.generateContent(apiKey, request)
             response.candidates?.firstOrNull()?.content?.parts?.firstOrNull()?.text?.trim()
@@ -213,8 +207,7 @@ object GeminiManager {
 
         try {
             val request = GenerateContentRequest(
-                contents = listOf(Content(parts = listOf(Part(text = prompt)))),
-                generationConfig = GenerationConfig(temperature = 0.6f)
+                contents = listOf(Content(parts = listOf(Part(text = prompt))))
             )
             val response = RetrofitClient.service.generateContent(apiKey, request)
             response.candidates?.firstOrNull()?.content?.parts?.firstOrNull()?.text?.trim()
@@ -261,10 +254,7 @@ object GeminiManager {
         try {
             val request = GenerateContentRequest(
                 contents = listOf(Content(parts = listOf(Part(text = prompt)))),
-                generationConfig = GenerationConfig(
-                    responseMimeType = "application/json",
-                    temperature = 0.3f
-                )
+                generationConfig = GenerationConfig(responseMimeType = "application/json")
             )
             val response = RetrofitClient.service.generateContent(apiKey, request)
             val jsonText = response.candidates?.firstOrNull()?.content?.parts?.firstOrNull()?.text
