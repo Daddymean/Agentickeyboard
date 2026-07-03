@@ -11,7 +11,12 @@ import androidx.room.PrimaryKey
 import androidx.room.Query
 import androidx.room.Room
 import androidx.room.RoomDatabase
+import androidx.room.migration.Migration
+import androidx.sqlite.db.SupportSQLiteDatabase
+import com.example.util.PrivacyTextSanitizer
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.map
+import java.util.concurrent.TimeUnit
 
 @Entity(tableName = "shortcut_templates")
 data class ShortcutTemplate(
@@ -45,6 +50,12 @@ data class UserVocabulary(
     val lastUsed: Long = System.currentTimeMillis()
 )
 
+@Entity(tableName = "app_settings")
+data class AppSetting(
+    @PrimaryKey val key: String,
+    val value: String
+)
+
 @Dao
 interface ShortcutDao {
     @Query("SELECT * FROM shortcut_templates ORDER BY shortcut ASC")
@@ -67,6 +78,12 @@ interface WritingLogDao {
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertLog(log: WritingLog)
+
+    @Query("DELETE FROM writing_logs WHERE timestamp < :cutoff")
+    suspend fun deleteOlderThan(cutoff: Long)
+
+    @Query("DELETE FROM writing_logs WHERE id NOT IN (SELECT id FROM writing_logs ORDER BY timestamp DESC LIMIT :maxRows)")
+    suspend fun keepNewest(maxRows: Int)
 
     @Query("DELETE FROM writing_logs")
     suspend fun clearAll()
@@ -108,25 +125,47 @@ interface UserVocabularyDao {
     suspend fun clearAll()
 }
 
+@Dao
+interface AppSettingDao {
+    @Query("SELECT value FROM app_settings WHERE `key` = :key LIMIT 1")
+    fun observeValue(key: String): Flow<String?>
+
+    @Query("SELECT value FROM app_settings WHERE `key` = :key LIMIT 1")
+    suspend fun getValue(key: String): String?
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsert(setting: AppSetting)
+}
+
 @Database(
     entities = [
         ShortcutTemplate::class,
         WritingLog::class,
         LearnedCorrection::class,
-        UserVocabulary::class
+        UserVocabulary::class,
+        AppSetting::class
     ],
-    version = 2,
-    exportSchema = false
+    version = 3,
+    exportSchema = true
 )
 abstract class AppDatabase : RoomDatabase() {
     abstract fun shortcutDao(): ShortcutDao
     abstract fun writingLogDao(): WritingLogDao
     abstract fun learnedCorrectionDao(): LearnedCorrectionDao
     abstract fun userVocabularyDao(): UserVocabularyDao
+    abstract fun appSettingDao(): AppSettingDao
 
     companion object {
         @Volatile
         private var INSTANCE: AppDatabase? = null
+
+        private val MIGRATION_2_3 = object : Migration(2, 3) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    "CREATE TABLE IF NOT EXISTS `app_settings` (`key` TEXT NOT NULL, `value` TEXT NOT NULL, PRIMARY KEY(`key`))"
+                )
+            }
+        }
 
         fun getDatabase(context: Context): AppDatabase {
             return INSTANCE ?: synchronized(this) {
@@ -135,7 +174,11 @@ abstract class AppDatabase : RoomDatabase() {
                     AppDatabase::class.java,
                     "agentic_keyboard_database"
                 )
-                .fallbackToDestructiveMigration()
+                .addMigrations(MIGRATION_2_3)
+                // Version 1 shipped without schema export in this prototype. Preserve
+                // known v2+ users, but recover safely from unknown v1 test installs.
+                .fallbackToDestructiveMigrationFrom(1)
+                .fallbackToDestructiveMigrationOnDowngrade()
                 .build()
                 INSTANCE = instance
                 instance
@@ -145,10 +188,25 @@ abstract class AppDatabase : RoomDatabase() {
 }
 
 class KeyboardRepository(private val db: AppDatabase) {
+    private companion object {
+        const val KEY_OFFLINE_MODE = "offline_mode"
+        const val MAX_WRITING_LOGS = 250
+        const val MAX_LOG_TEXT_CHARS = 500
+        val LOG_RETENTION_MILLIS: Long = TimeUnit.DAYS.toMillis(30)
+    }
+
     val allShortcuts: Flow<List<ShortcutTemplate>> = db.shortcutDao().getAllShortcuts()
     val allLogs: Flow<List<WritingLog>> = db.writingLogDao().getAllLogs()
     val allCorrections: Flow<List<LearnedCorrection>> = db.learnedCorrectionDao().getAllCorrections()
     val topVocabulary: Flow<List<UserVocabulary>> = db.userVocabularyDao().getTopVocabulary()
+
+    val isOfflineMode: Flow<Boolean> = db.appSettingDao()
+        .observeValue(KEY_OFFLINE_MODE)
+        .map { storedValue -> storedValue.equals("true", ignoreCase = true) }
+
+    suspend fun setOfflineMode(enabled: Boolean) {
+        db.appSettingDao().upsert(AppSetting(KEY_OFFLINE_MODE, enabled.toString()))
+    }
 
     suspend fun insertShortcut(shortcut: ShortcutTemplate) {
         db.shortcutDao().insertShortcut(shortcut)
@@ -163,14 +221,24 @@ class KeyboardRepository(private val db: AppDatabase) {
     }
 
     suspend fun insertLog(log: WritingLog) {
-        db.writingLogDao().insertLog(log)
+        val sanitizedText = PrivacyTextSanitizer
+            .sanitizeText(log.originalText)
+            .sanitized
+            .take(MAX_LOG_TEXT_CHARS)
+        db.writingLogDao().insertLog(log.copy(originalText = sanitizedText))
+        pruneWritingLogs()
+    }
+
+    private suspend fun pruneWritingLogs() {
+        val cutoff = System.currentTimeMillis() - LOG_RETENTION_MILLIS
+        db.writingLogDao().deleteOlderThan(cutoff)
+        db.writingLogDao().keepNewest(MAX_WRITING_LOGS)
     }
 
     suspend fun clearLogs() {
         db.writingLogDao().clearAll()
     }
 
-    // New on-device personalization repository functions
     suspend fun insertCorrection(correction: LearnedCorrection) {
         db.learnedCorrectionDao().insertCorrection(correction)
     }
