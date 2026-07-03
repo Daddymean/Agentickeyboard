@@ -1,10 +1,3 @@
-val releaseKeystorePath = System.getenv("KEYSTORE_PATH")
-val releaseStorePassword = System.getenv("STORE_PASSWORD")
-val releaseKeyPassword = System.getenv("KEY_PASSWORD")
-val hasReleaseSigning = !releaseKeystorePath.isNullOrBlank() &&
-  !releaseStorePassword.isNullOrBlank() &&
-  !releaseKeyPassword.isNullOrBlank()
-
 plugins {
   alias(libs.plugins.android.application)
   alias(libs.plugins.kotlin.compose)
@@ -12,6 +5,13 @@ plugins {
   alias(libs.plugins.roborazzi)
   alias(libs.plugins.secrets)
 }
+
+val releaseKeystorePath = System.getenv("KEYSTORE_PATH")
+val releaseStorePassword = System.getenv("STORE_PASSWORD")
+val releaseKeyPassword = System.getenv("KEY_PASSWORD")
+val hasReleaseSigning = !releaseKeystorePath.isNullOrBlank() &&
+  !releaseStorePassword.isNullOrBlank() &&
+  !releaseKeyPassword.isNullOrBlank()
 
 android {
   namespace = "com.example"
