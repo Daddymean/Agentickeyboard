@@ -10,10 +10,10 @@ object SwipeToTypeEngine {
     val keyCenters = mapOf(
         'q' to SwipePoint(0.5f, 0.5f), 'w' to SwipePoint(1.5f, 0.5f), 'e' to SwipePoint(2.5f, 0.5f), 'r' to SwipePoint(3.5f, 0.5f), 't' to SwipePoint(4.5f, 0.5f),
         'y' to SwipePoint(5.5f, 0.5f), 'u' to SwipePoint(6.5f, 0.5f), 'i' to SwipePoint(7.5f, 0.5f), 'o' to SwipePoint(8.5f, 0.5f), 'p' to SwipePoint(9.5f, 0.5f),
-        
+
         'a' to SwipePoint(1.0f, 1.5f), 's' to SwipePoint(2.0f, 1.5f), 'd' to SwipePoint(3.0f, 1.5f), 'f' to SwipePoint(4.0f, 1.5f), 'g' to SwipePoint(5.0f, 1.5f),
         'h' to SwipePoint(6.0f, 1.5f), 'j' to SwipePoint(7.0f, 1.5f), 'k' to SwipePoint(8.0f, 1.5f), 'l' to SwipePoint(9.0f, 1.5f),
-        
+
         'z' to SwipePoint(1.8f, 2.5f), 'x' to SwipePoint(2.8f, 2.5f), 'c' to SwipePoint(3.8f, 2.5f), 'v' to SwipePoint(4.8f, 2.5f), 'b' to SwipePoint(5.8f, 2.5f),
         'n' to SwipePoint(6.8f, 2.5f), 'm' to SwipePoint(7.8f, 2.5f)
     )
@@ -35,6 +35,10 @@ object SwipeToTypeEngine {
         "genius", "privacy"
     )
 
+    private val defaultWordsByStartEnd: Map<Pair<Char, Char>, List<String>> = defaultDictionary
+        .filter { it.length >= 2 && keyCenters.containsKey(it.first()) && keyCenters.containsKey(it.last()) }
+        .groupBy { it.first() to it.last() }
+
     private fun distance(p1: SwipePoint, p2: SwipePoint): Float {
         val dx = p1.x - p2.x
         val dy = p1.y - p2.y
@@ -52,6 +56,12 @@ object SwipeToTypeEngine {
             }
         }
         return closestChar
+    }
+
+    private fun charsWithin(pt: SwipePoint, maxDistance: Float): Set<Char> {
+        return keyCenters
+            .filterValues { center -> distance(pt, center) <= maxDistance }
+            .keys
     }
 
     fun interpolatePath(path: List<SwipePoint>): List<SwipePoint> {
@@ -77,29 +87,35 @@ object SwipeToTypeEngine {
         val path = interpolatePath(rawPath)
         val startPt = path.first()
         val endPt = path.last()
+        val startChars = charsWithin(startPt, MAX_ENDPOINT_DISTANCE)
+        val endChars = charsWithin(endPt, MAX_ENDPOINT_DISTANCE)
+        if (startChars.isEmpty() || endChars.isEmpty()) return emptyList()
 
-        val fullDictionary = (userVocabulary.map { it.lowercase() } + defaultDictionary).distinct()
+        val userWords = userVocabulary
+            .map { it.lowercase() }
+            .filter { it.length >= 2 && keyCenters.containsKey(it.first()) && keyCenters.containsKey(it.last()) }
+            .distinct()
+
+        val endpointPairs = startChars.flatMap { start -> endChars.map { end -> start to end } }
+        val indexedDefaultCandidates = endpointPairs.flatMap { pair -> defaultWordsByStartEnd[pair].orEmpty() }
+        val indexedUserCandidates = userWords.filter { word ->
+            startChars.contains(word.first()) && endChars.contains(word.last())
+        }
+        val userWordSet = indexedUserCandidates.toSet()
+        val fullDictionary = (indexedUserCandidates + indexedDefaultCandidates).distinct()
 
         val candidates = mutableListOf<Pair<String, Float>>()
 
         for (word in fullDictionary) {
-            if (word.length < 2) continue
-            
-            val firstChar = word.first()
-            val lastChar = word.last()
-            
-            val firstCenter = keyCenters[firstChar] ?: continue
-            val lastCenter = keyCenters[lastChar] ?: continue
+            val firstCenter = keyCenters[word.first()] ?: continue
+            val lastCenter = keyCenters[word.last()] ?: continue
 
             val startDist = distance(startPt, firstCenter)
             val endDist = distance(endPt, lastCenter)
+            if (startDist > MAX_ENDPOINT_DISTANCE || endDist > MAX_ENDPOINT_DISTANCE) continue
 
-            // Max distance threshold to start/end points: 2.2 units (roughly 2 key keys away)
-            if (startDist > 2.2f || endDist > 2.2f) {
-                continue
-            }
-
-            val score = scoreWord(word, path)
+            val personalizationBoost = if (userWordSet.contains(word)) USER_WORD_BOOST else 0f
+            val score = scoreWord(word, path) - personalizationBoost
             candidates.add(word to score)
         }
 
@@ -137,4 +153,7 @@ object SwipeToTypeEngine {
 
         return score
     }
+
+    private const val MAX_ENDPOINT_DISTANCE = 2.2f
+    private const val USER_WORD_BOOST = 0.75f
 }
