@@ -10,11 +10,15 @@ import com.example.network.GeminiManager
 import com.example.network.GrammarCorrectionResponse
 import com.example.network.SuggestionsResponse
 import com.example.network.ToneAnalysisResponse
+import com.example.util.PrivacyTextSanitizer
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
@@ -65,18 +69,24 @@ class KeyboardViewModel(private val repository: KeyboardRepository) : ViewModel(
     private val _rewrite = MutableStateFlow<String?>(null)
     val rewrite = _rewrite.asStateFlow()
 
-    private val _isLoading = MutableStateFlow(false)
-    val isLoading = _isLoading.asStateFlow()
+    private val _activeAiOperation = MutableStateFlow<String?>(null)
+    val activeAiOperation = _activeAiOperation.asStateFlow()
+    val isLoading: StateFlow<Boolean> = _activeAiOperation
+        .map { it != null }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
 
-    // Settings
-    private val _isOfflineMode = MutableStateFlow(false)
-    val isOfflineMode = _isOfflineMode.asStateFlow()
+    // Settings shared between the companion app and IME service.
+    val isOfflineMode: StateFlow<Boolean> = repository.isOfflineMode
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
 
     private val _sourceLanguage = MutableStateFlow("English")
     val sourceLanguage = _sourceLanguage.asStateFlow()
 
     private val _targetLanguage = MutableStateFlow("Spanish")
     val targetLanguage = _targetLanguage.asStateFlow()
+
+    private var aiJob: Job? = null
+    private var aiRequestId = 0L
 
     init {
         // Seed defaults exactly once when the database is empty. Using first()
@@ -105,6 +115,8 @@ class KeyboardViewModel(private val repository: KeyboardRepository) : ViewModel(
      * rewrite, and reply suggestions).
      */
     fun dismissResults() {
+        aiJob?.cancel()
+        _activeAiOperation.value = null
         _grammarCorrection.value = null
         _toneAnalysis.value = null
         _summary.value = null
@@ -124,7 +136,9 @@ class KeyboardViewModel(private val repository: KeyboardRepository) : ViewModel(
     }
 
     fun toggleOfflineMode() {
-        _isOfflineMode.value = !_isOfflineMode.value
+        viewModelScope.launch {
+            repository.setOfflineMode(!isOfflineMode.value)
+        }
     }
 
     fun setUserPersonaPreference(persona: String) {
@@ -145,7 +159,7 @@ class KeyboardViewModel(private val repository: KeyboardRepository) : ViewModel(
     }
 
     /**
-     * Compute dynamic personalization context to inject into AI requests
+     * Compute dynamic personalization context to inject into AI requests.
      */
     fun getPersonalizationContext(): String {
         val vocabularyList = topVocabulary.value.take(5).joinToString(", ") { it.word }
@@ -161,16 +175,19 @@ class KeyboardViewModel(private val repository: KeyboardRepository) : ViewModel(
     }
 
     /**
-     * Parse word usage and count them on-device
+     * Parse word usage and count it on-device. Sensitive tokens are redacted before
+     * extraction so emails, IDs, account numbers, URLs, and phones do not become
+     * learned vocabulary.
      */
     fun recordWordUsage(text: String) {
         if (text.isBlank()) return
         viewModelScope.launch {
-            val words = text.split("\\s+".toRegex())
+            val sanitized = PrivacyTextSanitizer.sanitizeText(text).sanitized
+            val words = sanitized.split("\\s+".toRegex())
             val stopWords = setOf("the", "and", "a", "of", "to", "in", "is", "that", "it", "for", "on", "with", "as", "at", "by", "an", "be", "this", "are", "from")
             for (w in words) {
                 val cleaned = w.replace("[^a-zA-Z]".toRegex(), "").lowercase().trim()
-                if (cleaned.length > 2 && !stopWords.contains(cleaned)) {
+                if (cleaned.length > 2 && !stopWords.contains(cleaned) && !cleaned.startsWith("redacted")) {
                     repository.recordWordUsage(cleaned)
                 }
             }
@@ -198,7 +215,7 @@ class KeyboardViewModel(private val repository: KeyboardRepository) : ViewModel(
     }
 
     /**
-     * Save an on-device spelling auto-correction rule
+     * Save an on-device spelling auto-correction rule.
      */
     fun addCorrection(typo: String, correction: String) {
         if (typo.isBlank() || correction.isBlank()) return
@@ -232,7 +249,7 @@ class KeyboardViewModel(private val repository: KeyboardRepository) : ViewModel(
     }
 
     /**
-     * Compute predictive autocomplete options based on top vocabulary
+     * Compute predictive autocomplete options based on top vocabulary.
      */
     fun updatePredictiveSuggestions(activeText: String) {
         viewModelScope.launch {
@@ -261,7 +278,7 @@ class KeyboardViewModel(private val repository: KeyboardRepository) : ViewModel(
     }
 
     /**
-     * Expand custom shortcuts in text based on templates
+     * Expand custom shortcuts in text based on templates.
      */
     fun tryExpandAbbreviation(text: String): String {
         if (text.isEmpty()) return text
@@ -277,29 +294,46 @@ class KeyboardViewModel(private val repository: KeyboardRepository) : ViewModel(
         }
     }
 
+    private fun launchAiOperation(operation: String, clear: () -> Unit = {}, block: suspend (Long) -> Unit) {
+        aiJob?.cancel()
+        val requestId = ++aiRequestId
+        clear()
+        _activeAiOperation.value = operation
+        aiJob = viewModelScope.launch {
+            try {
+                block(requestId)
+            } finally {
+                if (isCurrentRequest(requestId)) {
+                    _activeAiOperation.value = null
+                }
+            }
+        }
+    }
+
+    private fun isCurrentRequest(requestId: Long): Boolean = requestId == aiRequestId
+
     /**
-     * Trigger grammar correction
+     * Trigger grammar correction.
      */
     fun fixGrammar(text: String) {
         if (text.isBlank()) return
-        viewModelScope.launch {
-            _isLoading.value = true
-            _grammarCorrection.value = null
+        launchAiOperation("grammar", clear = { _grammarCorrection.value = null }) { requestId ->
             try {
-                // Incorporate personalization preferences inside grammar suggestions
                 val personalization = getPersonalizationContext()
-                val result = if (_isOfflineMode.value) {
+                val result = if (isOfflineMode.value) {
                     getOfflineGrammarFix(text)
                 } else {
                     GeminiManager.fixGrammar(text, personalization)
                 }
+                if (!isCurrentRequest(requestId)) return@launchAiOperation
+
                 _grammarCorrection.value = result
-                
-                // On-device learning: auto-extract spelling correction rules!
+
+                // On-device learning: auto-extract spelling correction rules.
                 extractAndLearnCorrections(text, result.corrected)
                 recordWordUsage(result.corrected)
-                
-                // Save log for personalized model export
+
+                // Save sanitized, pruned log for personalized model export.
                 repository.insertLog(
                     WritingLog(
                         originalText = text,
@@ -308,26 +342,30 @@ class KeyboardViewModel(private val repository: KeyboardRepository) : ViewModel(
                         wordCount = text.split("\\s+".toRegex()).size
                     )
                 )
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
-                _grammarCorrection.value = GrammarCorrectionResponse(text, text, "Error: ${e.localizedMessage}", 0)
-            } finally {
-                _isLoading.value = false
+                if (isCurrentRequest(requestId)) {
+                    _grammarCorrection.value = GrammarCorrectionResponse(text, text, "Error: ${e.localizedMessage}", 0)
+                }
             }
         }
     }
 
     /**
-     * Dynamic alignment of original and corrected text to extract custom spelling fixes
+     * Dynamic alignment of original and corrected text to extract custom spelling fixes.
      */
     private suspend fun extractAndLearnCorrections(original: String, corrected: String) {
-        val origWords = original.split("\\s+".toRegex()).map { it.replace("[^a-zA-Z]".toRegex(), "").lowercase() }
-        val corrWords = corrected.split("\\s+".toRegex()).map { it.replace("[^a-zA-Z]".toRegex(), "").lowercase() }
-        
+        val safeOriginal = PrivacyTextSanitizer.sanitizeText(original).sanitized
+        val safeCorrected = PrivacyTextSanitizer.sanitizeText(corrected).sanitized
+        val origWords = safeOriginal.split("\\s+".toRegex()).map { it.replace("[^a-zA-Z]".toRegex(), "").lowercase() }
+        val corrWords = safeCorrected.split("\\s+".toRegex()).map { it.replace("[^a-zA-Z]".toRegex(), "").lowercase() }
+
         if (origWords.size == corrWords.size) {
             for (i in origWords.indices) {
                 val oWord = origWords[i]
                 val cWord = corrWords[i]
-                if (oWord.isNotEmpty() && cWord.isNotEmpty() && oWord != cWord && oWord.length > 2) {
+                if (oWord.isNotEmpty() && cWord.isNotEmpty() && oWord != cWord && oWord.length > 2 && !oWord.startsWith("redacted")) {
                     val existing = repository.getCorrectionForTypo(oWord)
                     if (existing != null) {
                         repository.insertCorrection(existing.copy(correction = cWord, count = existing.count + 1))
@@ -340,122 +378,130 @@ class KeyboardViewModel(private val repository: KeyboardRepository) : ViewModel(
     }
 
     /**
-     * Suggest quick replies
+     * Suggest quick replies.
      */
     fun suggestReplies(contextMessage: String) {
         if (contextMessage.isBlank()) return
-        viewModelScope.launch {
-            _isLoading.value = true
-            _suggestions.value = emptyList()
+        launchAiOperation("smart_replies", clear = { _suggestions.value = emptyList() }) { requestId ->
             try {
                 val personalization = getPersonalizationContext()
-                val result = if (_isOfflineMode.value) {
+                val result = if (isOfflineMode.value) {
                     getOfflineSuggestions(contextMessage, personalization)
                 } else {
                     GeminiManager.suggestReplies(contextMessage, personalization)
                 }
-                _suggestions.value = result.suggestions
+                if (isCurrentRequest(requestId)) {
+                    _suggestions.value = result.suggestions
+                }
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
-                _suggestions.value = listOf("Sounds good!", "Sure thing", "Let me check.")
-            } finally {
-                _isLoading.value = false
+                if (isCurrentRequest(requestId)) {
+                    _suggestions.value = listOf("Sounds good!", "Sure thing", "Let me check.")
+                }
             }
         }
     }
 
     /**
-     * Summarize long text
+     * Summarize long text.
      */
     fun summarizeMessage(text: String) {
         if (text.isBlank()) return
-        viewModelScope.launch {
-            _isLoading.value = true
-            _summary.value = null
+        launchAiOperation("summary", clear = { _summary.value = null }) { requestId ->
             try {
                 val personalization = getPersonalizationContext()
-                val result = if (_isOfflineMode.value) {
+                val result = if (isOfflineMode.value) {
                     getOfflineSummary(text)
                 } else {
                     GeminiManager.summarizeMessage(text, personalization)
                 }
-                _summary.value = result
+                if (isCurrentRequest(requestId)) {
+                    _summary.value = result
+                }
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
-                _summary.value = "Failed to summarize text: ${e.localizedMessage}"
-            } finally {
-                _isLoading.value = false
+                if (isCurrentRequest(requestId)) {
+                    _summary.value = "Failed to summarize text: ${e.localizedMessage}"
+                }
             }
         }
     }
 
     /**
-     * Translate text
+     * Translate text.
      */
     fun translateText(text: String) {
         if (text.isBlank()) return
-        viewModelScope.launch {
-            _isLoading.value = true
-            _translation.value = null
+        launchAiOperation("translation", clear = { _translation.value = null }) { requestId ->
             try {
                 val personalization = getPersonalizationContext()
-                val result = if (_isOfflineMode.value) {
+                val result = if (isOfflineMode.value) {
                     "[Offline] $text"
                 } else {
                     GeminiManager.translateText(text, _sourceLanguage.value, _targetLanguage.value, personalization)
                 }
-                _translation.value = result
+                if (isCurrentRequest(requestId)) {
+                    _translation.value = result
+                }
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
-                _translation.value = "Translation error: ${e.localizedMessage}"
-            } finally {
-                _isLoading.value = false
+                if (isCurrentRequest(requestId)) {
+                    _translation.value = "Translation error: ${e.localizedMessage}"
+                }
             }
         }
     }
 
     /**
-     * Rewrite text to match the selected style persona
+     * Rewrite text to match the selected style persona.
      */
     fun rewriteTone(text: String) {
         if (text.isBlank()) return
-        viewModelScope.launch {
-            _isLoading.value = true
-            _rewrite.value = null
+        launchAiOperation("rewrite", clear = { _rewrite.value = null }) { requestId ->
             try {
                 val targetTone = effectivePersona()
-                val result = if (_isOfflineMode.value) {
+                val result = if (isOfflineMode.value) {
                     "[Offline: rewrite needs cloud mode] $text"
                 } else {
                     GeminiManager.rewriteWithTone(text, targetTone, getPersonalizationContext())
                 }
-                _rewrite.value = result
+                if (isCurrentRequest(requestId)) {
+                    _rewrite.value = result
+                }
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
-                _rewrite.value = "Rewrite error: ${e.localizedMessage}"
-            } finally {
-                _isLoading.value = false
+                if (isCurrentRequest(requestId)) {
+                    _rewrite.value = "Rewrite error: ${e.localizedMessage}"
+                }
             }
         }
     }
 
     /**
-     * Analyze text sentiment & communication tone
+     * Analyze text sentiment & communication tone.
      */
     fun analyzeTone(text: String) {
         if (text.isBlank()) return
-        viewModelScope.launch {
-            _isLoading.value = true
-            _toneAnalysis.value = null
+        launchAiOperation("tone", clear = { _toneAnalysis.value = null }) { requestId ->
             try {
                 val personalization = getPersonalizationContext()
-                val result = if (_isOfflineMode.value) {
+                val result = if (isOfflineMode.value) {
                     getOfflineToneAnalysis(text)
                 } else {
                     GeminiManager.analyzeTone(text, personalization)
                 }
+                if (!isCurrentRequest(requestId)) return@launchAiOperation
+
                 _toneAnalysis.value = result
-                
-                // Record word usage of what was analyzed
+
+                // Record word usage of what was analyzed.
                 recordWordUsage(text)
-                
-                // Save log for personalized style insights
+
+                // Save sanitized, pruned log for personalized style insights.
                 repository.insertLog(
                     WritingLog(
                         originalText = text,
@@ -464,10 +510,12 @@ class KeyboardViewModel(private val repository: KeyboardRepository) : ViewModel(
                         wordCount = text.split("\\s+".toRegex()).size
                     )
                 )
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
-                _toneAnalysis.value = ToneAnalysisResponse("Neutral", 0.5f, listOf("Error during analysis."))
-            } finally {
-                _isLoading.value = false
+                if (isCurrentRequest(requestId)) {
+                    _toneAnalysis.value = ToneAnalysisResponse("Neutral", 0.5f, listOf("Error during analysis."))
+                }
             }
         }
     }
