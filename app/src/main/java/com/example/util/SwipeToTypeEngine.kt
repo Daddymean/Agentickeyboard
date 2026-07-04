@@ -18,6 +18,30 @@ object SwipeToTypeEngine {
         'n' to SwipePoint(6.8f, 2.5f), 'm' to SwipePoint(7.8f, 2.5f)
     )
 
+    // Frequency-ranked dictionary loaded from res/raw/wordlist.txt at app start.
+    // The small built-in list below remains as a fallback (and keeps unit tests
+    // hermetic when no dictionary has been loaded).
+    @Volatile
+    private var loadedDictionary: List<String> = emptyList()
+
+    @Volatile
+    private var wordRanks: Map<String, Int> = emptyMap()
+
+    /**
+     * Installs a frequency-ranked dictionary (most frequent first). Passing an
+     * empty list reverts to the built-in fallback dictionary.
+     */
+    fun loadDictionary(words: List<String>) {
+        val cleaned = words.asSequence()
+            .map { it.trim().lowercase() }
+            .filter { it.length in 2..12 && it.all { c -> c in 'a'..'z' } }
+            .distinct()
+            .take(10_000)
+            .toList()
+        loadedDictionary = cleaned
+        wordRanks = cleaned.withIndex().associate { (i, w) -> w to i }
+    }
+
     private val defaultDictionary = listOf(
         "the", "be", "to", "of", "and", "a", "in", "that", "have", "it",
         "for", "not", "on", "with", "he", "as", "you", "do", "at", "this",
@@ -78,16 +102,18 @@ object SwipeToTypeEngine {
         val startPt = path.first()
         val endPt = path.last()
 
-        val fullDictionary = (userVocabulary.map { it.lowercase() } + defaultDictionary).distinct()
+        val baseDictionary = loadedDictionary.ifEmpty { defaultDictionary }
+        val fullDictionary = (userVocabulary.map { it.lowercase() } + baseDictionary).distinct()
+        val ranks = wordRanks
 
         val candidates = mutableListOf<Pair<String, Float>>()
 
         for (word in fullDictionary) {
             if (word.length < 2) continue
-            
+
             val firstChar = word.first()
             val lastChar = word.last()
-            
+
             val firstCenter = keyCenters[firstChar] ?: continue
             val lastCenter = keyCenters[lastChar] ?: continue
 
@@ -99,7 +125,14 @@ object SwipeToTypeEngine {
                 continue
             }
 
-            val score = scoreWord(word, path)
+            var score = scoreWord(word, path)
+
+            // Nudge similar-scoring candidates toward more frequent words. The
+            // penalty spans ~0.8 units across the full 10k dictionary; user
+            // vocabulary (rank unknown) is treated as highly frequent.
+            val rank = ranks[word] ?: 0
+            score += (rank / 10_000f) * 0.8f
+
             candidates.add(word to score)
         }
 

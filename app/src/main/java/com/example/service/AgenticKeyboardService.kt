@@ -1,9 +1,11 @@
 package com.example.service
 
+import android.content.Context
 import android.inputmethodservice.InputMethodService
 import android.view.KeyEvent
 import android.view.View
 import android.view.inputmethod.EditorInfo
+import android.view.inputmethod.InputMethodManager
 import androidx.compose.ui.platform.ComposeView
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleOwner
@@ -26,6 +28,7 @@ class AgenticKeyboardService : InputMethodService(), LifecycleOwner, ViewModelSt
 
     private companion object {
         const val CONTEXT_CHARS = 1000
+        const val MAX_CURSOR_STEPS = 20
     }
 
     private val lifecycleRegistry = LifecycleRegistry(this)
@@ -43,9 +46,12 @@ class AgenticKeyboardService : InputMethodService(), LifecycleOwner, ViewModelSt
         savedStateController.performRestore(null)
         lifecycleRegistry.handleLifecycleEvent(Lifecycle.Event.ON_CREATE)
 
-        // Instantiate ViewModel with repo from Application singleton
+        // Instantiate ViewModel with repo + settings from Application singleton
         val app = application as AgenticKeyboardApplication
-        viewModel = ViewModelProvider(this, KeyboardViewModelFactory(app.repository))[KeyboardViewModel::class.java]
+        viewModel = ViewModelProvider(
+            this,
+            KeyboardViewModelFactory(app.repository, app.settings)
+        )[KeyboardViewModel::class.java]
     }
 
     override fun onCreateInputView(): View {
@@ -64,6 +70,8 @@ class AgenticKeyboardService : InputMethodService(), LifecycleOwner, ViewModelSt
                     currentInputConnection?.deleteSurroundingText(1, 0)
                 },
                 onAction = { performEnterAction() },
+                onMicPress = { switchToVoiceInput() },
+                onCursorMove = { steps -> moveCursor(steps) },
                 // Resolved lazily on every use: the active InputConnection changes
                 // whenever the user switches editors, so it must never be captured.
                 inputConnectionProvider = { currentInputConnection }
@@ -91,6 +99,37 @@ class AgenticKeyboardService : InputMethodService(), LifecycleOwner, ViewModelSt
         }
     }
 
+    /** Moves the cursor left (negative) or right (positive) via DPAD key events. */
+    private fun moveCursor(steps: Int) {
+        if (steps == 0) return
+        val ic = currentInputConnection ?: return
+        val keyCode = if (steps > 0) KeyEvent.KEYCODE_DPAD_RIGHT else KeyEvent.KEYCODE_DPAD_LEFT
+        repeat(minOf(kotlin.math.abs(steps), MAX_CURSOR_STEPS)) {
+            ic.sendKeyEvent(KeyEvent(KeyEvent.ACTION_DOWN, keyCode))
+            ic.sendKeyEvent(KeyEvent(KeyEvent.ACTION_UP, keyCode))
+        }
+    }
+
+    /**
+     * Hands input off to an installed voice IME when one is enabled; otherwise
+     * shows the system input-method picker so the user can choose.
+     */
+    private fun switchToVoiceInput() {
+        val imm = getSystemService(Context.INPUT_METHOD_SERVICE) as InputMethodManager
+        val voiceIme = imm.enabledInputMethodList.firstOrNull { imi ->
+            (0 until imi.subtypeCount).any { imi.getSubtypeAt(it).mode == "voice" }
+        }
+        try {
+            if (voiceIme != null) {
+                switchInputMethod(voiceIme.id)
+            } else {
+                imm.showInputMethodPicker()
+            }
+        } catch (e: Exception) {
+            imm.showInputMethodPicker()
+        }
+    }
+
     private fun syncEditorText() {
         val textBefore = currentInputConnection?.getTextBeforeCursor(CONTEXT_CHARS, 0)?.toString() ?: ""
         viewModel.setInputText(textBefore)
@@ -99,6 +138,10 @@ class AgenticKeyboardService : InputMethodService(), LifecycleOwner, ViewModelSt
     override fun onStartInput(info: EditorInfo?, restarting: Boolean) {
         super.onStartInput(info, restarting)
         lifecycleRegistry.handleLifecycleEvent(Lifecycle.Event.ON_START)
+
+        // Detect password/secure fields (suppresses AI + learning) and restore the
+        // persona last used in this app.
+        viewModel.onEditorStarted(info?.packageName, info?.inputType ?: 0)
 
         // Fetch active editor contents to initialize suggestions/state, and drop
         // any AI result that referred to the previous editor.
