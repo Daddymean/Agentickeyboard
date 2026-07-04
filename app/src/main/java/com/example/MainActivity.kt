@@ -854,6 +854,7 @@ fun ExportTab(viewModel: KeyboardViewModel) {
     val isProofread by viewModel.isProofreadEnabled.collectAsState()
     val isLearningPaused by viewModel.isLearningPaused.collectAsState()
     val isHaptics by viewModel.isHapticsEnabled.collectAsState()
+    val themeMode by viewModel.themeMode.collectAsState()
     val clipboardManager = LocalClipboardManager.current
     val context = LocalContext.current
 
@@ -1028,6 +1029,49 @@ fun ExportTab(viewModel: KeyboardViewModel) {
                         checked = isHaptics,
                         onCheckedChange = { viewModel.setHapticsEnabled(it) }
                     )
+
+                    Spacer(modifier = Modifier.height(10.dp))
+                    Text(
+                        "Keyboard theme",
+                        color = Color(0xFF1C1B1F),
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 12.sp
+                    )
+                    Text(
+                        "Follow the system's light/dark setting, or force one.",
+                        color = Color(0xFF5F5D6B),
+                        fontSize = 10.sp
+                    )
+                    Spacer(modifier = Modifier.height(6.dp))
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        listOf(
+                            "System" to com.example.util.KeyboardSettings.THEME_SYSTEM,
+                            "Light" to com.example.util.KeyboardSettings.THEME_LIGHT,
+                            "Dark" to com.example.util.KeyboardSettings.THEME_DARK
+                        ).forEach { (label, mode) ->
+                            val isSelected = themeMode == mode
+                            Box(
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .clip(RoundedCornerShape(12.dp))
+                                    .background(if (isSelected) Color(0xFFE8DEF8) else Color(0xFFF1F5F9))
+                                    .clickable { viewModel.setThemeMode(mode) }
+                                    .border(1.dp, if (isSelected) Color(0xFF6750A4) else Color.Transparent, RoundedCornerShape(12.dp))
+                                    .padding(vertical = 8.dp),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text(
+                                    label,
+                                    color = if (isSelected) Color(0xFF21005D) else Color(0xFF49454F),
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
+                        }
+                    }
 
                     Spacer(modifier = Modifier.height(10.dp))
                     Text(

@@ -121,6 +121,9 @@ class KeyboardViewModel(
     private val _isOfflineMode = MutableStateFlow(settings?.isOfflineMode ?: false)
     val isOfflineMode = _isOfflineMode.asStateFlow()
 
+    private val _themeMode = MutableStateFlow(settings?.themeMode ?: KeyboardSettings.THEME_SYSTEM)
+    val themeMode = _themeMode.asStateFlow()
+
     private val _isSwipeEnabled = MutableStateFlow(settings?.isSwipeEnabled ?: true)
     val isSwipeEnabled = _isSwipeEnabled.asStateFlow()
 
@@ -172,6 +175,7 @@ class KeyboardViewModel(
         val s = settings ?: return@OnSharedPreferenceChangeListener
         when (key) {
             KeyboardSettings.KEY_OFFLINE_MODE -> _isOfflineMode.value = s.isOfflineMode
+            KeyboardSettings.KEY_THEME_MODE -> _themeMode.value = s.themeMode
             KeyboardSettings.KEY_SWIPE_ENABLED -> _isSwipeEnabled.value = s.isSwipeEnabled
             KeyboardSettings.KEY_AUTO_CAPITALIZE -> _isAutoCapitalizeEnabled.value = s.isAutoCapitalizeEnabled
             KeyboardSettings.KEY_NUMBER_ROW -> _isNumberRowEnabled.value = s.isNumberRowEnabled
@@ -299,6 +303,11 @@ class KeyboardViewModel(
         _targetLanguage.value = target
         settings?.sourceLanguage = source
         settings?.targetLanguage = target
+    }
+
+    fun setThemeMode(mode: String) {
+        _themeMode.value = mode
+        settings?.themeMode = mode
     }
 
     fun toggleOfflineMode() {

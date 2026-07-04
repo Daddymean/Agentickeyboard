@@ -16,6 +16,10 @@ class KeyboardSettings(context: Context) {
 
     companion object {
         const val KEY_OFFLINE_MODE = "offline_mode"
+        const val KEY_THEME_MODE = "theme_mode"
+        const val THEME_SYSTEM = "system"
+        const val THEME_LIGHT = "light"
+        const val THEME_DARK = "dark"
         const val KEY_SWIPE_ENABLED = "swipe_enabled"
         const val KEY_AUTO_CAPITALIZE = "auto_capitalize"
         const val KEY_NUMBER_ROW = "number_row"
@@ -35,6 +39,11 @@ class KeyboardSettings(context: Context) {
     var isOfflineMode: Boolean
         get() = prefs.getBoolean(KEY_OFFLINE_MODE, false)
         set(value) = prefs.edit().putBoolean(KEY_OFFLINE_MODE, value).apply()
+
+    /** Keyboard color theme: follow the system (default), or force light/dark. */
+    var themeMode: String
+        get() = prefs.getString(KEY_THEME_MODE, THEME_SYSTEM) ?: THEME_SYSTEM
+        set(value) = prefs.edit().putString(KEY_THEME_MODE, value).apply()
 
     var isSwipeEnabled: Boolean
         get() = prefs.getBoolean(KEY_SWIPE_ENABLED, true)
