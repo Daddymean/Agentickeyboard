@@ -71,3 +71,26 @@ app/src/main/java/com/example/
 - Keep each logical change in its own focused commit with a descriptive message.
 - Develop on a feature branch; do not push directly to `main`.
 - Commit and push only when a change is complete; keep the working tree clean.
+
+## Working efficiently (keep token usage low)
+
+This project is worked on under tight usage limits. Default to lean mode:
+
+- **One task per session.** Finish a feature, push, then start a fresh session
+  with a short handoff brief rather than continuing a long conversation — a long
+  chat re-sends its whole history every turn.
+- **Read in slices, not whole files.** Use Read `offset`/`limit` (or Grep) to
+  pull only the lines you need. `AgenticKeyboardLayout.kt`, `KeyboardViewModel.kt`,
+  and `MainActivity.kt` are large — never read them end-to-end without reason.
+- **Edit, don't rewrite.** Use targeted `Edit` (old→new string) on the lines that
+  change. Do not `Write` a whole large file to change a few lines.
+- **Don't re-read a file just to verify an edit.** The harness reports edit
+  success; a re-read is wasted tokens.
+- **Lean on CI instead of exhaustive manual review.** The pipeline compiles the
+  code — push and read the (small) CI status rather than reasoning through every
+  line locally.
+- **Prefer small GitHub calls.** Use `pull_request_read` `get_status` /
+  `get_check_runs` and pass `minimal_output: true`. Avoid `actions_list` /
+  `get_workflow_run` full objects — they return very large payloads.
+- **Don't poll.** Push once and check status a single time (or let the user
+  report back); don't loop on waits.
