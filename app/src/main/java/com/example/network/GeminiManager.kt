@@ -2,6 +2,7 @@ package com.example.network
 
 import android.util.Log
 import com.example.BuildConfig
+import com.example.util.ReplyIntents
 import com.squareup.moshi.Moshi
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -108,17 +109,17 @@ object GeminiManager {
     /**
      * Suggests smart response replies based on input message context.
      */
-    suspend fun suggestReplies(contextMessage: String, personalizationContext: String = ""): SuggestionsResponse = withContext(Dispatchers.IO) {
+    suspend fun suggestReplies(contextMessage: String, personalizationContext: String = "", intent: String = ""): SuggestionsResponse = withContext(Dispatchers.IO) {
         if (!isApiKeyAvailable()) {
-            return@withContext getOfflineSuggestions(contextMessage, personalizationContext)
+            return@withContext getOfflineSuggestions(contextMessage, personalizationContext, intent)
         }
 
         val prompt = """
             You are an expert keyboard assistant. The user received this message:
             "$contextMessage"
-            
+
             ${if (personalizationContext.isNotEmpty()) "Personalization Context (match user's writing habits):\n$personalizationContext\n" else ""}
-            
+            ${if (intent.isNotEmpty()) "Reply direction chosen by the user: $intent. ${ReplyIntents.promptDirective(intent)}\n" else ""}
             Generate exactly 3 smart, natural, conversational, and highly context-appropriate replies, at three lengths:
             1. Very short (4 words or fewer)
             2. Medium (roughly 8-12 words)
@@ -131,7 +132,7 @@ object GeminiManager {
             }
         """.trimIndent()
 
-        val cacheKey = "replies|$personalizationContext|$contextMessage"
+        val cacheKey = "replies|$intent|$personalizationContext|$contextMessage"
         (cacheGet(cacheKey) as? SuggestionsResponse)?.let { return@withContext it }
 
         try {
@@ -146,11 +147,11 @@ object GeminiManager {
                 cachePut(cacheKey, parsed)
                 parsed
             } else {
-                getOfflineSuggestions(contextMessage, personalizationContext)
+                getOfflineSuggestions(contextMessage, personalizationContext, intent)
             }
         } catch (e: Exception) {
             Log.e(TAG, "Error in suggestReplies", e)
-            getOfflineSuggestions(contextMessage, personalizationContext)
+            getOfflineSuggestions(contextMessage, personalizationContext, intent)
         }
     }
 
@@ -446,7 +447,10 @@ object GeminiManager {
         )
     }
 
-    private fun getOfflineSuggestions(contextMessage: String, personalizationContext: String = ""): SuggestionsResponse {
+    private fun getOfflineSuggestions(contextMessage: String, personalizationContext: String = "", intent: String = ""): SuggestionsResponse {
+        if (intent.isNotEmpty()) {
+            ReplyIntents.offlineReplies(intent)?.let { return SuggestionsResponse(it) }
+        }
         val lowercaseContext = contextMessage.lowercase()
         val isProfessional = personalizationContext.contains("Professional", ignoreCase = true)
         val isJoyful = personalizationContext.contains("Joyful", ignoreCase = true) || personalizationContext.contains("Friendly", ignoreCase = true)

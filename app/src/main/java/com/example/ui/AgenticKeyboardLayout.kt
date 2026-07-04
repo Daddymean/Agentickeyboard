@@ -68,6 +68,7 @@ import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Popup
+import com.example.util.ReplyIntents
 import com.example.util.SwipePoint
 import com.example.util.SwipeToTypeEngine
 import kotlinx.coroutines.delay
@@ -136,6 +137,7 @@ fun AgenticKeyboardLayout(
     val isNumberRowEnabled by viewModel.isNumberRowEnabled.collectAsState()
     val isHapticsEnabled by viewModel.isHapticsEnabled.collectAsState()
     val isLearningPaused by viewModel.isLearningPaused.collectAsState()
+    val replyIntentContext by viewModel.replyIntentContext.collectAsState()
 
     fun buzz(type: HapticFeedbackType) {
         if (isHapticsEnabled) haptic.performHapticFeedback(type)
@@ -840,7 +842,7 @@ fun AgenticKeyboardLayout(
                             showClipboardActions = false
                         }
                         ClipActionChip("Reply Ideas 💡") {
-                            viewModel.suggestReplies(clipboardText ?: "")
+                            viewModel.requestReplyIdeas(clipboardText ?: "")
                             showClipboardActions = false
                         }
                         ClipActionChip("Translate 🌐") {
@@ -854,6 +856,51 @@ fun AgenticKeyboardLayout(
                         ClipActionChip("Explain 🧠") {
                             viewModel.explainText(clipboardText ?: "")
                             showClipboardActions = false
+                        }
+                    }
+                }
+            }
+        }
+
+        // --- REPLY INTENT CHIPS PANEL ---
+        // Shown after "Reply Ideas" is tapped: the user picks the direction the
+        // generated replies should take before anything is sent to the model.
+        AnimatedVisibility(
+            visible = replyIntentContext != null && !isSensitiveField,
+            enter = fadeIn(),
+            exit = fadeOut()
+        ) {
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 8.dp, vertical = 4.dp),
+                colors = CardDefaults.cardColors(containerColor = Color(0xFFF3EDF7)),
+                shape = RoundedCornerShape(12.dp)
+            ) {
+                Column(modifier = Modifier.padding(8.dp)) {
+                    Text(
+                        text = "Reply with which intent?",
+                        color = Color(0xFF49454F),
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Spacer(modifier = Modifier.height(6.dp))
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .horizontalScroll(rememberScrollState())
+                            .testTag("reply_intent_chips"),
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        ClipActionChip("✨ Any") {
+                            buzz(HapticFeedbackType.TextHandleMove)
+                            viewModel.chooseReplyIntent(null)
+                        }
+                        ReplyIntents.ALL.forEach { intent ->
+                            ClipActionChip(intent) {
+                                buzz(HapticFeedbackType.TextHandleMove)
+                                viewModel.chooseReplyIntent(intent)
+                            }
                         }
                     }
                 }

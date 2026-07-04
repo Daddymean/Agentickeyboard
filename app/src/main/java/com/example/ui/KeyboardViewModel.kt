@@ -16,6 +16,7 @@ import com.example.network.SuggestionsResponse
 import com.example.network.ToneAnalysisResponse
 import com.example.util.KeyboardSettings
 import com.example.util.PersonalModelSerializer
+import com.example.util.ReplyIntents
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.cancelAndJoin
@@ -88,6 +89,11 @@ class KeyboardViewModel(
     // AI states
     private val _suggestions = MutableStateFlow<List<String>>(emptyList())
     val suggestions = _suggestions.asStateFlow()
+
+    // Message awaiting an intent choice (Accept/Decline/...) before reply
+    // suggestions are generated; non-null while the intent chips are shown.
+    private val _replyIntentContext = MutableStateFlow<String?>(null)
+    val replyIntentContext = _replyIntentContext.asStateFlow()
 
     private val _grammarCorrection = MutableStateFlow<GrammarCorrectionResponse?>(null)
     val grammarCorrection = _grammarCorrection.asStateFlow()
@@ -255,6 +261,7 @@ class KeyboardViewModel(
         _explanation.value = null
         _continuation.value = null
         _suggestions.value = emptyList()
+        _replyIntentContext.value = null
     }
 
     fun setInputText(text: String) {
@@ -688,24 +695,42 @@ class KeyboardViewModel(
     /**
      * Suggest quick replies (short, medium, and detailed variants)
      */
-    fun suggestReplies(contextMessage: String) {
+    fun suggestReplies(contextMessage: String, intent: String = "") {
         if (contextMessage.isBlank() || _isSensitiveField.value) return
         launchAi {
             _suggestions.value = emptyList()
             try {
                 val personalization = getPersonalizationContext()
                 val result = if (_isOfflineMode.value) {
-                    getOfflineSuggestions(contextMessage, personalization)
+                    getOfflineSuggestions(contextMessage, personalization, intent)
                 } else {
-                    GeminiManager.suggestReplies(contextMessage, personalization)
+                    GeminiManager.suggestReplies(contextMessage, personalization, intent)
                 }
                 _suggestions.value = result.suggestions
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
-                _suggestions.value = listOf("Sounds good!", "Sure thing", "Let me check.")
+                _suggestions.value = ReplyIntents.offlineReplies(intent)
+                    ?: listOf("Sounds good!", "Sure thing", "Let me check.")
             }
         }
+    }
+
+    /**
+     * First step of intent-directed replies: remember the message being replied
+     * to and let the UI show intent chips (Accept/Decline/...) before generating.
+     */
+    fun requestReplyIdeas(contextMessage: String) {
+        if (contextMessage.isBlank() || _isSensitiveField.value) return
+        dismissResults()
+        _replyIntentContext.value = contextMessage
+    }
+
+    /** Second step: generate replies steered by [intent], or unsteered when null. */
+    fun chooseReplyIntent(intent: String?) {
+        val contextMessage = _replyIntentContext.value ?: return
+        _replyIntentContext.value = null
+        suggestReplies(contextMessage, intent ?: "")
     }
 
     /**
@@ -1024,7 +1049,10 @@ class KeyboardViewModel(
         return GrammarCorrectionResponse(text, corrected, "Offline grammar spellchecker applied.", count)
     }
 
-    private fun getOfflineSuggestions(context: String, personalization: String = ""): SuggestionsResponse {
+    private fun getOfflineSuggestions(context: String, personalization: String = "", intent: String = ""): SuggestionsResponse {
+        if (intent.isNotEmpty()) {
+            ReplyIntents.offlineReplies(intent)?.let { return SuggestionsResponse(it) }
+        }
         val isProfessional = personalization.contains("Professional", ignoreCase = true)
         val isJoyful = personalization.contains("Joyful", ignoreCase = true) || personalization.contains("Friendly", ignoreCase = true)
         val replies = when {
