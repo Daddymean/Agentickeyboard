@@ -653,20 +653,33 @@ class KeyboardViewModel(
         val origWords = original.split("\\s+".toRegex()).map { it.replace("[^a-zA-Z]".toRegex(), "").lowercase() }
         val corrWords = corrected.split("\\s+".toRegex()).map { it.replace("[^a-zA-Z]".toRegex(), "").lowercase() }
 
-        if (origWords.size == corrWords.size) {
-            for (i in origWords.indices) {
-                val oWord = origWords[i]
-                val cWord = corrWords[i]
-                if (oWord.isNotEmpty() && cWord.isNotEmpty() && oWord != cWord && oWord.length > 2) {
-                    val existing = repository.getCorrectionForTypo(oWord)
-                    if (existing != null) {
-                        repository.insertCorrection(existing.copy(correction = cWord, count = existing.count + 1))
-                    } else {
-                        repository.insertCorrection(LearnedCorrection(typo = oWord, correction = cWord))
-                    }
-                }
+        if (origWords.size != corrWords.size) return
+
+        val toProcess = mutableListOf<Pair<String, String>>()
+        for (i in origWords.indices) {
+            val oWord = origWords[i]
+            val cWord = corrWords[i]
+            if (oWord.isNotEmpty() && cWord.isNotEmpty() && oWord != cWord && oWord.length > 2) {
+                toProcess.add(oWord to cWord)
             }
         }
+
+        if (toProcess.isEmpty()) return
+
+        val typos = toProcess.map { it.first }
+        val existingList = repository.getCorrectionsForTypos(typos)
+        val existingMap = existingList.associateBy { it.typo }
+
+        val toInsert = toProcess.map { (oWord, cWord) ->
+            val existing = existingMap[oWord]
+            if (existing != null) {
+                existing.copy(correction = cWord, count = existing.count + 1)
+            } else {
+                LearnedCorrection(typo = oWord, correction = cWord)
+            }
+        }
+
+        repository.insertCorrections(toInsert)
     }
 
     /**

@@ -125,6 +125,12 @@ interface LearnedCorrectionDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertCorrection(correction: LearnedCorrection)
 
+    @Query("SELECT * FROM learned_corrections WHERE typo IN (:typos)")
+    suspend fun getCorrectionsForTypos(typos: List<String>): List<LearnedCorrection>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertCorrections(corrections: List<LearnedCorrection>)
+
     @Query("DELETE FROM learned_corrections WHERE id = :id")
     suspend fun deleteById(id: Int)
 
@@ -255,6 +261,14 @@ class KeyboardRepository(private val db: AppDatabase) {
 
     suspend fun getCorrectionForTypo(typo: String): LearnedCorrection? {
         return db.learnedCorrectionDao().getCorrectionForTypo(typo)
+    }
+
+    suspend fun getCorrectionsForTypos(typos: List<String>): List<LearnedCorrection> {
+        return db.learnedCorrectionDao().getCorrectionsForTypos(typos)
+    }
+
+    suspend fun insertCorrections(corrections: List<LearnedCorrection>) {
+        db.learnedCorrectionDao().insertCorrections(corrections)
     }
 
     suspend fun deleteCorrectionById(id: Int) {
