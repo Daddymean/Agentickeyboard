@@ -95,6 +95,13 @@ object SwipeToTypeEngine {
         return result
     }
 
+    @Volatile
+    private var lastUserVocabulary: List<String>? = null
+    @Volatile
+    private var lastBaseDictionary: List<String>? = null
+    @Volatile
+    private var cachedFullDictionary: List<String> = emptyList()
+
     fun getSwipeWordMatches(rawPath: List<SwipePoint>, userVocabulary: List<String> = emptyList()): List<String> {
         if (rawPath.isEmpty()) return emptyList()
 
@@ -103,7 +110,15 @@ object SwipeToTypeEngine {
         val endPt = path.last()
 
         val baseDictionary = loadedDictionary.ifEmpty { defaultDictionary }
-        val fullDictionary = (userVocabulary.map { it.lowercase() } + baseDictionary).distinct()
+        val fullDictionary = if (userVocabulary != lastUserVocabulary || baseDictionary !== lastBaseDictionary) {
+            val combined = (userVocabulary.map { it.lowercase() } + baseDictionary).distinct()
+            lastUserVocabulary = userVocabulary
+            lastBaseDictionary = baseDictionary
+            cachedFullDictionary = combined
+            combined
+        } else {
+            cachedFullDictionary
+        }
         val ranks = wordRanks
 
         val candidates = mutableListOf<Pair<String, Float>>()
