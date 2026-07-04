@@ -200,6 +200,9 @@ private fun AgenticKeyboardContent(
     var showClipboardActions by remember { mutableStateOf(false) }
     var clipboardText by remember { mutableStateOf<String?>(null) }
 
+    // Message awaiting an intent choice before smart replies are generated
+    var replyIntentSource by remember { mutableStateOf<String?>(null) }
+
     // Swipe-to-Type Gesture States
     var keysAreaWidth by remember { mutableFloatStateOf(0f) }
     var keysAreaHeight by remember { mutableFloatStateOf(0f) }
@@ -888,7 +891,9 @@ private fun AgenticKeyboardContent(
                             showClipboardActions = false
                         }
                         ClipActionChip("Reply Ideas 💡") {
-                            viewModel.suggestReplies(clipboardText ?: "")
+                            // Ask for the reply's intent first; generation runs
+                            // once a direction chip is tapped.
+                            replyIntentSource = clipboardText
                             showClipboardActions = false
                         }
                         ClipActionChip("Translate 🌐") {
@@ -902,6 +907,76 @@ private fun AgenticKeyboardContent(
                         ClipActionChip("Explain 🧠") {
                             viewModel.explainText(clipboardText ?: "")
                             showClipboardActions = false
+                        }
+                    }
+                }
+            }
+        }
+
+        // --- REPLY INTENT CHOOSER (shown before generating smart replies) ---
+        AnimatedVisibility(
+            visible = replyIntentSource != null && !isSensitiveField,
+            enter = fadeIn(),
+            exit = fadeOut()
+        ) {
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 8.dp, vertical = 4.dp),
+                colors = CardDefaults.cardColors(containerColor = colors.panel),
+                shape = RoundedCornerShape(12.dp)
+            ) {
+                Column(modifier = Modifier.padding(8.dp)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            "🎯 Reply with what intent?",
+                            color = colors.text,
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                        IconButton(
+                            onClick = { replyIntentSource = null },
+                            modifier = Modifier.size(24.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Close,
+                                contentDescription = "Cancel reply intent",
+                                tint = colors.textMuted,
+                                modifier = Modifier.size(14.dp)
+                            )
+                        }
+                    }
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .horizontalScroll(rememberScrollState())
+                            .testTag("reply_intents"),
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        listOf(
+                            "✨ Any" to "",
+                            "✅ Accept" to "Accept",
+                            "🚫 Decline" to "Decline",
+                            "⚖️ Negotiate" to "Negotiate",
+                            "🕊 Soften" to "Soften",
+                            "❓ Clarify" to "Clarify",
+                            "🙏 Apologize" to "Apologize",
+                            "👍 Confirm" to "Confirm",
+                            "💰 Close sale" to "Close sale"
+                        ).forEach { (label, intent) ->
+                            ClipActionChip(label) {
+                                val source = replyIntentSource
+                                replyIntentSource = null
+                                if (source != null) {
+                                    buzz(HapticFeedbackType.TextHandleMove)
+                                    viewModel.suggestReplies(source, intent)
+                                }
+                            }
                         }
                     }
                 }

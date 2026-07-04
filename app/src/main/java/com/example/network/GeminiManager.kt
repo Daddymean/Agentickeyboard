@@ -106,19 +106,22 @@ object GeminiManager {
     }
 
     /**
-     * Suggests smart response replies based on input message context.
+     * Suggests smart response replies based on input message context. When an
+     * [intent] is given (Accept, Decline, Negotiate, ...) every reply is steered
+     * in that direction.
      */
-    suspend fun suggestReplies(contextMessage: String, personalizationContext: String = ""): SuggestionsResponse = withContext(Dispatchers.IO) {
+    suspend fun suggestReplies(contextMessage: String, personalizationContext: String = "", intent: String = ""): SuggestionsResponse = withContext(Dispatchers.IO) {
         if (!isApiKeyAvailable()) {
-            return@withContext getOfflineSuggestions(contextMessage, personalizationContext)
+            return@withContext getOfflineSuggestions(contextMessage, personalizationContext, intent)
         }
 
         val prompt = """
             You are an expert keyboard assistant. The user received this message:
             "$contextMessage"
-            
+
+            ${if (intent.isNotEmpty()) "The user has decided how they want to respond: \"$intent\". Every reply must clearly move the conversation in that direction.\n" else ""}
             ${if (personalizationContext.isNotEmpty()) "Personalization Context (match user's writing habits):\n$personalizationContext\n" else ""}
-            
+
             Generate exactly 3 smart, natural, conversational, and highly context-appropriate replies, at three lengths:
             1. Very short (4 words or fewer)
             2. Medium (roughly 8-12 words)
@@ -131,7 +134,7 @@ object GeminiManager {
             }
         """.trimIndent()
 
-        val cacheKey = "replies|$personalizationContext|$contextMessage"
+        val cacheKey = "replies|$intent|$personalizationContext|$contextMessage"
         (cacheGet(cacheKey) as? SuggestionsResponse)?.let { return@withContext it }
 
         try {
@@ -146,11 +149,11 @@ object GeminiManager {
                 cachePut(cacheKey, parsed)
                 parsed
             } else {
-                getOfflineSuggestions(contextMessage, personalizationContext)
+                getOfflineSuggestions(contextMessage, personalizationContext, intent)
             }
         } catch (e: Exception) {
             Log.e(TAG, "Error in suggestReplies", e)
-            getOfflineSuggestions(contextMessage, personalizationContext)
+            getOfflineSuggestions(contextMessage, personalizationContext, intent)
         }
     }
 
@@ -446,7 +449,21 @@ object GeminiManager {
         )
     }
 
-    private fun getOfflineSuggestions(contextMessage: String, personalizationContext: String = ""): SuggestionsResponse {
+    /** Canned offline replies steering toward a chosen intent. */
+    internal fun intentOfflineReplies(intent: String): List<String>? = when (intent.lowercase()) {
+        "accept" -> listOf("Yes, works for me.", "Sounds good — count me in.", "Happy to go ahead with that, thanks for asking.")
+        "decline" -> listOf("I'll pass, thanks.", "Unfortunately that won't work for me.", "Thanks for thinking of me, but I have to decline.")
+        "negotiate" -> listOf("Can we meet halfway?", "I'm interested, but I'd need better terms.", "Let's talk numbers — I think there's room to adjust this.")
+        "soften" -> listOf("No worries at all.", "Totally understand — no pressure either way.", "All good on my end, whenever it suits you works for me.")
+        "clarify" -> listOf("Could you clarify?", "What exactly do you mean by that part?", "Just to make sure I understand — could you give a bit more detail?")
+        "apologize" -> listOf("I'm really sorry.", "Apologies — that one is on me.", "I'm sorry about that; I'll make sure it doesn't happen again.")
+        "confirm" -> listOf("Confirmed.", "Yes, that's correct — we're set.", "Confirming everything is in place on my end, see you then.")
+        "close sale" -> listOf("Ready when you are.", "Shall we finalize everything today?", "Great — I'll send the paperwork over so we can wrap this up.")
+        else -> null
+    }
+
+    private fun getOfflineSuggestions(contextMessage: String, personalizationContext: String = "", intent: String = ""): SuggestionsResponse {
+        intentOfflineReplies(intent)?.let { return SuggestionsResponse(it) }
         val lowercaseContext = contextMessage.lowercase()
         val isProfessional = personalizationContext.contains("Professional", ignoreCase = true)
         val isJoyful = personalizationContext.contains("Joyful", ignoreCase = true) || personalizationContext.contains("Friendly", ignoreCase = true)

@@ -679,18 +679,19 @@ class KeyboardViewModel(
     }
 
     /**
-     * Suggest quick replies (short, medium, and detailed variants)
+     * Suggest quick replies (short, medium, and detailed variants), optionally
+     * steered toward a chosen intent (Accept, Decline, Negotiate, ...).
      */
-    fun suggestReplies(contextMessage: String) {
+    fun suggestReplies(contextMessage: String, intent: String = "") {
         if (contextMessage.isBlank() || _isSensitiveField.value) return
         launchAi {
             _suggestions.value = emptyList()
             try {
                 val personalization = getPersonalizationContext()
                 val result = if (_isOfflineMode.value) {
-                    getOfflineSuggestions(contextMessage, personalization)
+                    getOfflineSuggestions(contextMessage, personalization, intent)
                 } else {
-                    GeminiManager.suggestReplies(contextMessage, personalization)
+                    GeminiManager.suggestReplies(contextMessage, personalization, intent)
                 }
                 _suggestions.value = result.suggestions
             } catch (e: CancellationException) {
@@ -1019,7 +1020,8 @@ class KeyboardViewModel(
         return GrammarCorrectionResponse(text, corrected, "Offline grammar spellchecker applied.", count)
     }
 
-    private fun getOfflineSuggestions(context: String, personalization: String = ""): SuggestionsResponse {
+    private fun getOfflineSuggestions(context: String, personalization: String = "", intent: String = ""): SuggestionsResponse {
+        GeminiManager.intentOfflineReplies(intent)?.let { return SuggestionsResponse(it) }
         val isProfessional = personalization.contains("Professional", ignoreCase = true)
         val isJoyful = personalization.contains("Joyful", ignoreCase = true) || personalization.contains("Friendly", ignoreCase = true)
         val replies = when {
