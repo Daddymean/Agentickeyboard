@@ -74,7 +74,8 @@ class AgenticKeyboardService : InputMethodService(), LifecycleOwner, ViewModelSt
                 onCursorMove = { steps -> moveCursor(steps) },
                 // Resolved lazily on every use: the active InputConnection changes
                 // whenever the user switches editors, so it must never be captured.
-                inputConnectionProvider = { currentInputConnection }
+                inputConnectionProvider = { currentInputConnection },
+                selectedTextProvider = { currentInputConnection?.getSelectedText(0)?.toString() }
             )
         }
         return composeView

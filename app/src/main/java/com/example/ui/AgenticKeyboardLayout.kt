@@ -108,6 +108,7 @@ fun AgenticKeyboardLayout(
     onMicPress: () -> Unit = {},
     onCursorMove: (Int) -> Unit = {},
     inputConnectionProvider: () -> InputConnection? = { null },
+    selectedTextProvider: () -> String? = { null },
     inPlaygroundMode: Boolean = false,
     playgroundTextState: String = "",
     onPlaygroundTextChange: (String) -> Unit = {}
@@ -132,6 +133,7 @@ fun AgenticKeyboardLayout(
             onMicPress = onMicPress,
             onCursorMove = onCursorMove,
             inputConnectionProvider = inputConnectionProvider,
+            selectedTextProvider = selectedTextProvider,
             inPlaygroundMode = inPlaygroundMode,
             playgroundTextState = playgroundTextState,
             onPlaygroundTextChange = onPlaygroundTextChange
@@ -149,6 +151,7 @@ private fun AgenticKeyboardContent(
     onMicPress: () -> Unit = {},
     onCursorMove: (Int) -> Unit = {},
     inputConnectionProvider: () -> InputConnection? = { null },
+    selectedTextProvider: () -> String? = { null },
     inPlaygroundMode: Boolean = false,
     playgroundTextState: String = "",
     onPlaygroundTextChange: (String) -> Unit = {}
@@ -215,6 +218,16 @@ private fun AgenticKeyboardContent(
         inputConnectionProvider()?.getTextBeforeCursor(1000, 0)?.toString() ?: trackedInputText
     }
 
+    /** The user's active selection, or null when nothing is selected. */
+    fun currentSelection(): String? =
+        if (inPlaygroundMode) null else selectedTextProvider()?.takeIf { it.isNotEmpty() }
+
+    /**
+     * What AI actions operate on: the selection when one exists, otherwise the
+     * whole draft before the cursor.
+     */
+    fun aiSourceText(): String = currentSelection() ?: currentText()
+
     /** True when the caret sits at a position that should auto-capitalize. */
     fun isSentenceStart(text: String): Boolean {
         if (text.isEmpty() || text.endsWith("\n")) return true
@@ -228,13 +241,18 @@ private fun AgenticKeyboardContent(
         shiftState == ShiftState.OFF && isSentenceStart(activeText)
     val shiftActive = shiftState != ShiftState.OFF || autoCapActive
 
-    /** Replaces everything before the cursor with [newText]. */
+    /**
+     * Replaces the region AI actions operate on: the current selection when one
+     * exists (commitText replaces a selection), else everything before the cursor.
+     */
     fun replaceActiveText(newText: String) {
         if (inPlaygroundMode) {
             onPlaygroundTextChange(newText)
         } else {
             inputConnectionProvider()?.let { conn ->
-                conn.deleteSurroundingText(currentText().length, 0)
+                if (currentSelection() == null) {
+                    conn.deleteSurroundingText(currentText().length, 0)
+                }
                 conn.commitText(newText, 1)
             }
         }
@@ -340,17 +358,17 @@ private fun AgenticKeyboardContent(
                                 // Up-Right -> Translate
                                 buzz(HapticFeedbackType.LongPress)
                                 gestureAlert = "Gesture Triggered: Translating! 🌐"
-                                viewModel.translateText(currentText())
+                                viewModel.translateText(aiSourceText())
                             } else if (deltaX < 0 && deltaY < 0) {
                                 // Up-Left -> Summarize
                                 buzz(HapticFeedbackType.LongPress)
                                 gestureAlert = "Gesture Triggered: Summarizing! 🔍"
-                                viewModel.summarizeMessage(currentText())
+                                viewModel.summarizeMessage(aiSourceText())
                             } else if (deltaX < 0 && deltaY > 0) {
                                 // Down-Left -> Analyze Tone
                                 buzz(HapticFeedbackType.LongPress)
                                 gestureAlert = "Gesture Triggered: Analyzing Tone! 🎭"
-                                viewModel.analyzeTone(currentText())
+                                viewModel.analyzeTone(aiSourceText())
                             } else {
                                 // Down-Right -> Expand Templates
                                 buzz(HapticFeedbackType.LongPress)
@@ -980,7 +998,7 @@ private fun AgenticKeyboardContent(
                         highlighted = true,
                         onClick = {
                             buzz(HapticFeedbackType.TextHandleMove)
-                            viewModel.fixGrammar(currentText())
+                            viewModel.fixGrammar(aiSourceText())
                         },
                         modifier = Modifier.testTag("action_grammar")
                     )
@@ -990,7 +1008,7 @@ private fun AgenticKeyboardContent(
                         icon = "🪄",
                         onClick = {
                             buzz(HapticFeedbackType.TextHandleMove)
-                            val text = currentText()
+                            val text = aiSourceText()
                             if (text.isBlank()) {
                                 gestureAlert = "Type an instruction first, e.g. \"tell her I'm 20 min late\" 🪄"
                             } else {
@@ -1005,7 +1023,7 @@ private fun AgenticKeyboardContent(
                         icon = "✨",
                         onClick = {
                             buzz(HapticFeedbackType.TextHandleMove)
-                            viewModel.rewriteTone(currentText())
+                            viewModel.rewriteTone(aiSourceText())
                         },
                         onLongPress = {
                             buzz(HapticFeedbackType.LongPress)
@@ -1020,6 +1038,9 @@ private fun AgenticKeyboardContent(
                         icon = "✒️",
                         onClick = {
                             buzz(HapticFeedbackType.TextHandleMove)
+                            // Continue always extends the draft: its result is
+                            // appended at the cursor, so a selection would be
+                            // clobbered by the Append commit.
                             viewModel.continueDraft(currentText())
                         },
                         modifier = Modifier.testTag("action_continue")
@@ -1030,7 +1051,7 @@ private fun AgenticKeyboardContent(
                         icon = "🔍",
                         onClick = {
                             buzz(HapticFeedbackType.TextHandleMove)
-                            viewModel.summarizeMessage(currentText())
+                            viewModel.summarizeMessage(aiSourceText())
                         },
                         modifier = Modifier.testTag("action_summarize")
                     )
@@ -1040,7 +1061,7 @@ private fun AgenticKeyboardContent(
                         icon = "🌐",
                         onClick = {
                             buzz(HapticFeedbackType.TextHandleMove)
-                            viewModel.translateText(currentText())
+                            viewModel.translateText(aiSourceText())
                         },
                         modifier = Modifier.testTag("action_translate")
                     )
@@ -1050,7 +1071,7 @@ private fun AgenticKeyboardContent(
                         icon = "🎭",
                         onClick = {
                             buzz(HapticFeedbackType.TextHandleMove)
-                            viewModel.analyzeTone(currentText())
+                            viewModel.analyzeTone(aiSourceText())
                         },
                         modifier = Modifier.testTag("action_tone")
                     )
