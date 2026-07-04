@@ -54,6 +54,7 @@ class KeyboardViewModel(
             "on", "with", "as", "at", "by", "an", "be", "this", "are", "from"
         )
         private const val DAY_MS = 86_400_000L
+        private val OFFLINE_GRAMMAR_REPLACEMENTS = listOf("\\bteh\\b".toRegex(RegexOption.IGNORE_CASE) to "the", "\\bi\\b".toRegex(RegexOption.IGNORE_CASE) to "I", "\\bcant\\b".toRegex(RegexOption.IGNORE_CASE) to "can't")
     }
 
     // Shortcuts and logs from local Room DB
@@ -999,11 +1000,9 @@ class KeyboardViewModel(
     private fun getOfflineGrammarFix(text: String): GrammarCorrectionResponse {
         var corrected = text
         var count = 0
-        val replacements = mapOf("\\bteh\\b" to "the", "\\bi\\b" to "I", "\\bcant\\b" to "can't")
-        for ((typo, fix) in replacements) {
-            val r = typo.toRegex(RegexOption.IGNORE_CASE)
-            if (r.containsMatchIn(corrected)) {
-                corrected = corrected.replace(r, fix)
+        for ((typo, fix) in OFFLINE_GRAMMAR_REPLACEMENTS) {
+            if (typo.containsMatchIn(corrected)) {
+                corrected = corrected.replace(typo, fix)
                 count++
             }
         }
