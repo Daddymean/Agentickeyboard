@@ -2,12 +2,20 @@ package com.example.network
 
 import android.util.Log
 import com.example.BuildConfig
+import com.example.util.ReplyIntents
 import com.squareup.moshi.Moshi
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
 object GeminiManager {
     private const val TAG = "GeminiManager"
+
+    // Appended to rewrite/compose/continue prompts when the user's voice-lock
+    // setting is on: output must stay recognizably in the user's own words.
+    private const val VOICE_LOCK_DIRECTIVE =
+        "IMPORTANT: Preserve the user's own phrasing and word choices as much as possible. " +
+            "Make only the minimal edits needed. Do not add flourishes, filler, emojis, or an " +
+            "overproduced marketing tone — the result must still sound like the user wrote it."
     
     // We fetch the API key safely from BuildConfig
     private val apiKey: String = BuildConfig.GEMINI_API_KEY
@@ -58,7 +66,7 @@ object GeminiManager {
     /**
      * Corrects grammar and spelling errors. Returns a structured GrammarCorrectionResponse.
      */
-    suspend fun fixGrammar(text: String, personalizationContext: String = ""): GrammarCorrectionResponse = withContext(Dispatchers.IO) {
+    suspend fun fixGrammar(text: String, personalizationContext: String = "", bypassCache: Boolean = false): GrammarCorrectionResponse = withContext(Dispatchers.IO) {
         if (!isApiKeyAvailable()) {
             return@withContext getOfflineGrammarFix(text)
         }
@@ -81,7 +89,7 @@ object GeminiManager {
         """.trimIndent()
 
         val cacheKey = "grammar|$personalizationContext|$text"
-        (cacheGet(cacheKey) as? GrammarCorrectionResponse)?.let { return@withContext it }
+        if (!bypassCache) (cacheGet(cacheKey) as? GrammarCorrectionResponse)?.let { return@withContext it }
 
         try {
             val request = GenerateContentRequest(
@@ -108,17 +116,17 @@ object GeminiManager {
     /**
      * Suggests smart response replies based on input message context.
      */
-    suspend fun suggestReplies(contextMessage: String, personalizationContext: String = ""): SuggestionsResponse = withContext(Dispatchers.IO) {
+    suspend fun suggestReplies(contextMessage: String, personalizationContext: String = "", intent: String = "", bypassCache: Boolean = false): SuggestionsResponse = withContext(Dispatchers.IO) {
         if (!isApiKeyAvailable()) {
-            return@withContext getOfflineSuggestions(contextMessage, personalizationContext)
+            return@withContext getOfflineSuggestions(contextMessage, personalizationContext, intent)
         }
 
         val prompt = """
             You are an expert keyboard assistant. The user received this message:
             "$contextMessage"
-            
+
             ${if (personalizationContext.isNotEmpty()) "Personalization Context (match user's writing habits):\n$personalizationContext\n" else ""}
-            
+            ${if (intent.isNotEmpty()) "Reply direction chosen by the user: $intent. ${ReplyIntents.promptDirective(intent)}\n" else ""}
             Generate exactly 3 smart, natural, conversational, and highly context-appropriate replies, at three lengths:
             1. Very short (4 words or fewer)
             2. Medium (roughly 8-12 words)
@@ -131,8 +139,8 @@ object GeminiManager {
             }
         """.trimIndent()
 
-        val cacheKey = "replies|$personalizationContext|$contextMessage"
-        (cacheGet(cacheKey) as? SuggestionsResponse)?.let { return@withContext it }
+        val cacheKey = "replies|$intent|$personalizationContext|$contextMessage"
+        if (!bypassCache) (cacheGet(cacheKey) as? SuggestionsResponse)?.let { return@withContext it }
 
         try {
             val request = GenerateContentRequest(
@@ -146,18 +154,18 @@ object GeminiManager {
                 cachePut(cacheKey, parsed)
                 parsed
             } else {
-                getOfflineSuggestions(contextMessage, personalizationContext)
+                getOfflineSuggestions(contextMessage, personalizationContext, intent)
             }
         } catch (e: Exception) {
             Log.e(TAG, "Error in suggestReplies", e)
-            getOfflineSuggestions(contextMessage, personalizationContext)
+            getOfflineSuggestions(contextMessage, personalizationContext, intent)
         }
     }
 
     /**
      * Summarizes long input message text.
      */
-    suspend fun summarizeMessage(text: String, personalizationContext: String = ""): String = withContext(Dispatchers.IO) {
+    suspend fun summarizeMessage(text: String, personalizationContext: String = "", bypassCache: Boolean = false): String = withContext(Dispatchers.IO) {
         if (text.trim().split("\\s+".toRegex()).size < 10) {
             return@withContext "Message is too short to summarize."
         }
@@ -175,7 +183,7 @@ object GeminiManager {
         """.trimIndent()
 
         val cacheKey = "summary|$text"
-        (cacheGet(cacheKey) as? String)?.let { return@withContext it }
+        if (!bypassCache) (cacheGet(cacheKey) as? String)?.let { return@withContext it }
 
         try {
             val result = generateText(prompt)
@@ -190,7 +198,7 @@ object GeminiManager {
     /**
      * Translates text into target language.
      */
-    suspend fun translateText(text: String, sourceLang: String, targetLang: String, personalizationContext: String = ""): String = withContext(Dispatchers.IO) {
+    suspend fun translateText(text: String, sourceLang: String, targetLang: String, personalizationContext: String = "", bypassCache: Boolean = false): String = withContext(Dispatchers.IO) {
         if (text.isBlank()) return@withContext ""
         
         if (!isApiKeyAvailable()) {
@@ -206,7 +214,7 @@ object GeminiManager {
         """.trimIndent()
 
         val cacheKey = "translate|$sourceLang|$targetLang|$text"
-        (cacheGet(cacheKey) as? String)?.let { return@withContext it }
+        if (!bypassCache) (cacheGet(cacheKey) as? String)?.let { return@withContext it }
 
         try {
             val result = generateText(prompt)
@@ -221,7 +229,7 @@ object GeminiManager {
     /**
      * Rewrites text to match a target tone/persona while preserving meaning.
      */
-    suspend fun rewriteWithTone(text: String, targetTone: String, personalizationContext: String = ""): String = withContext(Dispatchers.IO) {
+    suspend fun rewriteWithTone(text: String, targetTone: String, personalizationContext: String = "", preserveVoice: Boolean = false, bypassCache: Boolean = false): String = withContext(Dispatchers.IO) {
         if (text.isBlank()) return@withContext ""
 
         if (!isApiKeyAvailable()) {
@@ -232,13 +240,13 @@ object GeminiManager {
             Rewrite the following text so it reads in a "$targetTone" tone. Preserve the original meaning and approximate length.
             Return ONLY the rewritten text with absolutely no introductory or extra text.
             ${if (personalizationContext.isNotEmpty()) "Blend in the user's habitual vocabulary where natural:\n$personalizationContext\n" else ""}
-
+            ${if (preserveVoice) "$VOICE_LOCK_DIRECTIVE\n" else ""}
             Text:
             $text
         """.trimIndent()
 
-        val cacheKey = "rewrite|$targetTone|$personalizationContext|$text"
-        (cacheGet(cacheKey) as? String)?.let { return@withContext it }
+        val cacheKey = "rewrite|$preserveVoice|$targetTone|$personalizationContext|$text"
+        if (!bypassCache) (cacheGet(cacheKey) as? String)?.let { return@withContext it }
 
         try {
             val result = generateText(prompt)
@@ -254,7 +262,7 @@ object GeminiManager {
      * Drafts a complete message from a short instruction the user typed, e.g.
      * "tell her I'll be 20 minutes late, apologetic" -> an actual message.
      */
-    suspend fun composeMessage(instruction: String, targetTone: String, personalizationContext: String = ""): String = withContext(Dispatchers.IO) {
+    suspend fun composeMessage(instruction: String, targetTone: String, personalizationContext: String = "", preserveVoice: Boolean = false, bypassCache: Boolean = false): String = withContext(Dispatchers.IO) {
         if (instruction.isBlank()) return@withContext ""
 
         if (!isApiKeyAvailable()) {
@@ -268,10 +276,11 @@ object GeminiManager {
             Write the actual message they should send, in a "$targetTone" tone, suitable for a mobile chat. Keep it natural and concise.
             Return ONLY the message text with absolutely no introductory or extra text.
             ${if (personalizationContext.isNotEmpty()) "Match the user's habitual voice:\n$personalizationContext\n" else ""}
+            ${if (preserveVoice) "$VOICE_LOCK_DIRECTIVE\n" else ""}
         """.trimIndent()
 
-        val cacheKey = "compose|$targetTone|$personalizationContext|$instruction"
-        (cacheGet(cacheKey) as? String)?.let { return@withContext it }
+        val cacheKey = "compose|$preserveVoice|$targetTone|$personalizationContext|$instruction"
+        if (!bypassCache) (cacheGet(cacheKey) as? String)?.let { return@withContext it }
 
         try {
             val result = generateText(prompt)
@@ -286,7 +295,7 @@ object GeminiManager {
     /**
      * Explains dense or jargon-heavy text (e.g. from the clipboard) in plain language.
      */
-    suspend fun explainText(text: String): String = withContext(Dispatchers.IO) {
+    suspend fun explainText(text: String, bypassCache: Boolean = false): String = withContext(Dispatchers.IO) {
         if (text.isBlank()) return@withContext ""
 
         if (!isApiKeyAvailable()) {
@@ -302,7 +311,7 @@ object GeminiManager {
         """.trimIndent()
 
         val cacheKey = "explain|$text"
-        (cacheGet(cacheKey) as? String)?.let { return@withContext it }
+        if (!bypassCache) (cacheGet(cacheKey) as? String)?.let { return@withContext it }
 
         try {
             val result = generateText(prompt)
@@ -318,7 +327,7 @@ object GeminiManager {
      * Continues the user's draft mid-thought in their own voice. Returns only the
      * continuation (not the original text).
      */
-    suspend fun continueText(text: String, personalizationContext: String = ""): String = withContext(Dispatchers.IO) {
+    suspend fun continueText(text: String, personalizationContext: String = "", preserveVoice: Boolean = false, bypassCache: Boolean = false): String = withContext(Dispatchers.IO) {
         if (text.isBlank()) return@withContext ""
 
         if (!isApiKeyAvailable()) {
@@ -331,10 +340,11 @@ object GeminiManager {
 
             Write the next 5-20 words that continue the draft. Return ONLY the continuation text - do NOT repeat the original draft, do not add quotes or commentary. If the draft ends mid-word, complete that word first.
             ${if (personalizationContext.isNotEmpty()) "Match the user's habitual voice:\n$personalizationContext\n" else ""}
+            ${if (preserveVoice) "$VOICE_LOCK_DIRECTIVE\n" else ""}
         """.trimIndent()
 
-        val cacheKey = "continue|$personalizationContext|$text"
-        (cacheGet(cacheKey) as? String)?.let { return@withContext it }
+        val cacheKey = "continue|$preserveVoice|$personalizationContext|$text"
+        if (!bypassCache) (cacheGet(cacheKey) as? String)?.let { return@withContext it }
 
         try {
             val result = generateText(prompt)
@@ -446,7 +456,10 @@ object GeminiManager {
         )
     }
 
-    private fun getOfflineSuggestions(contextMessage: String, personalizationContext: String = ""): SuggestionsResponse {
+    private fun getOfflineSuggestions(contextMessage: String, personalizationContext: String = "", intent: String = ""): SuggestionsResponse {
+        if (intent.isNotEmpty()) {
+            ReplyIntents.offlineReplies(intent)?.let { return SuggestionsResponse(it) }
+        }
         val lowercaseContext = contextMessage.lowercase()
         val isProfessional = personalizationContext.contains("Professional", ignoreCase = true)
         val isJoyful = personalizationContext.contains("Joyful", ignoreCase = true) || personalizationContext.contains("Friendly", ignoreCase = true)

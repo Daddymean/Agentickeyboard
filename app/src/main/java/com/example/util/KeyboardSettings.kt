@@ -22,6 +22,7 @@ class KeyboardSettings(context: Context) {
         const val KEY_PROOFREAD = "proofread_as_you_type"
         const val KEY_LEARNING_PAUSED = "learning_paused"
         const val KEY_HAPTICS = "haptics_enabled"
+        const val KEY_VOICE_LOCK = "voice_lock"
         const val KEY_PERSONA = "persona"
         const val KEY_SOURCE_LANG = "source_lang"
         const val KEY_TARGET_LANG = "target_lang"
@@ -60,6 +61,11 @@ class KeyboardSettings(context: Context) {
     var isHapticsEnabled: Boolean
         get() = prefs.getBoolean(KEY_HAPTICS, true)
         set(value) = prefs.edit().putBoolean(KEY_HAPTICS, value).apply()
+
+    /** Voice-lock: AI rewrite/compose/continue must preserve the user's own phrasing. */
+    var isVoiceLockEnabled: Boolean
+        get() = prefs.getBoolean(KEY_VOICE_LOCK, false)
+        set(value) = prefs.edit().putBoolean(KEY_VOICE_LOCK, value).apply()
 
     var persona: String
         get() = prefs.getString(KEY_PERSONA, "Match my history") ?: "Match my history"

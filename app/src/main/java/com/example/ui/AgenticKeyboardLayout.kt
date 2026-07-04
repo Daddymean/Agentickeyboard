@@ -68,6 +68,8 @@ import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Popup
+import com.example.util.CommandPalette
+import com.example.util.ReplyIntents
 import com.example.util.SwipePoint
 import com.example.util.SwipeToTypeEngine
 import kotlinx.coroutines.delay
@@ -136,6 +138,7 @@ fun AgenticKeyboardLayout(
     val isNumberRowEnabled by viewModel.isNumberRowEnabled.collectAsState()
     val isHapticsEnabled by viewModel.isHapticsEnabled.collectAsState()
     val isLearningPaused by viewModel.isLearningPaused.collectAsState()
+    val replyIntentContext by viewModel.replyIntentContext.collectAsState()
 
     fun buzz(type: HapticFeedbackType) {
         if (isHapticsEnabled) haptic.performHapticFeedback(type)
@@ -168,6 +171,17 @@ fun AgenticKeyboardLayout(
         inputConnectionProvider()?.getTextBeforeCursor(1000, 0)?.toString() ?: trackedInputText
     }
 
+    // Text the user has selected in the active editor, or null when nothing is
+    // selected. Playground mode has no editor selection to read.
+    fun selectedText(): String? = if (inPlaygroundMode) {
+        null
+    } else {
+        inputConnectionProvider()?.getSelectedText(0)?.toString()?.takeIf { it.isNotBlank() }
+    }
+
+    // Source text for AI actions: the selection when one exists, else the draft.
+    fun aiSourceText(): String = selectedText() ?: currentText()
+
     /** True when the caret sits at a position that should auto-capitalize. */
     fun isSentenceStart(text: String): Boolean {
         if (text.isEmpty() || text.endsWith("\n")) return true
@@ -181,13 +195,19 @@ fun AgenticKeyboardLayout(
         shiftState == ShiftState.OFF && isSentenceStart(activeText)
     val shiftActive = shiftState != ShiftState.OFF || autoCapActive
 
-    /** Replaces everything before the cursor with [newText]. */
+    /**
+     * Replaces the active selection with [newText] when one exists, otherwise
+     * replaces everything before the cursor. commitText on its own already
+     * replaces a selection, so only the no-selection case needs a delete first.
+     */
     fun replaceActiveText(newText: String) {
         if (inPlaygroundMode) {
             onPlaygroundTextChange(newText)
         } else {
             inputConnectionProvider()?.let { conn ->
-                conn.deleteSurroundingText(currentText().length, 0)
+                if (conn.getSelectedText(0).isNullOrEmpty()) {
+                    conn.deleteSurroundingText(currentText().length, 0)
+                }
                 conn.commitText(newText, 1)
             }
         }
@@ -293,17 +313,17 @@ fun AgenticKeyboardLayout(
                                 // Up-Right -> Translate
                                 buzz(HapticFeedbackType.LongPress)
                                 gestureAlert = "Gesture Triggered: Translating! 🌐"
-                                viewModel.translateText(currentText())
+                                viewModel.translateText(aiSourceText())
                             } else if (deltaX < 0 && deltaY < 0) {
                                 // Up-Left -> Summarize
                                 buzz(HapticFeedbackType.LongPress)
                                 gestureAlert = "Gesture Triggered: Summarizing! 🔍"
-                                viewModel.summarizeMessage(currentText())
+                                viewModel.summarizeMessage(aiSourceText())
                             } else if (deltaX < 0 && deltaY > 0) {
                                 // Down-Left -> Analyze Tone
                                 buzz(HapticFeedbackType.LongPress)
                                 gestureAlert = "Gesture Triggered: Analyzing Tone! 🎭"
-                                viewModel.analyzeTone(currentText())
+                                viewModel.analyzeTone(aiSourceText())
                             } else {
                                 // Down-Right -> Expand Templates
                                 buzz(HapticFeedbackType.LongPress)
@@ -775,6 +795,15 @@ fun AgenticKeyboardLayout(
                     }
                     if (hasAiResult) {
                         IconButton(
+                            onClick = {
+                                buzz(HapticFeedbackType.TextHandleMove)
+                                viewModel.regenerate()
+                            },
+                            modifier = Modifier.size(28.dp).testTag("regenerate_result")
+                        ) {
+                            Text("↻", color = Color(0xFF6750A4), fontSize = 15.sp, fontWeight = FontWeight.Bold)
+                        }
+                        IconButton(
                             onClick = { viewModel.dismissResults() },
                             modifier = Modifier.size(28.dp).testTag("dismiss_results")
                         ) {
@@ -785,6 +814,33 @@ fun AgenticKeyboardLayout(
                                 modifier = Modifier.size(16.dp)
                             )
                         }
+                    }
+                }
+            }
+        }
+
+        // --- ITERATE CHIPS (refine the AI text result that is showing) ---
+        val hasRefinableResult = grammarCorrection != null || summary != null || translation != null ||
+            rewrite != null || composeResult != null || continuation != null
+        AnimatedVisibility(
+            visible = hasRefinableResult && !isLoading,
+            enter = fadeIn(),
+            exit = fadeOut()
+        ) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(Color(0xFFF7F2FA))
+                    .padding(horizontal = 8.dp, vertical = 2.dp)
+                    .horizontalScroll(rememberScrollState())
+                    .testTag("iterate_chips"),
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                KeyboardViewModel.RESULT_REFINEMENTS.keys.forEach { adjustment ->
+                    ClipActionChip(adjustment) {
+                        buzz(HapticFeedbackType.TextHandleMove)
+                        viewModel.refineResult(adjustment)
                     }
                 }
             }
@@ -823,7 +879,7 @@ fun AgenticKeyboardLayout(
                             showClipboardActions = false
                         }
                         ClipActionChip("Reply Ideas 💡") {
-                            viewModel.suggestReplies(clipboardText ?: "")
+                            viewModel.requestReplyIdeas(clipboardText ?: "")
                             showClipboardActions = false
                         }
                         ClipActionChip("Translate 🌐") {
@@ -837,6 +893,51 @@ fun AgenticKeyboardLayout(
                         ClipActionChip("Explain 🧠") {
                             viewModel.explainText(clipboardText ?: "")
                             showClipboardActions = false
+                        }
+                    }
+                }
+            }
+        }
+
+        // --- REPLY INTENT CHIPS PANEL ---
+        // Shown after "Reply Ideas" is tapped: the user picks the direction the
+        // generated replies should take before anything is sent to the model.
+        AnimatedVisibility(
+            visible = replyIntentContext != null && !isSensitiveField,
+            enter = fadeIn(),
+            exit = fadeOut()
+        ) {
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 8.dp, vertical = 4.dp),
+                colors = CardDefaults.cardColors(containerColor = Color(0xFFF3EDF7)),
+                shape = RoundedCornerShape(12.dp)
+            ) {
+                Column(modifier = Modifier.padding(8.dp)) {
+                    Text(
+                        text = "Reply with which intent?",
+                        color = Color(0xFF49454F),
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Spacer(modifier = Modifier.height(6.dp))
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .horizontalScroll(rememberScrollState())
+                            .testTag("reply_intent_chips"),
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        ClipActionChip("✨ Any") {
+                            buzz(HapticFeedbackType.TextHandleMove)
+                            viewModel.chooseReplyIntent(null)
+                        }
+                        ReplyIntents.ALL.forEach { intent ->
+                            ClipActionChip(intent) {
+                                buzz(HapticFeedbackType.TextHandleMove)
+                                viewModel.chooseReplyIntent(intent)
+                            }
                         }
                     }
                 }
@@ -907,6 +1008,42 @@ fun AgenticKeyboardLayout(
             }
         }
 
+        // --- COMMAND PALETTE (draft starts with a "/" token) ---
+        val paletteCommands = if (isSensitiveField) emptyList() else CommandPalette.matches(activeText)
+        AnimatedVisibility(
+            visible = paletteCommands.isNotEmpty(),
+            enter = fadeIn(),
+            exit = fadeOut()
+        ) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(Color(0xFFEADDFF))
+                    .padding(vertical = 4.dp, horizontal = 6.dp)
+                    .horizontalScroll(rememberScrollState())
+                    .testTag("command_palette"),
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                paletteCommands.forEach { cmd ->
+                    ClipActionChip("${cmd.token} ${cmd.label}") {
+                        buzz(HapticFeedbackType.TextHandleMove)
+                        val body = CommandPalette.stripToken(currentText())
+                        if (body.isBlank()) {
+                            gestureAlert = "Type your text after ${cmd.token} first ⌨️"
+                        } else {
+                            replaceActiveText(body)
+                            when (cmd.action) {
+                                CommandPalette.Action.REWRITE -> viewModel.rewriteWithStyle(body, cmd.instruction)
+                                CommandPalette.Action.PROOFREAD -> viewModel.fixGrammar(body)
+                                CommandPalette.Action.TRANSLATE -> viewModel.translateText(body)
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
         // --- AI ACTIONS BUTTONS ROW ---
         AnimatedVisibility(
             visible = showAiActions && !isSensitiveField,
@@ -933,7 +1070,7 @@ fun AgenticKeyboardLayout(
                         highlighted = true,
                         onClick = {
                             buzz(HapticFeedbackType.TextHandleMove)
-                            viewModel.fixGrammar(currentText())
+                            viewModel.fixGrammar(aiSourceText())
                         },
                         modifier = Modifier.testTag("action_grammar")
                     )
@@ -943,7 +1080,7 @@ fun AgenticKeyboardLayout(
                         icon = "🪄",
                         onClick = {
                             buzz(HapticFeedbackType.TextHandleMove)
-                            val text = currentText()
+                            val text = aiSourceText()
                             if (text.isBlank()) {
                                 gestureAlert = "Type an instruction first, e.g. \"tell her I'm 20 min late\" 🪄"
                             } else {
@@ -958,7 +1095,7 @@ fun AgenticKeyboardLayout(
                         icon = "✨",
                         onClick = {
                             buzz(HapticFeedbackType.TextHandleMove)
-                            viewModel.rewriteTone(currentText())
+                            viewModel.rewriteTone(aiSourceText())
                         },
                         onLongPress = {
                             buzz(HapticFeedbackType.LongPress)
@@ -983,7 +1120,7 @@ fun AgenticKeyboardLayout(
                         icon = "🔍",
                         onClick = {
                             buzz(HapticFeedbackType.TextHandleMove)
-                            viewModel.summarizeMessage(currentText())
+                            viewModel.summarizeMessage(aiSourceText())
                         },
                         modifier = Modifier.testTag("action_summarize")
                     )
@@ -993,7 +1130,7 @@ fun AgenticKeyboardLayout(
                         icon = "🌐",
                         onClick = {
                             buzz(HapticFeedbackType.TextHandleMove)
-                            viewModel.translateText(currentText())
+                            viewModel.translateText(aiSourceText())
                         },
                         modifier = Modifier.testTag("action_translate")
                     )
@@ -1003,7 +1140,7 @@ fun AgenticKeyboardLayout(
                         icon = "🎭",
                         onClick = {
                             buzz(HapticFeedbackType.TextHandleMove)
-                            viewModel.analyzeTone(currentText())
+                            viewModel.analyzeTone(aiSourceText())
                         },
                         modifier = Modifier.testTag("action_tone")
                     )
