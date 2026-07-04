@@ -803,6 +803,29 @@ class KeyboardViewModel(
     }
 
     /**
+     * Rewrite with an explicit style instruction (command palette, iterate
+     * chips) instead of the selected persona.
+     */
+    fun rewriteWithStyle(text: String, styleInstruction: String) {
+        if (text.isBlank() || _isSensitiveField.value) return
+        launchAi {
+            _rewrite.value = null
+            try {
+                val result = if (_isOfflineMode.value) {
+                    "[Offline: rewrite needs cloud mode] $text"
+                } else {
+                    GeminiManager.rewriteWithTone(text, styleInstruction, getPersonalizationContext())
+                }
+                _rewrite.value = result
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                _rewrite.value = "Rewrite error: ${e.localizedMessage}"
+            }
+        }
+    }
+
+    /**
      * Compose a full message from a typed instruction (e.g. "tell her I'll be
      * 20 minutes late, apologetic").
      */

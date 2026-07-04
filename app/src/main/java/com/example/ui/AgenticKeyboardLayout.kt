@@ -68,6 +68,7 @@ import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Popup
+import com.example.util.CommandPalette
 import com.example.util.ReplyIntents
 import com.example.util.SwipePoint
 import com.example.util.SwipeToTypeEngine
@@ -965,6 +966,42 @@ fun AgenticKeyboardLayout(
                             Text("→ Swipe Right: Space", fontSize = 11.sp, color = Color.DarkGray)
                             Text("⇧⇧ Double Shift: Caps Lock", fontSize = 11.sp, color = Color.DarkGray)
                             Text("␣ Slide on Space: Move cursor", fontSize = 11.sp, color = Color.DarkGray)
+                        }
+                    }
+                }
+            }
+        }
+
+        // --- COMMAND PALETTE (draft starts with a "/" token) ---
+        val paletteCommands = if (isSensitiveField) emptyList() else CommandPalette.matches(activeText)
+        AnimatedVisibility(
+            visible = paletteCommands.isNotEmpty(),
+            enter = fadeIn(),
+            exit = fadeOut()
+        ) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(Color(0xFFEADDFF))
+                    .padding(vertical = 4.dp, horizontal = 6.dp)
+                    .horizontalScroll(rememberScrollState())
+                    .testTag("command_palette"),
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                paletteCommands.forEach { cmd ->
+                    ClipActionChip("${cmd.token} ${cmd.label}") {
+                        buzz(HapticFeedbackType.TextHandleMove)
+                        val body = CommandPalette.stripToken(currentText())
+                        if (body.isBlank()) {
+                            gestureAlert = "Type your text after ${cmd.token} first ⌨️"
+                        } else {
+                            replaceActiveText(body)
+                            when (cmd.action) {
+                                CommandPalette.Action.REWRITE -> viewModel.rewriteWithStyle(body, cmd.instruction)
+                                CommandPalette.Action.PROOFREAD -> viewModel.fixGrammar(body)
+                                CommandPalette.Action.TRANSLATE -> viewModel.translateText(body)
+                            }
                         }
                     }
                 }
