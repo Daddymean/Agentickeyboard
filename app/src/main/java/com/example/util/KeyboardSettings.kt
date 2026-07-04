@@ -24,6 +24,7 @@ class KeyboardSettings(context: Context) {
         const val KEY_AUTO_CAPITALIZE = "auto_capitalize"
         const val KEY_NUMBER_ROW = "number_row"
         const val KEY_PROOFREAD = "proofread_as_you_type"
+        const val KEY_VOICE_LOCK = "voice_lock"
         const val KEY_LEARNING_PAUSED = "learning_paused"
         const val KEY_HAPTICS = "haptics_enabled"
         const val KEY_PERSONA = "persona"
@@ -61,6 +62,14 @@ class KeyboardSettings(context: Context) {
     var isProofreadEnabled: Boolean
         get() = prefs.getBoolean(KEY_PROOFREAD, false)
         set(value) = prefs.edit().putBoolean(KEY_PROOFREAD, value).apply()
+
+    /**
+     * When on, AI rewrites/compose/continue must preserve the user's own phrasing
+     * with minimal edits instead of polishing it into marketing-speak.
+     */
+    var isVoiceLockEnabled: Boolean
+        get() = prefs.getBoolean(KEY_VOICE_LOCK, false)
+        set(value) = prefs.edit().putBoolean(KEY_VOICE_LOCK, value).apply()
 
     var isLearningPaused: Boolean
         get() = prefs.getBoolean(KEY_LEARNING_PAUSED, false)

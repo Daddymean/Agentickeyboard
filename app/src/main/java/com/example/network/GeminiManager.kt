@@ -46,6 +46,19 @@ object GeminiManager {
         synchronized(responseCache) { responseCache[key] = value }
     }
 
+    /**
+     * Prompt constraint appended when the user's voice-lock setting is on: the
+     * output must stay in the user's own words instead of being polished.
+     */
+    private fun voiceLockClause(voiceLock: Boolean): String = if (voiceLock) {
+        "\nVOICE LOCK: preserve the user's own phrasing, vocabulary, and rhythm. " +
+            "Make only the minimal edits needed. Do NOT polish or formalize the text, " +
+            "and do NOT make it sound overproduced, marketing-like, or fake-formal — " +
+            "it must still read like the same person typed it."
+    } else {
+        ""
+    }
+
     /** Runs a plain-text generation request, returning the trimmed reply or null. */
     private suspend fun generateText(prompt: String): String? {
         val request = GenerateContentRequest(
@@ -226,7 +239,7 @@ object GeminiManager {
      * instruction (e.g. "much shorter", "negotiating a counteroffer") — while
      * preserving meaning.
      */
-    suspend fun rewriteWithTone(text: String, targetTone: String, personalizationContext: String = ""): String = withContext(Dispatchers.IO) {
+    suspend fun rewriteWithTone(text: String, targetTone: String, personalizationContext: String = "", voiceLock: Boolean = false): String = withContext(Dispatchers.IO) {
         if (text.isBlank()) return@withContext ""
 
         if (!isApiKeyAvailable()) {
@@ -237,13 +250,13 @@ object GeminiManager {
             Rewrite the following text according to this tone/style instruction: "$targetTone".
             Preserve the original meaning, and keep the approximate length unless the instruction says otherwise.
             Return ONLY the rewritten text with absolutely no introductory or extra text.
-            ${if (personalizationContext.isNotEmpty()) "Blend in the user's habitual vocabulary where natural:\n$personalizationContext\n" else ""}
+            ${if (personalizationContext.isNotEmpty()) "Blend in the user's habitual vocabulary where natural:\n$personalizationContext\n" else ""}${voiceLockClause(voiceLock)}
 
             Text:
             $text
         """.trimIndent()
 
-        val cacheKey = "rewrite|$targetTone|$personalizationContext|$text"
+        val cacheKey = "rewrite|$targetTone|$voiceLock|$personalizationContext|$text"
         (cacheGet(cacheKey) as? String)?.let { return@withContext it }
 
         try {
@@ -260,7 +273,7 @@ object GeminiManager {
      * Drafts a complete message from a short instruction the user typed, e.g.
      * "tell her I'll be 20 minutes late, apologetic" -> an actual message.
      */
-    suspend fun composeMessage(instruction: String, targetTone: String, personalizationContext: String = ""): String = withContext(Dispatchers.IO) {
+    suspend fun composeMessage(instruction: String, targetTone: String, personalizationContext: String = "", voiceLock: Boolean = false): String = withContext(Dispatchers.IO) {
         if (instruction.isBlank()) return@withContext ""
 
         if (!isApiKeyAvailable()) {
@@ -273,10 +286,10 @@ object GeminiManager {
 
             Write the actual message they should send, in a "$targetTone" tone, suitable for a mobile chat. Keep it natural and concise.
             Return ONLY the message text with absolutely no introductory or extra text.
-            ${if (personalizationContext.isNotEmpty()) "Match the user's habitual voice:\n$personalizationContext\n" else ""}
+            ${if (personalizationContext.isNotEmpty()) "Match the user's habitual voice:\n$personalizationContext\n" else ""}${voiceLockClause(voiceLock)}
         """.trimIndent()
 
-        val cacheKey = "compose|$targetTone|$personalizationContext|$instruction"
+        val cacheKey = "compose|$targetTone|$voiceLock|$personalizationContext|$instruction"
         (cacheGet(cacheKey) as? String)?.let { return@withContext it }
 
         try {
@@ -324,7 +337,7 @@ object GeminiManager {
      * Continues the user's draft mid-thought in their own voice. Returns only the
      * continuation (not the original text).
      */
-    suspend fun continueText(text: String, personalizationContext: String = ""): String = withContext(Dispatchers.IO) {
+    suspend fun continueText(text: String, personalizationContext: String = "", voiceLock: Boolean = false): String = withContext(Dispatchers.IO) {
         if (text.isBlank()) return@withContext ""
 
         if (!isApiKeyAvailable()) {
@@ -336,10 +349,10 @@ object GeminiManager {
             "$text"
 
             Write the next 5-20 words that continue the draft. Return ONLY the continuation text - do NOT repeat the original draft, do not add quotes or commentary. If the draft ends mid-word, complete that word first.
-            ${if (personalizationContext.isNotEmpty()) "Match the user's habitual voice:\n$personalizationContext\n" else ""}
+            ${if (personalizationContext.isNotEmpty()) "Match the user's habitual voice:\n$personalizationContext\n" else ""}${voiceLockClause(voiceLock)}
         """.trimIndent()
 
-        val cacheKey = "continue|$personalizationContext|$text"
+        val cacheKey = "continue|$voiceLock|$personalizationContext|$text"
         (cacheGet(cacheKey) as? String)?.let { return@withContext it }
 
         try {

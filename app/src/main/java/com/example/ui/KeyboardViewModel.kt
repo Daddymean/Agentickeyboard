@@ -159,6 +159,9 @@ class KeyboardViewModel(
     private val _isProofreadEnabled = MutableStateFlow(settings?.isProofreadEnabled ?: false)
     val isProofreadEnabled = _isProofreadEnabled.asStateFlow()
 
+    private val _isVoiceLockEnabled = MutableStateFlow(settings?.isVoiceLockEnabled ?: false)
+    val isVoiceLockEnabled = _isVoiceLockEnabled.asStateFlow()
+
     private val _isLearningPaused = MutableStateFlow(settings?.isLearningPaused ?: false)
     val isLearningPaused = _isLearningPaused.asStateFlow()
 
@@ -203,6 +206,7 @@ class KeyboardViewModel(
             KeyboardSettings.KEY_AUTO_CAPITALIZE -> _isAutoCapitalizeEnabled.value = s.isAutoCapitalizeEnabled
             KeyboardSettings.KEY_NUMBER_ROW -> _isNumberRowEnabled.value = s.isNumberRowEnabled
             KeyboardSettings.KEY_PROOFREAD -> _isProofreadEnabled.value = s.isProofreadEnabled
+            KeyboardSettings.KEY_VOICE_LOCK -> _isVoiceLockEnabled.value = s.isVoiceLockEnabled
             KeyboardSettings.KEY_LEARNING_PAUSED -> _isLearningPaused.value = s.isLearningPaused
             KeyboardSettings.KEY_HAPTICS -> _isHapticsEnabled.value = s.isHapticsEnabled
             KeyboardSettings.KEY_PERSONA -> _userPersonaPreference.value = s.persona
@@ -362,6 +366,11 @@ class KeyboardViewModel(
             proofreadJob?.cancel()
             _proofreadHint.value = null
         }
+    }
+
+    fun setVoiceLockEnabled(enabled: Boolean) {
+        _isVoiceLockEnabled.value = enabled
+        settings?.isVoiceLockEnabled = enabled
     }
 
     fun setLearningPaused(paused: Boolean) {
@@ -793,7 +802,7 @@ class KeyboardViewModel(
                 val result = if (_isOfflineMode.value) {
                     "[Offline: rewrite needs cloud mode] $text"
                 } else {
-                    GeminiManager.rewriteWithTone(text, instruction, getPersonalizationContext())
+                    GeminiManager.rewriteWithTone(text, instruction, getPersonalizationContext(), _isVoiceLockEnabled.value)
                 }
                 _rewrite.value = result
             } catch (e: CancellationException) {
@@ -828,7 +837,7 @@ class KeyboardViewModel(
                 val result = if (_isOfflineMode.value) {
                     "[Offline: compose needs cloud mode]"
                 } else {
-                    GeminiManager.composeMessage(instruction, effectivePersona(), getPersonalizationContext())
+                    GeminiManager.composeMessage(instruction, effectivePersona(), getPersonalizationContext(), _isVoiceLockEnabled.value)
                 }
                 _composeResult.value = result
             } catch (e: CancellationException) {
@@ -872,7 +881,7 @@ class KeyboardViewModel(
                 val result = if (_isOfflineMode.value) {
                     "[Offline: continue needs cloud mode]"
                 } else {
-                    GeminiManager.continueText(text, getPersonalizationContext())
+                    GeminiManager.continueText(text, getPersonalizationContext(), _isVoiceLockEnabled.value)
                 }
                 _continuation.value = result.takeIf { it.isNotBlank() }
             } catch (e: CancellationException) {

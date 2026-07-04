@@ -854,6 +854,7 @@ fun ExportTab(viewModel: KeyboardViewModel) {
     val isProofread by viewModel.isProofreadEnabled.collectAsState()
     val isLearningPaused by viewModel.isLearningPaused.collectAsState()
     val isHaptics by viewModel.isHapticsEnabled.collectAsState()
+    val isVoiceLock by viewModel.isVoiceLockEnabled.collectAsState()
     val themeMode by viewModel.themeMode.collectAsState()
     val clipboardManager = LocalClipboardManager.current
     val context = LocalContext.current
@@ -1016,6 +1017,12 @@ fun ExportTab(viewModel: KeyboardViewModel) {
                         description = "Quietly checks grammar in the background and offers one-tap fixes. Sends drafts to the cloud, so it is off by default.",
                         checked = isProofread,
                         onCheckedChange = { viewModel.setProofreadEnabled(it) }
+                    )
+                    SettingSwitchRow(
+                        title = "Voice lock",
+                        description = "AI rewrites keep your own phrasing with minimal edits — never polished into marketing-speak.",
+                        checked = isVoiceLock,
+                        onCheckedChange = { viewModel.setVoiceLockEnabled(it) }
                     )
                     SettingSwitchRow(
                         title = "Pause learning",
