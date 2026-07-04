@@ -222,7 +222,9 @@ object GeminiManager {
     }
 
     /**
-     * Rewrites text to match a target tone/persona while preserving meaning.
+     * Rewrites text to match a target tone/persona — or any free-form style
+     * instruction (e.g. "much shorter", "negotiating a counteroffer") — while
+     * preserving meaning.
      */
     suspend fun rewriteWithTone(text: String, targetTone: String, personalizationContext: String = ""): String = withContext(Dispatchers.IO) {
         if (text.isBlank()) return@withContext ""
@@ -232,7 +234,8 @@ object GeminiManager {
         }
 
         val prompt = """
-            Rewrite the following text so it reads in a "$targetTone" tone. Preserve the original meaning and approximate length.
+            Rewrite the following text according to this tone/style instruction: "$targetTone".
+            Preserve the original meaning, and keep the approximate length unless the instruction says otherwise.
             Return ONLY the rewritten text with absolutely no introductory or extra text.
             ${if (personalizationContext.isNotEmpty()) "Blend in the user's habitual vocabulary where natural:\n$personalizationContext\n" else ""}
 

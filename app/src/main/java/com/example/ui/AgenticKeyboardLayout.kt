@@ -172,6 +172,7 @@ private fun AgenticKeyboardContent(
     val summary by viewModel.summary.collectAsState()
     val translation by viewModel.translation.collectAsState()
     val rewrite by viewModel.rewrite.collectAsState()
+    val rewriteLabel by viewModel.rewriteLabel.collectAsState()
     val composeResult by viewModel.composeResult.collectAsState()
     val explanation by viewModel.explanation.collectAsState()
     val continuation by viewModel.continuation.collectAsState()
@@ -622,7 +623,7 @@ private fun AgenticKeyboardContent(
                             horizontalArrangement = Arrangement.SpaceBetween
                         ) {
                             Column(modifier = Modifier.weight(1f)) {
-                                Text("Rewritten (${viewModel.effectivePersona()}):", color = colors.accent, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                Text("Rewritten (${rewriteLabel ?: viewModel.effectivePersona()}):", color = colors.accent, fontSize = 11.sp, fontWeight = FontWeight.Bold)
                                 Text(rewrite!!, color = colors.text, fontSize = 13.sp, maxLines = 1)
                             }
                             Button(
@@ -908,6 +909,58 @@ private fun AgenticKeyboardContent(
                             viewModel.explainText(clipboardText ?: "")
                             showClipboardActions = false
                         }
+                    }
+                }
+            }
+        }
+
+        // --- COMMAND PALETTE: a leading "/" token filters the command list ---
+        val commandQuery = if (!isSensitiveField && activeText.startsWith("/")) {
+            activeText.drop(1).takeWhile { !it.isWhitespace() }.lowercase()
+        } else {
+            null
+        }
+        val matchingCommands = if (commandQuery != null) {
+            KeyboardViewModel.SLASH_COMMANDS.filter { it.token.startsWith(commandQuery) }
+        } else {
+            emptyList()
+        }
+        if (matchingCommands.isNotEmpty()) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(colors.panel)
+                    .padding(horizontal = 8.dp, vertical = 6.dp)
+                    .horizontalScroll(rememberScrollState())
+                    .testTag("command_palette"),
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                matchingCommands.forEach { command ->
+                    Row(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(colors.chip)
+                            .clickable {
+                                buzz(HapticFeedbackType.TextHandleMove)
+                                // Re-read the editor at tap time and strip the
+                                // /token before running the command on the rest.
+                                val text = currentText()
+                                val typedToken = text.drop(1).takeWhile { !it.isWhitespace() }
+                                val payload = text.drop(1 + typedToken.length).trim()
+                                if (payload.isBlank()) {
+                                    gestureAlert = "Type your text after /${command.token} first ⌨️"
+                                } else {
+                                    replaceActiveText(payload)
+                                    viewModel.runSlashCommand(command, payload)
+                                }
+                            }
+                            .padding(horizontal = 10.dp, vertical = 6.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text("/${command.token}", color = colors.accent, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                        Spacer(modifier = Modifier.width(5.dp))
+                        Text(command.label, color = colors.onChip, fontSize = 11.sp)
                     }
                 }
             }

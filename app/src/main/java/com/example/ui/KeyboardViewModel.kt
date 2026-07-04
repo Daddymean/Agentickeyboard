@@ -34,6 +34,12 @@ data class WordReplacement(val replacement: String, val fromLearnedRule: Boolean
 /** A just-applied auto-correction that backspace can revert. */
 data class AutoCorrectionUndo(val original: String, val replacement: String, val fromLearnedRule: Boolean)
 
+/**
+ * A slash command runnable from the keyboard's command palette. Commands with an
+ * [instruction] are instruction-driven rewrites; the rest map to dedicated actions.
+ */
+data class SlashCommand(val token: String, val label: String, val instruction: String? = null)
+
 /** Local, on-device usage statistics shown in the Style Hub dashboard. */
 data class UsageStats(
     val autoCorrections: Int = 0,
@@ -49,6 +55,19 @@ class KeyboardViewModel(
 
     companion object {
         val PERSONAS = listOf("Match my history", "Professional", "Joyful", "Empathetic", "Casual")
+        val SLASH_COMMANDS = listOf(
+            SlashCommand("firm", "Make it firm", "firm, direct, and confident"),
+            SlashCommand("kind", "Make it kind", "kind, warm, and considerate"),
+            SlashCommand("short", "Make it shorter", "much shorter — trim it down hard while keeping the meaning"),
+            SlashCommand("long", "Make it longer", "longer and more detailed"),
+            SlashCommand("sell", "Sell it", "persuasive and sales-oriented, highlighting the value clearly"),
+            SlashCommand("decline", "Decline politely", "politely but unambiguously declining"),
+            SlashCommand("counteroffer", "Counteroffer", "negotiating a firm but fair counteroffer"),
+            SlashCommand("apologize", "Apologize", "sincerely apologetic without overdoing it"),
+            SlashCommand("proof", "Proofread"),
+            SlashCommand("extract", "Extract key points", "condensed to only the key facts, dates, amounts, and action items"),
+            SlashCommand("translate", "Translate")
+        )
         private val STOP_WORDS = setOf(
             "the", "and", "a", "of", "to", "in", "is", "that", "it", "for",
             "on", "with", "as", "at", "by", "an", "be", "this", "are", "from"
@@ -100,6 +119,10 @@ class KeyboardViewModel(
 
     private val _rewrite = MutableStateFlow<String?>(null)
     val rewrite = _rewrite.asStateFlow()
+
+    // What produced the current rewrite: a persona name or a command label
+    private val _rewriteLabel = MutableStateFlow<String?>(null)
+    val rewriteLabel = _rewriteLabel.asStateFlow()
 
     private val _composeResult = MutableStateFlow<String?>(null)
     val composeResult = _composeResult.asStateFlow()
@@ -252,6 +275,7 @@ class KeyboardViewModel(
         _summary.value = null
         _translation.value = null
         _rewrite.value = null
+        _rewriteLabel.value = null
         _composeResult.value = null
         _explanation.value = null
         _continuation.value = null
@@ -752,15 +776,24 @@ class KeyboardViewModel(
      * Rewrite text to match the selected style persona
      */
     fun rewriteTone(text: String) {
+        rewriteWithInstruction(text, effectivePersona(), effectivePersona())
+    }
+
+    /**
+     * Rewrite text following an arbitrary tone/style instruction (used by the
+     * command palette and the iterate chips). [label] names the source of the
+     * rewrite in the result panel.
+     */
+    fun rewriteWithInstruction(text: String, instruction: String, label: String) {
         if (text.isBlank() || _isSensitiveField.value) return
         launchAi {
             _rewrite.value = null
+            _rewriteLabel.value = label
             try {
-                val targetTone = effectivePersona()
                 val result = if (_isOfflineMode.value) {
                     "[Offline: rewrite needs cloud mode] $text"
                 } else {
-                    GeminiManager.rewriteWithTone(text, targetTone, getPersonalizationContext())
+                    GeminiManager.rewriteWithTone(text, instruction, getPersonalizationContext())
                 }
                 _rewrite.value = result
             } catch (e: CancellationException) {
@@ -768,6 +801,18 @@ class KeyboardViewModel(
             } catch (e: Exception) {
                 _rewrite.value = "Rewrite error: ${e.localizedMessage}"
             }
+        }
+    }
+
+    /**
+     * Runs a command palette entry on [payload] (the draft with the leading
+     * /token already stripped).
+     */
+    fun runSlashCommand(command: SlashCommand, payload: String) {
+        when (command.token) {
+            "proof" -> fixGrammar(payload)
+            "translate" -> translateText(payload)
+            else -> command.instruction?.let { rewriteWithInstruction(payload, it, command.label) }
         }
     }
 
