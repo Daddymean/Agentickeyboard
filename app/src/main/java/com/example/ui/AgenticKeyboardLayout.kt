@@ -859,6 +859,43 @@ private fun AgenticKeyboardContent(
             }
         }
 
+        // --- REGENERATE + ITERATE CHIPS (turn one-shot results into a back-and-forth) ---
+        if (hasAiResult && !isLoading) {
+            // Iterating rewrites the visible candidate text, so it only applies to
+            // single-text results — reply lists and tone analyses just regenerate.
+            val hasSingleTextResult = grammarCorrection != null || summary != null ||
+                translation != null || rewrite != null || composeResult != null
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(colors.shelf)
+                    .padding(horizontal = 8.dp, vertical = 3.dp)
+                    .horizontalScroll(rememberScrollState())
+                    .testTag("iterate_chips"),
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                ClipActionChip("↻ Regenerate") {
+                    buzz(HapticFeedbackType.TextHandleMove)
+                    viewModel.regenerateLastAction()
+                }
+                if (hasSingleTextResult) {
+                    listOf(
+                        "Shorter" to "much shorter while keeping the meaning",
+                        "Longer" to "longer with a bit more detail",
+                        "Warmer" to "warmer and friendlier",
+                        "Firmer" to "firmer and more direct",
+                        "More formal" to "more formal and professional"
+                    ).forEach { (label, instruction) ->
+                        ClipActionChip(label) {
+                            buzz(HapticFeedbackType.TextHandleMove)
+                            viewModel.iterateOnResult(instruction, label)
+                        }
+                    }
+                }
+            }
+        }
+
         // --- CLIPBOARD INTELLIGENCE PANEL ---
         AnimatedVisibility(
             visible = showClipboardActions && clipboardText != null && !isSensitiveField,
