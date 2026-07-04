@@ -168,6 +168,17 @@ fun AgenticKeyboardLayout(
         inputConnectionProvider()?.getTextBeforeCursor(1000, 0)?.toString() ?: trackedInputText
     }
 
+    // Text the user has selected in the active editor, or null when nothing is
+    // selected. Playground mode has no editor selection to read.
+    fun selectedText(): String? = if (inPlaygroundMode) {
+        null
+    } else {
+        inputConnectionProvider()?.getSelectedText(0)?.toString()?.takeIf { it.isNotBlank() }
+    }
+
+    // Source text for AI actions: the selection when one exists, else the draft.
+    fun aiSourceText(): String = selectedText() ?: currentText()
+
     /** True when the caret sits at a position that should auto-capitalize. */
     fun isSentenceStart(text: String): Boolean {
         if (text.isEmpty() || text.endsWith("\n")) return true
@@ -181,13 +192,19 @@ fun AgenticKeyboardLayout(
         shiftState == ShiftState.OFF && isSentenceStart(activeText)
     val shiftActive = shiftState != ShiftState.OFF || autoCapActive
 
-    /** Replaces everything before the cursor with [newText]. */
+    /**
+     * Replaces the active selection with [newText] when one exists, otherwise
+     * replaces everything before the cursor. commitText on its own already
+     * replaces a selection, so only the no-selection case needs a delete first.
+     */
     fun replaceActiveText(newText: String) {
         if (inPlaygroundMode) {
             onPlaygroundTextChange(newText)
         } else {
             inputConnectionProvider()?.let { conn ->
-                conn.deleteSurroundingText(currentText().length, 0)
+                if (conn.getSelectedText(0).isNullOrEmpty()) {
+                    conn.deleteSurroundingText(currentText().length, 0)
+                }
                 conn.commitText(newText, 1)
             }
         }
@@ -293,17 +310,17 @@ fun AgenticKeyboardLayout(
                                 // Up-Right -> Translate
                                 buzz(HapticFeedbackType.LongPress)
                                 gestureAlert = "Gesture Triggered: Translating! 🌐"
-                                viewModel.translateText(currentText())
+                                viewModel.translateText(aiSourceText())
                             } else if (deltaX < 0 && deltaY < 0) {
                                 // Up-Left -> Summarize
                                 buzz(HapticFeedbackType.LongPress)
                                 gestureAlert = "Gesture Triggered: Summarizing! 🔍"
-                                viewModel.summarizeMessage(currentText())
+                                viewModel.summarizeMessage(aiSourceText())
                             } else if (deltaX < 0 && deltaY > 0) {
                                 // Down-Left -> Analyze Tone
                                 buzz(HapticFeedbackType.LongPress)
                                 gestureAlert = "Gesture Triggered: Analyzing Tone! 🎭"
-                                viewModel.analyzeTone(currentText())
+                                viewModel.analyzeTone(aiSourceText())
                             } else {
                                 // Down-Right -> Expand Templates
                                 buzz(HapticFeedbackType.LongPress)
@@ -933,7 +950,7 @@ fun AgenticKeyboardLayout(
                         highlighted = true,
                         onClick = {
                             buzz(HapticFeedbackType.TextHandleMove)
-                            viewModel.fixGrammar(currentText())
+                            viewModel.fixGrammar(aiSourceText())
                         },
                         modifier = Modifier.testTag("action_grammar")
                     )
@@ -943,7 +960,7 @@ fun AgenticKeyboardLayout(
                         icon = "🪄",
                         onClick = {
                             buzz(HapticFeedbackType.TextHandleMove)
-                            val text = currentText()
+                            val text = aiSourceText()
                             if (text.isBlank()) {
                                 gestureAlert = "Type an instruction first, e.g. \"tell her I'm 20 min late\" 🪄"
                             } else {
@@ -958,7 +975,7 @@ fun AgenticKeyboardLayout(
                         icon = "✨",
                         onClick = {
                             buzz(HapticFeedbackType.TextHandleMove)
-                            viewModel.rewriteTone(currentText())
+                            viewModel.rewriteTone(aiSourceText())
                         },
                         onLongPress = {
                             buzz(HapticFeedbackType.LongPress)
@@ -983,7 +1000,7 @@ fun AgenticKeyboardLayout(
                         icon = "🔍",
                         onClick = {
                             buzz(HapticFeedbackType.TextHandleMove)
-                            viewModel.summarizeMessage(currentText())
+                            viewModel.summarizeMessage(aiSourceText())
                         },
                         modifier = Modifier.testTag("action_summarize")
                     )
@@ -993,7 +1010,7 @@ fun AgenticKeyboardLayout(
                         icon = "🌐",
                         onClick = {
                             buzz(HapticFeedbackType.TextHandleMove)
-                            viewModel.translateText(currentText())
+                            viewModel.translateText(aiSourceText())
                         },
                         modifier = Modifier.testTag("action_translate")
                     )
@@ -1003,7 +1020,7 @@ fun AgenticKeyboardLayout(
                         icon = "🎭",
                         onClick = {
                             buzz(HapticFeedbackType.TextHandleMove)
-                            viewModel.analyzeTone(currentText())
+                            viewModel.analyzeTone(aiSourceText())
                         },
                         modifier = Modifier.testTag("action_tone")
                     )
