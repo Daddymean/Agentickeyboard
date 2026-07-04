@@ -66,7 +66,7 @@ object GeminiManager {
     /**
      * Corrects grammar and spelling errors. Returns a structured GrammarCorrectionResponse.
      */
-    suspend fun fixGrammar(text: String, personalizationContext: String = ""): GrammarCorrectionResponse = withContext(Dispatchers.IO) {
+    suspend fun fixGrammar(text: String, personalizationContext: String = "", bypassCache: Boolean = false): GrammarCorrectionResponse = withContext(Dispatchers.IO) {
         if (!isApiKeyAvailable()) {
             return@withContext getOfflineGrammarFix(text)
         }
@@ -89,7 +89,7 @@ object GeminiManager {
         """.trimIndent()
 
         val cacheKey = "grammar|$personalizationContext|$text"
-        (cacheGet(cacheKey) as? GrammarCorrectionResponse)?.let { return@withContext it }
+        if (!bypassCache) (cacheGet(cacheKey) as? GrammarCorrectionResponse)?.let { return@withContext it }
 
         try {
             val request = GenerateContentRequest(
@@ -116,7 +116,7 @@ object GeminiManager {
     /**
      * Suggests smart response replies based on input message context.
      */
-    suspend fun suggestReplies(contextMessage: String, personalizationContext: String = "", intent: String = ""): SuggestionsResponse = withContext(Dispatchers.IO) {
+    suspend fun suggestReplies(contextMessage: String, personalizationContext: String = "", intent: String = "", bypassCache: Boolean = false): SuggestionsResponse = withContext(Dispatchers.IO) {
         if (!isApiKeyAvailable()) {
             return@withContext getOfflineSuggestions(contextMessage, personalizationContext, intent)
         }
@@ -140,7 +140,7 @@ object GeminiManager {
         """.trimIndent()
 
         val cacheKey = "replies|$intent|$personalizationContext|$contextMessage"
-        (cacheGet(cacheKey) as? SuggestionsResponse)?.let { return@withContext it }
+        if (!bypassCache) (cacheGet(cacheKey) as? SuggestionsResponse)?.let { return@withContext it }
 
         try {
             val request = GenerateContentRequest(
@@ -165,7 +165,7 @@ object GeminiManager {
     /**
      * Summarizes long input message text.
      */
-    suspend fun summarizeMessage(text: String, personalizationContext: String = ""): String = withContext(Dispatchers.IO) {
+    suspend fun summarizeMessage(text: String, personalizationContext: String = "", bypassCache: Boolean = false): String = withContext(Dispatchers.IO) {
         if (text.trim().split("\\s+".toRegex()).size < 10) {
             return@withContext "Message is too short to summarize."
         }
@@ -183,7 +183,7 @@ object GeminiManager {
         """.trimIndent()
 
         val cacheKey = "summary|$text"
-        (cacheGet(cacheKey) as? String)?.let { return@withContext it }
+        if (!bypassCache) (cacheGet(cacheKey) as? String)?.let { return@withContext it }
 
         try {
             val result = generateText(prompt)
@@ -198,7 +198,7 @@ object GeminiManager {
     /**
      * Translates text into target language.
      */
-    suspend fun translateText(text: String, sourceLang: String, targetLang: String, personalizationContext: String = ""): String = withContext(Dispatchers.IO) {
+    suspend fun translateText(text: String, sourceLang: String, targetLang: String, personalizationContext: String = "", bypassCache: Boolean = false): String = withContext(Dispatchers.IO) {
         if (text.isBlank()) return@withContext ""
         
         if (!isApiKeyAvailable()) {
@@ -214,7 +214,7 @@ object GeminiManager {
         """.trimIndent()
 
         val cacheKey = "translate|$sourceLang|$targetLang|$text"
-        (cacheGet(cacheKey) as? String)?.let { return@withContext it }
+        if (!bypassCache) (cacheGet(cacheKey) as? String)?.let { return@withContext it }
 
         try {
             val result = generateText(prompt)
@@ -229,7 +229,7 @@ object GeminiManager {
     /**
      * Rewrites text to match a target tone/persona while preserving meaning.
      */
-    suspend fun rewriteWithTone(text: String, targetTone: String, personalizationContext: String = "", preserveVoice: Boolean = false): String = withContext(Dispatchers.IO) {
+    suspend fun rewriteWithTone(text: String, targetTone: String, personalizationContext: String = "", preserveVoice: Boolean = false, bypassCache: Boolean = false): String = withContext(Dispatchers.IO) {
         if (text.isBlank()) return@withContext ""
 
         if (!isApiKeyAvailable()) {
@@ -246,7 +246,7 @@ object GeminiManager {
         """.trimIndent()
 
         val cacheKey = "rewrite|$preserveVoice|$targetTone|$personalizationContext|$text"
-        (cacheGet(cacheKey) as? String)?.let { return@withContext it }
+        if (!bypassCache) (cacheGet(cacheKey) as? String)?.let { return@withContext it }
 
         try {
             val result = generateText(prompt)
@@ -262,7 +262,7 @@ object GeminiManager {
      * Drafts a complete message from a short instruction the user typed, e.g.
      * "tell her I'll be 20 minutes late, apologetic" -> an actual message.
      */
-    suspend fun composeMessage(instruction: String, targetTone: String, personalizationContext: String = "", preserveVoice: Boolean = false): String = withContext(Dispatchers.IO) {
+    suspend fun composeMessage(instruction: String, targetTone: String, personalizationContext: String = "", preserveVoice: Boolean = false, bypassCache: Boolean = false): String = withContext(Dispatchers.IO) {
         if (instruction.isBlank()) return@withContext ""
 
         if (!isApiKeyAvailable()) {
@@ -280,7 +280,7 @@ object GeminiManager {
         """.trimIndent()
 
         val cacheKey = "compose|$preserveVoice|$targetTone|$personalizationContext|$instruction"
-        (cacheGet(cacheKey) as? String)?.let { return@withContext it }
+        if (!bypassCache) (cacheGet(cacheKey) as? String)?.let { return@withContext it }
 
         try {
             val result = generateText(prompt)
@@ -295,7 +295,7 @@ object GeminiManager {
     /**
      * Explains dense or jargon-heavy text (e.g. from the clipboard) in plain language.
      */
-    suspend fun explainText(text: String): String = withContext(Dispatchers.IO) {
+    suspend fun explainText(text: String, bypassCache: Boolean = false): String = withContext(Dispatchers.IO) {
         if (text.isBlank()) return@withContext ""
 
         if (!isApiKeyAvailable()) {
@@ -311,7 +311,7 @@ object GeminiManager {
         """.trimIndent()
 
         val cacheKey = "explain|$text"
-        (cacheGet(cacheKey) as? String)?.let { return@withContext it }
+        if (!bypassCache) (cacheGet(cacheKey) as? String)?.let { return@withContext it }
 
         try {
             val result = generateText(prompt)
@@ -327,7 +327,7 @@ object GeminiManager {
      * Continues the user's draft mid-thought in their own voice. Returns only the
      * continuation (not the original text).
      */
-    suspend fun continueText(text: String, personalizationContext: String = "", preserveVoice: Boolean = false): String = withContext(Dispatchers.IO) {
+    suspend fun continueText(text: String, personalizationContext: String = "", preserveVoice: Boolean = false, bypassCache: Boolean = false): String = withContext(Dispatchers.IO) {
         if (text.isBlank()) return@withContext ""
 
         if (!isApiKeyAvailable()) {
@@ -344,7 +344,7 @@ object GeminiManager {
         """.trimIndent()
 
         val cacheKey = "continue|$preserveVoice|$personalizationContext|$text"
-        (cacheGet(cacheKey) as? String)?.let { return@withContext it }
+        if (!bypassCache) (cacheGet(cacheKey) as? String)?.let { return@withContext it }
 
         try {
             val result = generateText(prompt)

@@ -795,6 +795,15 @@ fun AgenticKeyboardLayout(
                     }
                     if (hasAiResult) {
                         IconButton(
+                            onClick = {
+                                buzz(HapticFeedbackType.TextHandleMove)
+                                viewModel.regenerate()
+                            },
+                            modifier = Modifier.size(28.dp).testTag("regenerate_result")
+                        ) {
+                            Text("↻", color = Color(0xFF6750A4), fontSize = 15.sp, fontWeight = FontWeight.Bold)
+                        }
+                        IconButton(
                             onClick = { viewModel.dismissResults() },
                             modifier = Modifier.size(28.dp).testTag("dismiss_results")
                         ) {
@@ -805,6 +814,33 @@ fun AgenticKeyboardLayout(
                                 modifier = Modifier.size(16.dp)
                             )
                         }
+                    }
+                }
+            }
+        }
+
+        // --- ITERATE CHIPS (refine the AI text result that is showing) ---
+        val hasRefinableResult = grammarCorrection != null || summary != null || translation != null ||
+            rewrite != null || composeResult != null || continuation != null
+        AnimatedVisibility(
+            visible = hasRefinableResult && !isLoading,
+            enter = fadeIn(),
+            exit = fadeOut()
+        ) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(Color(0xFFF7F2FA))
+                    .padding(horizontal = 8.dp, vertical = 2.dp)
+                    .horizontalScroll(rememberScrollState())
+                    .testTag("iterate_chips"),
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                KeyboardViewModel.RESULT_REFINEMENTS.keys.forEach { adjustment ->
+                    ClipActionChip(adjustment) {
+                        buzz(HapticFeedbackType.TextHandleMove)
+                        viewModel.refineResult(adjustment)
                     }
                 }
             }

@@ -52,6 +52,14 @@ class KeyboardViewModel(
         private val NON_ALPHA_REGEX = "[^a-zA-Z]".toRegex()
         private val WHITESPACE_REGEX = "\\s+".toRegex()
         val PERSONAS = listOf("Match my history", "Professional", "Joyful", "Empathetic", "Casual")
+        /** Iterate chips on AI result panels → rewrite instruction they apply. */
+        val RESULT_REFINEMENTS = linkedMapOf(
+            "Shorter" to "the same message, noticeably shorter and tighter",
+            "Longer" to "the same message, expanded with a bit more detail",
+            "Warmer" to "the same message with a warmer, friendlier feel",
+            "Firmer" to "the same message with a firmer, more assertive edge",
+            "More formal" to "the same message in a more formal register"
+        )
         private val STOP_WORDS = setOf(
             "the", "and", "a", "of", "to", "in", "is", "that", "it", "for",
             "on", "with", "as", "at", "by", "an", "be", "this", "are", "from"
@@ -238,6 +246,26 @@ class KeyboardViewModel(
      * Cancels any in-flight AI request and starts a new one, so rapid taps never
      * stack requests or leave a stale spinner.
      */
+    // Re-runs the most recent AI action with the response cache bypassed, so the
+    // ↻ button on a result panel always produces a fresh variant.
+    private var regenerateAction: (() -> Unit)? = null
+
+    fun regenerate() {
+        regenerateAction?.invoke()
+    }
+
+    /**
+     * Iterate on the currently shown text result (Shorter/Longer/Warmer/...):
+     * clears the panels and rewrites the result text with the chip's instruction.
+     */
+    fun refineResult(adjustment: String) {
+        val current = _rewrite.value ?: _composeResult.value ?: _translation.value
+            ?: _summary.value ?: _continuation.value ?: _grammarCorrection.value?.corrected ?: return
+        val instruction = RESULT_REFINEMENTS[adjustment] ?: adjustment
+        dismissResults()
+        rewriteWithStyle(current, instruction, bypassCache = true)
+    }
+
     private fun launchAi(block: suspend () -> Unit) {
         val previous = aiJob
         aiJob = viewModelScope.launch {
@@ -628,8 +656,9 @@ class KeyboardViewModel(
     /**
      * Trigger grammar correction
      */
-    fun fixGrammar(text: String) {
+    fun fixGrammar(text: String, bypassCache: Boolean = false) {
         if (text.isBlank() || _isSensitiveField.value) return
+        regenerateAction = { fixGrammar(text, bypassCache = true) }
         launchAi {
             _grammarCorrection.value = null
             try {
@@ -638,7 +667,7 @@ class KeyboardViewModel(
                 val result = if (_isOfflineMode.value) {
                     getOfflineGrammarFix(text)
                 } else {
-                    GeminiManager.fixGrammar(text, personalization)
+                    GeminiManager.fixGrammar(text, personalization, bypassCache)
                 }
                 _grammarCorrection.value = result
 
@@ -704,8 +733,9 @@ class KeyboardViewModel(
     /**
      * Suggest quick replies (short, medium, and detailed variants)
      */
-    fun suggestReplies(contextMessage: String, intent: String = "") {
+    fun suggestReplies(contextMessage: String, intent: String = "", bypassCache: Boolean = false) {
         if (contextMessage.isBlank() || _isSensitiveField.value) return
+        regenerateAction = { suggestReplies(contextMessage, intent, bypassCache = true) }
         launchAi {
             _suggestions.value = emptyList()
             try {
@@ -713,7 +743,7 @@ class KeyboardViewModel(
                 val result = if (_isOfflineMode.value) {
                     getOfflineSuggestions(contextMessage, personalization, intent)
                 } else {
-                    GeminiManager.suggestReplies(contextMessage, personalization, intent)
+                    GeminiManager.suggestReplies(contextMessage, personalization, intent, bypassCache)
                 }
                 _suggestions.value = result.suggestions
             } catch (e: CancellationException) {
@@ -745,8 +775,9 @@ class KeyboardViewModel(
     /**
      * Summarize long text
      */
-    fun summarizeMessage(text: String) {
+    fun summarizeMessage(text: String, bypassCache: Boolean = false) {
         if (text.isBlank() || _isSensitiveField.value) return
+        regenerateAction = { summarizeMessage(text, bypassCache = true) }
         launchAi {
             _summary.value = null
             try {
@@ -754,7 +785,7 @@ class KeyboardViewModel(
                 val result = if (_isOfflineMode.value) {
                     getOfflineSummary(text)
                 } else {
-                    GeminiManager.summarizeMessage(text, personalization)
+                    GeminiManager.summarizeMessage(text, personalization, bypassCache)
                 }
                 _summary.value = result
             } catch (e: CancellationException) {
@@ -768,8 +799,9 @@ class KeyboardViewModel(
     /**
      * Translate text
      */
-    fun translateText(text: String) {
+    fun translateText(text: String, bypassCache: Boolean = false) {
         if (text.isBlank() || _isSensitiveField.value) return
+        regenerateAction = { translateText(text, bypassCache = true) }
         launchAi {
             _translation.value = null
             try {
@@ -777,7 +809,7 @@ class KeyboardViewModel(
                 val result = if (_isOfflineMode.value) {
                     "[Offline] $text"
                 } else {
-                    GeminiManager.translateText(text, _sourceLanguage.value, _targetLanguage.value, personalization)
+                    GeminiManager.translateText(text, _sourceLanguage.value, _targetLanguage.value, personalization, bypassCache)
                 }
                 _translation.value = result
             } catch (e: CancellationException) {
@@ -791,8 +823,9 @@ class KeyboardViewModel(
     /**
      * Rewrite text to match the selected style persona
      */
-    fun rewriteTone(text: String) {
+    fun rewriteTone(text: String, bypassCache: Boolean = false) {
         if (text.isBlank() || _isSensitiveField.value) return
+        regenerateAction = { rewriteTone(text, bypassCache = true) }
         launchAi {
             _rewrite.value = null
             try {
@@ -800,7 +833,7 @@ class KeyboardViewModel(
                 val result = if (_isOfflineMode.value) {
                     "[Offline: rewrite needs cloud mode] $text"
                 } else {
-                    GeminiManager.rewriteWithTone(text, targetTone, getPersonalizationContext(), _isVoiceLockEnabled.value)
+                    GeminiManager.rewriteWithTone(text, targetTone, getPersonalizationContext(), _isVoiceLockEnabled.value, bypassCache)
                 }
                 _rewrite.value = result
             } catch (e: CancellationException) {
@@ -815,15 +848,16 @@ class KeyboardViewModel(
      * Rewrite with an explicit style instruction (command palette, iterate
      * chips) instead of the selected persona.
      */
-    fun rewriteWithStyle(text: String, styleInstruction: String) {
+    fun rewriteWithStyle(text: String, styleInstruction: String, bypassCache: Boolean = false) {
         if (text.isBlank() || _isSensitiveField.value) return
+        regenerateAction = { rewriteWithStyle(text, styleInstruction, bypassCache = true) }
         launchAi {
             _rewrite.value = null
             try {
                 val result = if (_isOfflineMode.value) {
                     "[Offline: rewrite needs cloud mode] $text"
                 } else {
-                    GeminiManager.rewriteWithTone(text, styleInstruction, getPersonalizationContext(), _isVoiceLockEnabled.value)
+                    GeminiManager.rewriteWithTone(text, styleInstruction, getPersonalizationContext(), _isVoiceLockEnabled.value, bypassCache)
                 }
                 _rewrite.value = result
             } catch (e: CancellationException) {
@@ -838,15 +872,16 @@ class KeyboardViewModel(
      * Compose a full message from a typed instruction (e.g. "tell her I'll be
      * 20 minutes late, apologetic").
      */
-    fun composeFromInstruction(instruction: String) {
+    fun composeFromInstruction(instruction: String, bypassCache: Boolean = false) {
         if (instruction.isBlank() || _isSensitiveField.value) return
+        regenerateAction = { composeFromInstruction(instruction, bypassCache = true) }
         launchAi {
             _composeResult.value = null
             try {
                 val result = if (_isOfflineMode.value) {
                     "[Offline: compose needs cloud mode]"
                 } else {
-                    GeminiManager.composeMessage(instruction, effectivePersona(), getPersonalizationContext(), _isVoiceLockEnabled.value)
+                    GeminiManager.composeMessage(instruction, effectivePersona(), getPersonalizationContext(), _isVoiceLockEnabled.value, bypassCache)
                 }
                 _composeResult.value = result
             } catch (e: CancellationException) {
@@ -860,15 +895,16 @@ class KeyboardViewModel(
     /**
      * Explain dense/jargon-heavy text (usually from the clipboard) in plain language.
      */
-    fun explainText(text: String) {
+    fun explainText(text: String, bypassCache: Boolean = false) {
         if (text.isBlank() || _isSensitiveField.value) return
+        regenerateAction = { explainText(text, bypassCache = true) }
         launchAi {
             _explanation.value = null
             try {
                 val result = if (_isOfflineMode.value) {
                     "[Offline: explanations need cloud mode]"
                 } else {
-                    GeminiManager.explainText(text)
+                    GeminiManager.explainText(text, bypassCache)
                 }
                 _explanation.value = result
             } catch (e: CancellationException) {
@@ -882,15 +918,16 @@ class KeyboardViewModel(
     /**
      * Continue the user's draft mid-thought in their own voice.
      */
-    fun continueDraft(text: String) {
+    fun continueDraft(text: String, bypassCache: Boolean = false) {
         if (text.isBlank() || _isSensitiveField.value) return
+        regenerateAction = { continueDraft(text, bypassCache = true) }
         launchAi {
             _continuation.value = null
             try {
                 val result = if (_isOfflineMode.value) {
                     "[Offline: continue needs cloud mode]"
                 } else {
-                    GeminiManager.continueText(text, getPersonalizationContext(), _isVoiceLockEnabled.value)
+                    GeminiManager.continueText(text, getPersonalizationContext(), _isVoiceLockEnabled.value, bypassCache)
                 }
                 _continuation.value = result.takeIf { it.isNotBlank() }
             } catch (e: CancellationException) {
