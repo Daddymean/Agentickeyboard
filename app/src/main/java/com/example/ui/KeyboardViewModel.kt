@@ -48,6 +48,8 @@ class KeyboardViewModel(
 ) : ViewModel() {
 
     companion object {
+        private val WHITESPACE_REGEX = "\\s+".toRegex()
+        private val NON_ALPHA_REGEX = "[^a-zA-Z]".toRegex()
         val PERSONAS = listOf("Match my history", "Professional", "Joyful", "Empathetic", "Casual")
         private val STOP_WORDS = setOf(
             "the", "and", "a", "of", "to", "in", "is", "that", "it", "for",
@@ -402,9 +404,9 @@ class KeyboardViewModel(
     fun recordWordUsage(text: String) {
         if (text.isBlank() || !isLearningAllowed()) return
         viewModelScope.launch {
-            val words = text.split("\\s+".toRegex())
+            val words = text.split(WHITESPACE_REGEX)
             for (w in words) {
-                val cleaned = w.replace("[^a-zA-Z]".toRegex(), "").lowercase().trim()
+                val cleaned = w.replace(NON_ALPHA_REGEX, "").lowercase().trim()
                 if (cleaned.length > 2 && !STOP_WORDS.contains(cleaned)) {
                     repository.recordWordUsage(cleaned)
                 }
@@ -421,7 +423,7 @@ class KeyboardViewModel(
             previousCommittedWord = null
             return
         }
-        val cleaned = rawWord.replace("[^a-zA-Z]".toRegex(), "").lowercase()
+        val cleaned = rawWord.replace(NON_ALPHA_REGEX, "").lowercase()
         val previous = previousCommittedWord
         previousCommittedWord = if (cleaned.length in 2..24) cleaned else null
         viewModelScope.launch {
@@ -525,8 +527,8 @@ class KeyboardViewModel(
                     }
                 }
                 activeText.last().isWhitespace() -> {
-                    val previous = activeText.trim().split("\\s+".toRegex()).lastOrNull()
-                        ?.replace("[^a-zA-Z]".toRegex(), "")?.lowercase().orEmpty()
+                    val previous = activeText.trim().split(WHITESPACE_REGEX).lastOrNull()
+                        ?.replace(NON_ALPHA_REGEX, "")?.lowercase().orEmpty()
                     _predictiveSuggestions.value = if (previous.length >= 2) {
                         repository.nextWords(previous, 3)
                     } else {
@@ -534,7 +536,7 @@ class KeyboardViewModel(
                     }
                 }
                 else -> {
-                    val lastWord = activeText.split("\\s+".toRegex()).lastOrNull()?.lowercase() ?: ""
+                    val lastWord = activeText.split(WHITESPACE_REGEX).lastOrNull()?.lowercase() ?: ""
                     _predictiveSuggestions.value = if (lastWord.isNotEmpty()) {
                         topVocabulary.value
                             .filter { it.word.startsWith(lastWord) && it.word != lastWord }
@@ -553,7 +555,7 @@ class KeyboardViewModel(
      */
     fun tryExpandAbbreviation(text: String): String {
         if (text.isEmpty()) return text
-        val words = text.split("\\s+".toRegex())
+        val words = text.split(WHITESPACE_REGEX)
         if (words.isEmpty()) return text
         val lastWord = words.last().lowercase().trim()
         val match = shortcuts.value.find { it.shortcut == lastWord }
@@ -635,7 +637,7 @@ class KeyboardViewModel(
                         originalText = text,
                         sentiment = "Corrected",
                         toneScore = 0.9f,
-                        wordCount = text.split("\\s+".toRegex()).size
+                        wordCount = text.split(WHITESPACE_REGEX).size
                     )
                 )
             } catch (e: CancellationException) {
@@ -650,8 +652,8 @@ class KeyboardViewModel(
      * Dynamic alignment of original and corrected text to extract custom spelling fixes
      */
     private suspend fun extractAndLearnCorrections(original: String, corrected: String) {
-        val origWords = original.split("\\s+".toRegex()).map { it.replace("[^a-zA-Z]".toRegex(), "").lowercase() }
-        val corrWords = corrected.split("\\s+".toRegex()).map { it.replace("[^a-zA-Z]".toRegex(), "").lowercase() }
+        val origWords = original.split(WHITESPACE_REGEX).map { it.replace(NON_ALPHA_REGEX, "").lowercase() }
+        val corrWords = corrected.split(WHITESPACE_REGEX).map { it.replace(NON_ALPHA_REGEX, "").lowercase() }
 
         if (origWords.size == corrWords.size) {
             for (i in origWords.indices) {
@@ -853,7 +855,7 @@ class KeyboardViewModel(
                         originalText = text,
                         sentiment = result.sentiment,
                         toneScore = result.toneScore,
-                        wordCount = text.split("\\s+".toRegex()).size
+                        wordCount = text.split(WHITESPACE_REGEX).size
                     )
                 )
             } catch (e: CancellationException) {
@@ -980,7 +982,7 @@ class KeyboardViewModel(
                             originalText = item.text,
                             sentiment = item.sentiment,
                             toneScore = item.toneScore,
-                            wordCount = item.text.split("\\s+".toRegex()).size,
+                            wordCount = item.text.split(WHITESPACE_REGEX).size,
                             timestamp = if (item.timestamp > 0) item.timestamp else System.currentTimeMillis()
                         )
                     )
