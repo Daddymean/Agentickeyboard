@@ -140,6 +140,7 @@ fun AgenticKeyboardLayout(
     val isLearningPaused by viewModel.isLearningPaused.collectAsState()
     val replyIntentContext by viewModel.replyIntentContext.collectAsState()
     val sendGuardWarning by viewModel.sendGuardWarning.collectAsState()
+    val customCommands by viewModel.customCommands.collectAsState()
 
     fun buzz(type: HapticFeedbackType) {
         if (isHapticsEnabled) haptic.performHapticFeedback(type)
@@ -1062,7 +1063,10 @@ fun AgenticKeyboardLayout(
         }
 
         // --- COMMAND PALETTE (draft starts with a "/" token) ---
-        val paletteCommands = if (isSensitiveField) emptyList() else CommandPalette.matches(activeText)
+        val paletteCommands = if (isSensitiveField) emptyList() else CommandPalette.matches(
+            activeText,
+            customCommands.map { CommandPalette.Command(it.token, "Custom", CommandPalette.Action.REWRITE, it.instruction) }
+        )
         AnimatedVisibility(
             visible = paletteCommands.isNotEmpty(),
             enter = fadeIn(),

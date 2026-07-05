@@ -669,8 +669,11 @@ fun PlaygroundTab(viewModel: KeyboardViewModel, onNavigateToShortcuts: () -> Uni
 fun ShortcutsTab(viewModel: KeyboardViewModel) {
     var newShortcut by remember { mutableStateOf("") }
     var newTemplate by remember { mutableStateOf("") }
+    var newCommandToken by remember { mutableStateOf("") }
+    var newCommandInstruction by remember { mutableStateOf("") }
 
     val shortcuts by viewModel.shortcuts.collectAsState()
+    val customCommands by viewModel.customCommands.collectAsState()
 
     LazyColumn(
         modifier = Modifier
@@ -829,6 +832,164 @@ fun ShortcutsTab(viewModel: KeyboardViewModel) {
                         Icon(
                             imageVector = Icons.Default.Delete,
                             contentDescription = "Delete Template",
+                            tint = Color(0xFFC62828)
+                        )
+                    }
+                }
+            }
+        }
+
+        // --- User-defined slash commands for the keyboard's "/" palette ---
+        item {
+            Text(
+                "Slash Commands",
+                color = Color(0xFF1C1B1F),
+                fontSize = 24.sp,
+                fontWeight = FontWeight.Bold,
+                letterSpacing = (-0.8).sp,
+                modifier = Modifier.padding(top = 16.dp)
+            )
+            Text(
+                "Your own /commands: start a draft with the token and the keyboard rewrites it with your saved instruction. Built-in commands always win on a name clash.",
+                color = Color(0xFF5F5D6B),
+                fontSize = 12.sp,
+                lineHeight = 16.sp
+            )
+        }
+
+        item {
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .shadow(1.dp, RoundedCornerShape(28.dp)),
+                colors = CardDefaults.cardColors(containerColor = Color.White),
+                shape = RoundedCornerShape(28.dp),
+                border = BorderStroke(1.dp, Color(0xFFE2E8F0))
+            ) {
+                Column(modifier = Modifier.padding(20.dp)) {
+                    Text(
+                        "Add Slash Command",
+                        color = Color(0xFF1C1B1F),
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 15.sp
+                    )
+                    Spacer(modifier = Modifier.height(12.dp))
+
+                    OutlinedTextField(
+                        value = newCommandToken,
+                        onValueChange = { newCommandToken = it },
+                        label = { Text("Command (e.g. /boss)") },
+                        placeholder = { Text("/boss") },
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedBorderColor = Color(0xFF6750A4),
+                            unfocusedBorderColor = Color(0xFFCBD5E1),
+                            focusedTextColor = Color(0xFF1C1B1F),
+                            unfocusedTextColor = Color(0xFF1C1B1F)
+                        ),
+                        shape = RoundedCornerShape(12.dp),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .testTag("command_token_input")
+                    )
+
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    OutlinedTextField(
+                        value = newCommandInstruction,
+                        onValueChange = { newCommandInstruction = it },
+                        label = { Text("Rewrite instruction") },
+                        placeholder = { Text("formal but friendly, for my manager") },
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedBorderColor = Color(0xFF6750A4),
+                            unfocusedBorderColor = Color(0xFFCBD5E1),
+                            focusedTextColor = Color(0xFF1C1B1F),
+                            unfocusedTextColor = Color(0xFF1C1B1F)
+                        ),
+                        shape = RoundedCornerShape(12.dp),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .testTag("command_instruction_input")
+                    )
+
+                    Spacer(modifier = Modifier.height(16.dp))
+
+                    Button(
+                        onClick = {
+                            if (newCommandToken.isNotBlank() && newCommandInstruction.isNotBlank()) {
+                                viewModel.addCustomCommand(newCommandToken, newCommandInstruction)
+                                newCommandToken = ""
+                                newCommandInstruction = ""
+                            }
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF6750A4)),
+                        shape = RoundedCornerShape(12.dp),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .testTag("add_command_button")
+                    ) {
+                        Icon(Icons.Default.Add, contentDescription = "Add", tint = Color.White)
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text("Save Command", color = Color.White, fontWeight = FontWeight.Bold)
+                    }
+                }
+            }
+        }
+
+        item {
+            Text(
+                "Custom Commands (${customCommands.size})",
+                color = Color(0xFF1C1B1F),
+                fontWeight = FontWeight.Bold,
+                fontSize = 14.sp,
+                modifier = Modifier.padding(top = 8.dp)
+            )
+        }
+
+        items(customCommands) { command ->
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .shadow(1.dp, RoundedCornerShape(20.dp)),
+                colors = CardDefaults.cardColors(containerColor = Color.White),
+                shape = RoundedCornerShape(20.dp),
+                border = BorderStroke(1.dp, Color(0xFFE2E8F0))
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(16.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Box(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(8.dp))
+                                .background(Color(0xFFE8DEF8))
+                                .padding(horizontal = 8.dp, vertical = 4.dp)
+                        ) {
+                            Text(
+                                command.token,
+                                color = Color(0xFF21005D),
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 11.sp
+                            )
+                        }
+                        Spacer(modifier = Modifier.height(6.dp))
+                        Text(
+                            command.instruction,
+                            color = Color(0xFF1C1B1F),
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.Medium
+                        )
+                    }
+                    IconButton(
+                        onClick = { viewModel.deleteCustomCommand(command.id) },
+                        modifier = Modifier.testTag("delete_command_${command.id}")
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Delete,
+                            contentDescription = "Delete Command",
                             tint = Color(0xFFC62828)
                         )
                     }

@@ -60,6 +60,14 @@ data class AppPersona(
     val persona: String
 )
 
+/** User-defined slash command: typing its token opens a custom AI rewrite. */
+@Entity(tableName = "custom_commands")
+data class CustomCommand(
+    @PrimaryKey(autoGenerate = true) val id: Int = 0,
+    val token: String,      // normalized: leading slash, lowercase, no spaces
+    val instruction: String // rewrite style instruction forwarded to the AI
+)
+
 @Dao
 interface ShortcutDao {
     @Query("SELECT * FROM shortcut_templates ORDER BY shortcut ASC")
@@ -115,6 +123,18 @@ interface AppPersonaDao {
 }
 
 @Dao
+interface CustomCommandDao {
+    @Query("SELECT * FROM custom_commands ORDER BY token ASC")
+    fun getAll(): Flow<List<CustomCommand>>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insert(command: CustomCommand)
+
+    @Query("DELETE FROM custom_commands WHERE id = :id")
+    suspend fun deleteById(id: Int)
+}
+
+@Dao
 interface LearnedCorrectionDao {
     @Query("SELECT * FROM learned_corrections ORDER BY count DESC")
     fun getAllCorrections(): Flow<List<LearnedCorrection>>
@@ -163,9 +183,10 @@ interface UserVocabularyDao {
         LearnedCorrection::class,
         UserVocabulary::class,
         WordBigram::class,
-        AppPersona::class
+        AppPersona::class,
+        CustomCommand::class
     ],
-    version = 3,
+    version = 4,
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -175,6 +196,7 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun userVocabularyDao(): UserVocabularyDao
     abstract fun wordBigramDao(): WordBigramDao
     abstract fun appPersonaDao(): AppPersonaDao
+    abstract fun customCommandDao(): CustomCommandDao
 
     companion object {
         @Volatile
@@ -201,6 +223,7 @@ class KeyboardRepository(private val db: AppDatabase) {
     val allLogs: Flow<List<WritingLog>> = db.writingLogDao().getAllLogs()
     val allCorrections: Flow<List<LearnedCorrection>> = db.learnedCorrectionDao().getAllCorrections()
     val topVocabulary: Flow<List<UserVocabulary>> = db.userVocabularyDao().getTopVocabulary()
+    val allCustomCommands: Flow<List<CustomCommand>> = db.customCommandDao().getAll()
 
     suspend fun insertShortcut(shortcut: ShortcutTemplate) {
         db.shortcutDao().insertShortcut(shortcut)
@@ -242,6 +265,16 @@ class KeyboardRepository(private val db: AppDatabase) {
 
     suspend fun clearBigrams() {
         db.wordBigramDao().clearAll()
+    }
+
+    // --- User-defined slash commands ---
+
+    suspend fun insertCustomCommand(command: CustomCommand) {
+        db.customCommandDao().insert(command)
+    }
+
+    suspend fun deleteCustomCommandById(id: Int) {
+        db.customCommandDao().deleteById(id)
     }
 
     // --- Per-app persona memory ---

@@ -5,6 +5,7 @@ import android.text.InputType
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
+import com.example.db.CustomCommand
 import com.example.db.KeyboardRepository
 import com.example.db.LearnedCorrection
 import com.example.db.ShortcutTemplate
@@ -14,6 +15,7 @@ import com.example.network.GeminiManager
 import com.example.network.GrammarCorrectionResponse
 import com.example.network.SuggestionsResponse
 import com.example.network.ToneAnalysisResponse
+import com.example.util.CommandPalette
 import com.example.util.KeyboardSettings
 import com.example.util.PersonalModelSerializer
 import com.example.util.ReplyIntents
@@ -75,6 +77,10 @@ class KeyboardViewModel(
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     val logs: StateFlow<List<WritingLog>> = repository.allLogs
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    // User-defined "/token" commands extending the built-in command palette
+    val customCommands: StateFlow<List<CustomCommand>> = repository.allCustomCommands
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     // On-device Personalization state flows
@@ -1040,6 +1046,23 @@ class KeyboardViewModel(
     fun deleteShortcut(id: Int) {
         viewModelScope.launch {
             repository.deleteShortcutById(id)
+        }
+    }
+
+    /** Saves a user-defined slash command; invalid tokens are silently ignored. */
+    fun addCustomCommand(token: String, instruction: String) {
+        val normalized = CommandPalette.normalizeToken(token) ?: return
+        if (instruction.isBlank()) return
+        viewModelScope.launch {
+            repository.insertCustomCommand(
+                CustomCommand(token = normalized, instruction = instruction.trim())
+            )
+        }
+    }
+
+    fun deleteCustomCommand(id: Int) {
+        viewModelScope.launch {
+            repository.deleteCustomCommandById(id)
         }
     }
 

@@ -47,9 +47,29 @@ object CommandPalette {
     }
 
     /** Commands whose token begins with the draft's typed token; "/" alone matches all. */
-    fun matches(text: String): List<Command> {
+    fun matches(text: String): List<Command> = matches(text, emptyList())
+
+    /**
+     * Like [matches], but also offers [custom] user-defined commands after the
+     * built-ins. A custom command whose token collides with a built-in is
+     * ignored — built-ins always win.
+     */
+    fun matches(text: String, custom: List<Command>): List<Command> {
         val token = activeToken(text)?.lowercase() ?: return emptyList()
-        return COMMANDS.filter { it.token.startsWith(token) }
+        val builtIns = COMMANDS.filter { it.token.startsWith(token) }
+        val builtInTokens = COMMANDS.map { it.token }.toSet()
+        return builtIns + custom.filter { it.token.startsWith(token) && it.token !in builtInTokens }
+    }
+
+    /**
+     * Normalizes user input ("Firm", " /Firm ") into a palette token
+     * ("/firm"), or null when it can't be one (blank, inner whitespace, or
+     * extra slashes).
+     */
+    fun normalizeToken(raw: String): String? {
+        val cleaned = raw.trim().removePrefix("/").lowercase()
+        if (cleaned.isEmpty() || cleaned.any { it.isWhitespace() } || '/' in cleaned) return null
+        return "/$cleaned"
     }
 
     /** [text] without its leading slash token and the whitespace after it. */
