@@ -17,6 +17,7 @@ import com.example.network.ToneAnalysisResponse
 import com.example.util.KeyboardSettings
 import com.example.util.PersonalModelSerializer
 import com.example.util.ReplyIntents
+import com.example.util.SendGuard
 import com.example.util.WritingQualityMeter
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
@@ -160,6 +161,13 @@ class KeyboardViewModel(
     private val _isVoiceLockEnabled = MutableStateFlow(settings?.isVoiceLockEnabled ?: false)
     val isVoiceLockEnabled = _isVoiceLockEnabled.asStateFlow()
 
+    private val _isSendGuardEnabled = MutableStateFlow(settings?.isSendGuardEnabled ?: false)
+    val isSendGuardEnabled = _isSendGuardEnabled.asStateFlow()
+
+    // Draft that armed the send-guard; non-null while "Send anyway?" is shown.
+    private val _sendGuardWarning = MutableStateFlow<String?>(null)
+    val sendGuardWarning = _sendGuardWarning.asStateFlow()
+
     private val _sourceLanguage = MutableStateFlow(settings?.sourceLanguage ?: "English")
     val sourceLanguage = _sourceLanguage.asStateFlow()
 
@@ -200,6 +208,7 @@ class KeyboardViewModel(
             KeyboardSettings.KEY_LEARNING_PAUSED -> _isLearningPaused.value = s.isLearningPaused
             KeyboardSettings.KEY_HAPTICS -> _isHapticsEnabled.value = s.isHapticsEnabled
             KeyboardSettings.KEY_VOICE_LOCK -> _isVoiceLockEnabled.value = s.isVoiceLockEnabled
+            KeyboardSettings.KEY_SEND_GUARD -> _isSendGuardEnabled.value = s.isSendGuardEnabled
             KeyboardSettings.KEY_PERSONA -> _userPersonaPreference.value = s.persona
             KeyboardSettings.KEY_SOURCE_LANG -> _sourceLanguage.value = s.sourceLanguage
             KeyboardSettings.KEY_TARGET_LANG -> _targetLanguage.value = s.targetLanguage
@@ -295,6 +304,7 @@ class KeyboardViewModel(
         _continuation.value = null
         _suggestions.value = emptyList()
         _replyIntentContext.value = null
+        _sendGuardWarning.value = null
     }
 
     fun setInputText(text: String) {
@@ -387,6 +397,34 @@ class KeyboardViewModel(
     fun setVoiceLockEnabled(enabled: Boolean) {
         _isVoiceLockEnabled.value = enabled
         settings?.isVoiceLockEnabled = enabled
+    }
+
+    fun setSendGuardEnabled(enabled: Boolean) {
+        _isSendGuardEnabled.value = enabled
+        settings?.isSendGuardEnabled = enabled
+        if (!enabled) _sendGuardWarning.value = null
+    }
+
+    /**
+     * Called by the IME right before a Send editor action fires. Returns true
+     * when the action should be held back: the first Enter on a hostile-reading
+     * draft arms an inline "Send anyway?" warning; the next Enter (or the
+     * shelf's Send button, which re-triggers the action) goes through.
+     */
+    fun interceptSend(draft: String): Boolean {
+        if (_sendGuardWarning.value != null) {
+            // Second Enter while the warning is showing: let the send happen.
+            _sendGuardWarning.value = null
+            return false
+        }
+        if (!_isSendGuardEnabled.value || _isSensitiveField.value || draft.isBlank()) return false
+        if (!SendGuard.shouldWarn(draft)) return false
+        _sendGuardWarning.value = draft
+        return true
+    }
+
+    fun dismissSendGuardWarning() {
+        _sendGuardWarning.value = null
     }
 
     fun setLogRetentionDays(days: Int) {

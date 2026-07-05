@@ -855,6 +855,7 @@ fun ExportTab(viewModel: KeyboardViewModel) {
     val isLearningPaused by viewModel.isLearningPaused.collectAsState()
     val isHaptics by viewModel.isHapticsEnabled.collectAsState()
     val isVoiceLock by viewModel.isVoiceLockEnabled.collectAsState()
+    val isSendGuard by viewModel.isSendGuardEnabled.collectAsState()
     val clipboardManager = LocalClipboardManager.current
     val context = LocalContext.current
 
@@ -1034,6 +1035,12 @@ fun ExportTab(viewModel: KeyboardViewModel) {
                         description = "AI rewrite, compose, and continue keep your own phrasing: minimal edits, no overproduced tone.",
                         checked = isVoiceLock,
                         onCheckedChange = { viewModel.setVoiceLockEnabled(it) }
+                    )
+                    SettingSwitchRow(
+                        title = "Send-guard",
+                        description = "Pauses Send once when a draft reads hostile so you can confirm or soften it. Checked locally on-device.",
+                        checked = isSendGuard,
+                        onCheckedChange = { viewModel.setSendGuardEnabled(it) }
                     )
 
                     Spacer(modifier = Modifier.height(10.dp))

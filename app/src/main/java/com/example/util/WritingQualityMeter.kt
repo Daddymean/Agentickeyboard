@@ -111,16 +111,19 @@ object WritingQualityMeter {
 
     /**
      * How likely the message is to land badly: hostile wording weighs double,
-     * shouting (mostly capitals) and stacked "!!"/"??" escalate the level.
+     * shouting (mostly capitals, unless the words are warm — that's excitement)
+     * and stacked "!!"/"??" escalate the level.
      */
     fun risk(text: String): String {
-        var score = hostileHits(text.lowercase(), tokenSet(text)) * 2
+        val tokens = tokenSet(text)
+        var score = hostileHits(text.lowercase(), tokens) * 2
         val letters = text.count { it.isLetter() }
-        if (letters >= 12 && text.count { it.isUpperCase() } * 10 >= letters * 7) score += 2
+        val shouting = letters >= 12 && text.count { it.isUpperCase() } * 10 >= letters * 7
+        if (shouting && tokens.none { it in WARM_WORDS }) score += 3
         if ("!!" in text) score += 1
         if ("??" in text) score += 1
         return when {
-            score >= 4 -> RISK_HIGH
+            score >= 3 -> RISK_HIGH
             score >= 2 -> RISK_MEDIUM
             else -> RISK_LOW
         }

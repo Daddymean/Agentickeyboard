@@ -23,6 +23,7 @@ class KeyboardSettings(context: Context) {
         const val KEY_LEARNING_PAUSED = "learning_paused"
         const val KEY_HAPTICS = "haptics_enabled"
         const val KEY_VOICE_LOCK = "voice_lock"
+        const val KEY_SEND_GUARD = "send_guard"
         const val KEY_PERSONA = "persona"
         const val KEY_SOURCE_LANG = "source_lang"
         const val KEY_TARGET_LANG = "target_lang"
@@ -66,6 +67,11 @@ class KeyboardSettings(context: Context) {
     var isVoiceLockEnabled: Boolean
         get() = prefs.getBoolean(KEY_VOICE_LOCK, false)
         set(value) = prefs.edit().putBoolean(KEY_VOICE_LOCK, value).apply()
+
+    /** Send-guard: pause the Send action once when a draft reads hostile. Opt-in. */
+    var isSendGuardEnabled: Boolean
+        get() = prefs.getBoolean(KEY_SEND_GUARD, false)
+        set(value) = prefs.edit().putBoolean(KEY_SEND_GUARD, value).apply()
 
     var persona: String
         get() = prefs.getString(KEY_PERSONA, "Match my history") ?: "Match my history"

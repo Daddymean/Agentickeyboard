@@ -139,6 +139,7 @@ fun AgenticKeyboardLayout(
     val isHapticsEnabled by viewModel.isHapticsEnabled.collectAsState()
     val isLearningPaused by viewModel.isLearningPaused.collectAsState()
     val replyIntentContext by viewModel.replyIntentContext.collectAsState()
+    val sendGuardWarning by viewModel.sendGuardWarning.collectAsState()
 
     fun buzz(type: HapticFeedbackType) {
         if (isHapticsEnabled) haptic.performHapticFeedback(type)
@@ -421,7 +422,8 @@ fun AgenticKeyboardLayout(
         // --- AI RESULTS & INTERACTIVE SHELF BAR ---
         val hasAiResult = grammarCorrection != null || toneAnalysis != null || summary != null ||
             translation != null || rewrite != null || composeResult != null ||
-            explanation != null || continuation != null || suggestions.isNotEmpty()
+            explanation != null || continuation != null || suggestions.isNotEmpty() ||
+            sendGuardWarning != null
 
         Box(
             modifier = Modifier
@@ -447,7 +449,35 @@ fun AgenticKeyboardLayout(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Column(modifier = Modifier.weight(1f)) {
-                    if (grammarCorrection != null) {
+                    if (sendGuardWarning != null) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text("⚠️ This might land harshly", color = Color(0xFFB3261E), fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                                Text("Keep editing, or send it as-is.", color = Color(0xFF5F5D6B), fontSize = 10.sp, maxLines = 1)
+                            }
+                            ClipActionChip("✏️ Revise") {
+                                buzz(HapticFeedbackType.TextHandleMove)
+                                viewModel.dismissSendGuardWarning()
+                            }
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Button(
+                                onClick = {
+                                    buzz(HapticFeedbackType.LongPress)
+                                    // interceptSend sees the armed warning and lets this one through
+                                    onAction()
+                                },
+                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFB3261E)),
+                                modifier = Modifier.height(32.dp).testTag("send_anyway_button"),
+                                contentPadding = RowDefaultsButtonPadding
+                            ) {
+                                Text("Send anyway", color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                            }
+                        }
+                    } else if (grammarCorrection != null) {
                         val correction = grammarCorrection!!
                         Row(
                             modifier = Modifier.fillMaxWidth(),
