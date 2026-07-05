@@ -139,6 +139,8 @@ fun AgenticKeyboardLayout(
     val isHapticsEnabled by viewModel.isHapticsEnabled.collectAsState()
     val isLearningPaused by viewModel.isLearningPaused.collectAsState()
     val replyIntentContext by viewModel.replyIntentContext.collectAsState()
+    val sendGuardWarning by viewModel.sendGuardWarning.collectAsState()
+    val customCommands by viewModel.customCommands.collectAsState()
 
     fun buzz(type: HapticFeedbackType) {
         if (isHapticsEnabled) haptic.performHapticFeedback(type)
@@ -421,7 +423,8 @@ fun AgenticKeyboardLayout(
         // --- AI RESULTS & INTERACTIVE SHELF BAR ---
         val hasAiResult = grammarCorrection != null || toneAnalysis != null || summary != null ||
             translation != null || rewrite != null || composeResult != null ||
-            explanation != null || continuation != null || suggestions.isNotEmpty()
+            explanation != null || continuation != null || suggestions.isNotEmpty() ||
+            sendGuardWarning != null
 
         Box(
             modifier = Modifier
@@ -447,7 +450,35 @@ fun AgenticKeyboardLayout(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Column(modifier = Modifier.weight(1f)) {
-                    if (grammarCorrection != null) {
+                    if (sendGuardWarning != null) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text("⚠️ This might land harshly", color = Color(0xFFB3261E), fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                                Text("Keep editing, or send it as-is.", color = Color(0xFF5F5D6B), fontSize = 10.sp, maxLines = 1)
+                            }
+                            ClipActionChip("✏️ Revise") {
+                                buzz(HapticFeedbackType.TextHandleMove)
+                                viewModel.dismissSendGuardWarning()
+                            }
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Button(
+                                onClick = {
+                                    buzz(HapticFeedbackType.LongPress)
+                                    // interceptSend sees the armed warning and lets this one through
+                                    onAction()
+                                },
+                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFB3261E)),
+                                modifier = Modifier.height(32.dp).testTag("send_anyway_button"),
+                                contentPadding = RowDefaultsButtonPadding
+                            ) {
+                                Text("Send anyway", color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                            }
+                        }
+                    } else if (grammarCorrection != null) {
                         val correction = grammarCorrection!!
                         Row(
                             modifier = Modifier.fillMaxWidth(),
@@ -483,17 +514,40 @@ fun AgenticKeyboardLayout(
                             modifier = Modifier.fillMaxWidth(),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Text(
-                                text = "🎭 ${analysis.sentiment} (${(analysis.toneScore * 100).toInt()}%)",
-                                color = Color(0xFF21005D),
-                                fontWeight = FontWeight.Bold,
-                                fontSize = 13.sp
-                            )
+                            Column {
+                                Text(
+                                    text = "🎭 ${analysis.sentiment} (${(analysis.toneScore * 100).toInt()}%)",
+                                    color = Color(0xFF21005D),
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 13.sp
+                                )
+                                analysis.note?.let { note ->
+                                    Text(note, color = Color(0xFF5F5D6B), fontSize = 9.sp, maxLines = 1)
+                                }
+                            }
                             Spacer(modifier = Modifier.width(8.dp))
                             LazyRow(
                                 horizontalArrangement = Arrangement.spacedBy(6.dp),
                                 modifier = Modifier.weight(1f)
                             ) {
+                                // Compact writing-quality meter chips
+                                val meterChips = listOfNotNull(
+                                    analysis.clarity?.let { "🔍 $it" },
+                                    analysis.warmth?.let { "🤝 $it" },
+                                    analysis.firmness?.let { "💪 $it" },
+                                    analysis.risk?.let { "⚠️ Risk $it" },
+                                    analysis.lengthLabel?.let { "📏 $it" }
+                                )
+                                items(meterChips) { chip ->
+                                    Box(
+                                        modifier = Modifier
+                                            .clip(RoundedCornerShape(12.dp))
+                                            .background(Color(0xFFD0BCFF))
+                                            .padding(horizontal = 8.dp, vertical = 4.dp)
+                                    ) {
+                                        Text(chip, color = Color(0xFF21005D), fontSize = 11.sp, fontWeight = FontWeight.Medium)
+                                    }
+                                }
                                 // Tone-matched emoji, insertable with a tap
                                 items(viewModel.emojisForSentiment(analysis.sentiment)) { emoji ->
                                     Box(
@@ -1009,7 +1063,10 @@ fun AgenticKeyboardLayout(
         }
 
         // --- COMMAND PALETTE (draft starts with a "/" token) ---
-        val paletteCommands = if (isSensitiveField) emptyList() else CommandPalette.matches(activeText)
+        val paletteCommands = if (isSensitiveField) emptyList() else CommandPalette.matches(
+            activeText,
+            customCommands.map { CommandPalette.Command(it.token, "Custom", CommandPalette.Action.REWRITE, it.instruction) }
+        )
         AnimatedVisibility(
             visible = paletteCommands.isNotEmpty(),
             enter = fadeIn(),

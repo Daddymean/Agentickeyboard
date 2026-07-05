@@ -91,6 +91,12 @@ class AgenticKeyboardService : InputMethodService(), LifecycleOwner, ViewModelSt
         val hasAction = action != EditorInfo.IME_ACTION_NONE &&
             action != EditorInfo.IME_ACTION_UNSPECIFIED &&
             (options and EditorInfo.IME_FLAG_NO_ENTER_ACTION) == 0
+        // Opt-in send-guard: in messaging (Send) contexts, hold a hostile-reading
+        // draft back once so the shelf can ask "Send anyway?"; the next Enter sends.
+        if (hasAction && action == EditorInfo.IME_ACTION_SEND) {
+            val draft = ic.getTextBeforeCursor(CONTEXT_CHARS, 0)?.toString() ?: ""
+            if (viewModel.interceptSend(draft)) return
+        }
         if (hasAction) {
             ic.performEditorAction(action)
         } else {

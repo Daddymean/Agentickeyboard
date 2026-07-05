@@ -3,6 +3,7 @@ package com.example.network
 import android.util.Log
 import com.example.BuildConfig
 import com.example.util.ReplyIntents
+import com.example.util.WritingQualityMeter
 import com.squareup.moshi.Moshi
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -375,9 +376,15 @@ object GeminiManager {
             Identify the primary tone category (e.g. Professional, Joyful, Empathetic, Aggressive, Sarcastic, Apologetic, Urgent).
             Estimate a tone score / confidence value between 0.0 and 1.0.
             Provide exactly 2 actionable tips/suggestions to adjust or improve communication precision.
-            
+            Also rate these human-framed writing-quality dimensions as short levels (labels, never grades or numbers):
+            - clarity: exactly one of "Clear", "OK", "Dense"
+            - warmth: exactly one of "Warm", "Neutral", "Cold"
+            - firmness: exactly one of "Firm", "Balanced", "Soft"
+            - risk: how likely the message lands badly — exactly one of "Low", "Medium", "High"
+            And write "note": one plain-language remark of at most 8 words (e.g. "clear but cold", "friendly but hedged").
+
             ${if (personalizationContext.isNotEmpty()) "Contrast this text against the user's baseline writing habit to provide tailored recommendations:\n$personalizationContext\n" else ""}
-            
+
             Return raw JSON with this exact structure:
             {
               "sentiment": "ToneCategory",
@@ -385,7 +392,12 @@ object GeminiManager {
               "suggestions": [
                 "Tip 1 to refine the tone",
                 "Tip 2 to refine the tone"
-              ]
+              ],
+              "clarity": "Clear",
+              "warmth": "Neutral",
+              "firmness": "Balanced",
+              "risk": "Low",
+              "note": "clear but cold"
             }
         """.trimIndent()
 
@@ -400,6 +412,8 @@ object GeminiManager {
             val response = RetrofitClient.service.generateContent(apiKey, request)
             val jsonText = response.candidates?.firstOrNull()?.content?.parts?.firstOrNull()?.text
             val parsed = jsonText?.let { moshi.adapter(ToneAnalysisResponse::class.java).fromJson(extractJson(it)) }
+                // Length is computable locally, so never trust the model for it.
+                ?.copy(lengthLabel = WritingQualityMeter.lengthLabel(text))
             if (parsed != null) {
                 cachePut(cacheKey, parsed)
                 parsed
@@ -520,7 +534,8 @@ object GeminiManager {
         val isUrgent = lowercaseText.contains("asap") || lowercaseText.contains("need") || lowercaseText.contains("now") || lowercaseText.contains("hurry") || lowercaseText.contains("urgent")
         val isApologetic = lowercaseText.contains("sorry") || lowercaseText.contains("apologize") || lowercaseText.contains("pardon") || lowercaseText.contains("fault")
 
-        return when {
+        val meter = WritingQualityMeter.assess(text)
+        val base = when {
             isApologetic -> ToneAnalysisResponse(
                 sentiment = "Apologetic",
                 toneScore = 0.85f,
@@ -547,5 +562,13 @@ object GeminiManager {
                 suggestions = listOf("Add descriptive words for clarity.", "Consider using a direct question.")
             )
         }
+        return base.copy(
+            clarity = meter.clarity,
+            warmth = meter.warmth,
+            firmness = meter.firmness,
+            risk = meter.risk,
+            lengthLabel = meter.lengthLabel,
+            note = meter.note
+        )
     }
 }
