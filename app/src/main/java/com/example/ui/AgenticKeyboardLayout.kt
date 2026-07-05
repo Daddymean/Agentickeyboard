@@ -2,6 +2,7 @@ package com.example.ui
 
 import android.view.inputmethod.InputConnection
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.Canvas
@@ -18,6 +19,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -64,6 +66,8 @@ import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextDecoration
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -127,6 +131,7 @@ fun AgenticKeyboardLayout(
     val composeResult by viewModel.composeResult.collectAsState()
     val explanation by viewModel.explanation.collectAsState()
     val continuation by viewModel.continuation.collectAsState()
+    val aiResultSource by viewModel.aiResultSource.collectAsState()
     val proofreadHint by viewModel.proofreadHint.collectAsState()
     val isOfflineMode by viewModel.isOfflineMode.collectAsState()
     val predictiveSuggestions by viewModel.predictiveSuggestions.collectAsState()
@@ -203,6 +208,7 @@ fun AgenticKeyboardLayout(
      * replaces a selection, so only the no-selection case needs a delete first.
      */
     fun replaceActiveText(newText: String) {
+        val original = aiSourceText()
         if (inPlaygroundMode) {
             onPlaygroundTextChange(newText)
         } else {
@@ -212,6 +218,10 @@ fun AgenticKeyboardLayout(
                 }
                 conn.commitText(newText, 1)
             }
+        }
+        if (newText != original) {
+            viewModel.registerAiApply(original, newText)
+            gestureAlert = "Applied ✨ (⌫ undoes)"
         }
     }
 
@@ -285,10 +295,27 @@ fun AgenticKeyboardLayout(
             }
             viewModel.onUndoApplied()
             gestureAlert = "Reverted to \"${pending.original}\""
-        } else {
-            viewModel.clearPendingUndo()
-            onDelete()
+            return
         }
+        // Same idea for a just-applied AI result: one backspace restores the
+        // draft/selection the Apply replaced.
+        val aiPending = viewModel.peekPendingAiUndo()
+        if (aiPending != null && aiPending.replacement.isNotEmpty() && text.endsWith(aiPending.replacement)) {
+            if (inPlaygroundMode) {
+                onPlaygroundTextChange(text.dropLast(aiPending.replacement.length) + aiPending.original)
+            } else {
+                inputConnectionProvider()?.let { conn ->
+                    conn.deleteSurroundingText(aiPending.replacement.length, 0)
+                    if (aiPending.original.isNotEmpty()) conn.commitText(aiPending.original, 1)
+                }
+            }
+            viewModel.clearPendingAiUndo()
+            gestureAlert = "Restored original ↩️"
+            return
+        }
+        viewModel.clearPendingUndo()
+        viewModel.clearPendingAiUndo()
+        onDelete()
     }
 
     // Active AI actions visibility
@@ -332,9 +359,9 @@ fun AgenticKeyboardLayout(
                                 val text = currentText()
                                 val expanded = viewModel.tryExpandAbbreviation(text)
                                 if (expanded != text) {
-                                    gestureAlert = "Gesture Triggered: Template Expanded! ⚡"
                                     viewModel.recordShortcutExpansionStat()
                                     replaceActiveText(expanded)
+                                    gestureAlert = "Template Expanded! ⚡ (⌫ undoes)"
                                 } else {
                                     gestureAlert = "No abbreviations found to expand. ⚡"
                                 }
@@ -426,12 +453,19 @@ fun AgenticKeyboardLayout(
             explanation != null || continuation != null || suggestions.isNotEmpty() ||
             sendGuardWarning != null
 
+        // Tap a result's text to expand the shelf and read the full output
+        // (plus the original it replaces) before applying. Resets per result.
+        var resultExpanded by remember(
+            grammarCorrection, summary, translation, rewrite, composeResult, continuation
+        ) { mutableStateOf(false) }
+
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(64.dp)
+                .then(if (resultExpanded) Modifier.heightIn(min = 64.dp) else Modifier.height(64.dp))
+                .animateContentSize()
                 .background(Color(0xFFF7F2FA))
-                .padding(horizontal = 8.dp),
+                .padding(horizontal = 8.dp, vertical = if (resultExpanded) 8.dp else 0.dp),
             contentAlignment = Alignment.CenterStart
         ) {
             if (isLoading) {
@@ -485,15 +519,15 @@ fun AgenticKeyboardLayout(
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.SpaceBetween
                         ) {
-                            Column(modifier = Modifier.weight(1f)) {
-                                Text("Corrected:", color = Color(0xFF15803D), fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                                Text(
-                                    text = correction.corrected,
-                                    color = Color(0xFF1C1B1F),
-                                    fontSize = 14.sp,
-                                    maxLines = 1
-                                )
-                            }
+                            ExpandableResult(
+                                label = "Corrected:",
+                                labelColor = Color(0xFF15803D),
+                                result = correction.corrected,
+                                expanded = resultExpanded,
+                                onToggle = { resultExpanded = !resultExpanded },
+                                original = correction.original,
+                                modifier = Modifier.weight(1f)
+                            )
                             Button(
                                 onClick = {
                                     buzz(HapticFeedbackType.LongPress)
@@ -581,10 +615,15 @@ fun AgenticKeyboardLayout(
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.SpaceBetween
                         ) {
-                            Column(modifier = Modifier.weight(1f)) {
-                                Text("Summary:", color = Color(0xFF7E22CE), fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                                Text(summary!!, color = Color(0xFF1C1B1F), fontSize = 13.sp, maxLines = 1)
-                            }
+                            ExpandableResult(
+                                label = "Summary:",
+                                labelColor = Color(0xFF7E22CE),
+                                result = summary!!,
+                                expanded = resultExpanded,
+                                onToggle = { resultExpanded = !resultExpanded },
+                                original = aiResultSource,
+                                modifier = Modifier.weight(1f)
+                            )
                             Button(
                                 onClick = {
                                     replaceActiveText(summary!!)
@@ -604,10 +643,15 @@ fun AgenticKeyboardLayout(
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.SpaceBetween
                         ) {
-                            Column(modifier = Modifier.weight(1f)) {
-                                Text("Translated:", color = Color(0xFF0369A1), fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                                Text(translation!!, color = Color(0xFF1C1B1F), fontSize = 13.sp, maxLines = 1)
-                            }
+                            ExpandableResult(
+                                label = "Translated:",
+                                labelColor = Color(0xFF0369A1),
+                                result = translation!!,
+                                expanded = resultExpanded,
+                                onToggle = { resultExpanded = !resultExpanded },
+                                original = aiResultSource,
+                                modifier = Modifier.weight(1f)
+                            )
                             Button(
                                 onClick = {
                                     replaceActiveText(translation!!)
@@ -627,10 +671,15 @@ fun AgenticKeyboardLayout(
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.SpaceBetween
                         ) {
-                            Column(modifier = Modifier.weight(1f)) {
-                                Text("Rewritten (${viewModel.effectivePersona()}):", color = Color(0xFFB45309), fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                                Text(rewrite!!, color = Color(0xFF1C1B1F), fontSize = 13.sp, maxLines = 1)
-                            }
+                            ExpandableResult(
+                                label = "Rewritten (${viewModel.effectivePersona()}):",
+                                labelColor = Color(0xFFB45309),
+                                result = rewrite!!,
+                                expanded = resultExpanded,
+                                onToggle = { resultExpanded = !resultExpanded },
+                                original = aiResultSource,
+                                modifier = Modifier.weight(1f)
+                            )
                             Button(
                                 onClick = {
                                     buzz(HapticFeedbackType.LongPress)
@@ -651,10 +700,14 @@ fun AgenticKeyboardLayout(
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.SpaceBetween
                         ) {
-                            Column(modifier = Modifier.weight(1f)) {
-                                Text("Composed draft:", color = Color(0xFF9333EA), fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                                Text(composeResult!!, color = Color(0xFF1C1B1F), fontSize = 13.sp, maxLines = 1)
-                            }
+                            ExpandableResult(
+                                label = "Composed draft:",
+                                labelColor = Color(0xFF9333EA),
+                                result = composeResult!!,
+                                expanded = resultExpanded,
+                                onToggle = { resultExpanded = !resultExpanded },
+                                modifier = Modifier.weight(1f)
+                            )
                             Button(
                                 onClick = {
                                     buzz(HapticFeedbackType.LongPress)
@@ -675,16 +728,23 @@ fun AgenticKeyboardLayout(
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.SpaceBetween
                         ) {
-                            Column(modifier = Modifier.weight(1f)) {
-                                Text("Continue with:", color = Color(0xFF0E7490), fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                                Text(continuation!!, color = Color(0xFF1C1B1F), fontSize = 13.sp, maxLines = 1)
-                            }
+                            ExpandableResult(
+                                label = "Continue with:",
+                                labelColor = Color(0xFF0E7490),
+                                result = continuation!!,
+                                expanded = resultExpanded,
+                                onToggle = { resultExpanded = !resultExpanded },
+                                modifier = Modifier.weight(1f)
+                            )
                             Button(
                                 onClick = {
                                     buzz(HapticFeedbackType.LongPress)
                                     val text = currentText()
                                     val separator = if (text.isEmpty() || text.last().isWhitespace()) "" else " "
                                     onKeyPress(separator + continuation!!)
+                                    // Undo of an append restores by deleting it (empty original)
+                                    viewModel.registerAiApply("", separator + continuation!!)
+                                    gestureAlert = "Appended ✨ (⌫ undoes)"
                                     viewModel.recordAiApplyStat()
                                     viewModel.dismissResults()
                                 },
@@ -1558,6 +1618,49 @@ fun AgenticKeyboardLayout(
                 modifier = Modifier
                     .width(56.dp)
                     .testTag("key_enter")
+            )
+        }
+    }
+}
+
+/**
+ * One-line AI result (label + text) that expands on tap so the full output —
+ * and, when available, the original text it will replace — can be read before
+ * committing with Apply.
+ */
+@Composable
+private fun ExpandableResult(
+    label: String,
+    labelColor: Color,
+    result: String,
+    expanded: Boolean,
+    onToggle: () -> Unit,
+    original: String? = null,
+    modifier: Modifier = Modifier
+) {
+    Column(modifier = modifier.clickable { onToggle() }) {
+        Text(
+            text = "$label ${if (expanded) "▲" else "▼"}",
+            color = labelColor,
+            fontSize = 11.sp,
+            fontWeight = FontWeight.Bold
+        )
+        Text(
+            text = result,
+            color = Color(0xFF1C1B1F),
+            fontSize = 13.sp,
+            maxLines = if (expanded) 10 else 1,
+            overflow = TextOverflow.Ellipsis
+        )
+        if (expanded && !original.isNullOrBlank() && original != result) {
+            Spacer(modifier = Modifier.height(4.dp))
+            Text(
+                text = "Was: $original",
+                color = Color(0xFF79747E),
+                fontSize = 11.sp,
+                maxLines = 4,
+                overflow = TextOverflow.Ellipsis,
+                textDecoration = TextDecoration.LineThrough
             )
         }
     }

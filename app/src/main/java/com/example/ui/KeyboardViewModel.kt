@@ -39,6 +39,9 @@ data class WordReplacement(val replacement: String, val fromLearnedRule: Boolean
 /** A just-applied auto-correction that backspace can revert. */
 data class AutoCorrectionUndo(val original: String, val replacement: String, val fromLearnedRule: Boolean)
 
+/** A just-applied AI result that backspace can revert to the original text. */
+data class AiApplyUndo(val original: String, val replacement: String)
+
 /** Local, on-device usage statistics shown in the Style Hub dashboard. */
 data class UsageStats(
     val autoCorrections: Int = 0,
@@ -135,6 +138,12 @@ class KeyboardViewModel(
     private val _continuation = MutableStateFlow<String?>(null)
     val continuation = _continuation.asStateFlow()
 
+    // Text the pending result panel would replace, shown in the expanded
+    // original-vs-result preview; null for results with no original to compare
+    // (compose, continue, explain).
+    private val _aiResultSource = MutableStateFlow<String?>(null)
+    val aiResultSource = _aiResultSource.asStateFlow()
+
     // Debounced background grammar check result (opt-in; see isProofreadEnabled)
     private val _proofreadHint = MutableStateFlow<GrammarCorrectionResponse?>(null)
     val proofreadHint = _proofreadHint.asStateFlow()
@@ -197,6 +206,7 @@ class KeyboardViewModel(
     private var activeAppPackage: String? = null
     private var previousCommittedWord: String? = null
     private var pendingUndo: AutoCorrectionUndo? = null
+    private var pendingAiUndo: AiApplyUndo? = null
     private val correctionReverts = mutableMapOf<String, Int>()
     private var proofreadJob: Job? = null
     private var aiJob: Job? = null
@@ -311,6 +321,7 @@ class KeyboardViewModel(
         _suggestions.value = emptyList()
         _replyIntentContext.value = null
         _sendGuardWarning.value = null
+        _aiResultSource.value = null
     }
 
     fun setInputText(text: String) {
@@ -554,6 +565,7 @@ class KeyboardViewModel(
 
     fun registerAutoCorrection(original: String, replacement: String, fromLearnedRule: Boolean) {
         pendingUndo = AutoCorrectionUndo(original, replacement, fromLearnedRule)
+        pendingAiUndo = null
     }
 
     fun peekPendingUndo(): AutoCorrectionUndo? = pendingUndo
@@ -578,6 +590,24 @@ class KeyboardViewModel(
 
     fun clearPendingUndo() {
         pendingUndo = null
+    }
+
+    // --- AI apply undo ---------------------------------------------------------
+
+    /**
+     * Remembers a just-applied AI result so backspace pressed right after can
+     * restore [original]. Mirrors the auto-correction undo above but for whole
+     * drafts/selections replaced through the result panels.
+     */
+    fun registerAiApply(original: String, replacement: String) {
+        pendingUndo = null
+        pendingAiUndo = AiApplyUndo(original, replacement).takeIf { original != replacement }
+    }
+
+    fun peekPendingAiUndo(): AiApplyUndo? = pendingAiUndo
+
+    fun clearPendingAiUndo() {
+        pendingAiUndo = null
     }
 
     // --- Usage statistics (local only) ----------------------------------------
@@ -823,6 +853,7 @@ class KeyboardViewModel(
     fun summarizeMessage(text: String, bypassCache: Boolean = false) {
         if (text.isBlank() || _isSensitiveField.value) return
         regenerateAction = { summarizeMessage(text, bypassCache = true) }
+        _aiResultSource.value = text
         launchAi {
             _summary.value = null
             try {
@@ -847,6 +878,7 @@ class KeyboardViewModel(
     fun translateText(text: String, bypassCache: Boolean = false) {
         if (text.isBlank() || _isSensitiveField.value) return
         regenerateAction = { translateText(text, bypassCache = true) }
+        _aiResultSource.value = text
         launchAi {
             _translation.value = null
             try {
@@ -871,6 +903,7 @@ class KeyboardViewModel(
     fun rewriteTone(text: String, bypassCache: Boolean = false) {
         if (text.isBlank() || _isSensitiveField.value) return
         regenerateAction = { rewriteTone(text, bypassCache = true) }
+        _aiResultSource.value = text
         launchAi {
             _rewrite.value = null
             try {
@@ -896,6 +929,7 @@ class KeyboardViewModel(
     fun rewriteWithStyle(text: String, styleInstruction: String, bypassCache: Boolean = false) {
         if (text.isBlank() || _isSensitiveField.value) return
         regenerateAction = { rewriteWithStyle(text, styleInstruction, bypassCache = true) }
+        _aiResultSource.value = text
         launchAi {
             _rewrite.value = null
             try {
@@ -920,6 +954,7 @@ class KeyboardViewModel(
     fun composeFromInstruction(instruction: String, bypassCache: Boolean = false) {
         if (instruction.isBlank() || _isSensitiveField.value) return
         regenerateAction = { composeFromInstruction(instruction, bypassCache = true) }
+        _aiResultSource.value = null
         launchAi {
             _composeResult.value = null
             try {
@@ -943,6 +978,7 @@ class KeyboardViewModel(
     fun explainText(text: String, bypassCache: Boolean = false) {
         if (text.isBlank() || _isSensitiveField.value) return
         regenerateAction = { explainText(text, bypassCache = true) }
+        _aiResultSource.value = null
         launchAi {
             _explanation.value = null
             try {
@@ -966,6 +1002,7 @@ class KeyboardViewModel(
     fun continueDraft(text: String, bypassCache: Boolean = false) {
         if (text.isBlank() || _isSensitiveField.value) return
         regenerateAction = { continueDraft(text, bypassCache = true) }
+        _aiResultSource.value = null
         launchAi {
             _continuation.value = null
             try {
