@@ -17,6 +17,7 @@ import com.example.network.ToneAnalysisResponse
 import com.example.util.KeyboardSettings
 import com.example.util.PersonalModelSerializer
 import com.example.util.ReplyIntents
+import com.example.util.WritingQualityMeter
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.cancelAndJoin
@@ -1137,7 +1138,16 @@ class KeyboardViewModel(
     }
 
     private fun getOfflineToneAnalysis(text: String): ToneAnalysisResponse {
-        return ToneAnalysisResponse("Neutral (Offline)", 0.8f, listOf("Connect online for deep sentiment models."))
+        val meter = WritingQualityMeter.assess(text)
+        return ToneAnalysisResponse(
+            "Neutral (Offline)", 0.8f, listOf("Connect online for deep sentiment models."),
+            clarity = meter.clarity,
+            warmth = meter.warmth,
+            firmness = meter.firmness,
+            risk = meter.risk,
+            lengthLabel = meter.lengthLabel,
+            note = meter.note
+        )
     }
 }
 

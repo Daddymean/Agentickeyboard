@@ -49,7 +49,14 @@ data class GrammarCorrectionResponse(
 data class ToneAnalysisResponse(
     val sentiment: String, // e.g. "Positive", "Professional", "Anxious", etc.
     val toneScore: Float,  // e.g. 0.85
-    val suggestions: List<String> // recommendations to adjust tone
+    val suggestions: List<String>, // recommendations to adjust tone
+    // Writing-quality meter: human-framed levels, not grades (null = not assessed)
+    val clarity: String? = null,   // Clear / OK / Dense
+    val warmth: String? = null,    // Warm / Neutral / Cold
+    val firmness: String? = null,  // Firm / Balanced / Soft
+    val risk: String? = null,      // Low / Medium / High chance of landing badly
+    val lengthLabel: String? = null, // computed locally, e.g. "Tight", "Long for chat"
+    val note: String? = null       // one plain-language note, e.g. "clear but cold"
 )
 
 @JsonClass(generateAdapter = true)

@@ -483,17 +483,40 @@ fun AgenticKeyboardLayout(
                             modifier = Modifier.fillMaxWidth(),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Text(
-                                text = "🎭 ${analysis.sentiment} (${(analysis.toneScore * 100).toInt()}%)",
-                                color = Color(0xFF21005D),
-                                fontWeight = FontWeight.Bold,
-                                fontSize = 13.sp
-                            )
+                            Column {
+                                Text(
+                                    text = "🎭 ${analysis.sentiment} (${(analysis.toneScore * 100).toInt()}%)",
+                                    color = Color(0xFF21005D),
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 13.sp
+                                )
+                                analysis.note?.let { note ->
+                                    Text(note, color = Color(0xFF5F5D6B), fontSize = 9.sp, maxLines = 1)
+                                }
+                            }
                             Spacer(modifier = Modifier.width(8.dp))
                             LazyRow(
                                 horizontalArrangement = Arrangement.spacedBy(6.dp),
                                 modifier = Modifier.weight(1f)
                             ) {
+                                // Compact writing-quality meter chips
+                                val meterChips = listOfNotNull(
+                                    analysis.clarity?.let { "🔍 $it" },
+                                    analysis.warmth?.let { "🤝 $it" },
+                                    analysis.firmness?.let { "💪 $it" },
+                                    analysis.risk?.let { "⚠️ Risk $it" },
+                                    analysis.lengthLabel?.let { "📏 $it" }
+                                )
+                                items(meterChips) { chip ->
+                                    Box(
+                                        modifier = Modifier
+                                            .clip(RoundedCornerShape(12.dp))
+                                            .background(Color(0xFFD0BCFF))
+                                            .padding(horizontal = 8.dp, vertical = 4.dp)
+                                    ) {
+                                        Text(chip, color = Color(0xFF21005D), fontSize = 11.sp, fontWeight = FontWeight.Medium)
+                                    }
+                                }
                                 // Tone-matched emoji, insertable with a tap
                                 items(viewModel.emojisForSentiment(analysis.sentiment)) { emoji ->
                                     Box(
