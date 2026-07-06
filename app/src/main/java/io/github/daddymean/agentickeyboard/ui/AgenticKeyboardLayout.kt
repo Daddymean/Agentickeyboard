@@ -139,6 +139,9 @@ fun AgenticKeyboardLayout(
     val predictiveSuggestions by viewModel.predictiveSuggestions.collectAsState()
     val topVocabulary by viewModel.topVocabulary.collectAsState()
     val trackedInputText by viewModel.inputText.collectAsState()
+    // Mirrors the editor's selection state (playground mode never selects, and
+    // the service only updates this flow for real editors, so it stays false).
+    val hasEditorSelection by viewModel.hasSelection.collectAsState()
     val isSensitiveField by viewModel.isSensitiveField.collectAsState()
     val isSwipeToTypeEnabled by viewModel.isSwipeEnabled.collectAsState()
     val isAutoCapitalizeEnabled by viewModel.isAutoCapitalizeEnabled.collectAsState()
@@ -1265,6 +1268,24 @@ fun AgenticKeyboardLayout(
                             viewModel.analyzeTone(aiSourceText())
                         },
                         modifier = Modifier.testTag("action_tone")
+                    )
+                }
+
+                // Selection-scope indicator: the actions above silently operate
+                // on the selection when one exists; make that discoverable.
+                if (hasEditorSelection && !inPlaygroundMode) {
+                    Text(
+                        text = "Acting on selection",
+                        color = keyboardColors.accent,
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.Medium,
+                        maxLines = 1,
+                        modifier = Modifier
+                            .padding(start = 6.dp)
+                            .clip(RoundedCornerShape(8.dp))
+                            .background(keyboardColors.accent.copy(alpha = 0.15f))
+                            .padding(horizontal = 6.dp, vertical = 3.dp)
+                            .testTag("selection_badge")
                     )
                 }
 
