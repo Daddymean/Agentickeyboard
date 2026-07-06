@@ -5,7 +5,7 @@ import com.example.util.ReplyIntents
 /**
  * Centralized prompt templates for GeminiManager.
  * Extracted for maintainability, testability, and to reduce duplication in the large manager file.
- * Use string templates or builders here for easy updates.
+ * All prompt construction logic lives here.
  */
 object Prompts {
 
@@ -57,8 +57,13 @@ object Prompts {
         $text
     """.trimIndent()
 
-    // Add similar builders for translateText, rewriteWithTone, composeMessage, explainText, continueText, analyzeTone as needed
-    // This keeps GeminiManager focused on orchestration/caching/error handling.
+    fun translateText(sourceLang: String, targetLang: String, personalizationContext: String, text: String): String = """
+        Translate the following text from $sourceLang to $targetLang. Return ONLY the translated string with absolutely no introductory or extra text.
+        ${if (personalizationContext.isNotEmpty()) "Maintain the style level (formality, tone) matching the personalization preference:\n$personalizationContext\n" else ""}
+        
+        Text:
+        $text
+    """.trimIndent()
 
     fun rewriteWithTone(targetTone: String, personalizationContext: String, preserveVoice: Boolean, text: String): String = """
         Rewrite the following text so it reads in a "$targetTone" tone. Preserve the original meaning and approximate length.
@@ -69,5 +74,62 @@ object Prompts {
         $text
     """.trimIndent()
 
-    // ... (other prompts similarly extracted in full refactor)
+    fun composeMessage(instruction: String, targetTone: String, personalizationContext: String, preserveVoice: Boolean): String = """
+        The user wants you to write a message on their behalf. Their instruction describes what the message should say:
+        "$instruction"
+
+        Write the actual message they should send, in a "$targetTone" tone, suitable for a mobile chat. Keep it natural and concise.
+        Return ONLY the message text with absolutely no introductory or extra text.
+        ${if (personalizationContext.isNotEmpty()) "Match the user's habitual voice:\n$personalizationContext\n" else ""}
+        ${if (preserveVoice) "$VOICE_LOCK_DIRECTIVE\n" else ""}
+    """.trimIndent()
+
+    fun explainText(text: String): String = """
+        Explain the following text in plain, simple language a layperson would understand.
+        Keep the explanation to 1-3 short sentences suitable for a phone screen. Return ONLY the explanation.
+
+        Text:
+        $text
+    """.trimIndent()
+
+    fun continueText(text: String, personalizationContext: String, preserveVoice: Boolean): String = """
+        The user is drafting a message and wants you to continue it naturally in their voice:
+        "$text"
+
+        Write the next 5-20 words that continue the draft. Return ONLY the continuation text - do NOT repeat the original draft, do not add quotes or commentary. If the draft ends mid-word, complete that word first.
+        ${if (personalizationContext.isNotEmpty()) "Match the user's habitual voice:\n$personalizationContext\n" else ""}
+        ${if (preserveVoice) "$VOICE_LOCK_DIRECTIVE\n" else ""}
+    """.trimIndent()
+
+    fun analyzeTone(personalizationContext: String, text: String): String = """
+        Analyze the sentiment and communication tone of this keyboard text input:
+        "$text"
+        
+        Identify the primary tone category (e.g. Professional, Joyful, Empathetic, Aggressive, Sarcastic, Apologetic, Urgent).
+        Estimate a tone score / confidence value between 0.0 and 1.0.
+        Provide exactly 2 actionable tips/suggestions to adjust or improve communication precision.
+        Also rate these human-framed writing-quality dimensions as short levels (labels, never grades or numbers):
+        - clarity: exactly one of "Clear", "OK", "Dense"
+        - warmth: exactly one of "Warm", "Neutral", "Cold"
+        - firmness: exactly one of "Firm", "Balanced", "Soft"
+        - risk: how likely the message lands badly — exactly one of "Low", "Medium", "High"
+        And write "note": one plain-language remark of at most 8 words (e.g. "clear but cold", "friendly but hedged").
+
+        ${if (personalizationContext.isNotEmpty()) "Contrast this text against the user's baseline writing habit to provide tailored recommendations:\n$personalizationContext\n" else ""}
+
+        Return raw JSON with this exact structure:
+        {
+          "sentiment": "ToneCategory",
+          "toneScore": 0.85,
+          "suggestions": [
+            "Tip 1 to refine the tone",
+            "Tip 2 to refine the tone"
+          ],
+          "clarity": "Clear",
+          "warmth": "Neutral",
+          "firmness": "Balanced",
+          "risk": "Low",
+          "note": "clear but cold"
+        }
+    """.trimIndent()
 }
