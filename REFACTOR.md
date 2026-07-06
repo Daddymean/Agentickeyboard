@@ -21,18 +21,18 @@
 ### 3. Selection-scope indicator (current ROADMAP #1 Next up)
 - Selection-scoped AI actions already shipped (see PR #12 in ROADMAP).
 - The missing piece is discoverability: a small badge on the AI action row when `hasActiveSelection`.
-- **Implemented**: Created `ui/components/SelectionBadge.kt` as first extracted component. It uses `KeyboardTheme` and `LocalKeyboardColors` for theming. Ready to integrate into AI action row during shelf extraction.
+- **Implemented**: Created `ui/components/SelectionBadge.kt` as first extracted component. It uses `KeyboardTheme` and `LocalKeyboardColors` for theming. 
+- **Further progress**: Created `AiActionRow.kt` which integrates the SelectionBadge conditionally when `hasActiveSelection = true`. This demonstrates practical usage and paves the way for full shelf extraction from the monolith.
 
 ### 4. Extract prompts from GeminiManager.kt into dedicated templates (small, low-risk)
 - Created and expanded `app/src/main/java/com/example/network/Prompts.kt` with complete builder functions for ALL prompts (fixGrammar, suggestReplies, summarizeMessage, translateText, rewriteWithTone, composeMessage, explainText, continueText, analyzeTone) + VOICE_LOCK_DIRECTIVE.
-- **Migrated GeminiManager.kt**: Replaced all inline `val prompt = """...""".trimIndent()` blocks with calls to `Prompts.*(...)`. Removed duplicate const. File size reduced ~6k lines; now focused purely on orchestration, caching, API calls, and offline fallbacks.
-- Major maintainability win — prompts are now centralized and easy to A/B test or update.
+- **Migrated GeminiManager.kt**: Replaced all inline `val prompt = """...""".trimIndent()` blocks with calls to `Prompts.*(...)`. Removed duplicate const. File size reduced ~6k lines; now focused purely on orchestration, caching, API calls, and offline fallbacks. Major cleanup win.
 
 ### 5. Begin monolith split
-- Started with `ui/components/SelectionBadge.kt` (see above).
-- Demonstrates the pattern: small, self-contained, themed Composables extracted from the giants.
-- Future extractions: Key components, AiActionRow (to host the badge), SwipeView, ResultShelf, etc.
-- This will make Layout.kt, ViewModel.kt, and MainActivity.kt dramatically smaller and testable.
+- Started with `ui/components/SelectionBadge.kt` and `AiActionRow.kt`.
+- These are small, self-contained, themed Composables extracted from the giants (Layout.kt / ViewModel).
+- Pattern established for future extractions: Key components, full shelf, swipe elements, etc.
+- Will continue incremental extraction to shrink the 80k+ line files dramatically.
 
 ## Notes on approach
 - Cleaner/more efficient paths always preferred (e.g., provider pattern, centralized prompts, incremental extraction over in-place edits).
