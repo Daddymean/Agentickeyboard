@@ -7,6 +7,7 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGestures
@@ -42,6 +43,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
@@ -72,6 +74,9 @@ import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Popup
+import com.example.ui.theme.DarkKeyboardColors
+import com.example.ui.theme.LightKeyboardColors
+import com.example.ui.theme.LocalKeyboardColors
 import com.example.util.CommandPalette
 import com.example.util.ReplyIntents
 import com.example.util.SwipePoint
@@ -321,12 +326,16 @@ fun AgenticKeyboardLayout(
     // Active AI actions visibility
     var showAiActions by remember { mutableStateOf(true) }
 
-    val bentoKeyboardBg = Color(0xFFE6E1E5)
+    // Keyboard palette follows the system light/dark setting. Providing it here
+    // themes both call sites (IME service and the in-app playground) and every
+    // descendant composable (keys, chips, popups) through LocalKeyboardColors.
+    val keyboardColors = if (isSystemInDarkTheme()) DarkKeyboardColors else LightKeyboardColors
 
+    CompositionLocalProvider(LocalKeyboardColors provides keyboardColors) {
     Column(
         modifier = modifier
             .fillMaxWidth()
-            .background(bentoKeyboardBg)
+            .background(keyboardColors.background)
             .padding(bottom = 8.dp)
             .pointerInput(Unit) {
                 detectDragGestures(
@@ -417,13 +426,13 @@ fun AgenticKeyboardLayout(
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .background(Color(0xFF6750A4))
+                    .background(keyboardColors.accent)
                     .padding(vertical = 4.dp),
                 contentAlignment = Alignment.Center
             ) {
                 Text(
                     text = dragPreview!!,
-                    color = Color.White,
+                    color = keyboardColors.onAccent,
                     fontSize = 12.sp,
                     fontWeight = FontWeight.Bold
                 )
@@ -433,7 +442,7 @@ fun AgenticKeyboardLayout(
         if (gestureAlert != null) {
             Text(
                 text = gestureAlert ?: "",
-                color = Color(0xFFD0BCFF),
+                color = keyboardColors.keyActive,
                 fontSize = 11.sp,
                 textAlign = TextAlign.Center,
                 modifier = Modifier
@@ -464,7 +473,7 @@ fun AgenticKeyboardLayout(
                 .fillMaxWidth()
                 .then(if (resultExpanded) Modifier.heightIn(min = 64.dp) else Modifier.height(64.dp))
                 .animateContentSize()
-                .background(Color(0xFFF7F2FA))
+                .background(keyboardColors.shelf)
                 .padding(horizontal = 8.dp, vertical = if (resultExpanded) 8.dp else 0.dp),
             contentAlignment = Alignment.CenterStart
         ) {
@@ -474,9 +483,9 @@ fun AgenticKeyboardLayout(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.Center
                 ) {
-                    CircularProgressIndicator(modifier = Modifier.size(24.dp), color = Color(0xFF6750A4))
+                    CircularProgressIndicator(modifier = Modifier.size(24.dp), color = keyboardColors.accent)
                     Spacer(modifier = Modifier.width(12.dp))
-                    Text("Agentic AI processing...", color = Color(0xFF1C1B1F), fontSize = 12.sp)
+                    Text("Agentic AI processing...", color = keyboardColors.text, fontSize = 12.sp)
                 }
             } else {
                 Row(
@@ -491,8 +500,8 @@ fun AgenticKeyboardLayout(
                             horizontalArrangement = Arrangement.SpaceBetween
                         ) {
                             Column(modifier = Modifier.weight(1f)) {
-                                Text("⚠️ This might land harshly", color = Color(0xFFB3261E), fontSize = 12.sp, fontWeight = FontWeight.Bold)
-                                Text("Keep editing, or send it as-is.", color = Color(0xFF5F5D6B), fontSize = 10.sp, maxLines = 1)
+                                Text("⚠️ This might land harshly", color = keyboardColors.error, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                                Text("Keep editing, or send it as-is.", color = keyboardColors.textMuted, fontSize = 10.sp, maxLines = 1)
                             }
                             ClipActionChip("✏️ Revise") {
                                 buzz(HapticFeedbackType.TextHandleMove)
@@ -505,11 +514,11 @@ fun AgenticKeyboardLayout(
                                     // interceptSend sees the armed warning and lets this one through
                                     onAction()
                                 },
-                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFB3261E)),
+                                colors = ButtonDefaults.buttonColors(containerColor = keyboardColors.error),
                                 modifier = Modifier.height(32.dp).testTag("send_anyway_button"),
                                 contentPadding = RowDefaultsButtonPadding
                             ) {
-                                Text("Send anyway", color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                Text("Send anyway", color = keyboardColors.onError, fontSize = 11.sp, fontWeight = FontWeight.Bold)
                             }
                         }
                     } else if (grammarCorrection != null) {
@@ -521,7 +530,7 @@ fun AgenticKeyboardLayout(
                         ) {
                             ExpandableResult(
                                 label = "Corrected:",
-                                labelColor = Color(0xFF15803D),
+                                labelColor = keyboardColors.success,
                                 result = correction.corrected,
                                 expanded = resultExpanded,
                                 onToggle = { resultExpanded = !resultExpanded },
@@ -535,11 +544,11 @@ fun AgenticKeyboardLayout(
                                     viewModel.recordAiApplyStat()
                                     viewModel.dismissResults()
                                 },
-                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF6750A4)),
+                                colors = ButtonDefaults.buttonColors(containerColor = keyboardColors.accent),
                                 modifier = Modifier.height(32.dp),
                                 contentPadding = RowDefaultsButtonPadding
                             ) {
-                                Text("Apply", color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                Text("Apply", color = keyboardColors.onAccent, fontSize = 11.sp, fontWeight = FontWeight.Bold)
                             }
                         }
                     } else if (toneAnalysis != null) {
@@ -551,12 +560,12 @@ fun AgenticKeyboardLayout(
                             Column {
                                 Text(
                                     text = "🎭 ${analysis.sentiment} (${(analysis.toneScore * 100).toInt()}%)",
-                                    color = Color(0xFF21005D),
+                                    color = keyboardColors.onChip,
                                     fontWeight = FontWeight.Bold,
                                     fontSize = 13.sp
                                 )
                                 analysis.note?.let { note ->
-                                    Text(note, color = Color(0xFF5F5D6B), fontSize = 9.sp, maxLines = 1)
+                                    Text(note, color = keyboardColors.textMuted, fontSize = 9.sp, maxLines = 1)
                                 }
                             }
                             Spacer(modifier = Modifier.width(8.dp))
@@ -576,10 +585,10 @@ fun AgenticKeyboardLayout(
                                     Box(
                                         modifier = Modifier
                                             .clip(RoundedCornerShape(12.dp))
-                                            .background(Color(0xFFD0BCFF))
+                                            .background(keyboardColors.keyActive)
                                             .padding(horizontal = 8.dp, vertical = 4.dp)
                                     ) {
-                                        Text(chip, color = Color(0xFF21005D), fontSize = 11.sp, fontWeight = FontWeight.Medium)
+                                        Text(chip, color = keyboardColors.onChip, fontSize = 11.sp, fontWeight = FontWeight.Medium)
                                     }
                                 }
                                 // Tone-matched emoji, insertable with a tap
@@ -587,7 +596,7 @@ fun AgenticKeyboardLayout(
                                     Box(
                                         modifier = Modifier
                                             .clip(RoundedCornerShape(12.dp))
-                                            .background(Color(0xFFFFD8E4))
+                                            .background(keyboardColors.emojiChip)
                                             .clickable {
                                                 buzz(HapticFeedbackType.TextHandleMove)
                                                 onKeyPress(emoji)
@@ -601,10 +610,10 @@ fun AgenticKeyboardLayout(
                                     Box(
                                         modifier = Modifier
                                             .clip(RoundedCornerShape(12.dp))
-                                            .background(Color(0xFFE8DEF8))
+                                            .background(keyboardColors.chip)
                                             .padding(horizontal = 10.dp, vertical = 4.dp)
                                     ) {
-                                        Text(tip, color = Color(0xFF21005D), fontSize = 11.sp, fontWeight = FontWeight.Medium)
+                                        Text(tip, color = keyboardColors.onChip, fontSize = 11.sp, fontWeight = FontWeight.Medium)
                                     }
                                 }
                             }
@@ -617,7 +626,7 @@ fun AgenticKeyboardLayout(
                         ) {
                             ExpandableResult(
                                 label = "Summary:",
-                                labelColor = Color(0xFF7E22CE),
+                                labelColor = keyboardColors.labelSummary,
                                 result = summary!!,
                                 expanded = resultExpanded,
                                 onToggle = { resultExpanded = !resultExpanded },
@@ -630,11 +639,11 @@ fun AgenticKeyboardLayout(
                                     viewModel.recordAiApplyStat()
                                     viewModel.dismissResults()
                                 },
-                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF6750A4)),
+                                colors = ButtonDefaults.buttonColors(containerColor = keyboardColors.accent),
                                 modifier = Modifier.height(32.dp),
                                 contentPadding = RowDefaultsButtonPadding
                             ) {
-                                Text("Replace", color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                Text("Replace", color = keyboardColors.onAccent, fontSize = 11.sp, fontWeight = FontWeight.Bold)
                             }
                         }
                     } else if (translation != null) {
@@ -645,7 +654,7 @@ fun AgenticKeyboardLayout(
                         ) {
                             ExpandableResult(
                                 label = "Translated:",
-                                labelColor = Color(0xFF0369A1),
+                                labelColor = keyboardColors.labelTranslate,
                                 result = translation!!,
                                 expanded = resultExpanded,
                                 onToggle = { resultExpanded = !resultExpanded },
@@ -658,11 +667,11 @@ fun AgenticKeyboardLayout(
                                     viewModel.recordAiApplyStat()
                                     viewModel.dismissResults()
                                 },
-                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF6750A4)),
+                                colors = ButtonDefaults.buttonColors(containerColor = keyboardColors.accent),
                                 modifier = Modifier.height(32.dp),
                                 contentPadding = RowDefaultsButtonPadding
                             ) {
-                                Text("Insert", color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                Text("Insert", color = keyboardColors.onAccent, fontSize = 11.sp, fontWeight = FontWeight.Bold)
                             }
                         }
                     } else if (rewrite != null) {
@@ -673,7 +682,7 @@ fun AgenticKeyboardLayout(
                         ) {
                             ExpandableResult(
                                 label = "Rewritten (${viewModel.effectivePersona()}):",
-                                labelColor = Color(0xFFB45309),
+                                labelColor = keyboardColors.labelRewrite,
                                 result = rewrite!!,
                                 expanded = resultExpanded,
                                 onToggle = { resultExpanded = !resultExpanded },
@@ -687,11 +696,11 @@ fun AgenticKeyboardLayout(
                                     viewModel.recordAiApplyStat()
                                     viewModel.dismissResults()
                                 },
-                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF6750A4)),
+                                colors = ButtonDefaults.buttonColors(containerColor = keyboardColors.accent),
                                 modifier = Modifier.height(32.dp),
                                 contentPadding = RowDefaultsButtonPadding
                             ) {
-                                Text("Apply", color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                Text("Apply", color = keyboardColors.onAccent, fontSize = 11.sp, fontWeight = FontWeight.Bold)
                             }
                         }
                     } else if (composeResult != null) {
@@ -702,7 +711,7 @@ fun AgenticKeyboardLayout(
                         ) {
                             ExpandableResult(
                                 label = "Composed draft:",
-                                labelColor = Color(0xFF9333EA),
+                                labelColor = keyboardColors.labelCompose,
                                 result = composeResult!!,
                                 expanded = resultExpanded,
                                 onToggle = { resultExpanded = !resultExpanded },
@@ -715,11 +724,11 @@ fun AgenticKeyboardLayout(
                                     viewModel.recordAiApplyStat()
                                     viewModel.dismissResults()
                                 },
-                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF6750A4)),
+                                colors = ButtonDefaults.buttonColors(containerColor = keyboardColors.accent),
                                 modifier = Modifier.height(32.dp),
                                 contentPadding = RowDefaultsButtonPadding
                             ) {
-                                Text("Use", color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                Text("Use", color = keyboardColors.onAccent, fontSize = 11.sp, fontWeight = FontWeight.Bold)
                             }
                         }
                     } else if (continuation != null) {
@@ -730,7 +739,7 @@ fun AgenticKeyboardLayout(
                         ) {
                             ExpandableResult(
                                 label = "Continue with:",
-                                labelColor = Color(0xFF0E7490),
+                                labelColor = keyboardColors.labelContinue,
                                 result = continuation!!,
                                 expanded = resultExpanded,
                                 onToggle = { resultExpanded = !resultExpanded },
@@ -748,17 +757,17 @@ fun AgenticKeyboardLayout(
                                     viewModel.recordAiApplyStat()
                                     viewModel.dismissResults()
                                 },
-                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF6750A4)),
+                                colors = ButtonDefaults.buttonColors(containerColor = keyboardColors.accent),
                                 modifier = Modifier.height(32.dp),
                                 contentPadding = RowDefaultsButtonPadding
                             ) {
-                                Text("Append", color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                Text("Append", color = keyboardColors.onAccent, fontSize = 11.sp, fontWeight = FontWeight.Bold)
                             }
                         }
                     } else if (explanation != null) {
                         Column(modifier = Modifier.fillMaxWidth()) {
-                            Text("Plain-language explanation:", color = Color(0xFF15803D), fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                            Text(explanation!!, color = Color(0xFF1C1B1F), fontSize = 12.sp, maxLines = 2)
+                            Text("Plain-language explanation:", color = keyboardColors.success, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                            Text(explanation!!, color = keyboardColors.text, fontSize = 12.sp, maxLines = 2)
                         }
                     } else if (suggestions.isNotEmpty()) {
                         Row(
@@ -774,7 +783,7 @@ fun AgenticKeyboardLayout(
                                     Box(
                                         modifier = Modifier
                                             .clip(RoundedCornerShape(16.dp))
-                                            .background(Color(0xFFE8DEF8))
+                                            .background(keyboardColors.chip)
                                             .clickable {
                                                 buzz(HapticFeedbackType.TextHandleMove)
                                                 onKeyPress(reply)
@@ -783,7 +792,7 @@ fun AgenticKeyboardLayout(
                                             }
                                             .padding(horizontal = 12.dp, vertical = 6.dp)
                                     ) {
-                                        Text(reply, color = Color(0xFF21005D), fontSize = 12.sp, fontWeight = FontWeight.Medium, maxLines = 1)
+                                        Text(reply, color = keyboardColors.onChip, fontSize = 12.sp, fontWeight = FontWeight.Medium, maxLines = 1)
                                     }
                                 }
                             }
@@ -803,14 +812,14 @@ fun AgenticKeyboardLayout(
                                         isOfflineMode -> "🔒 Offline Privacy Active"
                                         else -> "🚀 Agentic Online Mode"
                                     },
-                                    color = if (isSensitiveField || isOfflineMode) Color(0xFF15803D) else Color(0xFF6750A4),
+                                    color = if (isSensitiveField || isOfflineMode) keyboardColors.success else keyboardColors.accent,
                                     fontSize = 11.sp,
                                     fontWeight = FontWeight.Bold
                                 )
                                 if (liveSwipePreviewWord != null) {
                                     Text(
                                         text = "Swiping: ${liveSwipePreviewWord!!} ✍️",
-                                        color = Color(0xFF6750A4),
+                                        color = keyboardColors.accent,
                                         fontSize = 14.sp,
                                         fontWeight = FontWeight.Bold,
                                         modifier = Modifier.padding(vertical = 4.dp)
@@ -820,14 +829,14 @@ fun AgenticKeyboardLayout(
                                         modifier = Modifier
                                             .padding(top = 2.dp)
                                             .clip(RoundedCornerShape(8.dp))
-                                            .background(Color(0xFFDCFCE7))
+                                            .background(keyboardColors.successChip)
                                             .clickable { viewModel.promoteProofreadHint() }
                                             .padding(horizontal = 10.dp, vertical = 4.dp)
                                             .testTag("proofread_hint")
                                     ) {
                                         Text(
                                             "📝 ${proofreadHint!!.correctionsCount} fix(es) found — tap to review",
-                                            color = Color(0xFF15803D),
+                                            color = keyboardColors.success,
                                             fontSize = 11.sp,
                                             fontWeight = FontWeight.Bold
                                         )
@@ -841,7 +850,7 @@ fun AgenticKeyboardLayout(
                                             Box(
                                                 modifier = Modifier
                                                     .clip(RoundedCornerShape(8.dp))
-                                                    .background(Color(0xFFEADDFF))
+                                                    .background(keyboardColors.chipAlt)
                                                     .clickable {
                                                         buzz(HapticFeedbackType.TextHandleMove)
                                                         val text = currentText()
@@ -858,14 +867,14 @@ fun AgenticKeyboardLayout(
                                                     }
                                                     .padding(horizontal = 10.dp, vertical = 4.dp)
                                             ) {
-                                                Text(suggestion, color = Color(0xFF21005D), fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                                Text(suggestion, color = keyboardColors.onChip, fontSize = 11.sp, fontWeight = FontWeight.Bold)
                                             }
                                         }
                                     }
                                 } else {
                                     Text(
                                         text = if (activeText.isEmpty()) "Start typing, swipe, or use AI tools below..." else activeText,
-                                        color = if (activeText.isEmpty()) Color.Gray else Color(0xFF1C1B1F),
+                                        color = if (activeText.isEmpty()) keyboardColors.textMuted else keyboardColors.text,
                                         fontSize = 13.sp,
                                         maxLines = 1
                                     )
@@ -915,7 +924,7 @@ fun AgenticKeyboardLayout(
                             },
                             modifier = Modifier.size(28.dp).testTag("regenerate_result")
                         ) {
-                            Text("↻", color = Color(0xFF6750A4), fontSize = 15.sp, fontWeight = FontWeight.Bold)
+                            Text("↻", color = keyboardColors.accent, fontSize = 15.sp, fontWeight = FontWeight.Bold)
                         }
                         IconButton(
                             onClick = { viewModel.dismissResults() },
@@ -924,7 +933,7 @@ fun AgenticKeyboardLayout(
                             Icon(
                                 imageVector = Icons.Default.Close,
                                 contentDescription = "Dismiss AI result",
-                                tint = Color.Gray,
+                                tint = keyboardColors.textMuted,
                                 modifier = Modifier.size(16.dp)
                             )
                         }
@@ -944,7 +953,7 @@ fun AgenticKeyboardLayout(
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .background(Color(0xFFF7F2FA))
+                    .background(keyboardColors.shelf)
                     .padding(horizontal = 8.dp, vertical = 2.dp)
                     .horizontalScroll(rememberScrollState())
                     .testTag("iterate_chips"),
@@ -970,14 +979,14 @@ fun AgenticKeyboardLayout(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(horizontal = 8.dp, vertical = 4.dp),
-                colors = CardDefaults.cardColors(containerColor = Color(0xFFF3EDF7)),
+                colors = CardDefaults.cardColors(containerColor = keyboardColors.panel),
                 shape = RoundedCornerShape(12.dp)
             ) {
                 Column(modifier = Modifier.padding(8.dp)) {
                     Text(
                         text = "📋 " + (clipboardText ?: "").take(60).replace("\n", " ") +
                             if ((clipboardText ?: "").length > 60) "…" else "",
-                        color = Color(0xFF49454F),
+                        color = keyboardColors.textMuted,
                         fontSize = 11.sp,
                         maxLines = 1
                     )
@@ -1025,13 +1034,13 @@ fun AgenticKeyboardLayout(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(horizontal = 8.dp, vertical = 4.dp),
-                colors = CardDefaults.cardColors(containerColor = Color(0xFFF3EDF7)),
+                colors = CardDefaults.cardColors(containerColor = keyboardColors.panel),
                 shape = RoundedCornerShape(12.dp)
             ) {
                 Column(modifier = Modifier.padding(8.dp)) {
                     Text(
                         text = "Reply with which intent?",
-                        color = Color(0xFF49454F),
+                        color = keyboardColors.textMuted,
                         fontSize = 11.sp,
                         fontWeight = FontWeight.Bold
                     )
@@ -1068,7 +1077,7 @@ fun AgenticKeyboardLayout(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(8.dp),
-                colors = CardDefaults.cardColors(containerColor = Color(0xFFF3EDF7)),
+                colors = CardDefaults.cardColors(containerColor = keyboardColors.panel),
                 shape = RoundedCornerShape(12.dp)
             ) {
                 Column(
@@ -1084,7 +1093,7 @@ fun AgenticKeyboardLayout(
                             text = "📐 Gestures Cheat Sheet",
                             fontSize = 12.sp,
                             fontWeight = FontWeight.Bold,
-                            color = Color(0xFF6750A4)
+                            color = keyboardColors.accent
                         )
                         IconButton(
                             onClick = { showGestureGuide = false },
@@ -1093,7 +1102,7 @@ fun AgenticKeyboardLayout(
                             Icon(
                                 imageVector = Icons.Default.Check,
                                 contentDescription = "Close",
-                                tint = Color.Gray,
+                                tint = keyboardColors.textMuted,
                                 modifier = Modifier.size(16.dp)
                             )
                         }
@@ -1104,18 +1113,18 @@ fun AgenticKeyboardLayout(
                         horizontalArrangement = Arrangement.SpaceEvenly
                     ) {
                         Column {
-                            Text("↖ Swipe Up-Left: Summarize", fontSize = 11.sp, color = Color.DarkGray)
-                            Text("↙ Swipe Down-Left: Analyze Tone", fontSize = 11.sp, color = Color.DarkGray)
-                            Text("← Swipe Left: Backspace", fontSize = 11.sp, color = Color.DarkGray)
-                            Text("␣␣ Double Space: Period", fontSize = 11.sp, color = Color.DarkGray)
-                            Text("⌫ After auto-fix: Undo", fontSize = 11.sp, color = Color.DarkGray)
+                            Text("↖ Swipe Up-Left: Summarize", fontSize = 11.sp, color = keyboardColors.textMuted)
+                            Text("↙ Swipe Down-Left: Analyze Tone", fontSize = 11.sp, color = keyboardColors.textMuted)
+                            Text("← Swipe Left: Backspace", fontSize = 11.sp, color = keyboardColors.textMuted)
+                            Text("␣␣ Double Space: Period", fontSize = 11.sp, color = keyboardColors.textMuted)
+                            Text("⌫ After auto-fix: Undo", fontSize = 11.sp, color = keyboardColors.textMuted)
                         }
                         Column {
-                            Text("↗ Swipe Up-Right: Translate", fontSize = 11.sp, color = Color.DarkGray)
-                            Text("↘ Swipe Down-Right: Expand Shortcut", fontSize = 11.sp, color = Color.DarkGray)
-                            Text("→ Swipe Right: Space", fontSize = 11.sp, color = Color.DarkGray)
-                            Text("⇧⇧ Double Shift: Caps Lock", fontSize = 11.sp, color = Color.DarkGray)
-                            Text("␣ Slide on Space: Move cursor", fontSize = 11.sp, color = Color.DarkGray)
+                            Text("↗ Swipe Up-Right: Translate", fontSize = 11.sp, color = keyboardColors.textMuted)
+                            Text("↘ Swipe Down-Right: Expand Shortcut", fontSize = 11.sp, color = keyboardColors.textMuted)
+                            Text("→ Swipe Right: Space", fontSize = 11.sp, color = keyboardColors.textMuted)
+                            Text("⇧⇧ Double Shift: Caps Lock", fontSize = 11.sp, color = keyboardColors.textMuted)
+                            Text("␣ Slide on Space: Move cursor", fontSize = 11.sp, color = keyboardColors.textMuted)
                         }
                     }
                 }
@@ -1135,7 +1144,7 @@ fun AgenticKeyboardLayout(
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .background(Color(0xFFEADDFF))
+                    .background(keyboardColors.chipAlt)
                     .padding(vertical = 4.dp, horizontal = 6.dp)
                     .horizontalScroll(rememberScrollState())
                     .testTag("command_palette"),
@@ -1170,7 +1179,7 @@ fun AgenticKeyboardLayout(
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .background(Color(0xFFF7F2FA))
+                    .background(keyboardColors.shelf)
                     .padding(vertical = 4.dp, horizontal = 6.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
@@ -1270,7 +1279,7 @@ fun AgenticKeyboardLayout(
                     Icon(
                         imageVector = Icons.Default.KeyboardArrowDown,
                         contentDescription = "Collapse",
-                        tint = Color.Gray
+                        tint = keyboardColors.textMuted
                     )
                 }
             }
@@ -1286,7 +1295,7 @@ fun AgenticKeyboardLayout(
                 Icon(
                     imageVector = Icons.Default.KeyboardArrowUp,
                     contentDescription = "Expand AI actions",
-                    tint = Color(0xFFD0BCFF)
+                    tint = keyboardColors.keyActive
                 )
             }
         }
@@ -1502,7 +1511,7 @@ fun AgenticKeyboardLayout(
 
                     drawPath(
                         path = path,
-                        color = Color(0xFF6750A4).copy(alpha = 0.5f),
+                        color = keyboardColors.accent.copy(alpha = 0.5f),
                         style = androidx.compose.ui.graphics.drawscope.Stroke(
                             width = 6.dp.toPx(),
                             cap = androidx.compose.ui.graphics.StrokeCap.Round,
@@ -1621,6 +1630,7 @@ fun AgenticKeyboardLayout(
             )
         }
     }
+    }
 }
 
 /**
@@ -1638,6 +1648,7 @@ private fun ExpandableResult(
     original: String? = null,
     modifier: Modifier = Modifier
 ) {
+    val colors = LocalKeyboardColors.current
     Column(modifier = modifier.clickable { onToggle() }) {
         Text(
             text = "$label ${if (expanded) "▲" else "▼"}",
@@ -1647,7 +1658,7 @@ private fun ExpandableResult(
         )
         Text(
             text = result,
-            color = Color(0xFF1C1B1F),
+            color = colors.text,
             fontSize = 13.sp,
             maxLines = if (expanded) 10 else 1,
             overflow = TextOverflow.Ellipsis
@@ -1656,7 +1667,7 @@ private fun ExpandableResult(
             Spacer(modifier = Modifier.height(4.dp))
             Text(
                 text = "Was: $original",
-                color = Color(0xFF79747E),
+                color = colors.textMuted,
                 fontSize = 11.sp,
                 maxLines = 4,
                 overflow = TextOverflow.Ellipsis,
@@ -1668,14 +1679,15 @@ private fun ExpandableResult(
 
 @Composable
 private fun ClipActionChip(label: String, onClick: () -> Unit) {
+    val colors = LocalKeyboardColors.current
     Box(
         modifier = Modifier
             .clip(RoundedCornerShape(12.dp))
-            .background(Color(0xFFE8DEF8))
+            .background(colors.chip)
             .clickable { onClick() }
             .padding(horizontal = 10.dp, vertical = 6.dp)
     ) {
-        Text(label, color = Color(0xFF21005D), fontSize = 11.sp, fontWeight = FontWeight.Bold)
+        Text(label, color = colors.onChip, fontSize = 11.sp, fontWeight = FontWeight.Bold)
     }
 }
 
@@ -1688,9 +1700,10 @@ fun AiActionButton(
     highlighted: Boolean = false,
     onLongPress: (() -> Unit)? = null
 ) {
-    val containerColor = if (highlighted) Color(0xFFEADDFF) else Color.White
-    val borderColor = if (highlighted) Color(0xFFD0BCFF) else Color(0xFFCBD5E1)
-    val contentColor = if (highlighted) Color(0xFF21005D) else Color(0xFF1C1B1F)
+    val colors = LocalKeyboardColors.current
+    val containerColor = if (highlighted) colors.chipAlt else colors.key
+    val borderColor = if (highlighted) colors.keyActive else colors.border
+    val contentColor = if (highlighted) colors.onChip else colors.text
 
     val currentOnClick by rememberUpdatedState(onClick)
     val currentOnLongPress by rememberUpdatedState(onLongPress)
@@ -1737,14 +1750,15 @@ fun KeyButton(
     onVariant: (String) -> Unit = {},
     onHorizontalDrag: ((Int) -> Unit)? = null
 ) {
+    val colors = LocalKeyboardColors.current
     val isEnter = text == "Enter"
     val containerColor = when {
-        isEnter -> Color(0xFF6750A4)
-        isHighlighted -> Color(0xFFD0BCFF)
-        isSpecial -> Color(0xFFE7E0EC)
-        else -> Color.White
+        isEnter -> colors.accent
+        isHighlighted -> colors.keyActive
+        isSpecial -> colors.keySpecial
+        else -> colors.key
     }
-    val contentColor = if (isEnter) Color.White else Color(0xFF1C1B1F)
+    val contentColor = if (isEnter) colors.onAccent else colors.text
 
     val currentOnClick by rememberUpdatedState(onClick)
     val currentOnVariant by rememberUpdatedState(onVariant)
@@ -1825,7 +1839,7 @@ fun KeyButton(
             ) {
                 Surface(
                     shape = RoundedCornerShape(8.dp),
-                    color = Color.White,
+                    color = colors.popup,
                     shadowElevation = 6.dp
                 ) {
                     Row(modifier = Modifier.padding(4.dp)) {
@@ -1839,7 +1853,7 @@ fun KeyButton(
                                     }
                                     .padding(horizontal = 9.dp, vertical = 8.dp)
                             ) {
-                                Text(variant, fontSize = 16.sp, color = Color(0xFF1C1B1F))
+                                Text(variant, fontSize = 16.sp, color = colors.text)
                             }
                         }
                     }

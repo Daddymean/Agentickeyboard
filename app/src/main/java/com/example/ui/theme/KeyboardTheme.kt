@@ -25,7 +25,16 @@ data class KeyboardColors(
     val success: Color,
     val successChip: Color,  // proofread hint chip background
     val emojiChip: Color,    // tone emoji chip background
-    val popup: Color         // key preview / accent variant popup
+    val popup: Color,        // key preview / accent variant popup
+    val error: Color,        // send-guard warning / destructive action
+    val onError: Color,      // text on error surfaces
+    // Per-feature result labels ("Summary:", "Translated:", ...). Kept distinct
+    // so the shelf's colour coding survives the light/dark switch.
+    val labelSummary: Color,
+    val labelTranslate: Color,
+    val labelRewrite: Color,
+    val labelCompose: Color,
+    val labelContinue: Color
 )
 
 val LightKeyboardColors = KeyboardColors(
@@ -46,7 +55,14 @@ val LightKeyboardColors = KeyboardColors(
     success = Color(0xFF15803D),
     successChip = Color(0xFFDCFCE7),
     emojiChip = Color(0xFFFFD8E4),
-    popup = Color.White
+    popup = Color.White,
+    error = Color(0xFFB3261E),
+    onError = Color.White,
+    labelSummary = Color(0xFF7E22CE),
+    labelTranslate = Color(0xFF0369A1),
+    labelRewrite = Color(0xFFB45309),
+    labelCompose = Color(0xFF9333EA),
+    labelContinue = Color(0xFF0E7490)
 )
 
 val DarkKeyboardColors = KeyboardColors(
@@ -67,7 +83,14 @@ val DarkKeyboardColors = KeyboardColors(
     success = Color(0xFF7EE2A8),
     successChip = Color(0xFF1E3A2A),
     emojiChip = Color(0xFF5D3B4A),
-    popup = Color(0xFF2B2930)
+    popup = Color(0xFF2B2930),
+    error = Color(0xFFF2B8B5),
+    onError = Color(0xFF601410),
+    labelSummary = Color(0xFFD6A8F5),
+    labelTranslate = Color(0xFF7EC8F0),
+    labelRewrite = Color(0xFFE9B27B),
+    labelCompose = Color(0xFFCFA8F5),
+    labelContinue = Color(0xFF6FCBDD)
 )
 
 val LocalKeyboardColors = staticCompositionLocalOf { LightKeyboardColors }
