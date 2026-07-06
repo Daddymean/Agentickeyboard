@@ -9,7 +9,7 @@ on:
 
 jobs:
   build:
-    name: Build debug APK
+    name: Build debug APK and run unit tests
     runs-on: ubuntu-latest
 
     steps:
@@ -26,8 +26,16 @@ jobs:
       - name: Grant execute permission for gradlew
         run: chmod +x ./gradlew
 
-      - name: Build debug APK
-        run: ./gradlew assembleDebug --stacktrace
+      - name: Build debug APK and run unit tests
+        run: ./gradlew assembleDebug testDebugUnitTest --stacktrace
+
+      - name: Upload unit test reports
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: unit-test-reports
+          path: app/build/reports/tests/testDebugUnitTest
+          if-no-files-found: ignore
 
       - name: Upload debug APK
         uses: actions/upload-artifact@v4
