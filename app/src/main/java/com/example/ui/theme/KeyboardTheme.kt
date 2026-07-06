@@ -1,5 +1,8 @@
 package com.example.ui.theme
 
+import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.graphics.Color
 
@@ -94,3 +97,23 @@ val DarkKeyboardColors = KeyboardColors(
 )
 
 val LocalKeyboardColors = staticCompositionLocalOf { LightKeyboardColors }
+
+/**
+ * Provides the correct KeyboardColors based on system dark mode (or explicit flag).
+ * Wrap any keyboard UI subtree with this to enable full light/dark theming.
+ * 
+ * Example:
+ * KeyboardTheme {
+ *     // your layout here - all colors now come from LocalKeyboardColors.current
+ * }
+ */
+@Composable
+fun KeyboardTheme(
+    darkTheme: Boolean = isSystemInDarkTheme(),
+    content: @Composable () -> Unit
+) {
+    val colors = if (darkTheme) DarkKeyboardColors else LightKeyboardColors
+    CompositionLocalProvider(LocalKeyboardColors provides colors) {
+        content()
+    }
+}
