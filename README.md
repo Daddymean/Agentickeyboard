@@ -4,6 +4,15 @@ An Android custom keyboard (IME) built with Jetpack Compose that pairs a
 standard QWERTY layout with Gemini-powered writing assistance and a fully
 on-device personalization engine.
 
+## Beta Notes (1.0-beta)
+
+This refactor branch (`refactor/cleanup-v1`) is preparing a cleaner, more maintainable codebase for beta testing.
+- Theming provider and extracted components (SelectionBadge, AiActionRow, KeyboardKey, etc.) for efficient UI.
+- Centralized prompts and leaner GeminiManager for better AI performance.
+- Minified release builds.
+- Build and test the app from this branch for the latest improvements.
+- Report issues for rapid iteration toward a stable beta.
+
 ## Features
 
 ### AI writing tools (Gemini)
@@ -88,3 +97,6 @@ Unit tests (Robolectric, Roborazzi screenshots, and plain JUnit) live in
 
 Covered areas: privacy redaction/sanitization, JSON export integrity,
 swipe-to-type decoding, and a keyboard layout screenshot test.
+
+## Beta Feedback
+Build from the refactor branch for the latest cleanups and test thoroughly. Issues with efficiency, UI, or AI performance are high priority for beta stabilization.
