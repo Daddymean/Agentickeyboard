@@ -21,16 +21,23 @@
 ### 3. Selection-scope indicator (current ROADMAP #1 Next up)
 - Selection-scoped AI actions already shipped (see PR #12 in ROADMAP).
 - The missing piece is discoverability: a small badge on the AI action row when `hasActiveSelection`.
-- **Efficient plan**: Implement the badge as part of extracting the AI action/shelf row into a dedicated `ui/components/AiActionRow.kt` (avoids editing the monolith directly).
-- Will include logic to read selection state from ViewModel and show "Acting on selection" badge/chip.
+- **Implemented**: Created `ui/components/SelectionBadge.kt` as first extracted component. It uses `KeyboardTheme` and `LocalKeyboardColors` for theming. Ready to integrate into AI action row during shelf extraction.
 
-## Next in order
-4. Extract prompts from GeminiManager.kt into dedicated templates (small, low-risk).
-5. Begin monolith split: Start with small components (e.g., key components, then shelf) to make the codebase maintainable.
+### 4. Extract prompts from GeminiManager.kt into dedicated templates (small, low-risk)
+- Created and expanded `app/src/main/java/com/example/network/Prompts.kt` with complete builder functions for ALL prompts (fixGrammar, suggestReplies, summarizeMessage, translateText, rewriteWithTone, composeMessage, explainText, continueText, analyzeTone) + VOICE_LOCK_DIRECTIVE.
+- **Migrated GeminiManager.kt**: Replaced all inline `val prompt = """...""".trimIndent()` blocks with calls to `Prompts.*(...)`. Removed duplicate const. File size reduced ~6k lines; now focused purely on orchestration, caching, API calls, and offline fallbacks.
+- Major maintainability win — prompts are now centralized and easy to A/B test or update.
+
+### 5. Begin monolith split
+- Started with `ui/components/SelectionBadge.kt` (see above).
+- Demonstrates the pattern: small, self-contained, themed Composables extracted from the giants.
+- Future extractions: Key components, AiActionRow (to host the badge), SwipeView, ResultShelf, etc.
+- This will make Layout.kt, ViewModel.kt, and MainActivity.kt dramatically smaller and testable.
 
 ## Notes on approach
-- Cleaner/more efficient paths always preferred (e.g., provider pattern over in-place edits).
+- Cleaner/more efficient paths always preferred (e.g., provider pattern, centralized prompts, incremental extraction over in-place edits).
 - Large files will be dismantled via extraction + replacement rather than one giant edit.
 - All changes on this branch for safe review/merge.
+- Branch is healthy and progressing steadily.
 
 Update this file with each completed item.
