@@ -75,23 +75,31 @@ class KeyboardViewModel(
         private val OFFLINE_GRAMMAR_REPLACEMENTS = listOf("\\bteh\\b".toRegex(RegexOption.IGNORE_CASE) to "the", "\\bi\\b".toRegex(RegexOption.IGNORE_CASE) to "I", "\\bcant\\b".toRegex(RegexOption.IGNORE_CASE) to "can't")
     }
 
-    // Shortcuts and logs from local Room DB
+    // Shortcuts and logs from local Room DB.
+    // NOTE: shortcuts, logs, topVocabulary, and learnedCorrections are read
+    // imperatively (.value) from event handlers (word commit, AI context,
+    // persona-from-history). The keyboard UI never collects most of them, so
+    // under WhileSubscribed their upstream never started and .value stayed an
+    // empty list forever — shortcut expansion, learned-correction replacement,
+    // and "Match my history" were silently dead in the IME process. They must
+    // be shared Eagerly; all are small, bounded queries.
     val shortcuts: StateFlow<List<ShortcutTemplate>> = repository.allShortcuts
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+        .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
     val logs: StateFlow<List<WritingLog>> = repository.allLogs
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+        .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
-    // User-defined "/token" commands extending the built-in command palette
+    // User-defined "/token" commands extending the built-in command palette;
+    // collected by the UI, so subscription-scoped sharing is fine here.
     val customCommands: StateFlow<List<CustomCommand>> = repository.allCustomCommands
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     // On-device Personalization state flows
     val topVocabulary: StateFlow<List<UserVocabulary>> = repository.topVocabulary
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+        .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
     val learnedCorrections: StateFlow<List<LearnedCorrection>> = repository.allCorrections
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+        .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
     // Selected style persona preference (Match history, Professional, Joyful, Empathetic, Casual)
     private val _userPersonaPreference = MutableStateFlow(settings?.persona ?: "Match my history")
