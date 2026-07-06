@@ -23,3 +23,10 @@
     public static int d(...);
     public static int i(...);
 }
+
+# OkHttp probes for optional TLS providers (BouncyCastle, Conscrypt, OpenJSSE)
+# at runtime; none of them ship with this app, so tell R8 the dangling
+# references are expected instead of failing the build on missing classes.
+-dontwarn org.bouncycastle.jsse.**
+-dontwarn org.conscrypt.**
+-dontwarn org.openjsse.**
