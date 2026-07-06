@@ -228,6 +228,11 @@ class KeyboardViewModel(
     private val correctionReverts = mutableMapOf<String, Int>()
     private var proofreadJob: Job? = null
     private var aiJob: Job? = null
+    private var predictionJob: Job? = null
+
+    // Last text pushed through setInputText; null until the first sync so the
+    // initial (possibly empty) editor state still seeds predictions.
+    private var lastSyncedText: String? = null
 
     // Keeps this ViewModel in sync when the other component (companion app vs IME
     // service) changes a shared setting — they hold separate ViewModel instances.
@@ -343,6 +348,11 @@ class KeyboardViewModel(
     }
 
     fun setInputText(text: String) {
+        // onUpdateSelection also fires for pure cursor moves; predictions and
+        // the proofread debounce only depend on the text, so skip the downstream
+        // work (and its coroutine churn) when nothing changed.
+        if (text == lastSyncedText) return
+        lastSyncedText = text
         _inputText.value = text
         updatePredictiveSuggestions(text)
         scheduleProofread(text)
@@ -654,7 +664,10 @@ class KeyboardViewModel(
      * a word is being typed, and frequent words as prompts when the field is empty.
      */
     fun updatePredictiveSuggestions(activeText: String) {
-        viewModelScope.launch {
+        // One in-flight computation at a time: a slow bigram lookup for an old
+        // keystroke must not land after (and overwrite) a newer result.
+        predictionJob?.cancel()
+        predictionJob = viewModelScope.launch {
             when {
                 activeText.isEmpty() -> {
                     val topWords = topVocabulary.value.take(3).map { it.word }
