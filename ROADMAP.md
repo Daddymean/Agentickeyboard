@@ -6,18 +6,16 @@ item: move it to **Shipped** with the PR number.
 
 ## Next up
 
-### 1. Keyboard theming / dark mode
-`ui/theme/KeyboardTheme.kt` already defines a light/dark palette behind a
-CompositionLocal, but `AgenticKeyboardLayout` hardcodes `Color(0xFF...)`
-values throughout (keyboard background, shelf, chips, panels), so the
-keyboard ignores system dark mode. Mechanical refactor: route every color
-through the theme, then honor `isSystemInDarkTheme()`. Note: the shelf's
-`ExpandableResult` helper and per-panel label colors are part of this sweep.
-
-### 2. Selection-scope indicator
+### 1. Selection-scope indicator
 When a text selection is active, the AI actions silently operate on it
 (shipped in PR #12). Add a small badge on the AI action row ("acting on
 selection") so the behavior is discoverable instead of surprising.
+
+### 2. In-keyboard theme override
+Dark mode now follows the system setting. Add an explicit Light/Dark/System
+choice (a `KeyboardSettings` entry + a control in the Style Hub) so users can
+pin the keyboard's theme independent of the OS, and have the layout read that
+override instead of only `isSystemInDarkTheme()`.
 
 ## Later / unscheduled
 
@@ -26,6 +24,9 @@ selection") so the behavior is discoverable instead of surprising.
   only the changed spans would make short edits scannable.
 - Expandable preview for the Explanation panel (the one result panel still
   capped to a fixed-height shelf).
+- Theme the companion app's playground chrome (MainActivity still has a few
+  hardcoded `Color(0xFF...)` around the simulation banner) for consistency
+  with the now-themed keyboard.
 - Multi-step undo: the AI-apply undo holds a single pending entry; an undo
   chip in the shelf could offer a small history instead of backspace-only.
 - Clipboard history (multiple recent clips, not just the current one).
@@ -35,9 +36,51 @@ selection") so the behavior is discoverable instead of surprising.
 - Instrumented/screenshot tests for the keyboard layout (CI currently only
   builds the APK and runs pure-JVM tests).
 
+## Differentiator candidates
+
+Bigger bets that would set the keyboard apart from Gboard/SwiftKey-class
+competitors. Each is anchored to plumbing that already exists, so none starts
+from zero. Promote to **Next up** deliberately — these are feature-sized, not
+session-sized.
+
+- **Per-app personas.** The ViewModel already tracks `activeAppPackage` and
+  `effectivePersona()`. Let users map apps to personas in the Style Hub
+  (Slack → Professional, WhatsApp → Casual) so tone-matching happens without
+  ever opening a menu. No mainstream keyboard does context-aware voice.
+- **"Sounds like you" score.** On-device learning already builds a vocabulary
+  profile and voice-lock steers rewrites toward it. Surface it: score each AI
+  result against the user's style fingerprint ("92% your voice") in the result
+  panel, and let iterate chips push the score up. Makes the invisible
+  personalization tangible — and trust in AI rewrites is the adoption barrier.
+- **Reply completeness coach.** Send-guard already intercepts Send for tone.
+  Extend the same hook to completeness: "they asked 2 questions, this answers
+  1." Small model call, huge everyday save.
+- **Keyboard passport.** `PersonalModelSerializer` already does privacy-aware
+  export/import of the personal model. Productize it: one-tap encrypted export
+  to file/QR so your learned dictionary, personas, and custom commands move
+  between devices with no cloud account. Privacy-first portability is a
+  marketable differentiator, and it's mostly UI work now.
+- **On-device AI via Gemini Nano (AICore).** Offline mode currently degrades
+  to canned fallbacks. On devices with AICore, run proofread/continue locally
+  so the privacy toggle stops being a feature-kill switch. "Full AI in
+  airplane mode" is a claim almost no competitor can make.
+- **Weekly writing report.** `UsageStats` already counts corrections, swipes,
+  AI applies, and expansions locally. Add tone-trend and top-vocabulary
+  aggregates and render a "your week in writing" card in the Style Hub —
+  Screen-Time-style insight, computed entirely on device.
+- **Snippet vault with slash recall.** Shortcuts + custom commands + (planned)
+  clipboard history converge into one searchable vault: `/find address` or
+  `/v lunch` recalls saved snippets inline. Reuses the palette matcher as-is.
+
 ## Shipped
 
-- **branch `claude/roadmap-review-updates-4cjt0i`** — undo for applied AI
+- **PR #16** — keyboard theming / dark
+  mode: `AgenticKeyboardLayout` now provides `LocalKeyboardColors` off
+  `isSystemInDarkTheme()` and routes every surface, key, chip, popup and label
+  through the palette (no more hardcoded `Color(0xFF…)` in the layout). Extended
+  `KeyboardColors` with `error`/`onError` and per-feature result-label colours
+  so the shelf's colour coding survives the dark switch.
+- **PR #16** — undo for applied AI
   results (⌫ right after Apply/Append restores the replaced draft/selection,
   via `AiApplyUndo` mirroring the smart-space undo) + expandable result
   preview (tap a result to grow the shelf, read the full output, and see the
