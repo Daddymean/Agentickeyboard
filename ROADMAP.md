@@ -6,12 +6,7 @@ item: move it to **Shipped** with the PR number.
 
 ## Next up
 
-### 1. Selection-scope indicator
-When a text selection is active, the AI actions silently operate on it
-(shipped in PR #12). Add a small badge on the AI action row ("acting on
-selection") so the behavior is discoverable instead of surprising.
-
-### 2. In-keyboard theme override
+### 1. In-keyboard theme override
 Dark mode now follows the system setting. Add an explicit Light/Dark/System
 choice (a `KeyboardSettings` entry + a control in the Style Hub) so users can
 pin the keyboard's theme independent of the OS, and have the layout read that
@@ -73,6 +68,14 @@ session-sized.
   `/v lunch` recalls saved snippets inline. Reuses the palette matcher as-is.
 
 ## Shipped
+
+- **(this branch)** — selection-scope indicator: the IME service mirrors the
+  editor's selection state into the ViewModel and the AI action row shows an
+  "Acting on selection" badge while a selection is active. Also ported the
+  good parts of `refactor/cleanup-v1`: prompt templates extracted to
+  `network/Prompts.kt` (GeminiManager keeps orchestration only) and a
+  `KeyboardTheme` root provider for the palette. Release R8 minification was
+  switched back off pending keep rules + a verified release build.
 
 - **PR #16** — keyboard theming / dark
   mode: `AgenticKeyboardLayout` now provides `LocalKeyboardColors` off
