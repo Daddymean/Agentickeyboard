@@ -1,5 +1,8 @@
 package io.github.daddymean.agentickeyboard.ui.theme
 
+import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.graphics.Color
 
@@ -94,3 +97,21 @@ val DarkKeyboardColors = KeyboardColors(
 )
 
 val LocalKeyboardColors = staticCompositionLocalOf { LightKeyboardColors }
+
+/**
+ * Root provider for the keyboard palette. Wrap the keyboard UI once, at the
+ * top of the tree; descendants read LocalKeyboardColors.current. Leaf
+ * composables must NOT wrap themselves in this — re-providing from
+ * isSystemInDarkTheme() at a leaf would override any explicit theme choice
+ * made further up (e.g. a future Light/Dark/System setting).
+ */
+@Composable
+fun KeyboardTheme(
+    darkTheme: Boolean = isSystemInDarkTheme(),
+    content: @Composable () -> Unit
+) {
+    val colors = if (darkTheme) DarkKeyboardColors else LightKeyboardColors
+    CompositionLocalProvider(LocalKeyboardColors provides colors) {
+        content()
+    }
+}
