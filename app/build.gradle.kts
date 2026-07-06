@@ -43,14 +43,19 @@ android {
   buildTypes {
     release {
       isCrunchPngs = false
-      // Keep R8 off until a release build is actually exercised: CI only builds
-      // debug, proguard-rules.pro has no keep rules, and Moshi's reflective
-      // codegen-adapter lookup is a known minification breakage. Re-enable
-      // together with keep rules and a verified release build.
-      isMinifyEnabled = false
-      isShrinkResources = false
+      // R8 shrinking/obfuscation, exercised by CI's assembleRelease step on
+      // every push. Library consumer rules plus proguard-rules.pro cover the
+      // reflective surfaces (see that file for the reasoning).
+      isMinifyEnabled = true
+      isShrinkResources = true
       proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
-      signingConfig = signingConfigs.getByName("release")
+      // Sign only when the upload keystore is actually available (local box or
+      // release pipeline with secrets); otherwise produce an unsigned APK so
+      // plain CI can still compile and verify the R8 build.
+      val uploadKeystore = file(System.getenv("KEYSTORE_PATH") ?: "${rootDir}/my-upload-key.jks")
+      if (uploadKeystore.exists()) {
+        signingConfig = signingConfigs.getByName("release")
+      }
     }
     debug {
       // Use the checked-in debug keystore only when present; otherwise fall back

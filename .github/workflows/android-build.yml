@@ -29,6 +29,18 @@ jobs:
       - name: Build debug APK and run unit tests
         run: ./gradlew assembleDebug testDebugUnitTest --stacktrace
 
+      # Compiles the R8-minified release APK (unsigned - CI has no keystore) so
+      # shrinking/obfuscation problems surface on every push, not at ship time.
+      - name: Build release APK (R8)
+        run: ./gradlew assembleRelease --stacktrace
+
+      - name: Upload release APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: app-release-unsigned
+          path: app/build/outputs/apk/release/*.apk
+          if-no-files-found: error
+
       - name: Upload unit test reports
         if: failure()
         uses: actions/upload-artifact@v4

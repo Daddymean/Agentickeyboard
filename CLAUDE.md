@@ -27,9 +27,10 @@ here. Specifically:
   project requires and must not be used to build the project.
 
 **All builds and tests run in GitHub Actions CI, not locally.** The workflow at
-`.github/workflows/android-build.yml` builds a debug APK and runs the unit
-tests (`assembleDebug testDebugUnitTest`) on every push and pull request to
-`main`/`master` and uploads the APK as an artifact.
+`.github/workflows/android-build.yml` builds a debug APK, runs the unit tests,
+and compiles the R8-minified release APK (unsigned; signing needs the upload
+keystore) on every push and pull request to `main`/`master`, uploading both
+APKs as artifacts.
 
 ### How to validate changes without a local build
 
