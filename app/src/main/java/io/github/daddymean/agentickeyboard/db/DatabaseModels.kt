@@ -5,12 +5,16 @@ import androidx.room.Dao
 import androidx.room.Database
 import androidx.room.Delete
 import androidx.room.Entity
+import androidx.room.Index
 import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.PrimaryKey
 import androidx.room.Query
 import androidx.room.Room
 import androidx.room.RoomDatabase
+import androidx.room.Transaction
+import androidx.room.migration.Migration
+import androidx.sqlite.db.SupportSQLiteDatabase
 import kotlinx.coroutines.flow.Flow
 
 @Entity(tableName = "shortcut_templates")
@@ -20,7 +24,7 @@ data class ShortcutTemplate(
     val template: String
 )
 
-@Entity(tableName = "writing_logs")
+@Entity(tableName = "writing_logs", indices = [Index("timestamp")])
 data class WritingLog(
     @PrimaryKey(autoGenerate = true) val id: Int = 0,
     val originalText: String,
@@ -30,7 +34,7 @@ data class WritingLog(
     val timestamp: Long = System.currentTimeMillis()
 )
 
-@Entity(tableName = "learned_corrections")
+@Entity(tableName = "learned_corrections", indices = [Index("typo")])
 data class LearnedCorrection(
     @PrimaryKey(autoGenerate = true) val id: Int = 0,
     val typo: String,
@@ -38,7 +42,7 @@ data class LearnedCorrection(
     val count: Int = 1
 )
 
-@Entity(tableName = "user_vocabulary")
+@Entity(tableName = "user_vocabulary", indices = [Index("count")])
 data class UserVocabulary(
     @PrimaryKey val word: String,
     val count: Int = 1,
@@ -109,6 +113,14 @@ interface WordBigramDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insert(bigram: WordBigram)
 
+    /** Atomically bumps a word-pair count, inserting it on first use. */
+    @Transaction
+    suspend fun upsert(first: String, second: String) {
+        if (increment(first, second) == 0) {
+            insert(WordBigram(firstWord = first, secondWord = second))
+        }
+    }
+
     @Query("DELETE FROM word_bigrams")
     suspend fun clearAll()
 }
@@ -172,6 +184,14 @@ interface UserVocabularyDao {
     @Query("UPDATE user_vocabulary SET count = count + 1, lastUsed = :now WHERE word = :word")
     suspend fun incrementWordCount(word: String, now: Long): Int
 
+    /** Atomically bumps a word's usage count, inserting it on first use. */
+    @Transaction
+    suspend fun upsert(word: String, now: Long) {
+        if (incrementWordCount(word, now) == 0) {
+            insertWord(UserVocabulary(word = word, count = 1, lastUsed = now))
+        }
+    }
+
     @Query("DELETE FROM user_vocabulary")
     suspend fun clearAll()
 }
@@ -186,8 +206,8 @@ interface UserVocabularyDao {
         AppPersona::class,
         CustomCommand::class
     ],
-    version = 4,
-    exportSchema = false
+    version = 5,
+    exportSchema = true
 )
 abstract class AppDatabase : RoomDatabase() {
     abstract fun shortcutDao(): ShortcutDao
@@ -202,6 +222,15 @@ abstract class AppDatabase : RoomDatabase() {
         @Volatile
         private var INSTANCE: AppDatabase? = null
 
+        /** v5 adds indices for the per-keystroke lookups; no data changes. */
+        private val MIGRATION_4_5 = object : Migration(4, 5) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_writing_logs_timestamp` ON `writing_logs` (`timestamp`)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_learned_corrections_typo` ON `learned_corrections` (`typo`)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_user_vocabulary_count` ON `user_vocabulary` (`count`)")
+            }
+        }
+
         fun getDatabase(context: Context): AppDatabase {
             return INSTANCE ?: synchronized(this) {
                 val instance = Room.databaseBuilder(
@@ -209,7 +238,11 @@ abstract class AppDatabase : RoomDatabase() {
                     AppDatabase::class.java,
                     "agentic_keyboard_database"
                 )
-                .fallbackToDestructiveMigration()
+                // Learned vocabulary/corrections ARE the product: real migrations
+                // from v4 on. Destructive fallback stays only for the pre-v4
+                // schemas that shipped before migrations existed.
+                .addMigrations(MIGRATION_4_5)
+                .fallbackToDestructiveMigrationFrom(true, 1, 2, 3)
                 .build()
                 INSTANCE = instance
                 instance
@@ -253,10 +286,7 @@ class KeyboardRepository(private val db: AppDatabase) {
 
     /** Atomically bumps a word-pair count, inserting it on first use. */
     suspend fun recordBigram(first: String, second: String) {
-        val updated = db.wordBigramDao().increment(first, second)
-        if (updated == 0) {
-            db.wordBigramDao().insert(WordBigram(firstWord = first, secondWord = second))
-        }
+        db.wordBigramDao().upsert(first, second)
     }
 
     suspend fun nextWords(word: String, limit: Int = 3): List<String> {
@@ -318,10 +348,7 @@ class KeyboardRepository(private val db: AppDatabase) {
 
     /** Atomically bumps a word's usage count, inserting it on first use. */
     suspend fun recordWordUsage(word: String) {
-        val updated = db.userVocabularyDao().incrementWordCount(word, System.currentTimeMillis())
-        if (updated == 0) {
-            db.userVocabularyDao().insertWord(UserVocabulary(word = word, count = 1))
-        }
+        db.userVocabularyDao().upsert(word, System.currentTimeMillis())
     }
 
     suspend fun getWord(word: String): UserVocabulary? {
