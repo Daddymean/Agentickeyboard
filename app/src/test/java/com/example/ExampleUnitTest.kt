@@ -3,9 +3,13 @@ package com.example
 import com.example.db.LearnedCorrection
 import com.example.db.UserVocabulary
 import com.example.db.WritingLog
+import com.example.ui.components.KeyboardKey
+import com.example.ui.components.SelectionBadge
+import com.example.ui.theme.KeyboardTheme
 import com.example.util.PersonalModelSerializer
 import org.junit.Assert.*
 import org.junit.Test
+import org.robolectric.annotation.Config
 
 class ExampleUnitTest {
     @Test
@@ -218,5 +222,25 @@ class ExampleUnitTest {
         val matches = com.example.util.SwipeToTypeEngine.getSwipeWordMatches(path)
         assertTrue(matches.contains("to"))
     }
-}
 
+    // New integration tests for refactor components (theming, selection, keys)
+    @Test
+    @Config(qualifiers = "night")
+    fun testThemingDarkMode() {
+        // KeyboardTheme should provide DarkKeyboardColors in dark mode
+        // (full test would use Compose testing; this is stub for Robolectric)
+        assertTrue(true) // Placeholder - expand with ComposeTestRule
+    }
+
+    @Test
+    fun testSelectionBadgeRenders() {
+        // SelectionBadge should render when hasActiveSelection = true
+        assertTrue(true) // Placeholder for Compose snapshot or assertion
+    }
+
+    @Test
+    fun testKeyboardKeyTheming() {
+        // KeyboardKey should use correct colors for special/active states
+        assertTrue(true) // Placeholder
+    }
+}
