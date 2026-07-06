@@ -75,23 +75,31 @@ class KeyboardViewModel(
         private val OFFLINE_GRAMMAR_REPLACEMENTS = listOf("\\bteh\\b".toRegex(RegexOption.IGNORE_CASE) to "the", "\\bi\\b".toRegex(RegexOption.IGNORE_CASE) to "I", "\\bcant\\b".toRegex(RegexOption.IGNORE_CASE) to "can't")
     }
 
-    // Shortcuts and logs from local Room DB
+    // Shortcuts and logs from local Room DB.
+    // NOTE: shortcuts, logs, topVocabulary, and learnedCorrections are read
+    // imperatively (.value) from event handlers (word commit, AI context,
+    // persona-from-history). The keyboard UI never collects most of them, so
+    // under WhileSubscribed their upstream never started and .value stayed an
+    // empty list forever — shortcut expansion, learned-correction replacement,
+    // and "Match my history" were silently dead in the IME process. They must
+    // be shared Eagerly; all are small, bounded queries.
     val shortcuts: StateFlow<List<ShortcutTemplate>> = repository.allShortcuts
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+        .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
     val logs: StateFlow<List<WritingLog>> = repository.allLogs
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+        .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
-    // User-defined "/token" commands extending the built-in command palette
+    // User-defined "/token" commands extending the built-in command palette;
+    // collected by the UI, so subscription-scoped sharing is fine here.
     val customCommands: StateFlow<List<CustomCommand>> = repository.allCustomCommands
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     // On-device Personalization state flows
     val topVocabulary: StateFlow<List<UserVocabulary>> = repository.topVocabulary
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+        .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
     val learnedCorrections: StateFlow<List<LearnedCorrection>> = repository.allCorrections
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+        .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
     // Selected style persona preference (Match history, Professional, Joyful, Empathetic, Casual)
     private val _userPersonaPreference = MutableStateFlow(settings?.persona ?: "Match my history")
@@ -220,6 +228,11 @@ class KeyboardViewModel(
     private val correctionReverts = mutableMapOf<String, Int>()
     private var proofreadJob: Job? = null
     private var aiJob: Job? = null
+    private var predictionJob: Job? = null
+
+    // Last text pushed through setInputText; null until the first sync so the
+    // initial (possibly empty) editor state still seeds predictions.
+    private var lastSyncedText: String? = null
 
     // Keeps this ViewModel in sync when the other component (companion app vs IME
     // service) changes a shared setting — they hold separate ViewModel instances.
@@ -309,6 +322,12 @@ class KeyboardViewModel(
             _isLoading.value = true
             try {
                 block()
+            } catch (e: CancellationException) {
+                throw e
+            } catch (_: Exception) {
+                // Last-resort guard. Every action handles its own errors; this
+                // exists so a missed one degrades to "no result" instead of
+                // crashing the IME process and taking the keyboard down.
             } finally {
                 _isLoading.value = false
             }
@@ -335,6 +354,11 @@ class KeyboardViewModel(
     }
 
     fun setInputText(text: String) {
+        // onUpdateSelection also fires for pure cursor moves; predictions and
+        // the proofread debounce only depend on the text, so skip the downstream
+        // work (and its coroutine churn) when nothing changed.
+        if (text == lastSyncedText) return
+        lastSyncedText = text
         _inputText.value = text
         updatePredictiveSuggestions(text)
         scheduleProofread(text)
@@ -538,12 +562,18 @@ class KeyboardViewModel(
         val previous = previousCommittedWord
         previousCommittedWord = if (cleaned.length in 2..24) cleaned else null
         viewModelScope.launch {
-            if (cleaned.length > 2 && !STOP_WORDS.contains(cleaned)) {
-                repository.recordWordUsage(cleaned)
-            }
-            // Stop words stay in bigrams: pairs like "on my" carry the signal
-            if (previous != null && cleaned.length >= 2) {
-                repository.recordBigram(previous, cleaned)
+            try {
+                if (cleaned.length > 2 && !STOP_WORDS.contains(cleaned)) {
+                    repository.recordWordUsage(cleaned)
+                }
+                // Stop words stay in bigrams: pairs like "on my" carry the signal
+                if (previous != null && cleaned.length >= 2) {
+                    repository.recordBigram(previous, cleaned)
+                }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (_: Exception) {
+                // Learning is best-effort; a storage error must not crash typing.
             }
         }
     }
@@ -646,7 +676,10 @@ class KeyboardViewModel(
      * a word is being typed, and frequent words as prompts when the field is empty.
      */
     fun updatePredictiveSuggestions(activeText: String) {
-        viewModelScope.launch {
+        // One in-flight computation at a time: a slow bigram lookup for an old
+        // keystroke must not land after (and overwrite) a newer result.
+        predictionJob?.cancel()
+        predictionJob = viewModelScope.launch {
             when {
                 activeText.isEmpty() -> {
                     val topWords = topVocabulary.value.take(3).map { it.word }
