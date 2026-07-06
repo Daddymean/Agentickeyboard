@@ -48,7 +48,7 @@ flight.
 ## Project layout
 
 ```
-app/src/main/java/com/example/
+app/src/main/java/io/github/daddymean/agentickeyboard/
 ├── AgenticKeyboardApplication.kt   # App singleton exposing the Room repository
 ├── MainActivity.kt                 # Companion app: playground, shortcuts, Style Hub, setup guide
 ├── service/AgenticKeyboardService.kt  # The InputMethodService hosting the Compose keyboard

@@ -50,7 +50,7 @@ change was verified by review and defer the authoritative pass/fail to CI.
 ## Repository layout
 
 ```
-app/src/main/java/com/example/
+app/src/main/java/io/github/daddymean/agentickeyboard/
 ├── AgenticKeyboardApplication.kt   # App singleton: Room repo, settings, swipe dictionary
 ├── MainActivity.kt                 # Companion app (Console / Shortcuts / Style Hub / Setup)
 ├── service/AgenticKeyboardService.kt  # The InputMethodService hosting the Compose keyboard
