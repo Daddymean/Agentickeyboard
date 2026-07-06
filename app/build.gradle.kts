@@ -18,6 +18,10 @@ android {
     versionName = "1.0"
 
     testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+
+    // Single source of truth for the Gemini model; the endpoint path is built
+    // from this at runtime rather than hardcoded in the Retrofit annotation.
+    buildConfigField("String", "GEMINI_MODEL", "\"gemini-3.5-flash\"")
   }
 
   signingConfigs {

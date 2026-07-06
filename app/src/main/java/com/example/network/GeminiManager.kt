@@ -60,7 +60,7 @@ object GeminiManager {
         val request = GenerateContentRequest(
             contents = listOf(Content(parts = listOf(Part(text = prompt))))
         )
-        val response = RetrofitClient.service.generateContent(apiKey, request)
+        val response = RetrofitClient.service.generateContent(BuildConfig.GEMINI_MODEL, apiKey, request)
         return response.candidates?.firstOrNull()?.content?.parts?.firstOrNull()?.text?.trim()
     }
 
@@ -99,7 +99,7 @@ object GeminiManager {
                 // response mime type is pinned for structured output.
                 generationConfig = GenerationConfig(responseMimeType = "application/json")
             )
-            val response = RetrofitClient.service.generateContent(apiKey, request)
+            val response = RetrofitClient.service.generateContent(BuildConfig.GEMINI_MODEL, apiKey, request)
             val jsonText = response.candidates?.firstOrNull()?.content?.parts?.firstOrNull()?.text
             val parsed = jsonText?.let { moshi.adapter(GrammarCorrectionResponse::class.java).fromJson(extractJson(it)) }
             if (parsed != null) {
@@ -148,7 +148,7 @@ object GeminiManager {
                 contents = listOf(Content(parts = listOf(Part(text = prompt)))),
                 generationConfig = GenerationConfig(responseMimeType = "application/json")
             )
-            val response = RetrofitClient.service.generateContent(apiKey, request)
+            val response = RetrofitClient.service.generateContent(BuildConfig.GEMINI_MODEL, apiKey, request)
             val jsonText = response.candidates?.firstOrNull()?.content?.parts?.firstOrNull()?.text
             val parsed = jsonText?.let { moshi.adapter(SuggestionsResponse::class.java).fromJson(extractJson(it)) }
             if (parsed != null) {
@@ -409,7 +409,7 @@ object GeminiManager {
                 contents = listOf(Content(parts = listOf(Part(text = prompt)))),
                 generationConfig = GenerationConfig(responseMimeType = "application/json")
             )
-            val response = RetrofitClient.service.generateContent(apiKey, request)
+            val response = RetrofitClient.service.generateContent(BuildConfig.GEMINI_MODEL, apiKey, request)
             val jsonText = response.candidates?.firstOrNull()?.content?.parts?.firstOrNull()?.text
             val parsed = jsonText?.let { moshi.adapter(ToneAnalysisResponse::class.java).fromJson(extractJson(it)) }
                 // Length is computable locally, so never trust the model for it.
