@@ -27,8 +27,9 @@ here. Specifically:
   project requires and must not be used to build the project.
 
 **All builds and tests run in GitHub Actions CI, not locally.** The workflow at
-`.github/workflows/android-build.yml` builds a debug APK on every push and pull
-request to `main`/`master` and uploads the APK as an artifact.
+`.github/workflows/android-build.yml` builds a debug APK and runs the unit
+tests (`assembleDebug testDebugUnitTest`) on every push and pull request to
+`main`/`master` and uploads the APK as an artifact.
 
 ### How to validate changes without a local build
 
@@ -49,7 +50,7 @@ change was verified by review and defer the authoritative pass/fail to CI.
 ## Repository layout
 
 ```
-app/src/main/java/com/example/
+app/src/main/java/io/github/daddymean/agentickeyboard/
 ├── AgenticKeyboardApplication.kt   # App singleton: Room repo, settings, swipe dictionary
 ├── MainActivity.kt                 # Companion app (Console / Shortcuts / Style Hub / Setup)
 ├── service/AgenticKeyboardService.kt  # The InputMethodService hosting the Compose keyboard

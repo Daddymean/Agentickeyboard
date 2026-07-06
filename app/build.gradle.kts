@@ -7,7 +7,7 @@ plugins {
 }
 
 android {
-  namespace = "com.example"
+  namespace = "io.github.daddymean.agentickeyboard"
   compileSdk { version = release(36) { minorApiLevel = 1 } }
 
   defaultConfig {
@@ -18,6 +18,10 @@ android {
     versionName = "1.0"
 
     testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+
+    // Single source of truth for the Gemini model; the endpoint path is built
+    // from this at runtime rather than hardcoded in the Retrofit annotation.
+    buildConfigField("String", "GEMINI_MODEL", "\"gemini-3.5-flash\"")
   }
 
   signingConfigs {
@@ -99,7 +103,7 @@ dependencies {
   implementation(libs.kotlinx.coroutines.android)
   implementation(libs.kotlinx.coroutines.core)
   implementation(libs.logging.interceptor)
-  implementation(libs.moshi.kotlin)
+  implementation(libs.moshi.core)
   implementation(libs.okhttp)
   // implementation(libs.play.services.location)
   implementation(libs.retrofit)
