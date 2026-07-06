@@ -2,7 +2,6 @@ package com.example.network
 
 import com.example.BuildConfig
 import com.squareup.moshi.Moshi
-import com.squareup.moshi.kotlin.reflect.KotlinJsonAdapterFactory
 import okhttp3.OkHttpClient
 import okhttp3.logging.HttpLoggingInterceptor
 import retrofit2.Retrofit
@@ -23,9 +22,9 @@ interface GeminiApiService {
 object RetrofitClient {
     private const val BASE_URL = "https://generativelanguage.googleapis.com/"
 
-    val moshi: Moshi = Moshi.Builder()
-        .addLast(KotlinJsonAdapterFactory())
-        .build()
+    // Every serialized model is annotated with @JsonClass(generateAdapter = true),
+    // so adapters come from KSP codegen; no reflection factory is registered.
+    val moshi: Moshi = Moshi.Builder().build()
 
     private val okHttpClient = OkHttpClient.Builder()
         .connectTimeout(30, TimeUnit.SECONDS)
