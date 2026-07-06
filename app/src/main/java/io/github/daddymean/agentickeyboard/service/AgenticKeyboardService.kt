@@ -139,6 +139,10 @@ class AgenticKeyboardService : InputMethodService(), LifecycleOwner, ViewModelSt
     private fun syncEditorText() {
         val textBefore = currentInputConnection?.getTextBeforeCursor(CONTEXT_CHARS, 0)?.toString() ?: ""
         viewModel.setInputText(textBefore)
+        // Same non-blank rule as the layout's selectedText(): AI actions treat a
+        // whitespace-only selection as no selection.
+        val selected = currentInputConnection?.getSelectedText(0)?.toString()
+        viewModel.setSelectionActive(!selected.isNullOrBlank())
     }
 
     override fun onStartInput(info: EditorInfo?, restarting: Boolean) {

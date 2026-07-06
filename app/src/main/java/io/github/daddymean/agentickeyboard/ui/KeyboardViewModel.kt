@@ -105,6 +105,16 @@ class KeyboardViewModel(
     private val _inputText = MutableStateFlow("")
     val inputText = _inputText.asStateFlow()
 
+    // True while the editor has a non-blank selection; mirrored by the IME
+    // service from onUpdateSelection so the AI action row can show that
+    // actions will operate on the selection instead of the whole draft.
+    private val _hasSelection = MutableStateFlow(false)
+    val hasSelection = _hasSelection.asStateFlow()
+
+    fun setSelectionActive(active: Boolean) {
+        _hasSelection.value = active
+    }
+
     // AI states
     private val _suggestions = MutableStateFlow<List<String>>(emptyList())
     val suggestions = _suggestions.asStateFlow()

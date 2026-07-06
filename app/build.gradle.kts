@@ -43,8 +43,12 @@ android {
   buildTypes {
     release {
       isCrunchPngs = false
-      isMinifyEnabled = true
-      isShrinkResources = true
+      // Keep R8 off until a release build is actually exercised: CI only builds
+      // debug, proguard-rules.pro has no keep rules, and Moshi's reflective
+      // codegen-adapter lookup is a known minification breakage. Re-enable
+      // together with keep rules and a verified release build.
+      isMinifyEnabled = false
+      isShrinkResources = false
       proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
       signingConfig = signingConfigs.getByName("release")
     }

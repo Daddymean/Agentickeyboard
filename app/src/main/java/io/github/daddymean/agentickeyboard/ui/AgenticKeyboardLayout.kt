@@ -7,7 +7,6 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGestures
@@ -43,7 +42,6 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
@@ -74,8 +72,7 @@ import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Popup
-import io.github.daddymean.agentickeyboard.ui.theme.DarkKeyboardColors
-import io.github.daddymean.agentickeyboard.ui.theme.LightKeyboardColors
+import io.github.daddymean.agentickeyboard.ui.theme.KeyboardTheme
 import io.github.daddymean.agentickeyboard.ui.theme.LocalKeyboardColors
 import io.github.daddymean.agentickeyboard.util.CommandPalette
 import io.github.daddymean.agentickeyboard.util.ReplyIntents
@@ -142,6 +139,9 @@ fun AgenticKeyboardLayout(
     val predictiveSuggestions by viewModel.predictiveSuggestions.collectAsState()
     val topVocabulary by viewModel.topVocabulary.collectAsState()
     val trackedInputText by viewModel.inputText.collectAsState()
+    // Mirrors the editor's selection state (playground mode never selects, and
+    // the service only updates this flow for real editors, so it stays false).
+    val hasEditorSelection by viewModel.hasSelection.collectAsState()
     val isSensitiveField by viewModel.isSensitiveField.collectAsState()
     val isSwipeToTypeEnabled by viewModel.isSwipeEnabled.collectAsState()
     val isAutoCapitalizeEnabled by viewModel.isAutoCapitalizeEnabled.collectAsState()
@@ -327,11 +327,10 @@ fun AgenticKeyboardLayout(
     var showAiActions by remember { mutableStateOf(true) }
 
     // Keyboard palette follows the system light/dark setting. Providing it here
-    // themes both call sites (IME service and the in-app playground) and every
-    // descendant composable (keys, chips, popups) through LocalKeyboardColors.
-    val keyboardColors = if (isSystemInDarkTheme()) DarkKeyboardColors else LightKeyboardColors
-
-    CompositionLocalProvider(LocalKeyboardColors provides keyboardColors) {
+    // (once, at the root) themes both call sites (IME service and the in-app
+    // playground) and every descendant composable through LocalKeyboardColors.
+    KeyboardTheme {
+    val keyboardColors = LocalKeyboardColors.current
     Column(
         modifier = modifier
             .fillMaxWidth()
@@ -1269,6 +1268,24 @@ fun AgenticKeyboardLayout(
                             viewModel.analyzeTone(aiSourceText())
                         },
                         modifier = Modifier.testTag("action_tone")
+                    )
+                }
+
+                // Selection-scope indicator: the actions above silently operate
+                // on the selection when one exists; make that discoverable.
+                if (hasEditorSelection && !inPlaygroundMode) {
+                    Text(
+                        text = "Acting on selection",
+                        color = keyboardColors.accent,
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.Medium,
+                        maxLines = 1,
+                        modifier = Modifier
+                            .padding(start = 6.dp)
+                            .clip(RoundedCornerShape(8.dp))
+                            .background(keyboardColors.accent.copy(alpha = 0.15f))
+                            .padding(horizontal = 6.dp, vertical = 3.dp)
+                            .testTag("selection_badge")
                     )
                 }
 
