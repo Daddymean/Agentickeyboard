@@ -322,6 +322,12 @@ class KeyboardViewModel(
             _isLoading.value = true
             try {
                 block()
+            } catch (e: CancellationException) {
+                throw e
+            } catch (_: Exception) {
+                // Last-resort guard. Every action handles its own errors; this
+                // exists so a missed one degrades to "no result" instead of
+                // crashing the IME process and taking the keyboard down.
             } finally {
                 _isLoading.value = false
             }
@@ -556,12 +562,18 @@ class KeyboardViewModel(
         val previous = previousCommittedWord
         previousCommittedWord = if (cleaned.length in 2..24) cleaned else null
         viewModelScope.launch {
-            if (cleaned.length > 2 && !STOP_WORDS.contains(cleaned)) {
-                repository.recordWordUsage(cleaned)
-            }
-            // Stop words stay in bigrams: pairs like "on my" carry the signal
-            if (previous != null && cleaned.length >= 2) {
-                repository.recordBigram(previous, cleaned)
+            try {
+                if (cleaned.length > 2 && !STOP_WORDS.contains(cleaned)) {
+                    repository.recordWordUsage(cleaned)
+                }
+                // Stop words stay in bigrams: pairs like "on my" carry the signal
+                if (previous != null && cleaned.length >= 2) {
+                    repository.recordBigram(previous, cleaned)
+                }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (_: Exception) {
+                // Learning is best-effort; a storage error must not crash typing.
             }
         }
     }
