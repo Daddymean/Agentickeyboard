@@ -71,7 +71,7 @@ session-sized.
 
 ## Shipped
 
-- **PR #22** — in-keyboard theme override: a System/Light/Dark chip row in the
+- **PR #23** — in-keyboard theme override: a System/Light/Dark chip row in the
   Style Hub (`KeyboardSettings.themeOverride`, synced across the companion app
   and IME processes like every other setting) now pins the keyboard palette;
   `AgenticKeyboardLayout`'s root `KeyboardTheme` reads the override and only
