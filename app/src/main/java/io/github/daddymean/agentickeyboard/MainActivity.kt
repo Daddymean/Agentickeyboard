@@ -91,6 +91,7 @@ import io.github.daddymean.agentickeyboard.ui.KeyboardViewModel
 import io.github.daddymean.agentickeyboard.ui.KeyboardViewModelFactory
 import io.github.daddymean.agentickeyboard.ui.RowDefaultsButtonPadding
 import io.github.daddymean.agentickeyboard.ui.theme.MyApplicationTheme
+import io.github.daddymean.agentickeyboard.util.OnDeviceAiStatus
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -1202,6 +1203,26 @@ fun ExportTab(viewModel: KeyboardViewModel) {
                         description = "Pauses Send once when a draft reads hostile so you can confirm or soften it. Checked locally on-device.",
                         checked = isSendGuard,
                         onCheckedChange = { viewModel.setSendGuardEnabled(it) }
+                    )
+
+                    Spacer(modifier = Modifier.height(10.dp))
+                    val onDeviceAiStatus by (context.applicationContext as AgenticKeyboardApplication)
+                        .onDeviceAi.status.collectAsState()
+                    Text(
+                        "On-device AI",
+                        color = Color(0xFF1C1B1F),
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 12.sp
+                    )
+                    Text(
+                        when (onDeviceAiStatus) {
+                            OnDeviceAiStatus.AVAILABLE -> "Available — offline Fix Grammar, Rewrite, and Summarize run on this device (Gemini Nano)."
+                            OnDeviceAiStatus.DOWNLOADING -> "Downloading the on-device model…"
+                            OnDeviceAiStatus.CHECKING -> "Checking device support…"
+                            OnDeviceAiStatus.UNSUPPORTED -> "Not supported on this device — offline mode uses basic local helpers."
+                        },
+                        color = Color(0xFF5F5D6B),
+                        fontSize = 10.sp
                     )
 
                     Spacer(modifier = Modifier.height(10.dp))

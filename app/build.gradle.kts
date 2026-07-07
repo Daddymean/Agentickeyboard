@@ -12,7 +12,10 @@ android {
 
   defaultConfig {
     applicationId = "com.aistudio.agentickeyboard.vqkymt"
-    minSdk = 24
+    // ML Kit GenAI (on-device Gemini Nano) libraries declare minSdk 26; Android
+    // 7.x devices are effectively gone, so the app follows rather than
+    // tools:overrideLibrary-ing the manifest.
+    minSdk = 26
     targetSdk = 36
     versionCode = 1
     versionName = "1.0"
@@ -97,6 +100,7 @@ dependencies {
   // implementation(libs.androidx.camera.lifecycle)
   // implementation(libs.androidx.camera.view)
   implementation(libs.androidx.compose.material.icons.core)
+  implementation(libs.androidx.concurrent.futures.ktx)
   // implementation(libs.androidx.compose.material.icons.extended)
   implementation(libs.androidx.compose.material3)
   implementation(libs.androidx.compose.ui)
@@ -115,6 +119,9 @@ dependencies {
   implementation(libs.kotlinx.coroutines.android)
   implementation(libs.kotlinx.coroutines.core)
   implementation(libs.logging.interceptor)
+  implementation(libs.mlkit.genai.proofreading)
+  implementation(libs.mlkit.genai.rewriting)
+  implementation(libs.mlkit.genai.summarization)
   implementation(libs.moshi.core)
   implementation(libs.okhttp)
   // implementation(libs.play.services.location)

@@ -72,7 +72,6 @@ class KeyboardViewModel(
             "on", "with", "as", "at", "by", "an", "be", "this", "are", "from"
         )
         private const val DAY_MS = 86_400_000L
-        private val OFFLINE_GRAMMAR_REPLACEMENTS = listOf("\\bteh\\b".toRegex(RegexOption.IGNORE_CASE) to "the", "\\bi\\b".toRegex(RegexOption.IGNORE_CASE) to "I", "\\bcant\\b".toRegex(RegexOption.IGNORE_CASE) to "can't")
     }
 
     // Shortcuts and logs from local Room DB.
@@ -783,7 +782,7 @@ class KeyboardViewModel(
                 // Incorporate personalization preferences inside grammar suggestions
                 val personalization = getPersonalizationContext()
                 val result = if (_isOfflineMode.value) {
-                    getOfflineGrammarFix(text)
+                    GeminiManager.offlineGrammarFix(text)
                 } else {
                     GeminiManager.fixGrammar(text, personalization, bypassCache)
                 }
@@ -902,7 +901,7 @@ class KeyboardViewModel(
             try {
                 val personalization = getPersonalizationContext()
                 val result = if (_isOfflineMode.value) {
-                    getOfflineSummary(text)
+                    GeminiManager.offlineSummary(text)
                 } else {
                     GeminiManager.summarizeMessage(text, personalization, bypassCache)
                 }
@@ -952,7 +951,7 @@ class KeyboardViewModel(
             try {
                 val targetTone = effectivePersona()
                 val result = if (_isOfflineMode.value) {
-                    "[Offline: rewrite needs cloud mode] $text"
+                    GeminiManager.offlineRewrite(text, targetTone)
                 } else {
                     GeminiManager.rewriteWithTone(text, targetTone, getPersonalizationContext(), _isVoiceLockEnabled.value, bypassCache)
                 }
@@ -977,7 +976,7 @@ class KeyboardViewModel(
             _rewrite.value = null
             try {
                 val result = if (_isOfflineMode.value) {
-                    "[Offline: rewrite needs cloud mode] $text"
+                    GeminiManager.offlineRewrite(text, styleInstruction)
                 } else {
                     GeminiManager.rewriteWithTone(text, styleInstruction, getPersonalizationContext(), _isVoiceLockEnabled.value, bypassCache)
                 }
@@ -1248,18 +1247,6 @@ class KeyboardViewModel(
 
     // --- Local Helpers for Offline Mode Isolation ---
 
-    private fun getOfflineGrammarFix(text: String): GrammarCorrectionResponse {
-        var corrected = text
-        var count = 0
-        for ((typo, fix) in OFFLINE_GRAMMAR_REPLACEMENTS) {
-            if (typo.containsMatchIn(corrected)) {
-                corrected = corrected.replace(typo, fix)
-                count++
-            }
-        }
-        return GrammarCorrectionResponse(text, corrected, "Offline grammar spellchecker applied.", count)
-    }
-
     private fun getOfflineSuggestions(context: String, personalization: String = "", intent: String = ""): SuggestionsResponse {
         if (intent.isNotEmpty()) {
             ReplyIntents.offlineReplies(intent)?.let { return SuggestionsResponse(it) }
@@ -1272,10 +1259,6 @@ class KeyboardViewModel(
             else -> listOf("Okay", "Sounds good!", "I'll reply soon.")
         }
         return SuggestionsResponse(replies)
-    }
-
-    private fun getOfflineSummary(text: String): String {
-        return "Offline Local Summary: " + text.take(30) + "..."
     }
 
     private fun getOfflineToneAnalysis(text: String): ToneAnalysisResponse {
