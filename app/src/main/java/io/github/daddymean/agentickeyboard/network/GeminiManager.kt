@@ -2,6 +2,8 @@ package io.github.daddymean.agentickeyboard.network
 
 import android.util.Log
 import io.github.daddymean.agentickeyboard.BuildConfig
+import io.github.daddymean.agentickeyboard.util.OnDeviceAi
+import io.github.daddymean.agentickeyboard.util.OnDeviceAiRouter
 import io.github.daddymean.agentickeyboard.util.ReplyIntents
 import io.github.daddymean.agentickeyboard.util.WritingQualityMeter
 import com.squareup.moshi.Moshi
@@ -15,6 +17,14 @@ object GeminiManager {
     private val apiKey: String = BuildConfig.GEMINI_API_KEY
 
     private val moshi: Moshi = RetrofitClient.moshi
+
+    /**
+     * On-device (Gemini Nano) provider for the offline path, injected by the
+     * Application at startup. Null (e.g. in unit tests) simply means every
+     * offline request uses the heuristic fallbacks.
+     */
+    @Volatile
+    var onDeviceAi: OnDeviceAi? = null
 
     /**
      * Checks if the API key is configured and seems valid.
@@ -62,7 +72,7 @@ object GeminiManager {
      */
     suspend fun fixGrammar(text: String, personalizationContext: String = "", bypassCache: Boolean = false): GrammarCorrectionResponse = withContext(Dispatchers.IO) {
         if (!isApiKeyAvailable()) {
-            return@withContext getOfflineGrammarFix(text)
+            return@withContext offlineGrammarFix(text)
         }
 
         val prompt = Prompts.fixGrammar(personalizationContext, text)
@@ -84,11 +94,11 @@ object GeminiManager {
                 cachePut(cacheKey, parsed)
                 parsed
             } else {
-                getOfflineGrammarFix(text)
+                offlineGrammarFix(text)
             }
         } catch (e: Exception) {
             Log.e(TAG, "Error in fixGrammar", e)
-            getOfflineGrammarFix(text, "Offline mode fallback (error: ${e.localizedMessage})")
+            offlineGrammarFix(text)
         }
     }
 
@@ -134,7 +144,7 @@ object GeminiManager {
         }
         
         if (!isApiKeyAvailable()) {
-            return@withContext getOfflineSummary(text)
+            return@withContext offlineSummary(text)
         }
 
         val prompt = Prompts.summarizeMessage(personalizationContext, text)
@@ -145,10 +155,10 @@ object GeminiManager {
         try {
             val result = generateText(prompt)
             if (result != null) cachePut(cacheKey, result)
-            result ?: getOfflineSummary(text)
+            result ?: offlineSummary(text)
         } catch (e: Exception) {
             Log.e(TAG, "Error in summarizeMessage", e)
-            getOfflineSummary(text)
+            offlineSummary(text)
         }
     }
 
@@ -184,7 +194,7 @@ object GeminiManager {
         if (text.isBlank()) return@withContext ""
 
         if (!isApiKeyAvailable()) {
-            return@withContext getOfflineRewrite(text, targetTone)
+            return@withContext offlineRewrite(text, targetTone)
         }
 
         val prompt = Prompts.rewriteWithTone(targetTone, personalizationContext, preserveVoice, text)
@@ -195,10 +205,10 @@ object GeminiManager {
         try {
             val result = generateText(prompt)
             if (result != null) cachePut(cacheKey, result)
-            result ?: getOfflineRewrite(text, targetTone)
+            result ?: offlineRewrite(text, targetTone)
         } catch (e: Exception) {
             Log.e(TAG, "Error in rewriteWithTone", e)
-            getOfflineRewrite(text, targetTone)
+            offlineRewrite(text, targetTone)
         }
     }
 
@@ -316,6 +326,54 @@ object GeminiManager {
             Log.e(TAG, "Error in analyzeTone", e)
             getOfflineToneAnalysis(text)
         }
+    }
+
+    // --- Offline routing: on-device Gemini Nano when available, else heuristics ---
+
+    /**
+     * Offline grammar fix: on-device proofreading when the model is available,
+     * the regex heuristics otherwise. Also the fallback for cloud failures.
+     */
+    suspend fun offlineGrammarFix(text: String): GrammarCorrectionResponse = OnDeviceAiRouter.route(
+        onDeviceAi,
+        onDevice = { ai ->
+            ai.proofread(text)?.let { corrected ->
+                val changed = corrected.trim() != text.trim()
+                GrammarCorrectionResponse(
+                    original = text,
+                    corrected = corrected,
+                    explanation = if (changed) "Corrected on-device (Gemini Nano)." else "No errors found on-device.",
+                    correctionsCount = if (changed) countWordChanges(text, corrected) else 0
+                )
+            }
+        },
+        fallback = { getOfflineGrammarFix(text) }
+    )
+
+    /** Offline summary: on-device summarization when available, else heuristic. */
+    suspend fun offlineSummary(text: String): String = OnDeviceAiRouter.route(
+        onDeviceAi,
+        onDevice = { ai -> ai.summarize(text) },
+        fallback = { getOfflineSummary(text) }
+    )
+
+    /**
+     * Offline rewrite: on-device rewriting when available *and* the requested
+     * tone/instruction maps onto a preset tone (SHORTEN/ELABORATE/FRIENDLY/
+     * PROFESSIONAL); anything else keeps the heuristic fallback.
+     */
+    suspend fun offlineRewrite(text: String, targetTone: String): String = OnDeviceAiRouter.route(
+        onDeviceAi,
+        onDevice = { ai -> OnDeviceAi.toneFor(targetTone)?.let { tone -> ai.rewrite(text, tone) } },
+        fallback = { getOfflineRewrite(text, targetTone) }
+    )
+
+    /** Rough count of differing words between original and corrected text. */
+    private fun countWordChanges(original: String, corrected: String): Int {
+        val a = original.trim().split("\\s+".toRegex())
+        val b = corrected.trim().split("\\s+".toRegex())
+        val diffs = a.zip(b).count { (x, y) -> x != y } + kotlin.math.abs(a.size - b.size)
+        return diffs.coerceAtLeast(1)
     }
 
     // --- Offline Fallback Implementations for basic text processing & privacy ---
