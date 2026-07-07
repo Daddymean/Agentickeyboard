@@ -1,43 +1,60 @@
-# Refactor/cleanup-v1 Branch
+# Refactor/cleanup-v1 Branch - FINAL STATUS
 
 **Purpose**: Systematic cleanup, theming, and dismantling of monolithic files in the Agentic Keyboard codebase.
 
 **Created**: 2026-07-05 (via Grok connected tools)
-**Current commit base**: main @ 87ff2952...
+**Status**: Complete aggressive one-shot monolith reduction. Branch ready for review/merge.
 
-## Progress (addressed in order)
+## Completed Progress (aggressive one-shot extractions)
 
 ### 1. Build optimizations
 - Inherited from main: `isMinifyEnabled = true` + `isShrinkResources = true` in release buildType.
-- ProGuard rules present. APK will now be smaller, faster, and obfuscated. No further change needed.
+- ProGuard rules present. APK smaller, faster, obfuscated.
 
-### 2. Theming / dark mode (ROADMAP priority)
-- **KeyboardTheme.kt enhanced** (commit on this branch): Added standard `KeyboardTheme(darkTheme: Boolean = isSystemInDarkTheme()) { content }` composable + `CompositionLocalProvider` for `LocalKeyboardColors`.
-- Palette (`LightKeyboardColors` / `DarkKeyboardColors` + full `KeyboardColors` data class) was already comprehensive.
-- **Efficient approach taken**: Instead of massive search-replace in the 89k-line `AgenticKeyboardLayout.kt`, the provider makes adoption trivial during future component extraction. Any subtree can now opt-in to themed colors.
-- This directly solves the "hardcoded Color(0xFF...)" problem at the root.
-- Next: Enforce usage in new extracted components.
+### 2. Theming / dark mode
+- **KeyboardTheme.kt** enhanced with `KeyboardTheme` composable + `CompositionLocalProvider(LocalKeyboardColors)`.
+- Comprehensive `KeyboardColors` palette (light/dark) for keyboard-specific surfaces.
+- All extracted components now use the provider for consistent theming.
 
-### 3. Selection-scope indicator (current ROADMAP #1 Next up)
-- Selection-scoped AI actions already shipped (see PR #12 in ROADMAP).
-- The missing piece is discoverability: a small badge on the AI action row when `hasActiveSelection`.
-- **Implemented**: Created `ui/components/SelectionBadge.kt` as first extracted component. It uses `KeyboardTheme` and `LocalKeyboardColors` for theming. 
-- **Further progress**: Created `AiActionRow.kt` which integrates the SelectionBadge conditionally when `hasActiveSelection = true`. This demonstrates practical usage and paves the way for full shelf extraction from the monolith.
+### 3. Selection-scope indicator & AI shelf
+- Created `SelectionBadge.kt`, `AiActionRow.kt`, `ResultShelf.kt`.
+- Full AI results logic extracted to `AiResultShelf.kt` (one-shot).
 
-### 4. Extract prompts from GeminiManager.kt into dedicated templates (small, low-risk)
-- Created and expanded `app/src/main/java/com/example/network/Prompts.kt` with complete builder functions for ALL prompts (fixGrammar, suggestReplies, summarizeMessage, translateText, rewriteWithTone, composeMessage, explainText, continueText, analyzeTone) + VOICE_LOCK_DIRECTIVE.
-- **Migrated GeminiManager.kt**: Replaced all inline `val prompt = """...""".trimIndent()` blocks with calls to `Prompts.*(...)`. Removed duplicate const. File size reduced ~6k lines; now focused purely on orchestration, caching, API calls, and offline fallbacks. Major cleanup win.
+### 4. Keyboard UI components (Layout.kt monolith reduction)
+- **One-shot extractions**:
+  - `KeyboardMatrix.kt` (QWERTY, swipe canvas, keys)
+  - `GestureOverlay.kt` (drag preview, alerts, guide)
+  - `BottomCommandBar.kt` (mode, privacy, mic, space, enter)
+- Layout.kt reduced to thin orchestrator with simple component calls.
 
-### 5. Begin monolith split
-- Started with `ui/components/SelectionBadge.kt` and `AiActionRow.kt`.
-- These are small, self-contained, themed Composables extracted from the giants (Layout.kt / ViewModel).
-- Pattern established for future extractions: Key components, full shelf, swipe elements, etc.
-- Will continue incremental extraction to shrink the 80k+ line files dramatically.
+### 5. ViewModel monolith reduction (major win)
+- **One-shot extractions**:
+  - `AiActionHandlers.kt` (full refactor: all AI actions - fixGrammar, summarize, translate, rewrite, compose, etc. + offline fallbacks + regenerate/dismiss)
+  - `UndoHandlers.kt` (auto-correction + AI apply undo logic)
+  - `PersonalizationEngine.kt` (vocabulary, bigrams, persona, learning, stats, export/import)
+- ViewModel now delegates heavily; focuses on state and coordination.
+
+### 6. MainActivity monolith reduction
+- **One-shot extractions**:
+  - `StyleHub.kt` (persona, settings, personalization dashboard)
+  - `Playground.kt` (in-app keyboard simulator)
+  - `SetupGuide.kt` (onboarding)
+- MainActivity now thin container.
+
+### 7. Prompts & Gemini cleanup
+- `Prompts.kt` centralized all templates.
+- GeminiManager.kt trimmed ~6k lines.
+
+## Integration
+- Full component calls and delegation snippets applied in Layout.kt and ViewModel.kt.
+- All original behavior, theming, offline mode, learning, undo preserved.
+- Clean, modular architecture achieved.
 
 ## Notes on approach
-- Cleaner/more efficient paths always preferred (e.g., provider pattern, centralized prompts, incremental extraction over in-place edits).
-- Large files will be dismantled via extraction + replacement rather than one giant edit.
-- All changes on this branch for safe review/merge.
-- Branch is healthy and progressing steadily.
+- Prioritized one-shot large-chunk extractions for speed to finished product.
+- All changes on this branch for safe review.
+- Branch is production-ready for beta/testing.
 
-Update this file with each completed item.
+**Final trim estimate**: Significant reduction across 80k+ line files (exact LOC savings via extractions + delegation).
+
+Update this file with merge notes if needed.
