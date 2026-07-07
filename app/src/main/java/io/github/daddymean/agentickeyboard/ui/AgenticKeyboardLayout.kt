@@ -42,6 +42,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
@@ -326,10 +327,18 @@ fun AgenticKeyboardLayout(
     // Active AI actions visibility
     var showAiActions by remember { mutableStateOf(true) }
 
-    // Keyboard palette follows the system light/dark setting. Providing it here
-    // (once, at the root) themes both call sites (IME service and the in-app
-    // playground) and every descendant composable through LocalKeyboardColors.
-    KeyboardTheme {
+    // Keyboard palette follows the user's theme override ("System" defers to the
+    // OS light/dark setting). Providing it here (once, at the root) themes both
+    // call sites (IME service and the in-app playground) and every descendant
+    // composable through LocalKeyboardColors.
+    val themeOverride by viewModel.themeOverride.collectAsState()
+    KeyboardTheme(
+        darkTheme = when (themeOverride) {
+            "Light" -> false
+            "Dark" -> true
+            else -> isSystemInDarkTheme()
+        }
+    ) {
     val keyboardColors = LocalKeyboardColors.current
     Column(
         modifier = modifier
