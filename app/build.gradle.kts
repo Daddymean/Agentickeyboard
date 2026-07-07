@@ -103,6 +103,8 @@ dependencies {
   implementation(libs.okhttp)
   // implementation(libs.play.services.location)
   implementation(libs.retrofit)
+  // Gemini Nano / AICore integration
+  implementation("com.google.mlkit:genai:16.0.0")  // ML Kit GenAI for Gemini Nano
   testImplementation(libs.androidx.compose.ui.test.junit4)
   testImplementation(libs.androidx.core)
   testImplementation(libs.androidx.junit)
