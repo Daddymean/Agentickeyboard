@@ -6,7 +6,58 @@ item: move it to **Shipped** with the PR number.
 
 ## Next up
 
-### 1. In-keyboard theme override
+### 1. On-device AI, Phase 1 — ML Kit GenAI (Gemini Nano via AICore)
+
+**Next-session kickoff prompt:** *"Implement ROADMAP item 1 (On-device AI
+Phase 1) exactly as specified there. One focused PR on the designated branch;
+verify with a workflow_dispatch CI run before reporting."*
+
+Goal: when offline mode is on (or the network is down) and the device has
+AICore, route **Fix Grammar**, **Rewrite (+ iterate chips)**, and
+**Summarize** through on-device Gemini Nano instead of the canned heuristics.
+Heuristics remain the final fallback; cloud path unchanged. Plan researched
+and verified 2026-07-07:
+
+- **Dependencies (real — verified on Google's Maven, unlike the
+  `com.google.mlkit:genai:16.0.0` hallucination on `refactor/cleanup-v1`):**
+  `com.google.mlkit:genai-proofreading`, `genai-rewriting`,
+  `genai-summarization` (resolve current versions at implementation time).
+  The freeform `genai-prompt` API (1.0.0-beta2, alpha) is **Phase 2** —
+  replies/compose/continue/tone — do not pull it into Phase 1.
+- **No manifest changes.** ML Kit binds AICore itself; the INTERNET-only
+  permission rule stands. Do NOT add `com.google.android.gms.permission.AI_CORE`.
+- **New abstraction** `util/OnDeviceAi.kt`: small interface
+  (`proofread(text)`, `rewrite(text, tone)`, `summarize(text)`, plus a
+  `StateFlow` availability status) with an ML Kit-backed implementation and a
+  fake for tests. Availability is async: check feature status →
+  AVAILABLE / DOWNLOADABLE (trigger download, report progress) / UNSUPPORTED.
+- **Routing** lives where the single offline-fallback module already sits in
+  `GeminiManager`: offline path tries `OnDeviceAi` when AVAILABLE, else the
+  existing heuristics. Keep the routing decision pure-JVM testable (inject
+  availability + provider; add routing unit tests with the fake).
+- **UI**: one Style Hub row — "On-device AI: Available / Downloading / Not
+  supported on this device". Iterate chips map to Rewriting preset tones
+  (SHORTEN / FRIENDLY / PROFESSIONAL, ...) where they exist.
+- **Constraints**: English-first API support (Translate stays cloud-only);
+  keep the strip-fences/validate-output habits; failures degrade silently to
+  heuristics — never surface an error for a missing model. Keyboard process
+  stays lean — ML Kit/AICore does inference out-of-process, so no model
+  loading in the IME.
+- **Validation**: push branch, `workflow_dispatch` on android-build.yml; the
+  R8 release step must also stay green (add keep/dontwarn rules if ML Kit's
+  transitives need them). Runtime behavior needs a supported device
+  (Pixel 9/10, Galaxy S24+, recent flagships) — flag that for manual testing.
+- **Explicitly out of scope**: Gemma/LiteRT-LM tier for non-AICore devices
+  (Phase 3, only if mid-range coverage becomes a goal; host outside the IME
+  process, opt-in download).
+
+Context: `refactor/cleanup-v1`'s AICore attempt was verified non-building
+(CI run #35: unresolvable dependency; undefined `AICore`/`Prompts.forTask`
+symbols; reaches into private ViewModel members). Do not merge or reuse its
+AI files; its extracted-component file boundaries are an acceptable map for a
+future monolith split, nothing more.
+
+### 2. In-keyboard theme override
 Dark mode now follows the system setting. Add an explicit Light/Dark/System
 choice (a `KeyboardSettings` entry + a control in the Style Hub) so users can
 pin the keyboard's theme independent of the OS, and have the layout read that
