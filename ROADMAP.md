@@ -11,11 +11,9 @@ candidates deliberately.)*
 
 ## Later / unscheduled
 
-- On-device AI, Phase 2 — freeform `com.google.mlkit:genai-prompt`
-  (1.0.0-beta2, alpha) for offline replies/compose/continue/tone on AICore
-  devices, building on the `OnDeviceAi` abstraction from Phase 1 (PR #22).
-  Phase 3 (Gemma/LiteRT-LM for non-AICore devices; host outside the IME
-  process, opt-in download) only if mid-range coverage becomes a goal.
+- On-device AI, Phase 3 — Gemma/LiteRT-LM tier for non-AICore devices, only if
+  mid-range coverage becomes a goal; host outside the IME process with an
+  opt-in download. (Phases 1 and 2 shipped in PR #22 and PR #24.)
 - Word-level diff highlighting in the expanded result preview — the current
   compare shows the whole original struck through ("Was: …"); highlighting
   only the changed spans would make short edits scannable.
@@ -70,6 +68,18 @@ session-sized.
   `/v lunch` recalls saved snippets inline. Reuses the palette matcher as-is.
 
 ## Shipped
+
+- **PR #24** — on-device AI, Phase 2 (freeform `genai-prompt` / Gemini Nano via
+  AICore): offline **replies**, **compose**, **continue**, and **tone** now run
+  on-device when the prompt feature is available, degrading silently to the
+  existing heuristics otherwise (cloud path unchanged). Extended `OnDeviceAi`
+  with a separate `promptStatus` gate + `generate(prompt)` so the freeform model
+  and the Phase 1 task features never disable each other; added
+  `offlineReplies`/`offlineCompose`/`offlineContinue`/`offlineTone` routing in
+  `GeminiManager` (also the cloud-error fallbacks), Nano-specific prompt
+  templates, and pure-JVM routing/parsing tests. Bumped `genai-common` to beta3
+  (pulled by `genai-prompt` beta2); no manifest changes. Runtime behavior still
+  needs manual testing on an AICore device.
 
 - **PR #23** — in-keyboard theme override: a System/Light/Dark chip row in the
   Style Hub (`KeyboardSettings.themeOverride`, synced across the companion app

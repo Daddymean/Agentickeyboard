@@ -1256,7 +1256,7 @@ fun ExportTab(viewModel: KeyboardViewModel) {
                     )
                     Text(
                         when (onDeviceAiStatus) {
-                            OnDeviceAiStatus.AVAILABLE -> "Available — offline Fix Grammar, Rewrite, and Summarize run on this device (Gemini Nano)."
+                            OnDeviceAiStatus.AVAILABLE -> "Available — offline Fix Grammar, Rewrite, Summarize, replies, compose, continue, and tone run on this device (Gemini Nano)."
                             OnDeviceAiStatus.DOWNLOADING -> "Downloading the on-device model…"
                             OnDeviceAiStatus.CHECKING -> "Checking device support…"
                             OnDeviceAiStatus.UNSUPPORTED -> "Not supported on this device — offline mode uses basic local helpers."

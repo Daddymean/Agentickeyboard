@@ -107,7 +107,7 @@ object GeminiManager {
      */
     suspend fun suggestReplies(contextMessage: String, personalizationContext: String = "", intent: String = "", bypassCache: Boolean = false): SuggestionsResponse = withContext(Dispatchers.IO) {
         if (!isApiKeyAvailable()) {
-            return@withContext getOfflineSuggestions(contextMessage, personalizationContext, intent)
+            return@withContext offlineReplies(contextMessage, personalizationContext, intent)
         }
 
         val prompt = Prompts.suggestReplies(contextMessage, personalizationContext, intent)
@@ -127,11 +127,11 @@ object GeminiManager {
                 cachePut(cacheKey, parsed)
                 parsed
             } else {
-                getOfflineSuggestions(contextMessage, personalizationContext, intent)
+                offlineReplies(contextMessage, personalizationContext, intent)
             }
         } catch (e: Exception) {
             Log.e(TAG, "Error in suggestReplies", e)
-            getOfflineSuggestions(contextMessage, personalizationContext, intent)
+            offlineReplies(contextMessage, personalizationContext, intent)
         }
     }
 
@@ -220,7 +220,7 @@ object GeminiManager {
         if (instruction.isBlank()) return@withContext ""
 
         if (!isApiKeyAvailable()) {
-            return@withContext "[Offline: compose needs cloud mode] $instruction"
+            return@withContext offlineCompose(instruction, targetTone, personalizationContext, preserveVoice)
         }
 
         val prompt = Prompts.composeMessage(instruction, targetTone, personalizationContext, preserveVoice)
@@ -231,10 +231,10 @@ object GeminiManager {
         try {
             val result = generateText(prompt)
             if (result != null) cachePut(cacheKey, result)
-            result ?: "[Compose failed] $instruction"
+            result ?: offlineCompose(instruction, targetTone, personalizationContext, preserveVoice)
         } catch (e: Exception) {
             Log.e(TAG, "Error in composeMessage", e)
-            "[Compose error] ${e.localizedMessage}"
+            offlineCompose(instruction, targetTone, personalizationContext, preserveVoice)
         }
     }
 
@@ -271,7 +271,7 @@ object GeminiManager {
         if (text.isBlank()) return@withContext ""
 
         if (!isApiKeyAvailable()) {
-            return@withContext "[Offline: continue needs cloud mode]"
+            return@withContext offlineContinue(text, personalizationContext, preserveVoice)
         }
 
         val prompt = Prompts.continueText(text, personalizationContext, preserveVoice)
@@ -282,10 +282,10 @@ object GeminiManager {
         try {
             val result = generateText(prompt)
             if (result != null) cachePut(cacheKey, result)
-            result ?: ""
+            result ?: offlineContinue(text, personalizationContext, preserveVoice)
         } catch (e: Exception) {
             Log.e(TAG, "Error in continueText", e)
-            ""
+            offlineContinue(text, personalizationContext, preserveVoice)
         }
     }
 
@@ -298,7 +298,7 @@ object GeminiManager {
         }
 
         if (!isApiKeyAvailable()) {
-            return@withContext getOfflineToneAnalysis(text)
+            return@withContext offlineTone(text, personalizationContext)
         }
 
         val prompt = Prompts.analyzeTone(personalizationContext, text)
@@ -320,11 +320,11 @@ object GeminiManager {
                 cachePut(cacheKey, parsed)
                 parsed
             } else {
-                getOfflineToneAnalysis(text)
+                offlineTone(text, personalizationContext)
             }
         } catch (e: Exception) {
             Log.e(TAG, "Error in analyzeTone", e)
-            getOfflineToneAnalysis(text)
+            offlineTone(text, personalizationContext)
         }
     }
 
@@ -375,6 +375,111 @@ object GeminiManager {
         val diffs = a.zip(b).count { (x, y) -> x != y } + kotlin.math.abs(a.size - b.size)
         return diffs.coerceAtLeast(1)
     }
+
+    // --- Phase 2: freeform-prompt routing (replies / compose / continue / tone) ---
+    // Gated on the prompt feature's own availability (promptStatus), independent
+    // of the Phase 1 task features, so one missing model never disables the other.
+
+    private val promptStatusOf: (OnDeviceAi) -> OnDeviceAiStatus = { it.promptStatus.value }
+
+    /** Offline replies: on-device prompt when available, else the canned heuristic. */
+    suspend fun offlineReplies(contextMessage: String, personalizationContext: String = "", intent: String = ""): SuggestionsResponse =
+        OnDeviceAiRouter.route(
+            onDeviceAi,
+            onDevice = { ai ->
+                parseReplyLines(ai.generate(Prompts.onDeviceReplies(contextMessage, personalizationContext, intent)))
+                    ?.let { SuggestionsResponse(it) }
+            },
+            fallback = { getOfflineSuggestions(contextMessage, personalizationContext, intent) },
+            statusOf = promptStatusOf
+        )
+
+    /** Offline compose: on-device prompt when available, else the cloud-mode hint. */
+    suspend fun offlineCompose(instruction: String, targetTone: String, personalizationContext: String = "", preserveVoice: Boolean = false): String =
+        OnDeviceAiRouter.route(
+            onDeviceAi,
+            onDevice = { ai -> ai.generate(Prompts.composeMessage(instruction, targetTone, personalizationContext, preserveVoice)) },
+            fallback = { "[Offline: compose needs cloud mode] $instruction" },
+            statusOf = promptStatusOf
+        )
+
+    /** Offline continue: on-device prompt when available, else empty (no suggestion). */
+    suspend fun offlineContinue(text: String, personalizationContext: String = "", preserveVoice: Boolean = false): String =
+        OnDeviceAiRouter.route(
+            onDeviceAi,
+            onDevice = { ai -> ai.generate(Prompts.continueText(text, personalizationContext, preserveVoice))?.let { stripDraftEcho(text, it) } },
+            fallback = { "" },
+            statusOf = promptStatusOf
+        )
+
+    /** Offline tone: on-device single-word classification when available, else heuristic. */
+    suspend fun offlineTone(text: String, personalizationContext: String = ""): ToneAnalysisResponse =
+        OnDeviceAiRouter.route(
+            onDeviceAi,
+            onDevice = { ai -> normalizeSentiment(ai.generate(Prompts.onDeviceTone(text)))?.let { toneAnalysisForSentiment(it, text) } },
+            fallback = { getOfflineToneAnalysis(text) },
+            statusOf = promptStatusOf
+        )
+
+    /** Split a model's multi-line reply output into up to 3 clean suggestions. */
+    internal fun parseReplyLines(raw: String?): List<String>? {
+        if (raw.isNullOrBlank()) return null
+        val cleaned = raw.lines()
+            .map { it.trim().removePrefix("-").removePrefix("*").removePrefix("•").trim() }
+            .map { it.replace(REPLY_NUMBER_PREFIX, "") }
+            .map { it.trim().trim('"') }
+            .filter { it.isNotBlank() }
+            .distinct()
+            .take(3)
+        return cleaned.takeIf { it.isNotEmpty() }
+    }
+
+    /** Map a model tone word onto one of the known sentiments; null if unrecognized. */
+    internal fun normalizeSentiment(raw: String?): String? {
+        val word = raw?.trim()?.lowercase()?.takeWhile { it.isLetter() }?.takeIf { it.isNotEmpty() } ?: return null
+        return when {
+            word.startsWith("prof") -> "Professional"
+            word.startsWith("joy") || word == "happy" -> "Joyful"
+            word.startsWith("emp") -> "Empathetic"
+            word.startsWith("apolog") || word == "sorry" -> "Apologetic"
+            word.startsWith("urg") -> "Urgent"
+            word.startsWith("neu") || word == "casual" -> "Neutral / Casual"
+            else -> null
+        }
+    }
+
+    /** Drop a leading verbatim echo of the draft the continuation model may repeat. */
+    private fun stripDraftEcho(draft: String, continuation: String): String {
+        val c = continuation.trim()
+        val d = draft.trim()
+        if (d.isNotEmpty() && c.regionMatches(0, d, 0, d.length, ignoreCase = true)) {
+            return c.substring(d.length).trimStart().ifEmpty { c }
+        }
+        return c
+    }
+
+    /** Build a tone response for a known [sentiment], filling dimensions locally. */
+    private fun toneAnalysisForSentiment(sentiment: String, text: String): ToneAnalysisResponse {
+        val meter = WritingQualityMeter.assess(text)
+        val base = when (sentiment) {
+            "Apologetic" -> ToneAnalysisResponse(sentiment, 0.85f, listOf("Add context if appropriate.", "Maintain accountability clearly."))
+            "Urgent" -> ToneAnalysisResponse(sentiment, 0.80f, listOf("Clarify the exact deadline.", "Include a friendly greeting first to soften."))
+            "Joyful" -> ToneAnalysisResponse(sentiment, 0.90f, listOf("Perfect for casual context.", "Add an exclamation mark to boost vibe."))
+            "Professional" -> ToneAnalysisResponse(sentiment, 0.95f, listOf("Excellent clarity and structure.", "Ensure action items are defined."))
+            "Empathetic" -> ToneAnalysisResponse(sentiment, 0.88f, listOf("Keep acknowledging how they feel.", "Offer one concrete next step."))
+            else -> ToneAnalysisResponse(sentiment, 0.70f, listOf("Add descriptive words for clarity.", "Consider using a direct question."))
+        }
+        return base.copy(
+            clarity = meter.clarity,
+            warmth = meter.warmth,
+            firmness = meter.firmness,
+            risk = meter.risk,
+            lengthLabel = meter.lengthLabel,
+            note = meter.note
+        )
+    }
+
+    private val REPLY_NUMBER_PREFIX = "^\\d+[.):]\\s*".toRegex()
 
     // --- Offline Fallback Implementations for basic text processing & privacy ---
 
@@ -478,47 +583,13 @@ object GeminiManager {
 
     private fun getOfflineToneAnalysis(text: String): ToneAnalysisResponse {
         val lowercaseText = text.lowercase()
-
-        val isJoyful = lowercaseText.contains("great") || lowercaseText.contains("love") || lowercaseText.contains("thanks") || lowercaseText.contains("awesome") || lowercaseText.contains("happy")
-        val isProfessional = lowercaseText.contains("please") || lowercaseText.contains("regards") || lowercaseText.contains("sincerely") || lowercaseText.contains("confirm") || lowercaseText.contains("as discussed")
-        val isUrgent = lowercaseText.contains("asap") || lowercaseText.contains("need") || lowercaseText.contains("now") || lowercaseText.contains("hurry") || lowercaseText.contains("urgent")
-        val isApologetic = lowercaseText.contains("sorry") || lowercaseText.contains("apologize") || lowercaseText.contains("pardon") || lowercaseText.contains("fault")
-
-        val meter = WritingQualityMeter.assess(text)
-        val base = when {
-            isApologetic -> ToneAnalysisResponse(
-                sentiment = "Apologetic",
-                toneScore = 0.85f,
-                suggestions = listOf("Add context if appropriate.", "Maintain accountability clearly.")
-            )
-            isUrgent -> ToneAnalysisResponse(
-                sentiment = "Urgent",
-                toneScore = 0.80f,
-                suggestions = listOf("Clarify the exact deadline.", "Include a friendly greeting first to soften.")
-            )
-            isJoyful -> ToneAnalysisResponse(
-                sentiment = "Joyful",
-                toneScore = 0.90f,
-                suggestions = listOf("Perfect for casual context.", "Add an exclamation mark to boost vibe.")
-            )
-            isProfessional -> ToneAnalysisResponse(
-                sentiment = "Professional",
-                toneScore = 0.95f,
-                suggestions = listOf("Excellent clarity and structure.", "Ensure action items are defined.")
-            )
-            else -> ToneAnalysisResponse(
-                sentiment = "Neutral / Casual",
-                toneScore = 0.70f,
-                suggestions = listOf("Add descriptive words for clarity.", "Consider using a direct question.")
-            )
+        val sentiment = when {
+            listOf("sorry", "apologize", "pardon", "fault").any { lowercaseText.contains(it) } -> "Apologetic"
+            listOf("asap", "need", "now", "hurry", "urgent").any { lowercaseText.contains(it) } -> "Urgent"
+            listOf("great", "love", "thanks", "awesome", "happy").any { lowercaseText.contains(it) } -> "Joyful"
+            listOf("please", "regards", "sincerely", "confirm", "as discussed").any { lowercaseText.contains(it) } -> "Professional"
+            else -> "Neutral / Casual"
         }
-        return base.copy(
-            clarity = meter.clarity,
-            warmth = meter.warmth,
-            firmness = meter.firmness,
-            risk = meter.risk,
-            lengthLabel = meter.lengthLabel,
-            note = meter.note
-        )
+        return toneAnalysisForSentiment(sentiment, text)
     }
 }

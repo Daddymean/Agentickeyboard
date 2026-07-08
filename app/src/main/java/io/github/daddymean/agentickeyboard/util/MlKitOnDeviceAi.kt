@@ -6,6 +6,8 @@ import androidx.concurrent.futures.await
 import com.google.mlkit.genai.common.DownloadCallback
 import com.google.mlkit.genai.common.FeatureStatus
 import com.google.mlkit.genai.common.GenAiException
+import com.google.mlkit.genai.prompt.Generation
+import com.google.mlkit.genai.prompt.GenerativeModel
 import com.google.mlkit.genai.proofreading.Proofreader
 import com.google.mlkit.genai.proofreading.ProofreaderOptions
 import com.google.mlkit.genai.proofreading.Proofreading
@@ -23,6 +25,7 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.launch
 
 /**
@@ -40,6 +43,12 @@ class MlKitOnDeviceAi(context: Context, scope: CoroutineScope) : OnDeviceAi {
 
     private val _status = MutableStateFlow(OnDeviceAiStatus.CHECKING)
     override val status = _status.asStateFlow()
+
+    private val _promptStatus = MutableStateFlow(OnDeviceAiStatus.CHECKING)
+    override val promptStatus = _promptStatus.asStateFlow()
+
+    // Freeform prompt client (Phase 2). Context-free, unlike the task clients.
+    private val generativeModel: GenerativeModel by lazy { Generation.getClient() }
 
     private val proofreader: Proofreader by lazy {
         Proofreading.getClient(
@@ -81,6 +90,7 @@ class MlKitOnDeviceAi(context: Context, scope: CoroutineScope) : OnDeviceAi {
 
     init {
         scope.launch { refresh() }
+        scope.launch { refreshPrompt() }
     }
 
     /**
@@ -123,6 +133,34 @@ class MlKitOnDeviceAi(context: Context, scope: CoroutineScope) : OnDeviceAi {
         if (statuses[2] == FeatureStatus.DOWNLOADABLE) summarizer.downloadFeature(loggingCallback("summarization")).await()
     }
 
+    /**
+     * Separate lifecycle for the freeform prompt feature: check status, drive a
+     * download if the device supports one, and resolve [promptStatus]. Kept
+     * independent of [refresh] so the prompt path and the task-feature path never
+     * gate each other.
+     */
+    private suspend fun refreshPrompt() {
+        try {
+            var status = generativeModel.checkStatus()
+            if (status == FeatureStatus.DOWNLOADABLE || status == FeatureStatus.DOWNLOADING) {
+                _promptStatus.value = OnDeviceAiStatus.DOWNLOADING
+                // Draining the download Flow suspends until AICore finishes.
+                generativeModel.download().toList()
+                status = generativeModel.checkStatus()
+            }
+            _promptStatus.value = if (status == FeatureStatus.AVAILABLE) {
+                OnDeviceAiStatus.AVAILABLE
+            } else {
+                OnDeviceAiStatus.UNSUPPORTED
+            }
+        } catch (e: CancellationException) {
+            throw e
+        } catch (t: Throwable) {
+            Log.i(TAG, "On-device prompt AI unavailable: ${t.message}")
+            _promptStatus.value = OnDeviceAiStatus.UNSUPPORTED
+        }
+    }
+
     private fun loggingCallback(feature: String) = object : DownloadCallback {
         override fun onDownloadStarted(bytesToDownload: Long) {
             Log.i(TAG, "$feature model download started ($bytesToDownload bytes)")
@@ -159,6 +197,12 @@ class MlKitOnDeviceAi(context: Context, scope: CoroutineScope) : OnDeviceAi {
         val summary = cleanOutput(result.summary) ?: return null
         return summary.lines().joinToString(" ") { it.replace(BULLET_PREFIX, "").trim() }
             .trim().takeIf { it.isNotEmpty() }
+    }
+
+    override suspend fun generate(prompt: String): String? {
+        if (prompt.isBlank()) return null
+        val response = generativeModel.generateContent(prompt)
+        return cleanOutput(response.candidates.firstOrNull()?.text)
     }
 
     /**

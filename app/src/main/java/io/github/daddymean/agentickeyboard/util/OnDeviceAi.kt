@@ -32,8 +32,19 @@ enum class OnDeviceTone { SHORTEN, ELABORATE, FRIENDLY, PROFESSIONAL }
  */
 interface OnDeviceAi {
 
-    /** Async availability, driven by feature-status checks and model downloads. */
+    /**
+     * Availability of the task-specific features (proofread/rewrite/summarize),
+     * driven by feature-status checks and model downloads. Phase 1 surface.
+     */
     val status: StateFlow<OnDeviceAiStatus>
+
+    /**
+     * Availability of the freeform prompt feature backing [generate]. Tracked
+     * separately from [status] so a device that lacks (or is still downloading)
+     * the prompt model keeps routing the Phase 1 task features on-device, and
+     * vice-versa.
+     */
+    val promptStatus: StateFlow<OnDeviceAiStatus>
 
     /** Grammar/spelling correction of [text]; null if no usable suggestion. */
     suspend fun proofread(text: String): String?
@@ -43,6 +54,12 @@ interface OnDeviceAi {
 
     /** Short summary of [text]; null if no usable summary. */
     suspend fun summarize(text: String): String?
+
+    /**
+     * Freeform text generation for the offline replies/compose/continue/tone
+     * paths. Returns the model's text, or null on empty/failed output.
+     */
+    suspend fun generate(prompt: String): String?
 
     companion object {
         /**
@@ -67,18 +84,24 @@ interface OnDeviceAi {
 }
 
 /**
- * The offline routing decision: use the on-device model only when it is actually
- * AVAILABLE and it produced a result; anything else — no provider, still
- * downloading, unsupported, null result, or a thrown error — degrades silently
- * to the heuristic [fallback]. Pure JVM so the decision is unit-testable.
+ * The offline routing decision: use the on-device model only when the relevant
+ * feature is actually AVAILABLE and it produced a result; anything else — no
+ * provider, still downloading, unsupported, null result, or a thrown error —
+ * degrades silently to the heuristic [fallback]. Pure JVM so the decision is
+ * unit-testable.
+ *
+ * [statusOf] selects which availability gate applies: the task features
+ * ([OnDeviceAi.status], the default) or the freeform prompt feature
+ * ([OnDeviceAi.promptStatus]).
  */
 object OnDeviceAiRouter {
     suspend fun <T> route(
         ai: OnDeviceAi?,
         onDevice: suspend (OnDeviceAi) -> T?,
-        fallback: () -> T
+        fallback: () -> T,
+        statusOf: (OnDeviceAi) -> OnDeviceAiStatus = { it.status.value }
     ): T {
-        if (ai == null || ai.status.value != OnDeviceAiStatus.AVAILABLE) return fallback()
+        if (ai == null || statusOf(ai) != OnDeviceAiStatus.AVAILABLE) return fallback()
         return try {
             onDevice(ai) ?: fallback()
         } catch (e: CancellationException) {
