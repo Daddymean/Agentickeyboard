@@ -6,11 +6,8 @@ item: move it to **Shipped** with the PR number.
 
 ## Next up
 
-### 1. In-keyboard theme override
-Dark mode now follows the system setting. Add an explicit Light/Dark/System
-choice (a `KeyboardSettings` entry + a control in the Style Hub) so users can
-pin the keyboard's theme independent of the OS, and have the layout read that
-override instead of only `isSystemInDarkTheme()`.
+*(empty — promote the next item from Later / unscheduled or Differentiator
+candidates deliberately.)*
 
 ## Later / unscheduled
 
@@ -73,6 +70,12 @@ session-sized.
   `/v lunch` recalls saved snippets inline. Reuses the palette matcher as-is.
 
 ## Shipped
+
+- **PR #23** — in-keyboard theme override: a System/Light/Dark chip row in the
+  Style Hub (`KeyboardSettings.themeOverride`, synced across the companion app
+  and IME processes like every other setting) now pins the keyboard palette;
+  `AgenticKeyboardLayout`'s root `KeyboardTheme` reads the override and only
+  defers to `isSystemInDarkTheme()` on "System".
 
 - **PR #22** — on-device AI, Phase 1 (ML Kit GenAI / Gemini Nano via AICore):
   offline **Fix Grammar**, **Rewrite** (+ iterate chips, mapped onto the

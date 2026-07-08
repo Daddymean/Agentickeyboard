@@ -59,6 +59,8 @@ class KeyboardViewModel(
         private val NON_ALPHA_REGEX = "[^a-zA-Z]".toRegex()
         private val WHITESPACE_REGEX = "\\s+".toRegex()
         val PERSONAS = listOf("Match my history", "Professional", "Joyful", "Empathetic", "Casual")
+        /** Keyboard palette override choices (see KeyboardSettings.themeOverride). */
+        val THEME_MODES = listOf("System", "Light", "Dark")
         /** Iterate chips on AI result panels → rewrite instruction they apply. */
         val RESULT_REFINEMENTS = linkedMapOf(
             "Shorter" to "the same message, noticeably shorter and tighter",
@@ -196,6 +198,9 @@ class KeyboardViewModel(
     private val _isSendGuardEnabled = MutableStateFlow(settings?.isSendGuardEnabled ?: false)
     val isSendGuardEnabled = _isSendGuardEnabled.asStateFlow()
 
+    private val _themeOverride = MutableStateFlow(settings?.themeOverride ?: "System")
+    val themeOverride = _themeOverride.asStateFlow()
+
     // Draft that armed the send-guard; non-null while "Send anyway?" is shown.
     private val _sendGuardWarning = MutableStateFlow<String?>(null)
     val sendGuardWarning = _sendGuardWarning.asStateFlow()
@@ -247,6 +252,7 @@ class KeyboardViewModel(
             KeyboardSettings.KEY_HAPTICS -> _isHapticsEnabled.value = s.isHapticsEnabled
             KeyboardSettings.KEY_VOICE_LOCK -> _isVoiceLockEnabled.value = s.isVoiceLockEnabled
             KeyboardSettings.KEY_SEND_GUARD -> _isSendGuardEnabled.value = s.isSendGuardEnabled
+            KeyboardSettings.KEY_THEME_OVERRIDE -> _themeOverride.value = s.themeOverride
             KeyboardSettings.KEY_PERSONA -> _userPersonaPreference.value = s.persona
             KeyboardSettings.KEY_SOURCE_LANG -> _sourceLanguage.value = s.sourceLanguage
             KeyboardSettings.KEY_TARGET_LANG -> _targetLanguage.value = s.targetLanguage
@@ -447,6 +453,11 @@ class KeyboardViewModel(
     fun setVoiceLockEnabled(enabled: Boolean) {
         _isVoiceLockEnabled.value = enabled
         settings?.isVoiceLockEnabled = enabled
+    }
+
+    fun setThemeOverride(mode: String) {
+        _themeOverride.value = mode
+        settings?.themeOverride = mode
     }
 
     fun setSendGuardEnabled(enabled: Boolean) {

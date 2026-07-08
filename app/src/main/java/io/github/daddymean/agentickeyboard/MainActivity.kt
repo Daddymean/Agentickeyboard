@@ -1206,6 +1206,46 @@ fun ExportTab(viewModel: KeyboardViewModel) {
                     )
 
                     Spacer(modifier = Modifier.height(10.dp))
+                    val themeOverride by viewModel.themeOverride.collectAsState()
+                    Text(
+                        "Keyboard theme",
+                        color = Color(0xFF1C1B1F),
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 12.sp
+                    )
+                    Text(
+                        "Pin the keyboard to Light or Dark, or follow the system setting.",
+                        color = Color(0xFF5F5D6B),
+                        fontSize = 10.sp
+                    )
+                    Spacer(modifier = Modifier.height(6.dp))
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        KeyboardViewModel.THEME_MODES.forEach { mode ->
+                            val isSelected = themeOverride == mode
+                            Box(
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .clip(RoundedCornerShape(12.dp))
+                                    .background(if (isSelected) Color(0xFFE8DEF8) else Color(0xFFF1F5F9))
+                                    .clickable { viewModel.setThemeOverride(mode) }
+                                    .border(1.dp, if (isSelected) Color(0xFF6750A4) else Color.Transparent, RoundedCornerShape(12.dp))
+                                    .padding(vertical = 8.dp),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text(
+                                    mode,
+                                    color = if (isSelected) Color(0xFF21005D) else Color(0xFF49454F),
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(10.dp))
                     val onDeviceAiStatus by (context.applicationContext as AgenticKeyboardApplication)
                         .onDeviceAi.status.collectAsState()
                     Text(

@@ -24,6 +24,7 @@ class KeyboardSettings(context: Context) {
         const val KEY_HAPTICS = "haptics_enabled"
         const val KEY_VOICE_LOCK = "voice_lock"
         const val KEY_SEND_GUARD = "send_guard"
+        const val KEY_THEME_OVERRIDE = "theme_override"
         const val KEY_PERSONA = "persona"
         const val KEY_SOURCE_LANG = "source_lang"
         const val KEY_TARGET_LANG = "target_lang"
@@ -72,6 +73,11 @@ class KeyboardSettings(context: Context) {
     var isSendGuardEnabled: Boolean
         get() = prefs.getBoolean(KEY_SEND_GUARD, false)
         set(value) = prefs.edit().putBoolean(KEY_SEND_GUARD, value).apply()
+
+    /** "System", "Light", or "Dark" — pins the keyboard palette independent of the OS. */
+    var themeOverride: String
+        get() = prefs.getString(KEY_THEME_OVERRIDE, "System") ?: "System"
+        set(value) = prefs.edit().putString(KEY_THEME_OVERRIDE, value).apply()
 
     var persona: String
         get() = prefs.getString(KEY_PERSONA, "Match my history") ?: "Match my history"
