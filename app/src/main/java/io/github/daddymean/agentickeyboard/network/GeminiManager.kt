@@ -4,6 +4,7 @@ import android.util.Log
 import io.github.daddymean.agentickeyboard.BuildConfig
 import io.github.daddymean.agentickeyboard.util.OnDeviceAi
 import io.github.daddymean.agentickeyboard.util.OnDeviceAiRouter
+import io.github.daddymean.agentickeyboard.util.OnDeviceAiStatus
 import io.github.daddymean.agentickeyboard.util.ReplyIntents
 import io.github.daddymean.agentickeyboard.util.WritingQualityMeter
 import com.squareup.moshi.Moshi
