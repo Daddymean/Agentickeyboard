@@ -1,5 +1,6 @@
 package io.github.daddymean.agentickeyboard
 
+import io.github.daddymean.agentickeyboard.network.GeminiManager
 import io.github.daddymean.agentickeyboard.ui.KeyboardViewModel
 import io.github.daddymean.agentickeyboard.util.OnDeviceAi
 import io.github.daddymean.agentickeyboard.util.OnDeviceAiRouter
@@ -14,12 +15,15 @@ import org.junit.Test
 /** Pure-JVM fake: canned results, settable availability, call counting. */
 private class FakeOnDeviceAi(
     initialStatus: OnDeviceAiStatus = OnDeviceAiStatus.AVAILABLE,
+    initialPromptStatus: OnDeviceAiStatus = OnDeviceAiStatus.AVAILABLE,
     var proofreadResult: String? = null,
     var rewriteResult: String? = null,
     var summarizeResult: String? = null,
+    var generateResult: String? = null,
     var throwOnUse: Boolean = false
 ) : OnDeviceAi {
     override val status = MutableStateFlow(initialStatus)
+    override val promptStatus = MutableStateFlow(initialPromptStatus)
     var calls = 0
         private set
 
@@ -32,6 +36,7 @@ private class FakeOnDeviceAi(
     override suspend fun proofread(text: String) = answer(proofreadResult)
     override suspend fun rewrite(text: String, tone: OnDeviceTone) = answer(rewriteResult)
     override suspend fun summarize(text: String) = answer(summarizeResult)
+    override suspend fun generate(prompt: String) = answer(generateResult)
 }
 
 class OnDeviceAiRoutingTest {
@@ -113,5 +118,87 @@ class OnDeviceAiRoutingTest {
     fun unknownTonesStayOnHeuristics() {
         assertNull(OnDeviceAi.toneFor(""))
         assertNull(OnDeviceAi.toneFor("like a pirate"))
+    }
+
+    // --- Phase 2: freeform prompt routing gated on promptStatus ---
+
+    @Test
+    fun promptPathUsesGenerateWhenPromptFeatureAvailable() = runTest {
+        val ai = FakeOnDeviceAi(generateResult = "on-device reply")
+        val result = OnDeviceAiRouter.route(
+            ai,
+            onDevice = { it.generate("p") },
+            fallback = { "heuristic" },
+            statusOf = { it.promptStatus.value }
+        )
+        assertEquals("on-device reply", result)
+        assertEquals(1, ai.calls)
+    }
+
+    @Test
+    fun promptPathFallsBackWhenPromptFeatureUnavailable() = runTest {
+        // Task features available, prompt feature not: the prompt path must not run.
+        val ai = FakeOnDeviceAi(
+            initialStatus = OnDeviceAiStatus.AVAILABLE,
+            initialPromptStatus = OnDeviceAiStatus.UNSUPPORTED,
+            generateResult = "on-device reply"
+        )
+        val result = OnDeviceAiRouter.route(
+            ai,
+            onDevice = { it.generate("p") },
+            fallback = { "heuristic" },
+            statusOf = { it.promptStatus.value }
+        )
+        assertEquals("heuristic", result)
+        assertEquals(0, ai.calls)
+    }
+
+    @Test
+    fun taskAndPromptGatesAreIndependent() = runTest {
+        // Prompt feature available, task features not: task path falls back,
+        // prompt path runs. Proves the two statuses don't couple.
+        val ai = FakeOnDeviceAi(
+            initialStatus = OnDeviceAiStatus.UNSUPPORTED,
+            initialPromptStatus = OnDeviceAiStatus.AVAILABLE,
+            proofreadResult = "fixed",
+            generateResult = "generated"
+        )
+        val taskResult = OnDeviceAiRouter.route(ai, { it.proofread("x") }, { "heuristic" })
+        val promptResult = OnDeviceAiRouter.route(
+            ai, { it.generate("x") }, { "heuristic" }, statusOf = { it.promptStatus.value }
+        )
+        assertEquals("heuristic", taskResult)
+        assertEquals("generated", promptResult)
+    }
+
+    // --- Phase 2: prompt-output parsing helpers (GeminiManager, pure) ---
+
+    @Test
+    fun parseReplyLinesStripsNumberingBulletsAndQuotes() {
+        val raw = "1. Sounds good!\n- \"On my way\"\n* See you soon"
+        assertEquals(listOf("Sounds good!", "On my way", "See you soon"), GeminiManager.parseReplyLines(raw))
+    }
+
+    @Test
+    fun parseReplyLinesDedupesAndCapsAtThree() {
+        val raw = "Yes\nYes\nMaybe\nNo\nLater"
+        assertEquals(listOf("Yes", "Maybe", "No"), GeminiManager.parseReplyLines(raw))
+    }
+
+    @Test
+    fun parseReplyLinesReturnsNullForEmpty() {
+        assertNull(GeminiManager.parseReplyLines(null))
+        assertNull(GeminiManager.parseReplyLines("   \n  \n"))
+    }
+
+    @Test
+    fun normalizeSentimentMapsKnownWordsAndRejectsOthers() {
+        assertEquals("Professional", GeminiManager.normalizeSentiment("Professional."))
+        assertEquals("Joyful", GeminiManager.normalizeSentiment("joyful"))
+        assertEquals("Urgent", GeminiManager.normalizeSentiment("URGENT!!!"))
+        assertEquals("Empathetic", GeminiManager.normalizeSentiment("Empathetic\n"))
+        assertNull(GeminiManager.normalizeSentiment("whatever"))
+        assertNull(GeminiManager.normalizeSentiment(null))
+        assertNull(GeminiManager.normalizeSentiment(""))
     }
 }

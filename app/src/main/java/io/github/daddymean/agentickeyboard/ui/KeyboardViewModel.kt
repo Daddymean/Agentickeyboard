@@ -20,7 +20,6 @@ import io.github.daddymean.agentickeyboard.util.KeyboardSettings
 import io.github.daddymean.agentickeyboard.util.PersonalModelSerializer
 import io.github.daddymean.agentickeyboard.util.ReplyIntents
 import io.github.daddymean.agentickeyboard.util.SendGuard
-import io.github.daddymean.agentickeyboard.util.WritingQualityMeter
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.cancelAndJoin
@@ -869,7 +868,7 @@ class KeyboardViewModel(
             try {
                 val personalization = getPersonalizationContext()
                 val result = if (_isOfflineMode.value) {
-                    getOfflineSuggestions(contextMessage, personalization, intent)
+                    GeminiManager.offlineReplies(contextMessage, personalization, intent)
                 } else {
                     GeminiManager.suggestReplies(contextMessage, personalization, intent, bypassCache)
                 }
@@ -1012,7 +1011,7 @@ class KeyboardViewModel(
             _composeResult.value = null
             try {
                 val result = if (_isOfflineMode.value) {
-                    "[Offline: compose needs cloud mode]"
+                    GeminiManager.offlineCompose(instruction, effectivePersona(), getPersonalizationContext(), _isVoiceLockEnabled.value)
                 } else {
                     GeminiManager.composeMessage(instruction, effectivePersona(), getPersonalizationContext(), _isVoiceLockEnabled.value, bypassCache)
                 }
@@ -1060,7 +1059,7 @@ class KeyboardViewModel(
             _continuation.value = null
             try {
                 val result = if (_isOfflineMode.value) {
-                    "[Offline: continue needs cloud mode]"
+                    GeminiManager.offlineContinue(text, getPersonalizationContext(), _isVoiceLockEnabled.value)
                 } else {
                     GeminiManager.continueText(text, getPersonalizationContext(), _isVoiceLockEnabled.value, bypassCache)
                 }
@@ -1083,7 +1082,7 @@ class KeyboardViewModel(
             try {
                 val personalization = getPersonalizationContext()
                 val result = if (_isOfflineMode.value) {
-                    getOfflineToneAnalysis(text)
+                    GeminiManager.offlineTone(text, personalization)
                 } else {
                     GeminiManager.analyzeTone(text, personalization)
                 }
@@ -1256,34 +1255,6 @@ class KeyboardViewModel(
         }
     }
 
-    // --- Local Helpers for Offline Mode Isolation ---
-
-    private fun getOfflineSuggestions(context: String, personalization: String = "", intent: String = ""): SuggestionsResponse {
-        if (intent.isNotEmpty()) {
-            ReplyIntents.offlineReplies(intent)?.let { return SuggestionsResponse(it) }
-        }
-        val isProfessional = personalization.contains("Professional", ignoreCase = true)
-        val isJoyful = personalization.contains("Joyful", ignoreCase = true) || personalization.contains("Friendly", ignoreCase = true)
-        val replies = when {
-            isProfessional -> listOf("Understood, thank you.", "I will review and follow up.", "Acknowledged.")
-            isJoyful -> listOf("Amazing! 🎉", "Awesome, thank you!", "Sounds super great!")
-            else -> listOf("Okay", "Sounds good!", "I'll reply soon.")
-        }
-        return SuggestionsResponse(replies)
-    }
-
-    private fun getOfflineToneAnalysis(text: String): ToneAnalysisResponse {
-        val meter = WritingQualityMeter.assess(text)
-        return ToneAnalysisResponse(
-            "Neutral (Offline)", 0.8f, listOf("Connect online for deep sentiment models."),
-            clarity = meter.clarity,
-            warmth = meter.warmth,
-            firmness = meter.firmness,
-            risk = meter.risk,
-            lengthLabel = meter.lengthLabel,
-            note = meter.note
-        )
-    }
 }
 
 class KeyboardViewModelFactory(

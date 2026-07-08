@@ -122,6 +122,10 @@ dependencies {
   implementation(libs.mlkit.genai.proofreading)
   implementation(libs.mlkit.genai.rewriting)
   implementation(libs.mlkit.genai.summarization)
+  implementation(libs.mlkit.genai.prompt)
+  // genai-prompt pulls genai-common beta3; pin it so the beta1 task
+  // libraries above resolve against the same (compatible) common version.
+  implementation(libs.mlkit.genai.common)
   implementation(libs.moshi.core)
   implementation(libs.okhttp)
   // implementation(libs.play.services.location)

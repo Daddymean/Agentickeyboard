@@ -101,6 +101,28 @@ object Prompts {
         ${if (preserveVoice) "$VOICE_LOCK_DIRECTIVE\n" else ""}
     """.trimIndent()
 
+    // --- On-device (Gemini Nano) variants ---
+    // The freeform prompt model returns plain text, not JSON, and is smaller than
+    // the cloud model, so these ask for line- or word-delimited output instead of
+    // a JSON schema. Compose/continue reuse the cloud templates as-is (they
+    // already say "Return ONLY the … text").
+
+    fun onDeviceReplies(contextMessage: String, personalizationContext: String, intent: String): String = """
+        You received this message: "$contextMessage"
+        ${if (intent.isNotEmpty()) "Reply direction: $intent. ${ReplyIntents.promptDirective(intent)}" else ""}
+        ${if (personalizationContext.isNotEmpty()) "Match this style: $personalizationContext" else ""}
+        Write exactly 3 natural reply options, one per line: a very short one, a medium one, and a one-sentence one.
+        Output only the 3 replies, each on its own line. No numbering, no quotes, no extra text.
+    """.trimIndent()
+
+    /** Nano tone: a single category word from a fixed set (dimensions computed locally). */
+    fun onDeviceTone(text: String): String = """
+        Classify the tone of this message in ONE word, chosen from exactly this list:
+        Professional, Joyful, Empathetic, Apologetic, Urgent, Neutral.
+        Message: "$text"
+        Answer with only that one word.
+    """.trimIndent()
+
     fun analyzeTone(personalizationContext: String, text: String): String = """
         Analyze the sentiment and communication tone of this keyboard text input:
         "$text"
