@@ -27,12 +27,15 @@ object CommandPalette {
         Command("/kind", "Kind & warm", Action.REWRITE, "kind, warm and considerate"),
         Command("/short", "Shorter", Action.REWRITE, "the same message but noticeably shorter and tighter"),
         Command("/long", "Longer", Action.REWRITE, "the same message expanded with more detail"),
-        Command("/sell", "Sales pitch", Action.REWRITE, "a persuasive, benefit-led sales message"),
+        Command("/sell", "Sales pitch", Action.REWRITE, "a persuasive, benefit-led sales message that highlights the item, offer, or opportunity clearly"),
+        Command("/close", "Close sale", Action.REWRITE, "a concise message that confidently closes the sale, confirms the next step, and reduces buyer friction"),
+        Command("/counteroffer", "Counteroffer", Action.REWRITE, "a confident counteroffer proposing better terms while keeping the conversation open"),
+        Command("/followup", "Follow up", Action.REWRITE, "a polite follow-up that restates the value and asks for the next concrete step"),
         Command("/decline", "Polite decline", Action.REWRITE, "a polite but unambiguous decline"),
-        Command("/counteroffer", "Counteroffer", Action.REWRITE, "a confident counteroffer proposing better terms"),
-        Command("/apologize", "Apology", Action.REWRITE, "a sincere, accountable apology"),
+        Command("/boundary", "Set boundary", Action.REWRITE, "a calm, firm boundary that protects the user's position without escalating"),
+        Command("/apologize", "Apology", Action.REWRITE, "a sincere, accountable apology without overexplaining"),
         Command("/proof", "Proofread", Action.PROOFREAD),
-        Command("/extract", "Extract key points", Action.REWRITE, "a compact bullet list of the key facts, dates, amounts and action items"),
+        Command("/extract", "Extract key facts", Action.REWRITE, "a compact bullet list of the key facts, dates, amounts, promises, unanswered questions, and action items"),
         Command("/translate", "Translate", Action.TRANSLATE)
     )
 
