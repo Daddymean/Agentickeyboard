@@ -22,12 +22,23 @@ class CommandPaletteTest {
     @Test
     fun matchesFiltersByTokenPrefix() {
         assertEquals(CommandPalette.COMMANDS, CommandPalette.matches("/"))
-        assertEquals(listOf("/firm"), CommandPalette.matches("/f").map { it.token })
+        assertEquals(listOf("/firm"), CommandPalette.matches("/fi").map { it.token })
         assertEquals(listOf("/firm"), CommandPalette.matches("/FIRM ok").map { it.token })
         assertTrue(CommandPalette.matches("/zzz").isEmpty())
         assertTrue(CommandPalette.matches("no slash").isEmpty())
         // A full path-like token that is no command should not open the palette
         assertTrue(CommandPalette.matches("/home/user").isEmpty())
+    }
+
+    @Test
+    fun marketplaceAndBoundaryCommandsAreBuiltIn() {
+        val tokens = CommandPalette.COMMANDS.map { it.token }
+        assertTrue(tokens.contains("/sell"))
+        assertTrue(tokens.contains("/close"))
+        assertTrue(tokens.contains("/counteroffer"))
+        assertTrue(tokens.contains("/followup"))
+        assertTrue(tokens.contains("/boundary"))
+        assertTrue(tokens.contains("/extract"))
     }
 
     @Test
