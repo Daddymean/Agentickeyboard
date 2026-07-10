@@ -61,7 +61,11 @@ data class WordBigram(
 @Entity(tableName = "app_personas")
 data class AppPersona(
     @PrimaryKey val packageName: String,
-    val persona: String
+    val persona: String,
+    // Human-readable app name, resolved by the IME (which has visibility to the
+    // app it serves) and stored so the companion app can show "Slack" rather
+    // than "com.Slack" without needing package-query permissions.
+    val appLabel: String = ""
 )
 
 /** User-defined slash command: typing its token opens a custom AI rewrite. */
@@ -130,8 +134,14 @@ interface AppPersonaDao {
     @Query("SELECT * FROM app_personas WHERE packageName = :packageName LIMIT 1")
     suspend fun getForApp(packageName: String): AppPersona?
 
+    @Query("SELECT * FROM app_personas ORDER BY appLabel COLLATE NOCASE ASC, packageName ASC")
+    fun getAllFlow(): Flow<List<AppPersona>>
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsert(persona: AppPersona)
+
+    @Query("DELETE FROM app_personas WHERE packageName = :packageName")
+    suspend fun delete(packageName: String)
 }
 
 @Dao
@@ -206,7 +216,7 @@ interface UserVocabularyDao {
         AppPersona::class,
         CustomCommand::class
     ],
-    version = 5,
+    version = 6,
     exportSchema = true
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -231,6 +241,13 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
+        /** v6 stores a human-readable app label alongside each per-app persona. */
+        private val MIGRATION_5_6 = object : Migration(5, 6) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE `app_personas` ADD COLUMN `appLabel` TEXT NOT NULL DEFAULT ''")
+            }
+        }
+
         fun getDatabase(context: Context): AppDatabase {
             return INSTANCE ?: synchronized(this) {
                 val instance = Room.databaseBuilder(
@@ -241,7 +258,7 @@ abstract class AppDatabase : RoomDatabase() {
                 // Learned vocabulary/corrections ARE the product: real migrations
                 // from v4 on. Destructive fallback stays only for the pre-v4
                 // schemas that shipped before migrations existed.
-                .addMigrations(MIGRATION_4_5)
+                .addMigrations(MIGRATION_4_5, MIGRATION_5_6)
                 .fallbackToDestructiveMigrationFrom(true, 1, 2, 3)
                 .build()
                 INSTANCE = instance
@@ -309,12 +326,20 @@ class KeyboardRepository(private val db: AppDatabase) {
 
     // --- Per-app persona memory ---
 
+    val allAppPersonas: Flow<List<AppPersona>> = db.appPersonaDao().getAllFlow()
+
     suspend fun getAppPersona(packageName: String): String? {
         return db.appPersonaDao().getForApp(packageName)?.persona
     }
 
-    suspend fun setAppPersona(packageName: String, persona: String) {
-        db.appPersonaDao().upsert(AppPersona(packageName = packageName, persona = persona))
+    suspend fun setAppPersona(packageName: String, persona: String, appLabel: String = "") {
+        db.appPersonaDao().upsert(
+            AppPersona(packageName = packageName, persona = persona, appLabel = appLabel)
+        )
+    }
+
+    suspend fun deleteAppPersona(packageName: String) {
+        db.appPersonaDao().delete(packageName)
     }
 
     // New on-device personalization repository functions

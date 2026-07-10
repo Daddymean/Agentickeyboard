@@ -48,6 +48,8 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
@@ -65,6 +67,7 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.key
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -91,6 +94,7 @@ import io.github.daddymean.agentickeyboard.ui.KeyboardViewModel
 import io.github.daddymean.agentickeyboard.ui.KeyboardViewModelFactory
 import io.github.daddymean.agentickeyboard.ui.RowDefaultsButtonPadding
 import io.github.daddymean.agentickeyboard.ui.theme.MyApplicationTheme
+import io.github.daddymean.agentickeyboard.util.AppPersonas
 import io.github.daddymean.agentickeyboard.util.OnDeviceAiStatus
 
 class MainActivity : ComponentActivity() {
@@ -1010,6 +1014,7 @@ fun ExportTab(viewModel: KeyboardViewModel) {
     val topVocabulary by viewModel.topVocabulary.collectAsState()
     val learnedCorrections by viewModel.learnedCorrections.collectAsState()
     val userPersonaPreference by viewModel.userPersonaPreference.collectAsState()
+    val appPersonas by viewModel.appPersonas.collectAsState()
     val usageStats by viewModel.usageStats.collectAsState()
     val isAutoCapitalize by viewModel.isAutoCapitalizeEnabled.collectAsState()
     val isNumberRow by viewModel.isNumberRowEnabled.collectAsState()
@@ -1136,6 +1141,106 @@ fun ExportTab(viewModel: KeyboardViewModel) {
                                     fontSize = 10.sp,
                                     fontWeight = FontWeight.Bold
                                 )
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // Per-app persona mappings (learned automatically, managed here)
+        item {
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .shadow(1.dp, RoundedCornerShape(24.dp)),
+                colors = CardDefaults.cardColors(containerColor = Color.White),
+                shape = RoundedCornerShape(24.dp),
+                border = BorderStroke(1.dp, Color(0xFFE2E8F0))
+            ) {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    Text(
+                        "📱 Per-app personas",
+                        color = Color(0xFF1C1B1F),
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 14.sp
+                    )
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(
+                        "The keyboard remembers the persona you pick in each app and reapplies it automatically. Review or change the mappings here.",
+                        color = Color(0xFF5F5D6B),
+                        fontSize = 11.sp,
+                        lineHeight = 14.sp
+                    )
+                    Spacer(modifier = Modifier.height(12.dp))
+
+                    if (appPersonas.isEmpty()) {
+                        Text(
+                            "No apps yet — pick a persona while typing in an app and it'll appear here.",
+                            color = Color(0xFF9A97A6),
+                            fontSize = 11.sp,
+                            fontStyle = androidx.compose.ui.text.font.FontStyle.Italic
+                        )
+                    } else {
+                        appPersonas.forEach { mapping ->
+                            key(mapping.packageName) {
+                                var expanded by remember { mutableStateOf(false) }
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(vertical = 4.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Text(
+                                        AppPersonas.friendlyName(mapping.appLabel, mapping.packageName),
+                                        color = Color(0xFF1C1B1F),
+                                        fontSize = 13.sp,
+                                        fontWeight = FontWeight.Medium,
+                                        modifier = Modifier.weight(1f)
+                                    )
+                                    Box {
+                                        Box(
+                                            modifier = Modifier
+                                                .clip(RoundedCornerShape(12.dp))
+                                                .background(Color(0xFFE8DEF8))
+                                                .clickable { expanded = true }
+                                                .padding(horizontal = 12.dp, vertical = 6.dp),
+                                            contentAlignment = Alignment.Center
+                                        ) {
+                                            Text(
+                                                mapping.persona,
+                                                color = Color(0xFF21005D),
+                                                fontSize = 11.sp,
+                                                fontWeight = FontWeight.Bold
+                                            )
+                                        }
+                                        DropdownMenu(
+                                            expanded = expanded,
+                                            onDismissRequest = { expanded = false }
+                                        ) {
+                                            KeyboardViewModel.PERSONAS.forEach { persona ->
+                                                DropdownMenuItem(
+                                                    text = { Text(persona, fontSize = 13.sp) },
+                                                    onClick = {
+                                                        viewModel.setAppPersonaOverride(
+                                                            mapping.packageName,
+                                                            mapping.appLabel,
+                                                            persona
+                                                        )
+                                                        expanded = false
+                                                    }
+                                                )
+                                            }
+                                        }
+                                    }
+                                    IconButton(onClick = { viewModel.removeAppPersona(mapping.packageName) }) {
+                                        Icon(
+                                            Icons.Default.Delete,
+                                            contentDescription = "Remove ${AppPersonas.friendlyName(mapping.appLabel, mapping.packageName)}",
+                                            tint = Color(0xFF9A97A6)
+                                        )
+                                    }
+                                }
                             }
                         }
                     }
