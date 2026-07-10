@@ -5,6 +5,7 @@ import android.text.InputType
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
+import io.github.daddymean.agentickeyboard.db.AppPersona
 import io.github.daddymean.agentickeyboard.db.CustomCommand
 import io.github.daddymean.agentickeyboard.db.KeyboardRepository
 import io.github.daddymean.agentickeyboard.db.LearnedCorrection
@@ -92,6 +93,11 @@ class KeyboardViewModel(
     // User-defined "/token" commands extending the built-in command palette;
     // collected by the UI, so subscription-scoped sharing is fine here.
     val customCommands: StateFlow<List<CustomCommand>> = repository.allCustomCommands
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    // App→persona mappings, learned automatically as the user picks a persona in
+    // each app and surfaced in the Style Hub for review/override. UI-collected only.
+    val appPersonas: StateFlow<List<AppPersona>> = repository.allAppPersonas
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     // On-device Personalization state flows
@@ -225,6 +231,7 @@ class KeyboardViewModel(
     val usageStats = _usageStats.asStateFlow()
 
     private var activeAppPackage: String? = null
+    private var activeAppLabel: String = ""
     private var previousCommittedWord: String? = null
     private var pendingUndo: AutoCorrectionUndo? = null
     private var pendingAiUndo: AiApplyUndo? = null
@@ -372,9 +379,10 @@ class KeyboardViewModel(
      * Called by the IME service whenever a new editor gains focus: detects
      * password/secure fields and restores the persona last used in this app.
      */
-    fun onEditorStarted(packageName: String?, inputType: Int) {
+    fun onEditorStarted(packageName: String?, appLabel: String = "", inputType: Int) {
         _isSensitiveField.value = isPasswordInputType(inputType)
         activeAppPackage = packageName
+        activeAppLabel = appLabel
         previousCommittedWord = null
         pendingUndo = null
         _proofreadHint.value = null
@@ -497,8 +505,19 @@ class KeyboardViewModel(
         _userPersonaPreference.value = persona
         settings?.persona = persona
         activeAppPackage?.let { pkg ->
-            viewModelScope.launch { repository.setAppPersona(pkg, persona) }
+            viewModelScope.launch { repository.setAppPersona(pkg, persona, activeAppLabel) }
         }
+    }
+
+    /** Style Hub: change the stored persona for an app that isn't the active one. */
+    fun setAppPersonaOverride(packageName: String, appLabel: String, persona: String) {
+        viewModelScope.launch { repository.setAppPersona(packageName, persona, appLabel) }
+        if (packageName == activeAppPackage) _userPersonaPreference.value = persona
+    }
+
+    /** Style Hub: forget the per-app persona mapping for [packageName]. */
+    fun removeAppPersona(packageName: String) {
+        viewModelScope.launch { repository.deleteAppPersona(packageName) }
     }
 
     /** Advances to the next persona (used by long-pressing Rewrite on the keyboard). */

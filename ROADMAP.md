@@ -38,10 +38,6 @@ competitors. Each is anchored to plumbing that already exists, so none starts
 from zero. Promote to **Next up** deliberately — these are feature-sized, not
 session-sized.
 
-- **Per-app personas.** The ViewModel already tracks `activeAppPackage` and
-  `effectivePersona()`. Let users map apps to personas in the Style Hub
-  (Slack → Professional, WhatsApp → Casual) so tone-matching happens without
-  ever opening a menu. No mainstream keyboard does context-aware voice.
 - **"Sounds like you" score.** On-device learning already builds a vocabulary
   profile and voice-lock steers rewrites toward it. Surface it: score each AI
   result against the user's style fingerprint ("92% your voice") in the result
@@ -68,6 +64,16 @@ session-sized.
   `/v lunch` recalls saved snippets inline. Reuses the palette matcher as-is.
 
 ## Shipped
+
+- **PR #25** — per-app personas: the keyboard already remembered the persona
+  last used in each app (`onEditorStarted` restore + `setUserPersonaPreference`
+  save); this surfaces those mappings in a Style Hub "Per-app personas" card
+  where each app shows its persona in a dropdown (change) with a remove button.
+  Added `AppPersonaDao.getAllFlow`/`delete`, a repository flow +
+  `deleteAppPersona`, an `appLabel` column (DB v5→v6 + `MIGRATION_5_6`) resolved
+  by the IME so the companion app shows "Slack" not "com.Slack" without
+  package-query permissions, and `AppPersonas.friendlyName` (pure-JVM, tested)
+  for the display fallback. No new permissions or manifest changes.
 
 - **PR #24** — on-device AI, Phase 2 (freeform `genai-prompt` / Gemini Nano via
   AICore): offline **replies**, **compose**, **continue**, and **tone** now run

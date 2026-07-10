@@ -145,13 +145,25 @@ class AgenticKeyboardService : InputMethodService(), LifecycleOwner, ViewModelSt
         viewModel.setSelectionActive(!selected.isNullOrBlank())
     }
 
+    /** Friendly app name for [packageName], or "" if it can't be resolved. */
+    @Suppress("DEPRECATION")
+    private fun resolveAppLabel(packageName: String?): String {
+        if (packageName.isNullOrBlank()) return ""
+        return runCatching {
+            packageManager.getApplicationLabel(
+                packageManager.getApplicationInfo(packageName, 0)
+            ).toString()
+        }.getOrDefault("")
+    }
+
     override fun onStartInput(info: EditorInfo?, restarting: Boolean) {
         super.onStartInput(info, restarting)
         lifecycleRegistry.handleLifecycleEvent(Lifecycle.Event.ON_START)
 
         // Detect password/secure fields (suppresses AI + learning) and restore the
-        // persona last used in this app.
-        viewModel.onEditorStarted(info?.packageName, info?.inputType ?: 0)
+        // persona last used in this app. The IME has package visibility to the app
+        // it serves, so it can resolve a friendly label to store alongside.
+        viewModel.onEditorStarted(info?.packageName, resolveAppLabel(info?.packageName), info?.inputType ?: 0)
 
         // Fetch active editor contents to initialize suggestions/state, and drop
         // any AI result that referred to the previous editor.
