@@ -65,7 +65,7 @@ session-sized.
 
 ## Shipped
 
-- **PR #25** — per-app personas: the keyboard already remembered the persona
+- **PR #26** — per-app personas: the keyboard already remembered the persona
   last used in each app (`onEditorStarted` restore + `setUserPersonaPreference`
   save); this surfaces those mappings in a Style Hub "Per-app personas" card
   where each app shows its persona in a dropdown (change) with a remove button.
