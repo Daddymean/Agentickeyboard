@@ -21,10 +21,10 @@ class CustomCommandPaletteTest {
     }
 
     @Test
-    fun customCommandsMatchByPrefix() {
+    fun customCommandsFollowMatchingBuiltInsForSharedPrefixes() {
         val hits = CommandPalette.matches("/bo tell him the deadline moved", custom)
-        assertEquals(listOf("/boss"), hits.map { it.token })
-        assertEquals("formal but friendly", hits[0].instruction)
+        assertEquals(listOf("/boundary", "/boss"), hits.map { it.token })
+        assertEquals("formal but friendly", hits.first { it.token == "/boss" }.instruction)
     }
 
     @Test
