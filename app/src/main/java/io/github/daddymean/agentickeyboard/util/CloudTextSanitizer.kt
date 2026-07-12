@@ -25,7 +25,7 @@ object CloudTextSanitizer {
             Regex(
                 pattern = """(?i)\b(password|passcode|api[_ -]?key|access[_ -]?token|auth[_ -]?token|secret)\b\s*[:=]\s*[\"']?[^\s,;\"'}]+"""
             ),
-            replacement = "$1=[REDACTED_SECRET]"
+            replacement = "\$1=[REDACTED_SECRET]"
         ),
         Rule(
             Regex("""[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}"""),
