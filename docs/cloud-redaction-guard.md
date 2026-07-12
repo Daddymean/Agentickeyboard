@@ -1,6 +1,6 @@
 # Cloud redaction guard
 
-The keyboard now sanitizes the final serialized Gemini request body immediately before OkHttp sends it.
+The keyboard sanitizes the final serialized Gemini request body immediately before OkHttp sends it.
 
 ## Why the network boundary
 
@@ -22,3 +22,11 @@ The sanitizer replaces values with neutral markers and never logs the original r
 ## Scope
 
 This first slice is intentionally always on. A later Trust Prism UI can expose local/cloud/redacted state and user controls after CI proves the request-boundary implementation.
+
+## Validation checklist
+
+- `CloudTextSanitizerTest` passes.
+- Debug APK builds.
+- Release/R8 build succeeds.
+- A request containing an email or credential-shaped value reaches the network layer with a redaction marker instead of the original value.
+- Ordinary writing without sensitive patterns is unchanged.
