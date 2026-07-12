@@ -31,7 +31,7 @@ object CloudTextSanitizer {
             Regex("""[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}"""),
             "[REDACTED_EMAIL]"
         ),
-        // Card-like numbers before phone matching, so a card is not partially consumed as a phone.
+        // Card-like numbers before other numeric rules, so a card is not partially consumed.
         Rule(
             Regex("""\b(?:\d[ -]*?){13,19}\b"""),
             "[REDACTED_FINANCIAL]"
@@ -39,6 +39,12 @@ object CloudTextSanitizer {
         Rule(
             Regex("""\b\d{3}-\d{2}-\d{4}\b"""),
             "[REDACTED_SSN]"
+        ),
+        // Long uninterrupted identifiers such as account, order, claim, or tracking numbers.
+        // This runs before phone matching so an order number is not mislabeled as a phone.
+        Rule(
+            Regex("""\b\d{8,}\b"""),
+            "[REDACTED_NUMERIC_ID]"
         ),
         Rule(
             Regex("""(?<!\d)(?:\+?\d{1,3}[-.\s]?)?(?:\(?\d{3}\)?[-.\s]?)\d{3}[-.\s]?\d{4}(?!\d)"""),
@@ -51,11 +57,6 @@ object CloudTextSanitizer {
         Rule(
             Regex("""(?i)\b(?:https?|ftp)://[^\s\"'<>]+"""),
             "[REDACTED_URL]"
-        ),
-        // Long uninterrupted identifiers such as account, order, claim, or tracking numbers.
-        Rule(
-            Regex("""\b\d{8,}\b"""),
-            "[REDACTED_NUMERIC_ID]"
         )
     )
 
