@@ -20,6 +20,20 @@ class ReplyIntentsTest {
     }
 
     @Test
+    fun salesIntentsAreAvailable() {
+        assertTrue(ReplyIntents.ALL.contains("Counteroffer"))
+        assertTrue(ReplyIntents.ALL.contains("Close sale"))
+        assertTrue(ReplyIntents.promptDirective("Counteroffer").contains("counteroffer", ignoreCase = true))
+        assertTrue(ReplyIntents.promptDirective("Close sale").contains("close", ignoreCase = true))
+    }
+
+    @Test
+    fun legacyCloseIntentStillWorksAsAlias() {
+        assertTrue(ReplyIntents.promptDirective("Close").isNotBlank())
+        assertEquals(3, ReplyIntents.offlineReplies("Close")!!.size)
+    }
+
+    @Test
     fun unknownIntentYieldsNoDirectiveAndNoCannedReplies() {
         assertEquals("", ReplyIntents.promptDirective("Escalate"))
         assertEquals("", ReplyIntents.promptDirective(""))
