@@ -65,6 +65,14 @@ session-sized.
 
 ## Shipped
 
+- **PR #28** — Trust Prism privacy status: a compact banner above the IME now
+  makes the active data path visible while typing. The tested state model gives
+  secure fields highest priority, then offline/on-device mode, then normal
+  cloud operation with PR #27's redaction guard; a distinct warning state exists
+  if cloud redaction is ever disabled. The banner also surfaces when local
+  personalization learning is paused. AI routing and request behavior are
+  unchanged.
+
 - **PR #27** — always-on cloud request redaction: a pure-JVM sanitizer now
   replaces credential-shaped secrets, emails, card-like numbers, SSNs, long
   numeric identifiers, phone numbers, IPv4 addresses, and URLs in the final
@@ -111,7 +119,7 @@ session-sized.
   `GeminiManager` (`offlineGrammarFix`/`offlineSummary`/`offlineRewrite`, also
   the cloud-error fallbacks), pure-JVM routing/tone-mapping tests with a fake,
   and a Style Hub availability row. Raised `minSdk` 24→26 (the ML Kit GenAI
-  AARs declare 26; no manifest changes). Runtime behavior still needs manual
+  AARs declare 26; no manifest changes. Runtime behavior still needs manual
   testing on an AICore device (Pixel 9/10, Galaxy S24+ class).
 
 - **(this branch)** — selection-scope indicator: the IME service mirrors the
