@@ -119,7 +119,7 @@ session-sized.
   `GeminiManager` (`offlineGrammarFix`/`offlineSummary`/`offlineRewrite`, also
   the cloud-error fallbacks), pure-JVM routing/tone-mapping tests with a fake,
   and a Style Hub availability row. Raised `minSdk` 24→26 (the ML Kit GenAI
-  AARs declare 26; no manifest changes. Runtime behavior still needs manual
+  AARs declare 26; no manifest changes). Runtime behavior still needs manual
   testing on an AICore device (Pixel 9/10, Galaxy S24+ class).
 
 - **(this branch)** — selection-scope indicator: the IME service mirrors the
