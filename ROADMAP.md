@@ -65,6 +65,15 @@ session-sized.
 
 ## Shipped
 
+- **PR #27** — always-on cloud request redaction: a pure-JVM sanitizer now
+  replaces credential-shaped secrets, emails, card-like numbers, SSNs, long
+  numeric identifiers, phone numbers, IPv4 addresses, and URLs in the final
+  serialized Gemini request immediately before OkHttp transmits it. The shared
+  interceptor protects every current and future cloud AI action through one
+  boundary; ordinary writing remains unchanged and unit tests cover sensitive
+  values plus serialized JSON request bodies. A visible Trust Prism UI is the
+  follow-up once the boundary implementation is proven by CI.
+
 - **PR #26** — per-app personas: the keyboard already remembered the persona
   last used in each app (`onEditorStarted` restore + `setUserPersonaPreference`
   save); this surfaces those mappings in a Style Hub "Per-app personas" card

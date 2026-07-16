@@ -38,6 +38,7 @@ flight.
 ### Privacy
 - **Password fields are detected automatically** — AI features, logging, and learning all shut off in secure fields.
 - **Offline mode toggle** blocks all cloud calls; local fallbacks keep the tools functional. The toggle (and all settings) persist across restarts.
+- **Always-on cloud request redaction** — the final serialized Gemini request is sanitized immediately before transmission, replacing credential-shaped secrets, emails, phone numbers, financial identifiers, SSNs, IP addresses, URLs, and long numeric IDs with neutral markers.
 - **Pause learning** — an incognito switch for the personalization engine.
 - **Data retention** — writing logs auto-expire after 7/30/90 days (your choice).
 - **Cloud backup disabled** — your typing history never leaves the device via Android backup.
@@ -55,9 +56,12 @@ app/src/main/java/io/github/daddymean/agentickeyboard/
 ├── ui/
 │   ├── AgenticKeyboardLayout.kt    # Keyboard UI: keys, AI shelf, gestures, swipe-to-type
 │   └── KeyboardViewModel.kt        # State + AI orchestration + on-device learning
-├── network/                        # Retrofit client + Gemini request/response models
+├── network/
+│   ├── RetrofitClient.kt           # Gemini API client
+│   └── CloudRedactionInterceptor.kt # Last-mile outbound privacy guard
 ├── db/DatabaseModels.kt            # Room entities, DAOs, repository
 └── util/
+    ├── CloudTextSanitizer.kt        # Pure-JVM sensitive-value redaction
     ├── SwipeToTypeEngine.kt        # Path-matching swipe decoder
     └── PersonalModelSerializer.kt  # Privacy-aware personalization export
 ```
@@ -86,5 +90,5 @@ Unit tests (Robolectric, Roborazzi screenshots, and plain JUnit) live in
 ./gradlew testDebugUnitTest
 ```
 
-Covered areas: privacy redaction/sanitization, JSON export integrity,
-swipe-to-type decoding, and a keyboard layout screenshot test.
+Covered areas: cloud request redaction, privacy-aware export, JSON integrity,
+swipe-to-type decoding, and keyboard layout screenshots.
