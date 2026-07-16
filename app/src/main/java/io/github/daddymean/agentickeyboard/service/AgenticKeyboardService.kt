@@ -6,6 +6,7 @@ import android.view.KeyEvent
 import android.view.View
 import android.view.inputmethod.EditorInfo
 import android.view.inputmethod.InputMethodManager
+import androidx.compose.foundation.layout.Column
 import androidx.compose.ui.platform.ComposeView
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleOwner
@@ -23,6 +24,7 @@ import io.github.daddymean.agentickeyboard.AgenticKeyboardApplication
 import io.github.daddymean.agentickeyboard.ui.AgenticKeyboardLayout
 import io.github.daddymean.agentickeyboard.ui.KeyboardViewModel
 import io.github.daddymean.agentickeyboard.ui.KeyboardViewModelFactory
+import io.github.daddymean.agentickeyboard.ui.TrustPrismBanner
 
 class AgenticKeyboardService : InputMethodService(), LifecycleOwner, ViewModelStoreOwner, SavedStateRegistryOwner {
 
@@ -61,21 +63,24 @@ class AgenticKeyboardService : InputMethodService(), LifecycleOwner, ViewModelSt
         composeView.setViewTreeSavedStateRegistryOwner(this)
 
         composeView.setContent {
-            AgenticKeyboardLayout(
-                viewModel = viewModel,
-                onKeyPress = { text ->
-                    currentInputConnection?.commitText(text, 1)
-                },
-                onDelete = {
-                    currentInputConnection?.deleteSurroundingText(1, 0)
-                },
-                onAction = { performEnterAction() },
-                onMicPress = { switchToVoiceInput() },
-                onCursorMove = { steps -> moveCursor(steps) },
-                // Resolved lazily on every use: the active InputConnection changes
-                // whenever the user switches editors, so it must never be captured.
-                inputConnectionProvider = { currentInputConnection }
-            )
+            Column {
+                TrustPrismBanner(viewModel)
+                AgenticKeyboardLayout(
+                    viewModel = viewModel,
+                    onKeyPress = { text ->
+                        currentInputConnection?.commitText(text, 1)
+                    },
+                    onDelete = {
+                        currentInputConnection?.deleteSurroundingText(1, 0)
+                    },
+                    onAction = { performEnterAction() },
+                    onMicPress = { switchToVoiceInput() },
+                    onCursorMove = { steps -> moveCursor(steps) },
+                    // Resolved lazily on every use: the active InputConnection changes
+                    // whenever the user switches editors, so it must never be captured.
+                    inputConnectionProvider = { currentInputConnection }
+                )
+            }
         }
         return composeView
     }

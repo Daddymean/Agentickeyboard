@@ -65,6 +65,14 @@ session-sized.
 
 ## Shipped
 
+- **PR #28** — Trust Prism privacy status: a compact banner above the IME now
+  makes the active data path visible while typing. The tested state model gives
+  secure fields highest priority, then offline/on-device mode, then normal
+  cloud operation with PR #27's redaction guard; a distinct warning state exists
+  if cloud redaction is ever disabled. The banner also surfaces when local
+  personalization learning is paused. AI routing and request behavior are
+  unchanged.
+
 - **PR #27** — always-on cloud request redaction: a pure-JVM sanitizer now
   replaces credential-shaped secrets, emails, card-like numbers, SSNs, long
   numeric identifiers, phone numbers, IPv4 addresses, and URLs in the final
