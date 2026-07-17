@@ -65,6 +65,14 @@ session-sized.
 
 ## Shipped
 
+- **PR #29** — AI response-cache hardening: cloud actions now use typed,
+  ten-minute in-memory LRU caches with opaque SHA-256 keys built from the model
+  and every prompt-affecting input. This fixes summary and translation cache
+  keys that previously omitted personalization context, prevents raw typed text
+  from being retained in map keys, and removes the shared `Any` cache plus its
+  unchecked casts. Tests cover key opacity, context/language separation,
+  expiration, and LRU eviction.
+
 - **PR #28** — Trust Prism privacy status: a compact banner above the IME now
   makes the active data path visible while typing. The tested state model gives
   secure fields highest priority, then offline/on-device mode, then normal
