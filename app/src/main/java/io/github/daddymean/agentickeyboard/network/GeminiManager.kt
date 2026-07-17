@@ -20,6 +20,15 @@ object GeminiManager {
     private val moshi: Moshi = RetrofitClient.moshi
 
     /**
+     * Separate typed caches avoid the former shared `Any` map and its unchecked
+     * casts. Keys are opaque SHA-256 digests and entries expire after ten minutes.
+     */
+    private val grammarCache = AiResponseCache<GrammarCorrectionResponse>(maxEntries = 12)
+    private val suggestionsCache = AiResponseCache<SuggestionsResponse>(maxEntries = 12)
+    private val textCache = AiResponseCache<String>(maxEntries = 32)
+    private val toneCache = AiResponseCache<ToneAnalysisResponse>(maxEntries = 12)
+
+    /**
      * On-device (Gemini Nano) provider for the offline path, injected by the
      * Application at startup. Null (e.g. in unit tests) simply means every
      * offline request uses the heuristic fallbacks.
@@ -47,18 +56,6 @@ object GeminiManager {
         return text
     }
 
-    // Small LRU cache so repeated identical requests (double-tapped actions,
-    // debounced background proofreads of unchanged text) don't re-bill the API.
-    private val responseCache = object : LinkedHashMap<String, Any>(32, 0.75f, true) {
-        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, Any>): Boolean = size > 48
-    }
-
-    private fun cacheGet(key: String): Any? = synchronized(responseCache) { responseCache[key] }
-
-    private fun cachePut(key: String, value: Any) {
-        synchronized(responseCache) { responseCache[key] = value }
-    }
-
     /** Runs a plain-text generation request, returning the trimmed reply or null. */
     private suspend fun generateText(prompt: String): String? {
         val request = GenerateContentRequest(
@@ -77,9 +74,8 @@ object GeminiManager {
         }
 
         val prompt = Prompts.fixGrammar(personalizationContext, text)
-
-        val cacheKey = "grammar|$personalizationContext|$text"
-        if (!bypassCache) (cacheGet(cacheKey) as? GrammarCorrectionResponse)?.let { return@withContext it }
+        val cacheKey = AiCacheKeys.grammar(BuildConfig.GEMINI_MODEL, personalizationContext, text)
+        if (!bypassCache) grammarCache.get(cacheKey)?.let { return@withContext it }
 
         try {
             val request = GenerateContentRequest(
@@ -92,7 +88,7 @@ object GeminiManager {
             val jsonText = response.candidates?.firstOrNull()?.content?.parts?.firstOrNull()?.text
             val parsed = jsonText?.let { moshi.adapter(GrammarCorrectionResponse::class.java).fromJson(extractJson(it)) }
             if (parsed != null) {
-                cachePut(cacheKey, parsed)
+                grammarCache.put(cacheKey, parsed)
                 parsed
             } else {
                 offlineGrammarFix(text)
@@ -112,9 +108,13 @@ object GeminiManager {
         }
 
         val prompt = Prompts.suggestReplies(contextMessage, personalizationContext, intent)
-
-        val cacheKey = "replies|$intent|$personalizationContext|$contextMessage"
-        if (!bypassCache) (cacheGet(cacheKey) as? SuggestionsResponse)?.let { return@withContext it }
+        val cacheKey = AiCacheKeys.replies(
+            BuildConfig.GEMINI_MODEL,
+            intent,
+            personalizationContext,
+            contextMessage
+        )
+        if (!bypassCache) suggestionsCache.get(cacheKey)?.let { return@withContext it }
 
         try {
             val request = GenerateContentRequest(
@@ -125,7 +125,7 @@ object GeminiManager {
             val jsonText = response.candidates?.firstOrNull()?.content?.parts?.firstOrNull()?.text
             val parsed = jsonText?.let { moshi.adapter(SuggestionsResponse::class.java).fromJson(extractJson(it)) }
             if (parsed != null) {
-                cachePut(cacheKey, parsed)
+                suggestionsCache.put(cacheKey, parsed)
                 parsed
             } else {
                 offlineReplies(contextMessage, personalizationContext, intent)
@@ -143,19 +143,18 @@ object GeminiManager {
         if (text.trim().split("\\s+".toRegex()).size < 10) {
             return@withContext "Message is too short to summarize."
         }
-        
+
         if (!isApiKeyAvailable()) {
             return@withContext offlineSummary(text)
         }
 
         val prompt = Prompts.summarizeMessage(personalizationContext, text)
-
-        val cacheKey = "summary|$text"
-        if (!bypassCache) (cacheGet(cacheKey) as? String)?.let { return@withContext it }
+        val cacheKey = AiCacheKeys.summary(BuildConfig.GEMINI_MODEL, personalizationContext, text)
+        if (!bypassCache) textCache.get(cacheKey)?.let { return@withContext it }
 
         try {
             val result = generateText(prompt)
-            if (result != null) cachePut(cacheKey, result)
+            if (result != null) textCache.put(cacheKey, result)
             result ?: offlineSummary(text)
         } catch (e: Exception) {
             Log.e(TAG, "Error in summarizeMessage", e)
@@ -168,19 +167,24 @@ object GeminiManager {
      */
     suspend fun translateText(text: String, sourceLang: String, targetLang: String, personalizationContext: String = "", bypassCache: Boolean = false): String = withContext(Dispatchers.IO) {
         if (text.isBlank()) return@withContext ""
-        
+
         if (!isApiKeyAvailable()) {
             return@withContext "[Offline Preview] Translated text from $sourceLang to $targetLang: $text"
         }
 
         val prompt = Prompts.translateText(sourceLang, targetLang, personalizationContext, text)
-
-        val cacheKey = "translate|$sourceLang|$targetLang|$text"
-        if (!bypassCache) (cacheGet(cacheKey) as? String)?.let { return@withContext it }
+        val cacheKey = AiCacheKeys.translation(
+            BuildConfig.GEMINI_MODEL,
+            sourceLang,
+            targetLang,
+            personalizationContext,
+            text
+        )
+        if (!bypassCache) textCache.get(cacheKey)?.let { return@withContext it }
 
         try {
             val result = generateText(prompt)
-            if (result != null) cachePut(cacheKey, result)
+            if (result != null) textCache.put(cacheKey, result)
             result ?: "[Translation Failed] $text"
         } catch (e: Exception) {
             Log.e(TAG, "Error in translateText", e)
@@ -199,13 +203,18 @@ object GeminiManager {
         }
 
         val prompt = Prompts.rewriteWithTone(targetTone, personalizationContext, preserveVoice, text)
-
-        val cacheKey = "rewrite|$preserveVoice|$targetTone|$personalizationContext|$text"
-        if (!bypassCache) (cacheGet(cacheKey) as? String)?.let { return@withContext it }
+        val cacheKey = AiCacheKeys.rewrite(
+            BuildConfig.GEMINI_MODEL,
+            preserveVoice,
+            targetTone,
+            personalizationContext,
+            text
+        )
+        if (!bypassCache) textCache.get(cacheKey)?.let { return@withContext it }
 
         try {
             val result = generateText(prompt)
-            if (result != null) cachePut(cacheKey, result)
+            if (result != null) textCache.put(cacheKey, result)
             result ?: offlineRewrite(text, targetTone)
         } catch (e: Exception) {
             Log.e(TAG, "Error in rewriteWithTone", e)
@@ -225,13 +234,18 @@ object GeminiManager {
         }
 
         val prompt = Prompts.composeMessage(instruction, targetTone, personalizationContext, preserveVoice)
-
-        val cacheKey = "compose|$preserveVoice|$targetTone|$personalizationContext|$instruction"
-        if (!bypassCache) (cacheGet(cacheKey) as? String)?.let { return@withContext it }
+        val cacheKey = AiCacheKeys.compose(
+            BuildConfig.GEMINI_MODEL,
+            preserveVoice,
+            targetTone,
+            personalizationContext,
+            instruction
+        )
+        if (!bypassCache) textCache.get(cacheKey)?.let { return@withContext it }
 
         try {
             val result = generateText(prompt)
-            if (result != null) cachePut(cacheKey, result)
+            if (result != null) textCache.put(cacheKey, result)
             result ?: offlineCompose(instruction, targetTone, personalizationContext, preserveVoice)
         } catch (e: Exception) {
             Log.e(TAG, "Error in composeMessage", e)
@@ -250,13 +264,12 @@ object GeminiManager {
         }
 
         val prompt = Prompts.explainText(text)
-
-        val cacheKey = "explain|$text"
-        if (!bypassCache) (cacheGet(cacheKey) as? String)?.let { return@withContext it }
+        val cacheKey = AiCacheKeys.explanation(BuildConfig.GEMINI_MODEL, text)
+        if (!bypassCache) textCache.get(cacheKey)?.let { return@withContext it }
 
         try {
             val result = generateText(prompt)
-            if (result != null) cachePut(cacheKey, result)
+            if (result != null) textCache.put(cacheKey, result)
             result ?: "[Explanation failed]"
         } catch (e: Exception) {
             Log.e(TAG, "Error in explainText", e)
@@ -276,13 +289,17 @@ object GeminiManager {
         }
 
         val prompt = Prompts.continueText(text, personalizationContext, preserveVoice)
-
-        val cacheKey = "continue|$preserveVoice|$personalizationContext|$text"
-        if (!bypassCache) (cacheGet(cacheKey) as? String)?.let { return@withContext it }
+        val cacheKey = AiCacheKeys.continuation(
+            BuildConfig.GEMINI_MODEL,
+            preserveVoice,
+            personalizationContext,
+            text
+        )
+        if (!bypassCache) textCache.get(cacheKey)?.let { return@withContext it }
 
         try {
             val result = generateText(prompt)
-            if (result != null) cachePut(cacheKey, result)
+            if (result != null) textCache.put(cacheKey, result)
             result ?: offlineContinue(text, personalizationContext, preserveVoice)
         } catch (e: Exception) {
             Log.e(TAG, "Error in continueText", e)
@@ -303,9 +320,8 @@ object GeminiManager {
         }
 
         val prompt = Prompts.analyzeTone(personalizationContext, text)
-
-        val cacheKey = "tone|$personalizationContext|$text"
-        (cacheGet(cacheKey) as? ToneAnalysisResponse)?.let { return@withContext it }
+        val cacheKey = AiCacheKeys.tone(BuildConfig.GEMINI_MODEL, personalizationContext, text)
+        toneCache.get(cacheKey)?.let { return@withContext it }
 
         try {
             val request = GenerateContentRequest(
@@ -318,7 +334,7 @@ object GeminiManager {
                 // Length is computable locally, so never trust the model for it.
                 ?.copy(lengthLabel = WritingQualityMeter.lengthLabel(text))
             if (parsed != null) {
-                cachePut(cacheKey, parsed)
+                toneCache.put(cacheKey, parsed)
                 parsed
             } else {
                 offlineTone(text, personalizationContext)
@@ -533,7 +549,7 @@ object GeminiManager {
         val lowercaseContext = contextMessage.lowercase()
         val isProfessional = personalizationContext.contains("Professional", ignoreCase = true)
         val isJoyful = personalizationContext.contains("Joyful", ignoreCase = true) || personalizationContext.contains("Friendly", ignoreCase = true)
-        
+
         val suggestions = when {
             lowercaseContext.contains("hello") || lowercaseContext.contains("hi") || lowercaseContext.contains("hey") -> {
                 when {
