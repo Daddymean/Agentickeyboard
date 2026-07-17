@@ -466,7 +466,7 @@ object GeminiManager {
     }
 
     /** Drop a leading verbatim echo of the draft the continuation model may repeat. */
-    private fun stripDraftEcho(draft: String, continuation: String): String {
+    internal fun stripDraftEcho(draft: String, continuation: String): String {
         val c = continuation.trim()
         val d = draft.trim()
         if (d.isNotEmpty() && c.regionMatches(0, d, 0, d.length, ignoreCase = true)) {
