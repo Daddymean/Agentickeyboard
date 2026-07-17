@@ -35,6 +35,14 @@ data class ImportedModel(
 
 object PersonalModelSerializer {
 
+    private val EMAIL_REGEX = """[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}""".toRegex()
+    private val PHONE_REGEX = """(?:\+?\d{1,3}[-.\s]?)?(?:\(?\d{3}\)?[-.\s]?\d{3}|\b\d{3})[-.\s]?\d{4}\b""".toRegex()
+    private val CC_REGEX = """\b\d{4}[- ]?\d{4}[- ]?\d{4}[- ]?\d{4}\b""".toRegex()
+    private val SSN_REGEX = """\b\d{3}-\d{2}-\d{4}\b""".toRegex()
+    private val IP_REGEX = """\b(?:[0-9]{1,3}\.){3}[0-9]{1,3}\b""".toRegex()
+    private val URL_REGEX = """\b(?:https?|ftp)://[^\s/$.?#].[^\s]*\b""".toRegex()
+    private val NUM_ID_REGEX = """\b\d{6,}\b""".toRegex()
+
     data class AnonymizationStats(
         val emailsRedacted: Int = 0,
         val phonesRedacted: Int = 0,
@@ -98,58 +106,51 @@ object PersonalModelSerializer {
         var numerics = 0
 
         // 1. Email Redaction
-        val emailRegex = """[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}""".toRegex()
-        val emailMatches = emailRegex.findAll(sanitized).toList()
+        val emailMatches = EMAIL_REGEX.findAll(sanitized).toList()
         if (emailMatches.isNotEmpty()) {
             emails += emailMatches.size
-            sanitized = sanitized.replace(emailRegex, "[REDACTED_EMAIL]")
+            sanitized = sanitized.replace(EMAIL_REGEX, "[REDACTED_EMAIL]")
         }
 
         // 2. Phone Number Redaction (e.g., +1-555-0199, (555) 555-0199, 555-555-0199)
-        val phoneRegex = """(?:\+?\d{1,3}[-.\s]?)?(?:\(?\d{3}\)?[-.\s]?\d{3}|\b\d{3})[-.\s]?\d{4}\b""".toRegex()
-        val phoneMatches = phoneRegex.findAll(sanitized).toList()
+        val phoneMatches = PHONE_REGEX.findAll(sanitized).toList()
         if (phoneMatches.isNotEmpty()) {
             phones += phoneMatches.size
-            sanitized = sanitized.replace(phoneRegex, "[REDACTED_PHONE]")
+            sanitized = sanitized.replace(PHONE_REGEX, "[REDACTED_PHONE]")
         }
 
         // 3. Credit Card or SSN Redaction
-        val ccRegex = """\b\d{4}[- ]?\d{4}[- ]?\d{4}[- ]?\d{4}\b""".toRegex()
-        val ccMatches = ccRegex.findAll(sanitized).toList()
+        val ccMatches = CC_REGEX.findAll(sanitized).toList()
         if (ccMatches.isNotEmpty()) {
             cards += ccMatches.size
-            sanitized = sanitized.replace(ccRegex, "[REDACTED_FINANCIAL]")
+            sanitized = sanitized.replace(CC_REGEX, "[REDACTED_FINANCIAL]")
         }
 
-        val ssnRegex = """\b\d{3}-\d{2}-\d{4}\b""".toRegex()
-        val ssnMatches = ssnRegex.findAll(sanitized).toList()
+        val ssnMatches = SSN_REGEX.findAll(sanitized).toList()
         if (ssnMatches.isNotEmpty()) {
             cards += ssnMatches.size
-            sanitized = sanitized.replace(ssnRegex, "[REDACTED_FINANCIAL]")
+            sanitized = sanitized.replace(SSN_REGEX, "[REDACTED_FINANCIAL]")
         }
 
         // 4. IP Address Redaction
-        val ipRegex = """\b(?:[0-9]{1,3}\.){3}[0-9]{1,3}\b""".toRegex()
-        val ipMatches = ipRegex.findAll(sanitized).toList()
+        val ipMatches = IP_REGEX.findAll(sanitized).toList()
         if (ipMatches.isNotEmpty()) {
             ips += ipMatches.size
-            sanitized = sanitized.replace(ipRegex, "[REDACTED_IP]")
+            sanitized = sanitized.replace(IP_REGEX, "[REDACTED_IP]")
         }
 
         // 5. URL Redaction
-        val urlRegex = """\b(?:https?|ftp)://[^\s/$.?#].[^\s]*\b""".toRegex()
-        val urlMatches = urlRegex.findAll(sanitized).toList()
+        val urlMatches = URL_REGEX.findAll(sanitized).toList()
         if (urlMatches.isNotEmpty()) {
             urls += urlMatches.size
-            sanitized = sanitized.replace(urlRegex, "[REDACTED_URL]")
+            sanitized = sanitized.replace(URL_REGEX, "[REDACTED_URL]")
         }
 
         // 6. Generic Numeric IDs (e.g. solid sequences of 6+ digits, like private tokens/accounts)
-        val numIdRegex = """\b\d{6,}\b""".toRegex()
-        val numIdMatches = numIdRegex.findAll(sanitized).toList()
+        val numIdMatches = NUM_ID_REGEX.findAll(sanitized).toList()
         if (numIdMatches.isNotEmpty()) {
             numerics += numIdMatches.size
-            sanitized = sanitized.replace(numIdRegex, "[REDACTED_NUMERIC_ID]")
+            sanitized = sanitized.replace(NUM_ID_REGEX, "[REDACTED_NUMERIC_ID]")
         }
 
         val total = emails + phones + cards + urls + ips + numerics
