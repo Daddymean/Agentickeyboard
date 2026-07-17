@@ -129,10 +129,7 @@ internal class AiResponseCache<T>(
         require(ttlMillis > 0) { "ttlMillis must be positive" }
     }
 
-    private val entries = object : LinkedHashMap<AiCacheKey, Entry<T>>(maxEntries, 0.75f, true) {
-        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<AiCacheKey, Entry<T>>): Boolean =
-            size > maxEntries
-    }
+    private val entries = LinkedHashMap<AiCacheKey, Entry<T>>(maxEntries, 0.75f, true)
 
     fun get(key: AiCacheKey): T? = synchronized(entries) {
         val entry = entries[key] ?: return@synchronized null
@@ -146,8 +143,13 @@ internal class AiResponseCache<T>(
 
     fun put(key: AiCacheKey, value: T) {
         synchronized(entries) {
-            removeExpiredLocked(clockMillis())
-            entries[key] = Entry(value, clockMillis())
+            val now = clockMillis()
+            removeExpiredLocked(now)
+            entries[key] = Entry(value, now)
+            while (entries.size > maxEntries) {
+                val eldestKey = entries.entries.iterator().next().key
+                entries.remove(eldestKey)
+            }
         }
     }
 
