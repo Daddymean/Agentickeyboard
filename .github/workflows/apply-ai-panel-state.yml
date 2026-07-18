@@ -7,12 +7,14 @@ on:
       - main
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   apply:
     if: github.actor != 'github-actions[bot]' && github.head_ref == 'refactor/ai-panel-state'
     runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
     steps:
       - name: Check out feature branch
         uses: actions/checkout@v4
@@ -53,7 +55,45 @@ jobs:
           python tools/apply_ai_panel_state_refactor.py
           git diff --check
 
-      - name: Upload transformed sources
+      - name: Commit transformed sources through GitHub Contents API
+        run: |
+          python - <<'PY'
+          import base64
+          import json
+          import os
+          import subprocess
+          from pathlib import Path
+
+          repository = os.environ['GITHUB_REPOSITORY']
+          branch = os.environ['GITHUB_HEAD_REF']
+          paths = [
+              'app/src/main/java/io/github/daddymean/agentickeyboard/ui/KeyboardViewModel.kt',
+              'app/src/main/java/io/github/daddymean/agentickeyboard/ui/AgenticKeyboardLayout.kt',
+              'app/src/main/java/io/github/daddymean/agentickeyboard/MainActivity.kt',
+          ]
+
+          for path in paths:
+              sha = subprocess.check_output([
+                  'gh', 'api', f'repos/{repository}/contents/{path}',
+                  '-f', f'ref={branch}', '--jq', '.sha'
+              ], text=True).strip()
+              payload = {
+                  'message': f'Consolidate AI panel state in {Path(path).name}',
+                  'content': base64.b64encode(Path(path).read_bytes()).decode(),
+                  'branch': branch,
+                  'sha': sha,
+              }
+              payload_path = Path('/tmp/contents-payload.json')
+              payload_path.write_text(json.dumps(payload))
+              subprocess.run([
+                  'gh', 'api', '--method', 'PUT',
+                  f'repos/{repository}/contents/{path}',
+                  '--input', str(payload_path)
+              ], check=True)
+          PY
+
+      - name: Upload transformed sources on API failure
+        if: failure()
         uses: actions/upload-artifact@v4
         with:
           name: ai-panel-transformed-sources
