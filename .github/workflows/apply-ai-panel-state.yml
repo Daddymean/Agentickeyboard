@@ -20,12 +20,13 @@ jobs:
           ref: ${{ github.head_ref }}
           fetch-depth: 0
 
-      - name: Distinguish the two rewrite producers
+      - name: Disambiguate repeated legacy assignments
         run: |
           python - <<'PY'
           from pathlib import Path
           path = Path('tools/apply_ai_panel_state_refactor.py')
           text = path.read_text()
+
           result_line = "vm = one(vm, '                _rewrite.value = result\\n', '                _aiPanelState.value = AiPanelState.Rewrite(result, text, targetTone)\\n', 'persona rewrite result')"
           error_line = "vm = one(vm, '                _rewrite.value = \"Rewrite error: ${e.localizedMessage}\"\\n', '                _aiPanelState.value = AiPanelState.Rewrite(\\n                    \"Rewrite error: ${e.localizedMessage}\", text, targetTone\\n                )\\n', 'persona rewrite error')"
           if text.count("                _rewrite.value = result\\n") != 2:
@@ -34,6 +35,17 @@ jobs:
               raise RuntimeError('expected two rewrite error assignments')
           text = text.replace(result_line, "vm = vm.replace('                _rewrite.value = result\\n', '                _aiPanelState.value = AiPanelState.Rewrite(result, text, targetTone)\\n', 1)", 1)
           text = text.replace(error_line, "vm = vm.replace('                _rewrite.value = \"Rewrite error: ${e.localizedMessage}\"\\n', '                _aiPanelState.value = AiPanelState.Rewrite(\\n                    \"Rewrite error: ${e.localizedMessage}\", text, targetTone\\n                )\\n', 1)", 1)
+
+          continuation_tuple = "    '            _continuation.value = null\\n',\n"
+          if text.count(continuation_tuple) != 1:
+              raise RuntimeError('continuation tuple entry changed')
+          text = text.replace(continuation_tuple, '', 1)
+          marker = "if vm.count('            _rewrite.value = null\\n') != 2:\n"
+          continuation_split = "if vm.count('            _continuation.value = null\\n') != 2:\n    raise RuntimeError('continuation null assignments changed')\nvm = vm.replace('            _continuation.value = null\\n', '', 1)\n"
+          if text.count(marker) != 1:
+              raise RuntimeError('rewrite clear marker changed')
+          text = text.replace(marker, continuation_split + marker, 1)
+
           path.write_text(text)
           PY
 
