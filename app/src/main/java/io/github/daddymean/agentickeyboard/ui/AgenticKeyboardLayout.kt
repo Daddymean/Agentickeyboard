@@ -124,17 +124,20 @@ fun AgenticKeyboardLayout(
     var isNumberMode by remember { mutableStateOf(false) }
 
     // Collect states from ViewModel
-    val isLoading by viewModel.isLoading.collectAsState()
-    val suggestions by viewModel.suggestions.collectAsState()
-    val grammarCorrection by viewModel.grammarCorrection.collectAsState()
-    val toneAnalysis by viewModel.toneAnalysis.collectAsState()
-    val summary by viewModel.summary.collectAsState()
-    val translation by viewModel.translation.collectAsState()
-    val rewrite by viewModel.rewrite.collectAsState()
-    val composeResult by viewModel.composeResult.collectAsState()
-    val explanation by viewModel.explanation.collectAsState()
-    val continuation by viewModel.continuation.collectAsState()
-    val aiResultSource by viewModel.aiResultSource.collectAsState()
+    val aiPanelState by viewModel.aiPanelState.collectAsState()
+    val isLoading = aiPanelState == AiPanelState.Loading
+    val suggestions = (aiPanelState as? AiPanelState.Replies)?.suggestions.orEmpty()
+    val grammarCorrection = (aiPanelState as? AiPanelState.Grammar)?.result
+    val toneAnalysis = (aiPanelState as? AiPanelState.Tone)?.result
+    val summary = (aiPanelState as? AiPanelState.Summary)?.text
+    val translation = (aiPanelState as? AiPanelState.Translation)?.text
+    val rewriteState = aiPanelState as? AiPanelState.Rewrite
+    val rewrite = rewriteState?.text
+    val composeResult = (aiPanelState as? AiPanelState.Compose)?.text
+    val explanation = (aiPanelState as? AiPanelState.Explanation)?.text
+    val continuation = (aiPanelState as? AiPanelState.Continuation)?.text
+    val aiResultSource = aiPanelState.sourceText
+    val replyIntentContext = (aiPanelState as? AiPanelState.ReplyIntent)?.contextMessage
     val proofreadHint by viewModel.proofreadHint.collectAsState()
     val isOfflineMode by viewModel.isOfflineMode.collectAsState()
     val predictiveSuggestions by viewModel.predictiveSuggestions.collectAsState()
@@ -149,7 +152,6 @@ fun AgenticKeyboardLayout(
     val isNumberRowEnabled by viewModel.isNumberRowEnabled.collectAsState()
     val isHapticsEnabled by viewModel.isHapticsEnabled.collectAsState()
     val isLearningPaused by viewModel.isLearningPaused.collectAsState()
-    val replyIntentContext by viewModel.replyIntentContext.collectAsState()
     val sendGuardWarning by viewModel.sendGuardWarning.collectAsState()
     val customCommands by viewModel.customCommands.collectAsState()
 
@@ -689,7 +691,7 @@ fun AgenticKeyboardLayout(
                             horizontalArrangement = Arrangement.SpaceBetween
                         ) {
                             ExpandableResult(
-                                label = "Rewritten (${viewModel.effectivePersona()}):",
+                                label = "Rewritten (${rewriteState?.styleLabel ?: viewModel.effectivePersona()}):",
                                 labelColor = keyboardColors.labelRewrite,
                                 result = rewrite!!,
                                 expanded = resultExpanded,
