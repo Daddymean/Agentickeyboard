@@ -55,7 +55,7 @@ jobs:
           python tools/apply_ai_panel_state_refactor.py
           git diff --check
 
-      - name: Commit transformed sources through GitHub Contents API
+      - name: Create unattached Git blobs
         run: |
           python - <<'PY'
           import base64
@@ -65,39 +65,31 @@ jobs:
           from pathlib import Path
 
           repository = os.environ['GITHUB_REPOSITORY']
-          branch = os.environ['GITHUB_HEAD_REF']
           paths = [
               'app/src/main/java/io/github/daddymean/agentickeyboard/ui/KeyboardViewModel.kt',
               'app/src/main/java/io/github/daddymean/agentickeyboard/ui/AgenticKeyboardLayout.kt',
               'app/src/main/java/io/github/daddymean/agentickeyboard/MainActivity.kt',
           ]
-
+          blobs = {}
           for path in paths:
-              sha = subprocess.check_output([
-                  'gh', 'api', f'repos/{repository}/contents/{path}',
-                  '-f', f'ref={branch}', '--jq', '.sha'
-              ], text=True).strip()
               payload = {
-                  'message': f'Consolidate AI panel state in {Path(path).name}',
                   'content': base64.b64encode(Path(path).read_bytes()).decode(),
-                  'branch': branch,
-                  'sha': sha,
+                  'encoding': 'base64',
               }
-              payload_path = Path('/tmp/contents-payload.json')
+              payload_path = Path('/tmp/blob-payload.json')
               payload_path.write_text(json.dumps(payload))
-              subprocess.run([
-                  'gh', 'api', '--method', 'PUT',
-                  f'repos/{repository}/contents/{path}',
-                  '--input', str(payload_path)
-              ], check=True)
+              result = subprocess.check_output([
+                  'gh', 'api', '--method', 'POST',
+                  f'repos/{repository}/git/blobs',
+                  '--input', str(payload_path),
+                  '--jq', '.sha'
+              ], text=True).strip()
+              blobs[path] = result
+          Path('ai-panel-source-blobs.json').write_text(json.dumps(blobs, indent=2))
           PY
 
-      - name: Upload transformed sources on API failure
-        if: failure()
+      - name: Upload blob manifest
         uses: actions/upload-artifact@v4
         with:
-          name: ai-panel-transformed-sources
-          path: |
-            app/src/main/java/io/github/daddymean/agentickeyboard/MainActivity.kt
-            app/src/main/java/io/github/daddymean/agentickeyboard/ui/AgenticKeyboardLayout.kt
-            app/src/main/java/io/github/daddymean/agentickeyboard/ui/KeyboardViewModel.kt
+          name: ai-panel-source-blobs
+          path: ai-panel-source-blobs.json
