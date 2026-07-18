@@ -1,0 +1,26 @@
+name: Export AI panel CI failure
+
+on:
+  pull_request:
+    types: [synchronize]
+    branches: [main]
+
+permissions:
+  actions: read
+  contents: read
+
+jobs:
+  export:
+    if: github.head_ref == 'refactor/ai-panel-state'
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - name: Download failed job log
+        run: gh api repos/${GITHUB_REPOSITORY}/actions/jobs/88050794565/logs > ci-job.log
+
+      - name: Upload failed job log
+        uses: actions/upload-artifact@v4
+        with:
+          name: ai-panel-ci-failure-log
+          path: ci-job.log
