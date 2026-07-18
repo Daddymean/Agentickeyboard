@@ -65,6 +65,15 @@ session-sized.
 
 ## Shipped
 
+- **PR #45** — unified AI panel state: the ViewModel now exposes one sealed
+  `AiPanelState` instead of parallel nullable flows for loading, reply intent,
+  replies, grammar, tone, summary, translation, rewrite, compose, explanation,
+  and continuation. Comparison source text and refinement eligibility travel
+  with the active result, making contradictory panel combinations impossible
+  and reducing manual dismissal bookkeeping. The keyboard and companion
+  playground now collect the same single state; Send Guard and the background
+  proofread hint remain independent safeguards.
+
 - **PR #29** — AI response-cache hardening: cloud actions now use typed,
   ten-minute in-memory LRU caches with opaque SHA-256 keys built from the model
   and every prompt-affecting input. This fixes summary and translation cache

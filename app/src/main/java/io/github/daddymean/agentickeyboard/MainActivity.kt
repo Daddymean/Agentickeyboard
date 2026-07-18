@@ -90,6 +90,7 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.ViewModelProvider
 import io.github.daddymean.agentickeyboard.db.ShortcutTemplate
 import io.github.daddymean.agentickeyboard.ui.AgenticKeyboardLayout
+import io.github.daddymean.agentickeyboard.ui.AiPanelState
 import io.github.daddymean.agentickeyboard.ui.KeyboardViewModel
 import io.github.daddymean.agentickeyboard.ui.KeyboardViewModelFactory
 import io.github.daddymean.agentickeyboard.ui.RowDefaultsButtonPadding
@@ -234,10 +235,11 @@ fun PlaygroundTab(viewModel: KeyboardViewModel, onNavigateToShortcuts: () -> Uni
     var testText by remember { mutableStateOf("") }
     val isOfflineMode by viewModel.isOfflineMode.collectAsState()
     
-    val grammarCorrection by viewModel.grammarCorrection.collectAsState()
-    val toneAnalysis by viewModel.toneAnalysis.collectAsState()
-    val summary by viewModel.summary.collectAsState()
-    val translation by viewModel.translation.collectAsState()
+    val aiPanelState by viewModel.aiPanelState.collectAsState()
+    val grammarCorrection = (aiPanelState as? AiPanelState.Grammar)?.result
+    val toneAnalysis = (aiPanelState as? AiPanelState.Tone)?.result
+    val summary = (aiPanelState as? AiPanelState.Summary)?.text
+    val translation = (aiPanelState as? AiPanelState.Translation)?.text
     val shortcuts by viewModel.shortcuts.collectAsState()
 
     LazyColumn(
