@@ -23,4 +23,6 @@ The sealed state makes impossible combinations unrepresentable:
 
 Source text now travels with results that support before/after comparison. Refinement eligibility is also defined by the state model rather than by checking several unrelated fields.
 
+Every foreground AI request transitions through `Loading`. A completed result replaces that state atomically, while a cancelled or empty request returns the panel to `Idle`.
+
 Send Guard and the background proofread hint remain separate because they are independent editor safeguards, not AI result panels.
