@@ -61,12 +61,23 @@ jobs:
 
       - name: Validate and publish transformed sources
         run: |
-          git diff --check
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add \
-            app/src/main/java/io/github/daddymean/agentickeyboard/ui/KeyboardViewModel.kt \
-            app/src/main/java/io/github/daddymean/agentickeyboard/ui/AgenticKeyboardLayout.kt \
-            app/src/main/java/io/github/daddymean/agentickeyboard/MainActivity.kt
-          git commit -m "Consolidate AI panel state"
-          git push origin HEAD:${{ github.head_ref }}
+          set -o pipefail
+          {
+            git diff --check
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add \
+              app/src/main/java/io/github/daddymean/agentickeyboard/ui/KeyboardViewModel.kt \
+              app/src/main/java/io/github/daddymean/agentickeyboard/ui/AgenticKeyboardLayout.kt \
+              app/src/main/java/io/github/daddymean/agentickeyboard/MainActivity.kt
+            git status --short
+            git commit -m "Consolidate AI panel state"
+            git push origin HEAD:${{ github.head_ref }}
+          } > publish.log 2>&1
+
+      - name: Upload publish log
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ai-panel-publish-log
+          path: publish.log
