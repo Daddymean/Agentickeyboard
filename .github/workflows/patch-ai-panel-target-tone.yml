@@ -1,0 +1,81 @@
+name: Patch AI panel target tone scope
+
+on:
+  pull_request:
+    types: [opened, synchronize]
+    branches: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    if: github.actor != 'github-actions[bot]' && github.head_ref == 'refactor/ai-panel-state'
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - name: Check out feature branch
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.head_ref }}
+          fetch-depth: 1
+
+      - name: Move target tone outside try scope
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          path = Path('app/src/main/java/io/github/daddymean/agentickeyboard/ui/KeyboardViewModel.kt')
+          text = path.read_text()
+          old = '''        launchAi {
+            try {
+                val targetTone = effectivePersona()
+                val result = if (_isOfflineMode.value) {
+'''
+          new = '''        launchAi {
+            val targetTone = effectivePersona()
+            try {
+                val result = if (_isOfflineMode.value) {
+'''
+          if text.count(old) != 1:
+              raise RuntimeError(f'expected one persona rewrite scope, found {text.count(old)}')
+          path.write_text(text.replace(old, new, 1))
+          PY
+          git diff --check
+
+      - name: Create corrected source blob and manifest
+        run: |
+          python - <<'PY'
+          import base64
+          import json
+          import os
+          import subprocess
+          from pathlib import Path
+
+          repository = os.environ['GITHUB_REPOSITORY']
+          path = 'app/src/main/java/io/github/daddymean/agentickeyboard/ui/KeyboardViewModel.kt'
+          payload = {
+              'content': base64.b64encode(Path(path).read_bytes()).decode(),
+              'encoding': 'base64',
+          }
+          Path('/tmp/blob-payload.json').write_text(json.dumps(payload))
+          blob = subprocess.check_output([
+              'gh', 'api', '--method', 'POST',
+              f'repos/{repository}/git/blobs',
+              '--input', '/tmp/blob-payload.json',
+              '--jq', '.sha'
+          ], text=True).strip()
+          manifest = {
+              'parent': subprocess.check_output(['git', 'rev-parse', 'HEAD'], text=True).strip(),
+              'base_tree': subprocess.check_output(['git', 'rev-parse', 'HEAD^{tree}'], text=True).strip(),
+              'path': path,
+              'blob': blob,
+          }
+          Path('ai-panel-compile-fix.json').write_text(json.dumps(manifest, indent=2))
+          PY
+
+      - name: Upload corrected blob manifest
+        uses: actions/upload-artifact@v4
+        with:
+          name: ai-panel-compile-fix
+          path: ai-panel-compile-fix.json
