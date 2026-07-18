@@ -21,7 +21,14 @@ jobs:
           fetch-depth: 0
 
       - name: Apply verified source transformations
-        run: python tools/apply_ai_panel_state_refactor.py
+        run: python tools/apply_ai_panel_state_refactor.py > migration.log 2>&1
+
+      - name: Upload migration assertion log
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ai-panel-migration-log
+          path: migration.log
 
       - name: Remove one-shot migration files
         run: |
