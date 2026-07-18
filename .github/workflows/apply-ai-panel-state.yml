@@ -1,25 +1,23 @@
 name: Apply AI panel state refactor
 
 on:
-  push:
+  pull_request:
+    types: [opened, synchronize]
     branches:
-      - refactor/ai-panel-state
-    paths:
-      - tools/apply_ai_panel_state_refactor.py
-      - .github/workflows/apply-ai-panel-state.yml
+      - main
 
 permissions:
   contents: write
 
 jobs:
   apply:
-    # The workflow is intentionally removed by its own successful commit.
-    if: github.actor != 'github-actions[bot]'
+    if: github.actor != 'github-actions[bot]' && github.head_ref == 'refactor/ai-panel-state'
     runs-on: ubuntu-latest
     steps:
-      - name: Check out branch
+      - name: Check out feature branch
         uses: actions/checkout@v4
         with:
+          ref: ${{ github.head_ref }}
           fetch-depth: 0
 
       - name: Apply verified source transformations
@@ -37,4 +35,4 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add -A
           git commit -m "Consolidate AI panel state"
-          git push origin HEAD:${GITHUB_REF_NAME}
+          git push origin HEAD:${{ github.head_ref }}
