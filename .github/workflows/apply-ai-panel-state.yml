@@ -20,6 +20,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           ref: ${{ github.head_ref }}
+          fetch-depth: 1
 
       - name: Disambiguate repeated legacy assignments
         run: |
@@ -55,7 +56,7 @@ jobs:
           python tools/apply_ai_panel_state_refactor.py
           git diff --check
 
-      - name: Create unattached Git blobs
+      - name: Create unattached Git blobs and manifest
         run: |
           python - <<'PY'
           import base64
@@ -85,7 +86,13 @@ jobs:
                   '--jq', '.sha'
               ], text=True).strip()
               blobs[path] = result
-          Path('ai-panel-source-blobs.json').write_text(json.dumps(blobs, indent=2))
+
+          manifest = {
+              'parent': subprocess.check_output(['git', 'rev-parse', 'HEAD'], text=True).strip(),
+              'base_tree': subprocess.check_output(['git', 'rev-parse', 'HEAD^{tree}'], text=True).strip(),
+              'blobs': blobs,
+          }
+          Path('ai-panel-source-blobs.json').write_text(json.dumps(manifest, indent=2))
           PY
 
       - name: Upload blob manifest
