@@ -22,6 +22,14 @@ internal class AiSessionController(
     private val _panelState = MutableStateFlow<AiPanelState>(AiPanelState.Idle)
     val panelState: StateFlow<AiPanelState> = _panelState.asStateFlow()
 
+    /**
+     * Transitional write bridge for [KeyboardViewModel]'s action-specific result
+     * publishers. The controller remains the sole owner of the backing state;
+     * individual actions can migrate to [publish] incrementally.
+     */
+    internal val mutablePanelState: MutableStateFlow<AiPanelState>
+        get() = _panelState
+
     val currentState: AiPanelState
         get() = _panelState.value
 

@@ -22,7 +22,6 @@ import io.github.daddymean.agentickeyboard.util.ReplyIntents
 import io.github.daddymean.agentickeyboard.util.SendGuard
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
-import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -128,9 +127,11 @@ class KeyboardViewModel(
         _hasSelection.value = active
     }
 
-    // Exactly one AI panel can be active at a time.
-    private val _aiPanelState = MutableStateFlow<AiPanelState>(AiPanelState.Idle)
-    val aiPanelState = _aiPanelState.asStateFlow()
+    // Exactly one AI panel can be active at a time; the controller owns
+    // foreground request lifecycle and the backing result state.
+    private val aiSession = AiSessionController(viewModelScope)
+    private val _aiPanelState = aiSession.mutablePanelState
+    val aiPanelState = aiSession.panelState
 
     // Debounced background grammar check result (opt-in; see isProofreadEnabled)
     private val _proofreadHint = MutableStateFlow<GrammarCorrectionResponse?>(null)
@@ -198,7 +199,6 @@ class KeyboardViewModel(
     private var pendingAiUndo: AiApplyUndo? = null
     private val correctionReverts = mutableMapOf<String, Int>()
     private var proofreadJob: Job? = null
-    private var aiJob: Job? = null
     private var predictionJob: Job? = null
 
     // Last text pushed through setInputText; null until the first sync so the
@@ -259,20 +259,15 @@ class KeyboardViewModel(
     }
 
     override fun onCleared() {
+        aiSession.cancel()
         settings?.unregisterListener(prefsListener)
         super.onCleared()
     }
 
-    /**
-     * Cancels any in-flight AI request and starts a new one, so rapid taps never
-     * stack requests or leave a stale spinner.
-     */
     // Re-runs the most recent AI action with the response cache bypassed, so the
     // ↻ button on a result panel always produces a fresh variant.
-    private var regenerateAction: (() -> Unit)? = null
-
     fun regenerate() {
-        regenerateAction?.invoke()
+        aiSession.regenerate()
     }
 
     /**
@@ -280,34 +275,19 @@ class KeyboardViewModel(
      * clears the panels and rewrites the result text with the chip's instruction.
      */
     fun refineResult(adjustment: String) {
-        val current = _aiPanelState.value.refinableText ?: return
+        val current = aiSession.currentState.refinableText ?: return
         val instruction = RESULT_REFINEMENTS[adjustment] ?: adjustment
         dismissResults()
         rewriteWithStyle(current, instruction, bypassCache = true)
     }
 
     private fun launchAi(block: suspend () -> Unit) {
-        val previous = aiJob
-        aiJob = viewModelScope.launch {
-            previous?.cancelAndJoin()
-            _aiPanelState.value = AiPanelState.Loading
-            try {
-                block()
-            } catch (e: CancellationException) {
-                throw e
-            } catch (_: Exception) {
-                // A missed action error must not crash the IME process.
-            } finally {
-                if (_aiPanelState.value == AiPanelState.Loading) {
-                    _aiPanelState.value = AiPanelState.Idle
-                }
-            }
-        }
+        aiSession.launch { block() }
     }
 
     /** Clears the active AI panel and any armed send warning. */
     fun dismissResults() {
-        _aiPanelState.value = AiPanelState.Idle
+        aiSession.clear()
         _sendGuardWarning.value = null
     }
 
@@ -751,7 +731,7 @@ class KeyboardViewModel(
      */
     fun fixGrammar(text: String, bypassCache: Boolean = false) {
         if (text.isBlank() || _isSensitiveField.value) return
-        regenerateAction = { fixGrammar(text, bypassCache = true) }
+        aiSession.setRegenerateAction { fixGrammar(text, bypassCache = true) }
         launchAi {
             try {
                 // Incorporate personalization preferences inside grammar suggestions
@@ -829,7 +809,7 @@ class KeyboardViewModel(
      */
     fun suggestReplies(contextMessage: String, intent: String = "", bypassCache: Boolean = false) {
         if (contextMessage.isBlank() || _isSensitiveField.value) return
-        regenerateAction = { suggestReplies(contextMessage, intent, bypassCache = true) }
+        aiSession.setRegenerateAction { suggestReplies(contextMessage, intent, bypassCache = true) }
         launchAi {
             try {
                 val personalization = getPersonalizationContext()
@@ -871,7 +851,7 @@ class KeyboardViewModel(
      */
     fun summarizeMessage(text: String, bypassCache: Boolean = false) {
         if (text.isBlank() || _isSensitiveField.value) return
-        regenerateAction = { summarizeMessage(text, bypassCache = true) }
+        aiSession.setRegenerateAction { summarizeMessage(text, bypassCache = true) }
         launchAi {
             try {
                 val personalization = getPersonalizationContext()
@@ -896,7 +876,7 @@ class KeyboardViewModel(
      */
     fun translateText(text: String, bypassCache: Boolean = false) {
         if (text.isBlank() || _isSensitiveField.value) return
-        regenerateAction = { translateText(text, bypassCache = true) }
+        aiSession.setRegenerateAction { translateText(text, bypassCache = true) }
         launchAi {
             try {
                 val personalization = getPersonalizationContext()
@@ -921,7 +901,7 @@ class KeyboardViewModel(
      */
     fun rewriteTone(text: String, bypassCache: Boolean = false) {
         if (text.isBlank() || _isSensitiveField.value) return
-        regenerateAction = { rewriteTone(text, bypassCache = true) }
+        aiSession.setRegenerateAction { rewriteTone(text, bypassCache = true) }
         launchAi {
             try {
                 val targetTone = effectivePersona()
@@ -947,7 +927,7 @@ class KeyboardViewModel(
      */
     fun rewriteWithStyle(text: String, styleInstruction: String, bypassCache: Boolean = false) {
         if (text.isBlank() || _isSensitiveField.value) return
-        regenerateAction = { rewriteWithStyle(text, styleInstruction, bypassCache = true) }
+        aiSession.setRegenerateAction { rewriteWithStyle(text, styleInstruction, bypassCache = true) }
         launchAi {
             try {
                 val result = if (_isOfflineMode.value) {
@@ -972,7 +952,7 @@ class KeyboardViewModel(
      */
     fun composeFromInstruction(instruction: String, bypassCache: Boolean = false) {
         if (instruction.isBlank() || _isSensitiveField.value) return
-        regenerateAction = { composeFromInstruction(instruction, bypassCache = true) }
+        aiSession.setRegenerateAction { composeFromInstruction(instruction, bypassCache = true) }
         launchAi {
             try {
                 val result = if (_isOfflineMode.value) {
@@ -994,7 +974,7 @@ class KeyboardViewModel(
      */
     fun explainText(text: String, bypassCache: Boolean = false) {
         if (text.isBlank() || _isSensitiveField.value) return
-        regenerateAction = { explainText(text, bypassCache = true) }
+        aiSession.setRegenerateAction { explainText(text, bypassCache = true) }
         launchAi {
             try {
                 val result = if (_isOfflineMode.value) {
@@ -1016,7 +996,7 @@ class KeyboardViewModel(
      */
     fun continueDraft(text: String, bypassCache: Boolean = false) {
         if (text.isBlank() || _isSensitiveField.value) return
-        regenerateAction = { continueDraft(text, bypassCache = true) }
+        aiSession.setRegenerateAction { continueDraft(text, bypassCache = true) }
         launchAi {
             try {
                 val result = if (_isOfflineMode.value) {

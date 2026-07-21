@@ -6,8 +6,11 @@ item: move it to **Shipped** with the PR number.
 
 ## Next up
 
-*(empty — promote the next item from Later / unscheduled or Differentiator
-candidates deliberately.)*
+- **Keyboard Mastery, Phase A** — implement issue #49's privacy-first local
+  progression foundation: four mastery paths, capped XP, gentle streaks,
+  achievements, opt-out/reset controls, and a Style Hub progress card. Do not
+  reward or gate features behind enabling/selecting the IME; default-keyboard
+  setup remains a transparent, user-initiated Android system choice.
 
 ## Later / unscheduled
 
@@ -64,6 +67,20 @@ session-sized.
   `/v lunch` recalls saved snippets inline. Reuses the palette matcher as-is.
 
 ## Shipped
+
+- **PR #48** — integrated foreground AI sessions: `KeyboardViewModel` now binds
+  its existing `aiPanelState` contract to `AiSessionController`, delegates
+  request replacement, cancellation, loading cleanup, dismissal, and
+  regeneration, and removes its duplicate `aiJob`, stored regeneration callback,
+  and coroutine cancellation implementation. Action-specific prompts,
+  personalization, offline routing, learning, and repository writes remain in
+  the ViewModel; the public UI contract is unchanged.
+
+- **PR #47** — introduced the tested `AiSessionController` seam with ownership
+  of foreground request cancellation, loading cleanup, panel publication,
+  dismissal, and regeneration. Coroutine tests cover cancellation, empty and
+  failed completion, completed-result persistence, dismissal, and latest-action
+  regeneration.
 
 - **PR #45** — unified AI panel state: the ViewModel now exposes one sealed
   `AiPanelState` instead of parallel nullable flows for loading, reply intent,
