@@ -17,6 +17,10 @@ import io.github.daddymean.agentickeyboard.network.GrammarCorrectionResponse
 import io.github.daddymean.agentickeyboard.network.ToneAnalysisResponse
 import io.github.daddymean.agentickeyboard.util.CommandPalette
 import io.github.daddymean.agentickeyboard.util.KeyboardSettings
+import io.github.daddymean.agentickeyboard.util.mastery.KeyboardMastery
+import io.github.daddymean.agentickeyboard.util.mastery.MasteryEvent
+import io.github.daddymean.agentickeyboard.util.mastery.MasteryState
+import io.github.daddymean.agentickeyboard.util.mastery.MasteryStateCodec
 import io.github.daddymean.agentickeyboard.util.PersonalModelSerializer
 import io.github.daddymean.agentickeyboard.util.ReplyIntents
 import io.github.daddymean.agentickeyboard.util.SendGuard
@@ -192,6 +196,16 @@ class KeyboardViewModel(
     )
     val usageStats = _usageStats.asStateFlow()
 
+    private val _isMasteryEnabled = MutableStateFlow(settings?.isMasteryEnabled ?: true)
+    val isMasteryEnabled = _isMasteryEnabled.asStateFlow()
+
+    private val initialMasteryState = MasteryStateCodec.decode(
+        settings?.masteryState,
+        enabledFallback = _isMasteryEnabled.value
+    ).copy(enabled = _isMasteryEnabled.value)
+    private val _masteryState = MutableStateFlow(initialMasteryState)
+    val masteryState = _masteryState.asStateFlow()
+
     private var activeAppPackage: String? = null
     private var activeAppLabel: String = ""
     private var previousCommittedWord: String? = null
@@ -223,6 +237,15 @@ class KeyboardViewModel(
             KeyboardSettings.KEY_PERSONA -> _userPersonaPreference.value = s.persona
             KeyboardSettings.KEY_SOURCE_LANG -> _sourceLanguage.value = s.sourceLanguage
             KeyboardSettings.KEY_TARGET_LANG -> _targetLanguage.value = s.targetLanguage
+            KeyboardSettings.KEY_MASTERY_ENABLED -> {
+                _isMasteryEnabled.value = s.isMasteryEnabled
+                _masteryState.value = _masteryState.value.copy(enabled = s.isMasteryEnabled)
+            }
+            KeyboardSettings.KEY_MASTERY_STATE -> {
+                _masteryState.value = MasteryStateCodec.decode(
+                    s.masteryState, enabledFallback = s.isMasteryEnabled
+                ).copy(enabled = s.isMasteryEnabled)
+            }
         }
     }
 
@@ -277,6 +300,7 @@ class KeyboardViewModel(
     fun refineResult(adjustment: String) {
         val current = aiSession.currentState.refinableText ?: return
         val instruction = RESULT_REFINEMENTS[adjustment] ?: adjustment
+        recordMastery(MasteryEvent.REFINEMENT)
         dismissResults()
         rewriteWithStyle(current, instruction, bypassCache = true)
     }
@@ -427,6 +451,20 @@ class KeyboardViewModel(
     }
 
     fun getLogRetentionDays(): Int = settings?.logRetentionDays ?: 30
+
+    fun setMasteryEnabled(enabled: Boolean) {
+        _isMasteryEnabled.value = enabled
+        settings?.isMasteryEnabled = enabled
+        val updated = _masteryState.value.copy(enabled = enabled)
+        _masteryState.value = updated
+        settings?.masteryState = MasteryStateCodec.encode(updated)
+    }
+
+    fun resetMasteryProgress() {
+        val reset = MasteryState.fresh(enabled = _isMasteryEnabled.value)
+        _masteryState.value = reset
+        settings?.masteryState = MasteryStateCodec.encode(reset)
+    }
 
     fun setUserPersonaPreference(persona: String) {
         _userPersonaPreference.value = persona
@@ -618,10 +656,45 @@ class KeyboardViewModel(
         }
     }
 
-    fun recordAutoCorrectionStat() = updateStats { it.copy(autoCorrections = it.autoCorrections + 1) }
-    fun recordSwipeWordStat() = updateStats { it.copy(swipeWords = it.swipeWords + 1) }
-    fun recordAiApplyStat() = updateStats { it.copy(aiApplies = it.aiApplies + 1) }
-    fun recordShortcutExpansionStat() = updateStats { it.copy(shortcutExpansions = it.shortcutExpansions + 1) }
+    private fun recordMastery(event: MasteryEvent) {
+        val award = KeyboardMastery.record(
+            state = _masteryState.value,
+            event = event,
+            epochDay = System.currentTimeMillis() / DAY_MS,
+            isSensitiveField = _isSensitiveField.value
+        )
+        if (award.state != _masteryState.value) {
+            _masteryState.value = award.state
+            settings?.masteryState = MasteryStateCodec.encode(award.state)
+        }
+    }
+
+    fun recordAutoCorrectionStat() {
+        updateStats { it.copy(autoCorrections = it.autoCorrections + 1) }
+        recordMastery(MasteryEvent.AUTO_CORRECTION)
+    }
+
+    fun recordSwipeWordStat() {
+        updateStats { it.copy(swipeWords = it.swipeWords + 1) }
+        recordMastery(MasteryEvent.SWIPE_WORD)
+    }
+
+    fun recordAiApplyStat() {
+        updateStats { it.copy(aiApplies = it.aiApplies + 1) }
+        val event = when {
+            _isOfflineMode.value -> MasteryEvent.OFFLINE_AI_APPLY
+            aiSession.currentState is AiPanelState.Translation -> MasteryEvent.TRANSLATION_APPLY
+            _isVoiceLockEnabled.value && aiSession.currentState is AiPanelState.Rewrite ->
+                MasteryEvent.VOICE_LOCK_APPLY
+            else -> MasteryEvent.AI_APPLY
+        }
+        recordMastery(event)
+    }
+
+    fun recordShortcutExpansionStat() {
+        updateStats { it.copy(shortcutExpansions = it.shortcutExpansions + 1) }
+        recordMastery(MasteryEvent.SHORTCUT_EXPANSION)
+    }
 
     // --- Prediction ------------------------------------------------------------
 
