@@ -7,69 +7,14 @@ on:
     branches: [main, master]
   workflow_dispatch:
 
-permissions:
-  contents: write
-
 jobs:
   build:
     name: Build debug APK and run unit tests
     runs-on: ubuntu-latest
-    env:
-      GH_TOKEN: ${{ github.token }}
 
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
-
-      - name: Apply AI session integration
-        if: github.event_name == 'pull_request' && github.head_ref == 'refactor/integrate-ai-session-controller'
-        run: |
-          python tools/integrate_ai_session_controller.py
-          git diff --check
-
-      - name: Export integrated ViewModel blob
-        if: github.event_name == 'pull_request' && github.head_ref == 'refactor/integrate-ai-session-controller'
-        env:
-          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
-        run: |
-          python - <<'PY'
-          import base64
-          import json
-          import os
-          import subprocess
-          from pathlib import Path
-
-          repository = os.environ['GITHUB_REPOSITORY']
-          head_sha = os.environ['PR_HEAD_SHA']
-          path = 'app/src/main/java/io/github/daddymean/agentickeyboard/ui/KeyboardViewModel.kt'
-          payload = {
-              'content': base64.b64encode(Path(path).read_bytes()).decode(),
-              'encoding': 'base64',
-          }
-          Path('/tmp/blob.json').write_text(json.dumps(payload))
-          blob = subprocess.check_output([
-              'gh', 'api', '--method', 'POST',
-              f'repos/{repository}/git/blobs',
-              '--input', '/tmp/blob.json',
-              '--jq', '.sha'
-          ], text=True).strip()
-          base_tree = subprocess.check_output([
-              'gh', 'api', f'repos/{repository}/git/commits/{head_sha}', '--jq', '.tree.sha'
-          ], text=True).strip()
-          Path('ai-session-integration.json').write_text(json.dumps({
-              'parent': head_sha,
-              'base_tree': base_tree,
-              'path': path,
-              'blob': blob,
-          }, indent=2))
-          PY
-
-      - name: Upload AI session integration manifest
-        if: github.event_name == 'pull_request' && github.head_ref == 'refactor/integrate-ai-session-controller'
-        uses: actions/upload-artifact@v4
-        with:
-          name: ai-session-integration
-          path: ai-session-integration.json
 
       - name: Set up JDK 17
         uses: actions/setup-java@v4
