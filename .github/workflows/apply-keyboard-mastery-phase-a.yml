@@ -1,0 +1,87 @@
+name: Apply Keyboard Mastery Phase A
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+    branches: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  validate:
+    if: github.head_ref == 'feature/keyboard-mastery-phase-a'
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - name: Check out feature branch
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.head_ref }}
+          fetch-depth: 1
+
+      - name: Apply verified integration
+        run: |
+          python tools/apply_keyboard_mastery_phase_a.py
+          git diff --check
+
+      - name: Export transformed source blobs
+        run: |
+          python - <<'PY'
+          import base64
+          import json
+          import os
+          import subprocess
+          from pathlib import Path
+
+          repository = os.environ['GITHUB_REPOSITORY']
+          paths = [
+              'app/src/main/java/io/github/daddymean/agentickeyboard/util/KeyboardSettings.kt',
+              'app/src/main/java/io/github/daddymean/agentickeyboard/ui/KeyboardViewModel.kt',
+              'app/src/main/java/io/github/daddymean/agentickeyboard/MainActivity.kt',
+          ]
+          blobs = {}
+          for path in paths:
+              payload = {
+                  'content': base64.b64encode(Path(path).read_bytes()).decode(),
+                  'encoding': 'base64',
+              }
+              payload_path = Path('/tmp/blob-payload.json')
+              payload_path.write_text(json.dumps(payload))
+              blobs[path] = subprocess.check_output([
+                  'gh', 'api', '--method', 'POST',
+                  f'repos/{repository}/git/blobs',
+                  '--input', str(payload_path),
+                  '--jq', '.sha'
+              ], text=True).strip()
+
+          manifest = {
+              'parent': subprocess.check_output(['git', 'rev-parse', 'HEAD'], text=True).strip(),
+              'base_tree': subprocess.check_output(['git', 'rev-parse', 'HEAD^{tree}'], text=True).strip(),
+              'blobs': blobs,
+          }
+          Path('keyboard-mastery-blobs.json').write_text(json.dumps(manifest, indent=2))
+          PY
+
+      - name: Upload source manifest
+        uses: actions/upload-artifact@v4
+        with:
+          name: keyboard-mastery-source-blobs
+          path: keyboard-mastery-blobs.json
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+          cache: gradle
+
+      - name: Grant execute permission
+        run: chmod +x ./gradlew
+
+      - name: Build debug APK and run unit tests
+        run: ./gradlew assembleDebug testDebugUnitTest --stacktrace
+
+      - name: Build release APK (R8)
+        run: ./gradlew assembleRelease --stacktrace
