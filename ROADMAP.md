@@ -6,11 +6,11 @@ item: move it to **Shipped** with the PR number.
 
 ## Next up
 
-- **Keyboard Mastery, Phase A** — implement issue #49's privacy-first local
-  progression foundation: four mastery paths, capped XP, gentle streaks,
-  achievements, opt-out/reset controls, and a Style Hub progress card. Do not
-  reward or gate features behind enabling/selecting the IME; default-keyboard
-  setup remains a transparent, user-initiated Android system choice.
+- **Keyboard Mastery, Phase B** — build optional missions from feature-usage
+  gaps and add a locally computed weekly writing report with estimated time
+  saved, personal bests, and accessibility-safe celebrations. Missions remain
+  dismissible, never require sending a message, and never reward changing the
+  Android default-input setting.
 
 ## Later / unscheduled
 
@@ -67,6 +67,14 @@ session-sized.
   `/v lunch` recalls saved snippets inline. Reuses the palette matcher as-is.
 
 ## Shipped
+
+- **PR #57** — Keyboard Mastery, Phase A: added a fully local progression
+  engine with Flow, Clarity, Voice, and Trust paths; per-event and per-path
+  daily XP caps; gentle streaks with grace days and retained personal bests;
+  achievement IDs; defensive SharedPreferences serialization; and a Style Hub
+  progress card with pause and reset controls. Existing aggregate events feed
+  mastery without storing typed text, and secure fields produce no progress.
+  Core keyboard features and Android input-method selection remain ungated.
 
 - **PR #48** — integrated foreground AI sessions: `KeyboardViewModel` now binds
   its existing `aiPanelState` contract to `AiSessionController`, delegates
