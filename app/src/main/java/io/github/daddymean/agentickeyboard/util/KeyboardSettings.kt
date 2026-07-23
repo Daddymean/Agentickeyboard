@@ -33,6 +33,8 @@ class KeyboardSettings(context: Context) {
         const val KEY_STAT_SWIPE_WORDS = "stat_swipe_words"
         const val KEY_STAT_AI_APPLIES = "stat_ai_applies"
         const val KEY_STAT_SHORTCUT_EXPANSIONS = "stat_shortcut_expansions"
+        const val KEY_MASTERY_ENABLED = "mastery_enabled"
+        const val KEY_MASTERY_STATE = "mastery_state"
     }
 
     var isOfflineMode: Boolean
@@ -112,6 +114,14 @@ class KeyboardSettings(context: Context) {
     var statShortcutExpansions: Int
         get() = prefs.getInt(KEY_STAT_SHORTCUT_EXPANSIONS, 0)
         set(value) = prefs.edit().putInt(KEY_STAT_SHORTCUT_EXPANSIONS, value).apply()
+
+    var isMasteryEnabled: Boolean
+        get() = prefs.getBoolean(KEY_MASTERY_ENABLED, true)
+        set(value) = prefs.edit().putBoolean(KEY_MASTERY_ENABLED, value).apply()
+
+    var masteryState: String
+        get() = prefs.getString(KEY_MASTERY_STATE, "") ?: ""
+        set(value) = prefs.edit().putString(KEY_MASTERY_STATE, value).apply()
 
     fun registerListener(listener: SharedPreferences.OnSharedPreferenceChangeListener) {
         prefs.registerOnSharedPreferenceChangeListener(listener)

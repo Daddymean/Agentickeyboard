@@ -92,6 +92,7 @@ import io.github.daddymean.agentickeyboard.db.ShortcutTemplate
 import io.github.daddymean.agentickeyboard.ui.AgenticKeyboardLayout
 import io.github.daddymean.agentickeyboard.ui.AiPanelState
 import io.github.daddymean.agentickeyboard.ui.KeyboardViewModel
+import io.github.daddymean.agentickeyboard.ui.KeyboardMasteryCard
 import io.github.daddymean.agentickeyboard.ui.KeyboardViewModelFactory
 import io.github.daddymean.agentickeyboard.ui.RowDefaultsButtonPadding
 import io.github.daddymean.agentickeyboard.ui.theme.MyApplicationTheme
@@ -1066,6 +1067,10 @@ fun ExportTab(viewModel: KeyboardViewModel) {
                 fontSize = 12.sp,
                 lineHeight = 16.sp
             )
+        }
+
+        item {
+            KeyboardMasteryCard(viewModel)
         }
 
         // Persona Selection Card
