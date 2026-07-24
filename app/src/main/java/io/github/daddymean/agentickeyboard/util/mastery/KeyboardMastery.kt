@@ -44,6 +44,16 @@ object MasteryAchievements {
     fun byId(id: String): MasteryAchievement? = catalog.firstOrNull { it.id == id }
 }
 
+/** One bounded, aggregate-only day used by missions and the rolling weekly report. */
+data class MasteryDaySnapshot(
+    val epochDay: Long,
+    val eventCounts: Map<MasteryEvent, Int> = emptyMap()
+) {
+    val totalEvents: Int get() = eventCounts.values.sum()
+
+    fun count(event: MasteryEvent): Int = eventCounts[event] ?: 0
+}
+
 /**
  * Entirely local progression state. It contains only counters, dates, and IDs.
  * Raw typed content, app names, recipients, and field values never enter it.
@@ -59,7 +69,10 @@ data class MasteryState(
     val bestStreak: Int = 0,
     val lastActiveEpochDay: Long = NO_DAY,
     val graceDays: Int = 1,
-    val achievements: Set<String> = emptySet()
+    val achievements: Set<String> = emptySet(),
+    val recentDays: List<MasteryDaySnapshot> = emptyList(),
+    val missionEpochDay: Long = NO_DAY,
+    val dismissedMissionIds: Set<String> = emptySet()
 ) {
     val totalXp: Int get() = pathXp.values.sum()
 
@@ -69,6 +82,9 @@ data class MasteryState(
 
     fun levelProgress(path: MasteryPath): Float =
         (xpFor(path) % XP_PER_LEVEL).toFloat() / XP_PER_LEVEL.toFloat()
+
+    fun snapshotFor(epochDay: Long): MasteryDaySnapshot? =
+        recentDays.firstOrNull { it.epochDay == epochDay }
 
     companion object {
         const val NO_DAY: Long = Long.MIN_VALUE
@@ -93,6 +109,7 @@ object KeyboardMastery {
     const val DAILY_PATH_XP_CAP = 40
     const val MAX_REWARDED_EVENT_REPETITIONS_PER_DAY = 10
     const val MAX_GRACE_DAYS = 2
+    const val HISTORY_DAYS = 28
 
     fun record(
         state: MasteryState,
@@ -102,10 +119,15 @@ object KeyboardMastery {
     ): MasteryAward {
         if (!state.enabled || isSensitiveField) return MasteryAward(state)
 
-        val dayState = if (state.dailyEpochDay == epochDay) {
+        val missionState = if (state.missionEpochDay == epochDay) {
             state
         } else {
-            state.copy(
+            state.copy(missionEpochDay = epochDay, dismissedMissionIds = emptySet())
+        }
+        val dayState = if (missionState.dailyEpochDay == epochDay) {
+            missionState
+        } else {
+            missionState.copy(
                 dailyEpochDay = epochDay,
                 dailyPathXp = MasteryState.zeroPathMap(),
                 dailyEventCounts = emptyMap()
@@ -140,7 +162,8 @@ object KeyboardMastery {
             currentStreak = streak.current,
             bestStreak = streak.best,
             lastActiveEpochDay = epochDay,
-            graceDays = streak.graceDays
+            graceDays = streak.graceDays,
+            recentDays = updateRecentDays(dayState.recentDays, event, epochDay)
         )
         val achievementIds = evaluateAchievements(candidate)
         val unlocked = achievementIds - candidate.achievements
@@ -152,6 +175,22 @@ object KeyboardMastery {
             unlockedAchievementIds = unlocked,
             streakAdvanced = streak.advanced
         )
+    }
+
+    private fun updateRecentDays(
+        existing: List<MasteryDaySnapshot>,
+        event: MasteryEvent,
+        epochDay: Long
+    ): List<MasteryDaySnapshot> {
+        val current = existing.firstOrNull { it.epochDay == epochDay }
+            ?: MasteryDaySnapshot(epochDay)
+        val updatedCounts = current.eventCounts.toMutableMap().apply {
+            this[event] = (this[event] ?: 0) + 1
+        }
+        val updated = current.copy(eventCounts = updatedCounts)
+        return (existing.filterNot { it.epochDay == epochDay } + updated)
+            .sortedBy { it.epochDay }
+            .takeLast(HISTORY_DAYS)
     }
 
     private data class StreakResult(
@@ -213,7 +252,8 @@ object KeyboardMastery {
 
 /** Compact, defensive persistence format for SharedPreferences. */
 object MasteryStateCodec {
-    private const val VERSION = 1
+    private const val VERSION = 2
+    private const val LEGACY_VERSION = 1
 
     fun encode(state: MasteryState): String = listOf(
         "v=$VERSION",
@@ -227,7 +267,10 @@ object MasteryStateCodec {
         "best=${state.bestStreak}",
         "last=${state.lastActiveEpochDay}",
         "grace=${state.graceDays}",
-        "ach=${state.achievements.sorted().joinToString(",")}" 
+        "ach=${state.achievements.sorted().joinToString(",")}",
+        "history=${encodeHistory(state.recentDays)}",
+        "missionDay=${state.missionEpochDay}",
+        "dismissed=${state.dismissedMissionIds.sorted().joinToString(",")}"
     ).joinToString(";")
 
     fun decode(raw: String?, enabledFallback: Boolean = true): MasteryState {
@@ -239,24 +282,66 @@ object MasteryStateCodec {
                     if (index <= 0) null else token.substring(0, index) to token.substring(index + 1)
                 }
                 .toMap()
-            if (parts["v"]?.toIntOrNull() != VERSION) return MasteryState.fresh(enabledFallback)
+            val version = parts["v"]?.toIntOrNull()
+            if (version != VERSION && version != LEGACY_VERSION) {
+                return MasteryState.fresh(enabledFallback)
+            }
+
+            val dailyEpochDay = parts["day"]?.toLongOrNull() ?: MasteryState.NO_DAY
+            val dailyEventCounts = decodeEnumMap<MasteryEvent>(parts["dailyEvents"])
+            val recentDays = if (version == VERSION) {
+                decodeHistory(parts["history"])
+            } else if (dailyEpochDay != MasteryState.NO_DAY && dailyEventCounts.isNotEmpty()) {
+                listOf(MasteryDaySnapshot(dailyEpochDay, dailyEventCounts))
+            } else {
+                emptyList()
+            }
 
             MasteryState(
                 enabled = parts["enabled"]?.toIntOrNull() != 0,
                 pathXp = decodeEnumMap<MasteryPath>(parts["path"]).withPathDefaults(),
                 eventCounts = decodeEnumMap(parts["events"]),
-                dailyEpochDay = parts["day"]?.toLongOrNull() ?: MasteryState.NO_DAY,
+                dailyEpochDay = dailyEpochDay,
                 dailyPathXp = decodeEnumMap<MasteryPath>(parts["dailyPath"]).withPathDefaults(),
-                dailyEventCounts = decodeEnumMap(parts["dailyEvents"]),
+                dailyEventCounts = dailyEventCounts,
                 currentStreak = parts["current"]?.toIntOrNull()?.coerceAtLeast(0) ?: 0,
                 bestStreak = parts["best"]?.toIntOrNull()?.coerceAtLeast(0) ?: 0,
                 lastActiveEpochDay = parts["last"]?.toLongOrNull() ?: MasteryState.NO_DAY,
-                graceDays = parts["grace"]?.toIntOrNull()?.coerceIn(0, KeyboardMastery.MAX_GRACE_DAYS) ?: 1,
-                achievements = parts["ach"].orEmpty().split(',').filter { it.isNotBlank() }.toSet()
+                graceDays = parts["grace"]?.toIntOrNull()
+                    ?.coerceIn(0, KeyboardMastery.MAX_GRACE_DAYS) ?: 1,
+                achievements = parts["ach"].orEmpty().split(',').filter { it.isNotBlank() }.toSet(),
+                recentDays = recentDays,
+                missionEpochDay = if (version == VERSION) {
+                    parts["missionDay"]?.toLongOrNull() ?: MasteryState.NO_DAY
+                } else {
+                    MasteryState.NO_DAY
+                },
+                dismissedMissionIds = if (version == VERSION) {
+                    parts["dismissed"].orEmpty().split(',').filter { it.isNotBlank() }.toSet()
+                } else {
+                    emptySet()
+                }
             )
         } catch (_: Exception) {
             MasteryState.fresh(enabledFallback)
         }
+    }
+
+    private fun encodeHistory(days: List<MasteryDaySnapshot>): String =
+        days.sortedBy { it.epochDay }.joinToString("|") { day ->
+            "${day.epochDay}~${encodeMap(day.eventCounts)}"
+        }
+
+    private fun decodeHistory(raw: String?): List<MasteryDaySnapshot> {
+        if (raw.isNullOrBlank()) return emptyList()
+        return raw.split('|').mapNotNull { token ->
+            val pair = token.split('~', limit = 2)
+            val day = pair.firstOrNull()?.toLongOrNull() ?: return@mapNotNull null
+            val counts = decodeEnumMap<MasteryEvent>(pair.getOrNull(1))
+            MasteryDaySnapshot(day, counts)
+        }.distinctBy { it.epochDay }
+            .sortedBy { it.epochDay }
+            .takeLast(KeyboardMastery.HISTORY_DAYS)
     }
 
     private fun <K : Enum<K>> encodeMap(map: Map<K, Int>): String =
@@ -268,7 +353,8 @@ object MasteryStateCodec {
         return raw.split(',').mapNotNull { token ->
             val pair = token.split(':', limit = 2)
             val key = values[pair.firstOrNull()] ?: return@mapNotNull null
-            val value = pair.getOrNull(1)?.toIntOrNull()?.coerceAtLeast(0) ?: return@mapNotNull null
+            val value = pair.getOrNull(1)?.toIntOrNull()?.coerceAtLeast(0)
+                ?: return@mapNotNull null
             key to value
         }.toMap()
     }
