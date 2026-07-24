@@ -63,7 +63,9 @@ class KeyboardMasteryInsightsTest {
         var state = MasteryState.fresh()
         repeat(12) {
             state = KeyboardMastery.record(state, MasteryEvent.SWIPE_WORD, 90).state
+            state = KeyboardMastery.record(state, MasteryEvent.SHORTCUT_EXPANSION, 90).state
             state = KeyboardMastery.record(state, MasteryEvent.AUTO_CORRECTION, 90).state
+            state = KeyboardMastery.record(state, MasteryEvent.AI_APPLY, 90).state
         }
 
         val missions = KeyboardMasteryMissions.forDay(state, epochDay = 100)
