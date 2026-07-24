@@ -125,6 +125,7 @@ fun AgenticKeyboardLayout(
 
     // Collect states from ViewModel
     val aiPanelState by viewModel.aiPanelState.collectAsState()
+    val voiceMatch by viewModel.voiceMatch.collectAsState()
     val isLoading = aiPanelState == AiPanelState.Loading
     val suggestions = (aiPanelState as? AiPanelState.Replies)?.suggestions.orEmpty()
     val grammarCorrection = (aiPanelState as? AiPanelState.Grammar)?.result
@@ -481,10 +482,10 @@ fun AgenticKeyboardLayout(
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .then(if (resultExpanded) Modifier.heightIn(min = 64.dp) else Modifier.height(64.dp))
+                .then(if (resultExpanded || voiceMatch != null) Modifier.heightIn(min = 64.dp) else Modifier.height(64.dp))
                 .animateContentSize()
                 .background(keyboardColors.shelf)
-                .padding(horizontal = 8.dp, vertical = if (resultExpanded) 8.dp else 0.dp),
+                .padding(horizontal = 8.dp, vertical = if (resultExpanded || voiceMatch != null) 8.dp else 0.dp),
             contentAlignment = Alignment.CenterStart
         ) {
             if (isLoading) {
@@ -924,6 +925,10 @@ fun AgenticKeyboardLayout(
                                 }
                             }
                         }
+                    }
+                    voiceMatch?.let { match ->
+                        Spacer(modifier = Modifier.height(4.dp))
+                        VoiceMatchBadge(match)
                     }
                     }
                     if (hasAiResult) {
@@ -1895,3 +1900,35 @@ val RowDefaultsButtonPadding = androidx.compose.foundation.layout.PaddingValues(
     horizontal = 12.dp,
     vertical = 0.dp
 )
+
+@Composable
+private fun VoiceMatchBadge(match: VoiceMatchState) {
+    val keyboardColors = LocalKeyboardColors.current
+    val deltaText = when {
+        match.delta == null -> ""
+        match.delta > 0 -> " · ↑ ${match.delta} after refine"
+        match.delta < 0 -> " · ${-match.delta} point shift"
+        else -> " · steady after refine"
+    }
+    val confidenceText = if (match.confidence < 35) " · early estimate" else ""
+    val signalText = match.signals.firstOrNull()?.let { " · $it" }.orEmpty()
+
+    Row(
+        modifier = Modifier
+            .clip(RoundedCornerShape(10.dp))
+            .background(keyboardColors.accent.copy(alpha = 0.12f))
+            .padding(horizontal = 8.dp, vertical = 3.dp)
+            .testTag("voice_match_badge"),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(
+            text = "🎙 ${match.percent}% your voice$deltaText$confidenceText$signalText",
+            color = keyboardColors.accent,
+            fontSize = 9.sp,
+            fontWeight = FontWeight.Bold,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
+        )
+    }
+}
+
