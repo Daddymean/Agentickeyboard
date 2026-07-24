@@ -165,6 +165,12 @@ fun KeyboardMasteryCard(viewModel: KeyboardViewModel) {
             WeeklyReportSummary(report)
 
             Spacer(modifier = Modifier.height(12.dp))
+            MasteryConstellationSection(
+                state = state,
+                settings = masterySettings
+            )
+
+            Spacer(modifier = Modifier.height(12.dp))
             val unlocked = MasteryAchievements.catalog.filter { it.id in state.achievements }
             Text(
                 "${unlocked.size}/${MasteryAchievements.catalog.size} achievements · ${state.graceDays} grace day${if (state.graceDays == 1) "" else "s"}",

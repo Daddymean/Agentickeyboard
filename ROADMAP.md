@@ -6,10 +6,11 @@ item: move it to **Shipped** with the PR number.
 
 ## Next up
 
-- **Keyboard Mastery, Phase C** — add optional cosmetic unlocks and a small
-  evolving companion or constellation inside the companion app. Core keyboard
-  features remain ungated, cosmetics never appear in secure fields, and no
-  reward is attached to enabling or selecting the Android input method.
+- **"Sounds like you" score** — score each eligible AI result against the
+  user's on-device style fingerprint and surface a clear confidence label in
+  the result panel. Keep scoring local, explain which aggregate signals shaped
+  the result, and let refinement chips improve the score without exposing raw
+  writing history.
 
 ## Later / unscheduled
 
@@ -40,11 +41,6 @@ competitors. Each is anchored to plumbing that already exists, so none starts
 from zero. Promote to **Next up** deliberately — these are feature-sized, not
 session-sized.
 
-- **"Sounds like you" score.** On-device learning already builds a vocabulary
-  profile and voice-lock steers rewrites toward it. Surface it: score each AI
-  result against the user's style fingerprint ("92% your voice") in the result
-  panel, and let iterate chips push the score up. Makes the invisible
-  personalization tangible — and trust in AI rewrites is the adoption barrier.
 - **Reply completeness coach.** Send-guard already intercepts Send for tone.
   Extend the same hook to completeness: "they asked 2 questions, this answers
   1." Small model call, huge everyday save.
@@ -62,6 +58,13 @@ session-sized.
   `/v lunch` recalls saved snippets inline. Reuses the palette matcher as-is.
 
 ## Shipped
+
+- **PR #60** — Keyboard Mastery, Phase C: added a companion-app-only Lumina
+  constellation with five deterministic growth stages, five optional visual
+  auras, testable unlock rules, safe fallback after resets, persistent hide and
+  aura preferences, and a static accessibility-safe star map. Cosmetics use
+  existing local aggregates, grant no capabilities or bonus XP, never render
+  in the IME, and do not depend on Android input-method selection.
 
 - **PR #59** — Keyboard Mastery, Phase B: added a bounded 28-day aggregate
   history with automatic Phase A persistence migration, three optional daily
@@ -129,7 +132,7 @@ session-sized.
 
 - **PR #26** — per-app personas: the keyboard already remembered the persona
   last used in each app (`onEditorStarted` restore + `setUserPersonaPreference`
-  save); this surfaces those mappings in a Style Hub "Per-app personas" card
+  save); this surfaces those mappings in the Style Hub "Per-app personas" card
   where each app shows its persona in a dropdown (change) with a remove button.
   Added `AppPersonaDao.getAllFlow`/`delete`, a repository flow +
   `deleteAppPersona`, an `appLabel` column (DB v5→v6 + `MIGRATION_5_6`) resolved
