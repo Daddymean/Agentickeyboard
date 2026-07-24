@@ -29,15 +29,18 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import io.github.daddymean.agentickeyboard.util.KeyboardSettings
 import io.github.daddymean.agentickeyboard.util.mastery.KeyboardMasteryMissions
 import io.github.daddymean.agentickeyboard.util.mastery.KeyboardMasteryReports
 import io.github.daddymean.agentickeyboard.util.mastery.MasteryAchievements
 import io.github.daddymean.agentickeyboard.util.mastery.MasteryMission
 import io.github.daddymean.agentickeyboard.util.mastery.MasteryPath
+import io.github.daddymean.agentickeyboard.util.mastery.MasteryStateCodec
 import io.github.daddymean.agentickeyboard.util.mastery.WeeklyMasteryReport
 
 private const val DAY_MS = 86_400_000L
@@ -48,6 +51,8 @@ fun KeyboardMasteryCard(viewModel: KeyboardViewModel) {
     val state by viewModel.masteryState.collectAsState()
     val enabled by viewModel.isMasteryEnabled.collectAsState()
     var confirmReset by remember { mutableStateOf(false) }
+    val context = LocalContext.current
+    val masterySettings = remember(context) { KeyboardSettings(context) }
     val epochDay = System.currentTimeMillis() / DAY_MS
     val missions = remember(state, epochDay) {
         KeyboardMasteryMissions.forDay(state, epochDay)
@@ -145,7 +150,12 @@ fun KeyboardMasteryCard(viewModel: KeyboardViewModel) {
                 MasteryMissionRow(
                     mission = mission,
                     onDismiss = {
-                        viewModel.dismissMasteryMission(mission.definition.id)
+                        val updated = KeyboardMasteryMissions.dismiss(
+                            state = state,
+                            missionId = mission.definition.id,
+                            epochDay = epochDay
+                        )
+                        masterySettings.masteryState = MasteryStateCodec.encode(updated)
                     }
                 )
                 Spacer(modifier = Modifier.height(7.dp))
