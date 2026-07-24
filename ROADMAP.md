@@ -6,11 +6,10 @@ item: move it to **Shipped** with the PR number.
 
 ## Next up
 
-- **Keyboard Mastery, Phase B** — build optional missions from feature-usage
-  gaps and add a locally computed weekly writing report with estimated time
-  saved, personal bests, and accessibility-safe celebrations. Missions remain
-  dismissible, never require sending a message, and never reward changing the
-  Android default-input setting.
+- **Keyboard Mastery, Phase C** — add optional cosmetic unlocks and a small
+  evolving companion or constellation inside the companion app. Core keyboard
+  features remain ungated, cosmetics never appear in secure fields, and no
+  reward is attached to enabling or selecting the Android input method.
 
 ## Later / unscheduled
 
@@ -67,6 +66,14 @@ session-sized.
   `/v lunch` recalls saved snippets inline. Reuses the palette matcher as-is.
 
 ## Shipped
+
+- **PR #59** — Keyboard Mastery, Phase B: added a bounded 28-day aggregate
+  history with automatic Phase A persistence migration, three optional daily
+  missions selected from underused features, penalty-free dismissal, diverse
+  mastery-path recommendations, and a rolling seven-day report with prior-week
+  comparison, active days, personal bests, and conservative estimates for
+  keystrokes and time saved. The Style Hub shows mission progress and a compact
+  report; no raw text or Android default-input state enters either model.
 
 - **PR #57** — Keyboard Mastery, Phase A: added a fully local progression
   engine with Flow, Clarity, Voice, and Trust paths; per-event and per-path
