@@ -36,7 +36,18 @@ jobs:
         run: chmod +x gradlew
 
       - name: Build debug APK and run unit tests
-        run: ./gradlew testDebugUnitTest assembleDebug --stacktrace
+        shell: bash
+        run: |
+          set -o pipefail
+          ./gradlew testDebugUnitTest assembleDebug --stacktrace 2>&1 | tee phase-c-build.log
+
+      - name: Upload compiler log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: mastery-phase-c-build-log
+          path: phase-c-build.log
+          retention-days: 7
 
       - name: Build release APK (R8)
         run: ./gradlew assembleRelease --stacktrace
