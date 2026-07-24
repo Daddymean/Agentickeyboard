@@ -6,11 +6,11 @@ item: move it to **Shipped** with the PR number.
 
 ## Next up
 
-- **"Sounds like you" score** — score each eligible AI result against the
-  user's on-device style fingerprint and surface a clear confidence label in
-  the result panel. Keep scoring local, explain which aggregate signals shaped
-  the result, and let refinement chips improve the score without exposing raw
-  writing history.
+- **Reply completeness coach** — reuse Send Guard's editor-action seam to
+  notice when an incoming message asked multiple questions but the current
+  draft appears to answer only some of them. Keep it advisory and reversible,
+  prefer local/on-device analysis where available, and never send, rewrite, or
+  block a message automatically.
 
 ## Later / unscheduled
 
@@ -41,9 +41,6 @@ competitors. Each is anchored to plumbing that already exists, so none starts
 from zero. Promote to **Next up** deliberately — these are feature-sized, not
 session-sized.
 
-- **Reply completeness coach.** Send-guard already intercepts Send for tone.
-  Extend the same hook to completeness: "they asked 2 questions, this answers
-  1." Small model call, huge everyday save.
 - **Keyboard passport.** `PersonalModelSerializer` already does privacy-aware
   export/import of the personal model. Productize it: one-tap encrypted export
   to file/QR so your learned dictionary, personas, and custom commands move
@@ -58,6 +55,14 @@ session-sized.
   `/v lunch` recalls saved snippets inline. Reuses the palette matcher as-is.
 
 ## Shipped
+
+- **PR #61** — local “Sounds like you” scoring: added an explainable,
+  in-memory style fingerprint from learned vocabulary and bounded local writing
+  samples; eligible grammar, rewrite, compose, and continuation results show a
+  confidence-aware match percentage, a derived signal, and refinement delta.
+  Insufficient evidence produces no score. Candidate text, fingerprints, and
+  score history are never persisted or uploaded; the score never gates
+  features, progression, or Android input-method selection.
 
 - **PR #60** — Keyboard Mastery, Phase C: added a companion-app-only Lumina
   constellation with five deterministic growth stages, five optional visual
