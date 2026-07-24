@@ -1,5 +1,6 @@
 package io.github.daddymean.agentickeyboard.ui
 
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -32,8 +33,14 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import io.github.daddymean.agentickeyboard.util.mastery.KeyboardMasteryMissions
+import io.github.daddymean.agentickeyboard.util.mastery.KeyboardMasteryReports
 import io.github.daddymean.agentickeyboard.util.mastery.MasteryAchievements
+import io.github.daddymean.agentickeyboard.util.mastery.MasteryMission
 import io.github.daddymean.agentickeyboard.util.mastery.MasteryPath
+import io.github.daddymean.agentickeyboard.util.mastery.WeeklyMasteryReport
+
+private const val DAY_MS = 86_400_000L
 
 /** Compact, local-only progression surface for the Style Hub. */
 @Composable
@@ -41,6 +48,13 @@ fun KeyboardMasteryCard(viewModel: KeyboardViewModel) {
     val state by viewModel.masteryState.collectAsState()
     val enabled by viewModel.isMasteryEnabled.collectAsState()
     var confirmReset by remember { mutableStateOf(false) }
+    val epochDay = System.currentTimeMillis() / DAY_MS
+    val missions = remember(state, epochDay) {
+        KeyboardMasteryMissions.forDay(state, epochDay)
+    }
+    val report = remember(state, epochDay) {
+        KeyboardMasteryReports.rollingWeek(state, epochDay)
+    }
 
     Card(
         modifier = Modifier
@@ -119,6 +133,28 @@ fun KeyboardMasteryCard(viewModel: KeyboardViewModel) {
                 Spacer(modifier = Modifier.height(10.dp))
             }
 
+            Text(
+                "TODAY'S MISSIONS",
+                color = Color.White.copy(alpha = 0.6f),
+                fontSize = 10.sp,
+                fontWeight = FontWeight.Bold,
+                letterSpacing = 0.5.sp
+            )
+            Spacer(modifier = Modifier.height(7.dp))
+            missions.forEach { mission ->
+                MasteryMissionRow(
+                    mission = mission,
+                    onDismiss = {
+                        viewModel.dismissMasteryMission(mission.definition.id)
+                    }
+                )
+                Spacer(modifier = Modifier.height(7.dp))
+            }
+
+            Spacer(modifier = Modifier.height(5.dp))
+            WeeklyReportSummary(report)
+
+            Spacer(modifier = Modifier.height(12.dp))
             val unlocked = MasteryAchievements.catalog.filter { it.id in state.achievements }
             Text(
                 "${unlocked.size}/${MasteryAchievements.catalog.size} achievements · ${state.graceDays} grace day${if (state.graceDays == 1) "" else "s"}",
@@ -140,7 +176,11 @@ fun KeyboardMasteryCard(viewModel: KeyboardViewModel) {
                 onClick = { confirmReset = true },
                 modifier = Modifier.testTag("mastery_reset")
             ) {
-                Text("Reset mastery progress", color = Color.White.copy(alpha = 0.65f), fontSize = 11.sp)
+                Text(
+                    "Reset mastery progress",
+                    color = Color.White.copy(alpha = 0.65f),
+                    fontSize = 11.sp
+                )
             }
         }
     }
@@ -150,7 +190,7 @@ fun KeyboardMasteryCard(viewModel: KeyboardViewModel) {
             onDismissRequest = { confirmReset = false },
             title = { Text("Reset Keyboard Mastery?") },
             text = {
-                Text("This clears XP, streaks, and achievements. It does not change keyboard settings, learned vocabulary, or core features.")
+                Text("This clears XP, missions, weekly history, streaks, and achievements. It does not change keyboard settings, learned vocabulary, or core features.")
             },
             confirmButton = {
                 Button(
@@ -220,6 +260,145 @@ private fun MasteryPathProgress(
                 .clip(RoundedCornerShape(6.dp)),
             color = Color(0xFF8B5CF6),
             trackColor = Color.White.copy(alpha = 0.12f)
+        )
+    }
+}
+
+@Composable
+private fun MasteryMissionRow(
+    mission: MasteryMission,
+    onDismiss: () -> Unit
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(14.dp))
+            .background(Color.White.copy(alpha = 0.07f))
+            .padding(horizontal = 11.dp, vertical = 9.dp)
+            .testTag("mastery_mission_${mission.definition.id}")
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    "${mission.definition.path.symbol} ${mission.definition.title}",
+                    color = Color.White,
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Bold
+                )
+                Text(
+                    mission.definition.description,
+                    color = Color.White.copy(alpha = 0.62f),
+                    fontSize = 9.sp
+                )
+            }
+            if (!mission.completed) {
+                TextButton(
+                    onClick = onDismiss,
+                    modifier = Modifier.testTag("dismiss_mission_${mission.definition.id}")
+                ) {
+                    Text("Dismiss", color = Color.White.copy(alpha = 0.5f), fontSize = 9.sp)
+                }
+            }
+        }
+        Spacer(modifier = Modifier.height(5.dp))
+        LinearProgressIndicator(
+            progress = mission.progressFraction,
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(5.dp)
+                .clip(RoundedCornerShape(5.dp)),
+            color = if (mission.completed) Color(0xFF34D399) else Color(0xFF60A5FA),
+            trackColor = Color.White.copy(alpha = 0.1f)
+        )
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Text(
+                "${mission.clampedProgress}/${mission.definition.target}",
+                color = Color.White.copy(alpha = 0.5f),
+                fontSize = 9.sp
+            )
+            AnimatedVisibility(visible = mission.completed) {
+                Text(
+                    "✓ Complete",
+                    color = Color(0xFF6EE7B7),
+                    fontSize = 9.sp,
+                    fontWeight = FontWeight.Bold
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun WeeklyReportSummary(report: WeeklyMasteryReport) {
+    val comparison = when {
+        report.actionDelta > 0 -> "+${report.actionDelta} useful actions vs prior week"
+        report.actionDelta < 0 -> "${-report.actionDelta} fewer actions than prior week"
+        else -> "Even with the prior week"
+    }
+    val timeLabel = when {
+        report.estimatedSecondsSaved <= 0 -> "0s"
+        report.estimatedSecondsSaved < 60 -> "${report.estimatedSecondsSaved}s"
+        else -> "${(report.estimatedSecondsSaved + 30) / 60}m"
+    }
+
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(16.dp))
+            .background(Color(0xFF1F2937))
+            .padding(12.dp)
+            .testTag("mastery_weekly_report")
+    ) {
+        Text(
+            "YOUR LAST 7 DAYS",
+            color = Color.White.copy(alpha = 0.6f),
+            fontSize = 10.sp,
+            fontWeight = FontWeight.Bold,
+            letterSpacing = 0.5.sp
+        )
+        Spacer(modifier = Modifier.height(8.dp))
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(7.dp)
+        ) {
+            MasteryMetric(
+                label = "Keys saved",
+                value = report.estimatedKeystrokesSaved.toString(),
+                modifier = Modifier.weight(1f)
+            )
+            MasteryMetric(
+                label = "Time back",
+                value = timeLabel,
+                modifier = Modifier.weight(1f)
+            )
+            MasteryMetric(
+                label = "Active days",
+                value = "${report.activeDays}/7",
+                modifier = Modifier.weight(1f)
+            )
+        }
+        Spacer(modifier = Modifier.height(8.dp))
+        Text(
+            comparison,
+            color = Color.White.copy(alpha = 0.72f),
+            fontSize = 10.sp
+        )
+        Text(
+            "Top path: ${report.dominantPath?.label ?: "Still exploring"} · Personal best: ${report.bestDayActions} useful actions in one day",
+            color = Color.White.copy(alpha = 0.55f),
+            fontSize = 9.sp
+        )
+        Text(
+            "Time saved is a conservative estimate from aggregate actions only.",
+            color = Color.White.copy(alpha = 0.42f),
+            fontSize = 8.sp
         )
     }
 }
