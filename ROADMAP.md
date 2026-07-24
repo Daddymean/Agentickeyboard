@@ -57,10 +57,6 @@ session-sized.
   to canned fallbacks. On devices with AICore, run proofread/continue locally
   so the privacy toggle stops being a feature-kill switch. "Full AI in
   airplane mode" is a claim almost no competitor can make.
-- **Weekly writing report.** `UsageStats` already counts corrections, swipes,
-  AI applies, and expansions locally. Add tone-trend and top-vocabulary
-  aggregates and render a "your week in writing" card in the Style Hub —
-  Screen-Time-style insight, computed entirely on device.
 - **Snippet vault with slash recall.** Shortcuts + custom commands + (planned)
   clipboard history converge into one searchable vault: `/find address` or
   `/v lunch` recalls saved snippets inline. Reuses the palette matcher as-is.
