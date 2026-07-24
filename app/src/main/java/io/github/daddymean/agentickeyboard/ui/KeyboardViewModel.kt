@@ -24,6 +24,9 @@ import io.github.daddymean.agentickeyboard.util.mastery.MasteryStateCodec
 import io.github.daddymean.agentickeyboard.util.PersonalModelSerializer
 import io.github.daddymean.agentickeyboard.util.ReplyIntents
 import io.github.daddymean.agentickeyboard.util.SendGuard
+import io.github.daddymean.agentickeyboard.util.VoiceMatchScorer
+import io.github.daddymean.agentickeyboard.util.VoiceSample
+import io.github.daddymean.agentickeyboard.util.VoiceVocabulary
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -50,6 +53,15 @@ data class UsageStats(
     val swipeWords: Int = 0,
     val aiApplies: Int = 0,
     val shortcutExpansions: Int = 0
+)
+
+/** Transient, local-only style match shown beside eligible AI writing results. */
+data class VoiceMatchState(
+    val percent: Int,
+    val confidence: Int,
+    val label: String,
+    val signals: List<String>,
+    val delta: Int? = null
 )
 
 class KeyboardViewModel(
@@ -136,6 +148,10 @@ class KeyboardViewModel(
     private val aiSession = AiSessionController(viewModelScope)
     private val _aiPanelState = aiSession.mutablePanelState
     val aiPanelState = aiSession.panelState
+
+    private val _voiceMatch = MutableStateFlow<VoiceMatchState?>(null)
+    val voiceMatch = _voiceMatch.asStateFlow()
+    private var pendingVoiceBaseline: Int? = null
 
     // Debounced background grammar check result (opt-in; see isProofreadEnabled)
     private val _proofreadHint = MutableStateFlow<GrammarCorrectionResponse?>(null)
@@ -300,19 +316,68 @@ class KeyboardViewModel(
     fun refineResult(adjustment: String) {
         val current = aiSession.currentState.refinableText ?: return
         val instruction = RESULT_REFINEMENTS[adjustment] ?: adjustment
+        val baseline = _voiceMatch.value?.percent
         recordMastery(MasteryEvent.REFINEMENT)
         dismissResults()
+        pendingVoiceBaseline = baseline
         rewriteWithStyle(current, instruction, bypassCache = true)
     }
 
     private fun launchAi(block: suspend () -> Unit) {
+        _voiceMatch.value = null
         aiSession.launch { block() }
     }
 
     /** Clears the active AI panel and any armed send warning. */
     fun dismissResults() {
         aiSession.clear()
+        _voiceMatch.value = null
+        pendingVoiceBaseline = null
         _sendGuardWarning.value = null
+    }
+
+    private fun publishAiPanel(state: AiPanelState) {
+        _aiPanelState.value = state
+        val candidate = when (state) {
+            is AiPanelState.Grammar -> state.result.corrected.takeUnless {
+                state.result.explanation.startsWith("Error", ignoreCase = true)
+            }
+            is AiPanelState.Rewrite -> state.text
+            is AiPanelState.Compose -> state.text
+            is AiPanelState.Continuation -> state.text
+            else -> null
+        }?.takeUnless {
+            it.startsWith("Rewrite error", ignoreCase = true) ||
+                it.startsWith("Compose error", ignoreCase = true) ||
+                it.startsWith("[Offline:", ignoreCase = true)
+        }
+
+        val score = candidate
+            ?.takeIf { !_isSensitiveField.value }
+            ?.let { text ->
+                VoiceMatchScorer.score(
+                    candidate = text,
+                    vocabulary = topVocabulary.value.take(100).map {
+                        VoiceVocabulary(word = it.word, count = it.count)
+                    },
+                    samples = logs.value.asSequence()
+                        .filter { it.sentiment != "Corrected" }
+                        .take(30)
+                        .map { VoiceSample(text = it.originalText, wordCount = it.wordCount) }
+                        .toList()
+                )
+            }
+
+        _voiceMatch.value = score?.let {
+            VoiceMatchState(
+                percent = it.percent,
+                confidence = it.confidence,
+                label = it.label,
+                signals = it.signals,
+                delta = pendingVoiceBaseline?.let { baseline -> it.percent - baseline }
+            )
+        }
+        pendingVoiceBaseline = null
     }
 
     fun setInputText(text: String) {
@@ -792,7 +857,7 @@ class KeyboardViewModel(
     fun promoteProofreadHint() {
         _proofreadHint.value?.let {
             dismissResults()
-            _aiPanelState.value = AiPanelState.Grammar(it)
+            publishAiPanel(AiPanelState.Grammar(it))
             _proofreadHint.value = null
         }
     }
@@ -814,7 +879,7 @@ class KeyboardViewModel(
                 } else {
                     GeminiManager.fixGrammar(text, personalization, bypassCache)
                 }
-                _aiPanelState.value = AiPanelState.Grammar(result)
+                publishAiPanel(AiPanelState.Grammar(result))
 
                 // On-device learning: auto-extract spelling correction rules!
                 if (isLearningAllowed()) {
@@ -834,8 +899,10 @@ class KeyboardViewModel(
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
-                _aiPanelState.value = AiPanelState.Grammar(
-                    GrammarCorrectionResponse(text, text, "Error: ${e.localizedMessage}", 0)
+                publishAiPanel(
+                    AiPanelState.Grammar(
+                        GrammarCorrectionResponse(text, text, "Error: ${e.localizedMessage}", 0)
+                    )
                 )
             }
         }
@@ -983,12 +1050,14 @@ class KeyboardViewModel(
                 } else {
                     GeminiManager.rewriteWithTone(text, targetTone, getPersonalizationContext(), _isVoiceLockEnabled.value, bypassCache)
                 }
-                _aiPanelState.value = AiPanelState.Rewrite(result, text, targetTone)
+                publishAiPanel(AiPanelState.Rewrite(result, text, targetTone))
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
-                _aiPanelState.value = AiPanelState.Rewrite(
-                    "Rewrite error: ${e.localizedMessage}", text, targetTone
+                publishAiPanel(
+                    AiPanelState.Rewrite(
+                        "Rewrite error: ${e.localizedMessage}", text, targetTone
+                    )
                 )
             }
         }
@@ -1008,12 +1077,14 @@ class KeyboardViewModel(
                 } else {
                     GeminiManager.rewriteWithTone(text, styleInstruction, getPersonalizationContext(), _isVoiceLockEnabled.value, bypassCache)
                 }
-                _aiPanelState.value = AiPanelState.Rewrite(result, text, styleInstruction)
+                publishAiPanel(AiPanelState.Rewrite(result, text, styleInstruction))
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
-                _aiPanelState.value = AiPanelState.Rewrite(
-                    "Rewrite error: ${e.localizedMessage}", text, styleInstruction
+                publishAiPanel(
+                    AiPanelState.Rewrite(
+                        "Rewrite error: ${e.localizedMessage}", text, styleInstruction
+                    )
                 )
             }
         }
@@ -1033,11 +1104,11 @@ class KeyboardViewModel(
                 } else {
                     GeminiManager.composeMessage(instruction, effectivePersona(), getPersonalizationContext(), _isVoiceLockEnabled.value, bypassCache)
                 }
-                _aiPanelState.value = AiPanelState.Compose(result)
+                publishAiPanel(AiPanelState.Compose(result))
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
-                _aiPanelState.value = AiPanelState.Compose("Compose error: ${e.localizedMessage}")
+                publishAiPanel(AiPanelState.Compose("Compose error: ${e.localizedMessage}"))
             }
         }
     }
@@ -1077,9 +1148,10 @@ class KeyboardViewModel(
                 } else {
                     GeminiManager.continueText(text, getPersonalizationContext(), _isVoiceLockEnabled.value, bypassCache)
                 }
-                _aiPanelState.value = result.takeIf { it.isNotBlank() }
+                val panel = result.takeIf { it.isNotBlank() }
                     ?.let(AiPanelState::Continuation)
                     ?: AiPanelState.Idle
+                publishAiPanel(panel)
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
