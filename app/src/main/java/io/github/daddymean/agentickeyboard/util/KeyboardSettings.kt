@@ -35,6 +35,8 @@ class KeyboardSettings(context: Context) {
         const val KEY_STAT_SHORTCUT_EXPANSIONS = "stat_shortcut_expansions"
         const val KEY_MASTERY_ENABLED = "mastery_enabled"
         const val KEY_MASTERY_STATE = "mastery_state"
+        const val KEY_MASTERY_COMPANION_VISIBLE = "mastery_companion_visible"
+        const val KEY_MASTERY_AURA = "mastery_aura"
     }
 
     var isOfflineMode: Boolean
@@ -122,6 +124,16 @@ class KeyboardSettings(context: Context) {
     var masteryState: String
         get() = prefs.getString(KEY_MASTERY_STATE, "") ?: ""
         set(value) = prefs.edit().putString(KEY_MASTERY_STATE, value).apply()
+
+    /** Companion-app-only cosmetic visibility; it has no effect on the IME. */
+    var isMasteryCompanionVisible: Boolean
+        get() = prefs.getBoolean(KEY_MASTERY_COMPANION_VISIBLE, true)
+        set(value) = prefs.edit().putBoolean(KEY_MASTERY_COMPANION_VISIBLE, value).apply()
+
+    /** Selected cosmetic aura. Locked or unknown IDs safely fall back in the UI. */
+    var masteryAura: String
+        get() = prefs.getString(KEY_MASTERY_AURA, "starlight") ?: "starlight"
+        set(value) = prefs.edit().putString(KEY_MASTERY_AURA, value).apply()
 
     fun registerListener(listener: SharedPreferences.OnSharedPreferenceChangeListener) {
         prefs.registerOnSharedPreferenceChangeListener(listener)
