@@ -1,6 +1,7 @@
 package io.github.daddymean.agentickeyboard.service
 
 import android.content.Context
+import android.content.Intent
 import android.inputmethodservice.InputMethodService
 import android.view.KeyEvent
 import android.view.View
@@ -21,10 +22,13 @@ import androidx.savedstate.SavedStateRegistryController
 import androidx.savedstate.SavedStateRegistryOwner
 import androidx.savedstate.setViewTreeSavedStateRegistryOwner
 import io.github.daddymean.agentickeyboard.AgenticKeyboardApplication
+import io.github.daddymean.agentickeyboard.SnippetVaultActivity
+import io.github.daddymean.agentickeyboard.db.KeyboardRepository
 import io.github.daddymean.agentickeyboard.ui.AgenticKeyboardLayout
 import io.github.daddymean.agentickeyboard.ui.KeyboardViewModel
 import io.github.daddymean.agentickeyboard.ui.KeyboardViewModelFactory
 import io.github.daddymean.agentickeyboard.ui.ReplyCompletenessBar
+import io.github.daddymean.agentickeyboard.ui.SnippetVaultBar
 import io.github.daddymean.agentickeyboard.ui.TrustPrismBanner
 import io.github.daddymean.agentickeyboard.util.ReplyCompletenessSession
 
@@ -45,6 +49,7 @@ class AgenticKeyboardService : InputMethodService(), LifecycleOwner, ViewModelSt
     override val savedStateRegistry: SavedStateRegistry get() = savedStateController.savedStateRegistry
 
     private lateinit var viewModel: KeyboardViewModel
+    private lateinit var repository: KeyboardRepository
 
     override fun onCreate() {
         super.onCreate()
@@ -53,9 +58,10 @@ class AgenticKeyboardService : InputMethodService(), LifecycleOwner, ViewModelSt
 
         // Instantiate ViewModel with repo + settings from Application singleton
         val app = application as AgenticKeyboardApplication
+        repository = app.repository
         viewModel = ViewModelProvider(
             this,
-            KeyboardViewModelFactory(app.repository, app.settings)
+            KeyboardViewModelFactory(repository, app.settings)
         )[KeyboardViewModel::class.java]
     }
 
@@ -72,6 +78,12 @@ class AgenticKeyboardService : InputMethodService(), LifecycleOwner, ViewModelSt
                     viewModel = viewModel,
                     session = replyCompletenessSession,
                     onSendAnyway = { performEnterAction() }
+                )
+                SnippetVaultBar(
+                    viewModel = viewModel,
+                    repository = repository,
+                    onReplaceDraft = { replaceDraftBeforeCursor(it) },
+                    onOpenManager = { openSnippetVaultManager() }
                 )
                 AgenticKeyboardLayout(
                     viewModel = viewModel,
@@ -91,6 +103,27 @@ class AgenticKeyboardService : InputMethodService(), LifecycleOwner, ViewModelSt
             }
         }
         return composeView
+    }
+
+    /** Replaces the bounded draft that triggered `/v` or `/find` recall. */
+    private fun replaceDraftBeforeCursor(text: String) {
+        val ic = currentInputConnection ?: return
+        val existing = ic.getTextBeforeCursor(CONTEXT_CHARS, 0)?.length ?: 0
+        ic.beginBatchEdit()
+        try {
+            if (existing > 0) ic.deleteSurroundingText(existing, 0)
+            ic.commitText(text, 1)
+        } finally {
+            ic.endBatchEdit()
+        }
+        syncEditorText()
+    }
+
+    /** Opens the local manager only after the user taps Manage in the vault bar. */
+    private fun openSnippetVaultManager() {
+        val intent = Intent(this, SnippetVaultActivity::class.java)
+            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        runCatching { startActivity(intent) }
     }
 
     /**
