@@ -99,6 +99,9 @@ interface WritingLogDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertLog(log: WritingLog)
 
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertAllLogs(logs: List<WritingLog>)
+
     @Query("DELETE FROM writing_logs WHERE timestamp < :cutoff")
     suspend fun deleteOlderThan(cutoff: Long)
 
@@ -289,6 +292,10 @@ class KeyboardRepository(private val db: AppDatabase) {
 
     suspend fun insertLog(log: WritingLog) {
         db.writingLogDao().insertLog(log)
+    }
+
+    suspend fun insertAllLogs(logs: List<WritingLog>) {
+        db.writingLogDao().insertAllLogs(logs)
     }
 
     suspend fun deleteLogsOlderThan(cutoff: Long) {
