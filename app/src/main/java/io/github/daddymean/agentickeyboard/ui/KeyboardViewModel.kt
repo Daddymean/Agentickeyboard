@@ -1298,17 +1298,24 @@ class KeyboardViewModel(
                 return@launch
             }
             var imported = 0
-            model.typingPatterns?.vocabulary?.forEach { item ->
-                if (item.word.isNotBlank()) {
-                    val existing = repository.getWord(item.word)
-                    repository.insertWord(
+
+            val vocabularyItems = model.typingPatterns?.vocabulary?.filter { it.word.isNotBlank() } ?: emptyList()
+            if (vocabularyItems.isNotEmpty()) {
+                vocabularyItems.chunked(900).forEach { chunk ->
+                    val wordsInChunk = chunk.map { it.word }
+                    val existingWords = repository.getWords(wordsInChunk).associateBy { it.word }
+
+                    val wordsToInsert = chunk.map { item ->
+                        val existing = existingWords[item.word]
                         UserVocabulary(
                             word = item.word,
                             count = (existing?.count ?: 0) + item.count,
                             lastUsed = maxOf(existing?.lastUsed ?: 0L, item.lastUsed, 1L)
                         )
-                    )
-                    imported++
+                    }
+
+                    repository.insertWords(wordsToInsert)
+                    imported += chunk.size
                 }
             }
             model.correctionHistory.forEach { item ->
