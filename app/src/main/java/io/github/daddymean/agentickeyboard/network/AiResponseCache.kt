@@ -1,6 +1,5 @@
 package io.github.daddymean.agentickeyboard.network
 
-import java.nio.ByteBuffer
 import java.security.MessageDigest
 import java.util.LinkedHashMap
 
@@ -92,10 +91,16 @@ internal object AiCacheKeys {
 
     private fun key(action: String, vararg inputs: String): AiCacheKey {
         val digest = MessageDigest.getInstance("SHA-256")
+        val sizeBytes = ByteArray(Int.SIZE_BYTES)
 
         fun update(value: String) {
             val bytes = value.toByteArray(Charsets.UTF_8)
-            digest.update(ByteBuffer.allocate(Int.SIZE_BYTES).putInt(bytes.size).array())
+            val size = bytes.size
+            sizeBytes[0] = (size ushr 24).toByte()
+            sizeBytes[1] = (size ushr 16).toByte()
+            sizeBytes[2] = (size ushr 8).toByte()
+            sizeBytes[3] = size.toByte()
+            digest.update(sizeBytes)
             digest.update(bytes)
         }
 
