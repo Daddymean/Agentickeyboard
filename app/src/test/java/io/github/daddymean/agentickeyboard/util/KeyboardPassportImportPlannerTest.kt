@@ -146,7 +146,10 @@ class KeyboardPassportImportPlannerTest {
     @Test
     fun malformedRecordsAreDroppedAndCountsCannotOverflow() {
         val plan = KeyboardPassportImportPlanner.plan(
-            current = current.copy(vocabulary = listOf(UserVocabulary("alpha", Int.MAX_VALUE, 1))),
+            current = current.copy(
+                vocabulary = listOf(UserVocabulary("alpha", Int.MAX_VALUE, 1)),
+                customCommands = emptyList()
+            ),
             incoming = PassportPayload(
                 vocabulary = listOf(ImportedVocabulary("alpha", 10, 2), ImportedVocabulary(" ", 3, 1)),
                 corrections = listOf(ImportedCorrection("", "x", 1)),
