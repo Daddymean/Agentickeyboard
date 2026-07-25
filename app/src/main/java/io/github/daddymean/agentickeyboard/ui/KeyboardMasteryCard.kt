@@ -201,6 +201,9 @@ fun KeyboardMasteryCard(viewModel: KeyboardViewModel) {
         }
     }
 
+    Spacer(modifier = Modifier.height(12.dp))
+    KeyboardPassportCard()
+
     if (confirmReset) {
         AlertDialog(
             onDismissRequest = { confirmReset = false },
