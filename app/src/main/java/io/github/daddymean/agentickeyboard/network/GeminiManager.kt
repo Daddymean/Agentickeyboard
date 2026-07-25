@@ -13,6 +13,7 @@ import kotlinx.coroutines.withContext
 
 object GeminiManager {
     private const val TAG = "GeminiManager"
+    private val WHITESPACE_REGEX = "\\s+".toRegex()
 
     // We fetch the API key safely from BuildConfig
     private val apiKey: String = BuildConfig.GEMINI_API_KEY
@@ -386,9 +387,9 @@ object GeminiManager {
     )
 
     /** Rough count of differing words between original and corrected text. */
-    private fun countWordChanges(original: String, corrected: String): Int {
-        val a = original.trim().split("\\s+".toRegex())
-        val b = corrected.trim().split("\\s+".toRegex())
+    internal fun countWordChanges(original: String, corrected: String): Int {
+        val a = original.trim().split(WHITESPACE_REGEX)
+        val b = corrected.trim().split(WHITESPACE_REGEX)
         val diffs = a.zip(b).count { (x, y) -> x != y } + kotlin.math.abs(a.size - b.size)
         return diffs.coerceAtLeast(1)
     }
