@@ -11,7 +11,7 @@ current reply draft addresses each topic and can surface a reminder such as:
 The feature is not a semantic guarantee. It is a conservative local heuristic
 intended to catch obvious omissions without turning Send into an interrogation.
 
-## First slice: pure local model
+## Local analysis model
 
 `ReplyCompletenessCoach` is pure Kotlin and has no Android, network, database,
 or model dependency. It:
@@ -33,24 +33,66 @@ The model returns `null` rather than guessing when:
 A non-null assessment can still have `shouldWarn == false` when the draft
 appears to address every extracted obligation.
 
-## Privacy boundary
+## Explicit context and Send integration
+
+The keyboard never scrapes another app's conversation. The user copies the
+message they are answering and taps **Use clipboard** in the Reply Coach bar.
+Only that tap reads the current clipboard. A bounded preview lets the user
+verify, replace, or clear the attached context.
+
+`ReplyCompletenessSession` keeps the selected context and transient warning
+state in memory. It coordinates the Send action without entering
+`AiPanelState`, hostile-tone Send Guard state, Room, SharedPreferences, or the
+AI request lifecycle.
+
+For editors whose IME action is Send:
+
+1. the service asks the completeness session whether the explicitly attached
+   context and current draft justify an advisory,
+2. if no completeness warning is needed, the existing hostile-tone Send Guard
+   runs independently,
+3. if neither advisory pauses the action, the editor's Send action proceeds.
+
+The warning offers:
+
+- **Keep editing** — clears the warning but keeps context, so the edited draft
+  is checked again,
+- **Dismiss this draft** — suppresses the warning only for the identical
+  context/draft pair,
+- **Send anyway** — bypasses completeness analysis for the next Send attempt,
+- a second Send on the same armed draft — also proceeds, matching the existing
+  reversible Send Guard interaction.
+
+If both completeness and hostile-tone advisories apply, they can appear in
+sequence because they remain separate safeguards with separate dismissal
+state. Neither becomes a permanent block.
+
+## Lifecycle and privacy boundary
 
 Analysis is synchronous and in memory. The assessment does not contain the
 whole incoming message or draft. It contains only derived counts, up to three
 short missing-topic labels, confidence, and advisory text.
 
-This slice does not:
+The active UI state contains a bounded, user-visible context preview so the
+user can verify what they deliberately attached. Context is capped at 8,000
+characters for predictable IME work. The full bounded context remains private
+to the in-memory session and is discarded when:
 
-- persist incoming messages, drafts, obligations, or assessments,
+- the user taps Clear,
+- a new editor session starts,
+- input finishes,
+- or a secure field is encountered.
+
+The feature does not:
+
+- persist incoming messages, drafts, obligations, assessments, or dismissals,
 - upload text or call Gemini,
 - inspect contacts or recipients,
-- capture the clipboard,
+- capture clipboard contents in the background,
 - read another app's conversation automatically,
-- send, rewrite, or block a message,
+- rewrite or automatically send a message,
+- hard-block Send,
 - award Mastery XP or change progression.
-
-The later UI integration must preserve the existing secure-field boundary and
-must obtain reply context through an explicit user-visible action.
 
 ## Known limitations
 
@@ -63,16 +105,13 @@ A future model-assisted fallback may be evaluated, but it must remain optional.
 On-device execution is preferred; any cloud fallback must use the existing
 redaction boundary and may never be required in order to send.
 
-## Planned second slice
+## Test surface
 
-After the pure model is stable:
+Pure-JVM tests cover extraction and matching plus the integration coordinator:
+explicit capture, bounded previews, partial and complete replies, secure-field
+cleanup, same-draft second Send, Keep editing, exact-draft dismissal, one-shot
+bypass, draft changes, and full session clearing.
 
-- define explicit incoming-context capture,
-- add a separate completeness-warning UI state,
-- reuse the Send Guard action seam without conflating tone and completeness,
-- provide Keep editing, Dismiss, and Send anyway actions,
-- clear context on editor changes and secure fields,
-- add ViewModel and Compose coverage.
-
-The warning remains advisory and reversible. No draft is automatically changed
-and no send action is permanently blocked.
+Compose controls expose stable test tags for later instrumented and screenshot
+coverage. GitHub Actions remains authoritative for JVM tests, debug assembly,
+and release/R8 validation.
