@@ -24,7 +24,9 @@ import io.github.daddymean.agentickeyboard.AgenticKeyboardApplication
 import io.github.daddymean.agentickeyboard.ui.AgenticKeyboardLayout
 import io.github.daddymean.agentickeyboard.ui.KeyboardViewModel
 import io.github.daddymean.agentickeyboard.ui.KeyboardViewModelFactory
+import io.github.daddymean.agentickeyboard.ui.ReplyCompletenessBar
 import io.github.daddymean.agentickeyboard.ui.TrustPrismBanner
+import io.github.daddymean.agentickeyboard.util.ReplyCompletenessSession
 
 class AgenticKeyboardService : InputMethodService(), LifecycleOwner, ViewModelStoreOwner, SavedStateRegistryOwner {
 
@@ -36,6 +38,7 @@ class AgenticKeyboardService : InputMethodService(), LifecycleOwner, ViewModelSt
     private val lifecycleRegistry = LifecycleRegistry(this)
     private val store = ViewModelStore()
     private val savedStateController = SavedStateRegistryController.create(this)
+    private val replyCompletenessSession = ReplyCompletenessSession()
 
     override val lifecycle: Lifecycle get() = lifecycleRegistry
     override val viewModelStore: ViewModelStore get() = store
@@ -65,6 +68,11 @@ class AgenticKeyboardService : InputMethodService(), LifecycleOwner, ViewModelSt
         composeView.setContent {
             Column {
                 TrustPrismBanner(viewModel)
+                ReplyCompletenessBar(
+                    viewModel = viewModel,
+                    session = replyCompletenessSession,
+                    onSendAnyway = { performEnterAction() }
+                )
                 AgenticKeyboardLayout(
                     viewModel = viewModel,
                     onKeyPress = { text ->
@@ -96,10 +104,12 @@ class AgenticKeyboardService : InputMethodService(), LifecycleOwner, ViewModelSt
         val hasAction = action != EditorInfo.IME_ACTION_NONE &&
             action != EditorInfo.IME_ACTION_UNSPECIFIED &&
             (options and EditorInfo.IME_FLAG_NO_ENTER_ACTION) == 0
-        // Opt-in send-guard: in messaging (Send) contexts, hold a hostile-reading
-        // draft back once so the shelf can ask "Send anyway?"; the next Enter sends.
         if (hasAction && action == EditorInfo.IME_ACTION_SEND) {
             val draft = ic.getTextBeforeCursor(CONTEXT_CHARS, 0)?.toString() ?: ""
+            // Reply completeness and hostile-tone Send Guard are independent,
+            // reversible advisories. Completeness runs first only when the user
+            // explicitly attached incoming context from the clipboard.
+            if (replyCompletenessSession.interceptSend(draft, viewModel.isSensitiveField.value)) return
             if (viewModel.interceptSend(draft)) return
         }
         if (hasAction) {
@@ -165,6 +175,11 @@ class AgenticKeyboardService : InputMethodService(), LifecycleOwner, ViewModelSt
         super.onStartInput(info, restarting)
         lifecycleRegistry.handleLifecycleEvent(Lifecycle.Event.ON_START)
 
+        // Reply context never crosses editor sessions, including secure fields.
+        // Clearing on every start is intentionally more conservative than trying
+        // to infer whether a framework restart still represents the same draft.
+        replyCompletenessSession.clear()
+
         // Detect password/secure fields (suppresses AI + learning) and restore the
         // persona last used in this app. The IME has package visibility to the app
         // it serves, so it can resolve a friendly label to store alongside.
@@ -203,6 +218,7 @@ class AgenticKeyboardService : InputMethodService(), LifecycleOwner, ViewModelSt
     }
 
     override fun onFinishInput() {
+        replyCompletenessSession.clear()
         lifecycleRegistry.handleLifecycleEvent(Lifecycle.Event.ON_STOP)
         super.onFinishInput()
     }

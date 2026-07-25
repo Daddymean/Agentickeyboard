@@ -6,11 +6,10 @@ item: move it to **Shipped** with the PR number.
 
 ## Next up
 
-- **Reply completeness coach** — reuse Send Guard's editor-action seam to
-  notice when an incoming message asked multiple questions but the current
-  draft appears to answer only some of them. Keep it advisory and reversible,
-  prefer local/on-device analysis where available, and never send, rewrite, or
-  block a message automatically.
+- **Keyboard Passport** — productize `PersonalModelSerializer` into a versioned,
+  optionally encrypted file export/import flow. Show an import preview, support
+  deterministic merge versus replace, exclude raw writing logs by default, and
+  keep the transfer fully user-owned with no cloud account requirement.
 
 ## Later / unscheduled
 
@@ -41,20 +40,26 @@ competitors. Each is anchored to plumbing that already exists, so none starts
 from zero. Promote to **Next up** deliberately — these are feature-sized, not
 session-sized.
 
-- **Keyboard passport.** `PersonalModelSerializer` already does privacy-aware
-  export/import of the personal model. Productize it: one-tap encrypted export
-  to file/QR so your learned dictionary, personas, and custom commands move
-  between devices with no cloud account. Privacy-first portability is a
-  marketable differentiator, and it's mostly UI work now.
-- **On-device AI via Gemini Nano (AICore).** Offline mode currently degrades
-  to canned fallbacks. On devices with AICore, run proofread/continue locally
-  so the privacy toggle stops being a feature-kill switch. "Full AI in
-  airplane mode" is a claim almost no competitor can make.
 - **Snippet vault with slash recall.** Shortcuts + custom commands + (planned)
   clipboard history converge into one searchable vault: `/find address` or
   `/v lunch` recalls saved snippets inline. Reuses the palette matcher as-is.
 
 ## Shipped
+
+- **PR #71** — Reply Completeness Coach integration: added explicit
+  clipboard-to-context capture with a bounded preview, an in-memory session,
+  and an independent pre-Send advisory layered before hostile-tone Send Guard.
+  Users can keep editing, dismiss the identical draft, clear or replace context,
+  or send anyway. Context is cleared across editor sessions and secure fields,
+  and no incoming message, draft, assessment, or dismissal is persisted or
+  uploaded.
+
+- **PR #62** — local Reply Completeness Coach model: added conservative pure
+  Kotlin extraction and matching for multi-question and multi-request messages.
+  It returns likely answered counts, short missing-topic labels, confidence, and
+  advisory copy while suppressing single requests, tiny acknowledgements,
+  rhetorical questions, casual small talk, quoted material, and low-confidence
+  cases. The model has no Android, database, network, or AI dependency.
 
 - **PR #61** — local “Sounds like you” scoring: added an explainable,
   in-memory style fingerprint from learned vocabulary and bounded local writing
