@@ -47,7 +47,7 @@ class KeyboardPassportTransfer(
         if (PassportCategory.VOCABULARY in plan.affectedCategories) {
             repository.clearVocabulary()
             if (mode == KeyboardPassportImportMode.REPLACE) repository.clearBigrams()
-            plan.snapshot.vocabulary.forEach(repository::insertWord)
+            plan.snapshot.vocabulary.forEach { repository.insertWord(it) }
         }
 
         if (PassportCategory.CORRECTIONS in plan.affectedCategories) {
@@ -58,13 +58,13 @@ class KeyboardPassportTransfer(
         }
 
         if (PassportCategory.SHORTCUTS in plan.affectedCategories) {
-            repository.allShortcuts.first().forEach(repository::deleteShortcut)
-            plan.snapshot.shortcuts.forEach(repository::insertShortcut)
+            repository.allShortcuts.first().forEach { repository.deleteShortcut(it) }
+            plan.snapshot.shortcuts.forEach { repository.insertShortcut(it) }
         }
 
         if (PassportCategory.CUSTOM_COMMANDS in plan.affectedCategories) {
             repository.allCustomCommands.first().forEach { repository.deleteCustomCommandById(it.id) }
-            plan.snapshot.customCommands.forEach(repository::insertCustomCommand)
+            plan.snapshot.customCommands.forEach { repository.insertCustomCommand(it) }
         }
 
         if (PassportCategory.APP_PERSONAS in plan.affectedCategories) {
@@ -76,7 +76,7 @@ class KeyboardPassportTransfer(
 
         if (PassportCategory.WRITING_LOGS in plan.affectedCategories) {
             repository.clearLogs()
-            plan.snapshot.writingLogs.forEach(repository::insertLog)
+            plan.snapshot.writingLogs.forEach { repository.insertLog(it) }
         }
 
         if (PassportCategory.PERSONA_PREFERENCE in plan.affectedCategories) {
