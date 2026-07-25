@@ -6,10 +6,11 @@ item: move it to **Shipped** with the PR number.
 
 ## Next up
 
-- **Keyboard Passport** — productize `PersonalModelSerializer` into a versioned,
-  optionally encrypted file export/import flow. Show an import preview, support
-  deterministic merge versus replace, exclude raw writing logs by default, and
-  keep the transfer fully user-owned with no cloud account requirement.
+- **Snippet Vault, Phase 1** — converge shortcut templates and custom slash
+  commands into one searchable local model with deterministic `/find` and `/v`
+  recall. Start with pure Kotlin search/ranking and migration-safe contracts,
+  preserve the existing palette behavior, and leave clipboard history opt-in
+  and unscheduled until the saved-snippet boundary is proven.
 
 ## Later / unscheduled
 
@@ -33,18 +34,21 @@ item: move it to **Shipped** with the PR number.
 - Instrumented/screenshot tests for the keyboard layout (CI currently only
   builds the APK and runs pure-JVM tests).
 
-## Differentiator candidates
-
-Bigger bets that would set the keyboard apart from Gboard/SwiftKey-class
-competitors. Each is anchored to plumbing that already exists, so none starts
-from zero. Promote to **Next up** deliberately — these are feature-sized, not
-session-sized.
-
-- **Snippet vault with slash recall.** Shortcuts + custom commands + (planned)
-  clipboard history converge into one searchable vault: `/find address` or
-  `/v lunch` recalls saved snippets inline. Reuses the palette matcher as-is.
-
 ## Shipped
+
+- **PR #73** — Keyboard Passport companion flow: added system document-picker
+  export/import in the Style Hub, encrypted export by default, sensitive-data
+  redaction by default, optional writing-log inclusion, a 5 MB read boundary,
+  metadata preview, passphrase verification, deterministic Merge versus Replace
+  included rules, and a second confirmation before local mutation. Export reads
+  the complete vocabulary table rather than the bounded prediction shelf. Files,
+  passphrases, and decrypted payloads remain local and transient.
+
+- **PR #72** — Keyboard Passport foundation: added a versioned envelope and
+  payload schema, category/count metadata, SHA-256 integrity verification,
+  optional AES-256-GCM encryption with PBKDF2-HMAC-SHA256, safe rejection of
+  wrong passphrases, tampering, malformed or unsupported future files, default
+  exclusion of writing logs, and backward-compatible legacy JSON/Base64 reads.
 
 - **PR #71** — Reply Completeness Coach integration: added explicit
   clipboard-to-context capture with a bounded preview, an in-memory session,
@@ -193,7 +197,7 @@ session-sized.
   `isSystemInDarkTheme()` and routes every surface, key, chip, popup and label
   through the palette (no more hardcoded `Color(0xFF…)` in the layout). Extended
   `KeyboardColors` with `error`/`onError` and per-feature result-label colours
-  so the shelf's colour coding survives the dark switch.
+  so the shelf's colour coding survives the light/dark switch.
 - **PR #16** — undo for applied AI
   results (⌫ right after Apply/Append restores the replaced draft/selection,
   via `AiApplyUndo` mirroring the smart-space undo) + expandable result
