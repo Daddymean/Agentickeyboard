@@ -6,11 +6,11 @@ item: move it to **Shipped** with the PR number.
 
 ## Next up
 
-- **Snippet Vault, Phase 1** — converge shortcut templates and custom slash
-  commands into one searchable local model with deterministic `/find` and `/v`
-  recall. Start with pure Kotlin search/ranking and migration-safe contracts,
-  preserve the existing palette behavior, and leave clipboard history opt-in
-  and unscheduled until the saved-snippet boundary is proven.
+- **Snippet Vault, Phase 2** — wire the proven local model into the IME and
+  companion app. Combine saved snippets, shortcut templates, and custom commands
+  into `/v` and `/find` result chips; require an explicit tap before insert or
+  rewrite; bypass secure fields; record use only after selection; and add local
+  create/edit/tag/delete surfaces without introducing clipboard history.
 
 ## Later / unscheduled
 
@@ -35,6 +35,14 @@ item: move it to **Shipped** with the PR number.
   builds the APK and runs pure-JVM tests).
 
 ## Shipped
+
+- **PR #74** — Snippet Vault local foundation: added a Room v7 `saved_snippets`
+  boundary with non-destructive migration, repository CRUD and use tracking,
+  newline-safe aliases and tags, and one pure Kotlin search contract spanning
+  saved snippets, existing shortcut templates, and custom rewrite commands.
+  Dedicated `/v` and `/find` parsing leaves the existing palette untouched;
+  bounded deterministic ranking covers titles, aliases, tags, content, usage,
+  recency, and stable ties without reading the clipboard or sending data off-device.
 
 - **PR #73** — Keyboard Passport companion flow: added system document-picker
   export/import in the Style Hub, encrypted export by default, sensitive-data
@@ -181,7 +189,7 @@ item: move it to **Shipped** with the PR number.
   `GeminiManager` (`offlineGrammarFix`/`offlineSummary`/`offlineRewrite`, also
   the cloud-error fallbacks), pure-JVM routing/tone-mapping tests with a fake,
   and a Style Hub availability row. Raised `minSdk` 24→26 (the ML Kit GenAI
-  AARs declare 26; no manifest changes). Runtime behavior still needs manual
+  AARs declare 26; no manifest changes. Runtime behavior still needs manual
   testing on an AICore device (Pixel 9/10, Galaxy S24+ class).
 
 - **(this branch)** — selection-scope indicator: the IME service mirrors the
