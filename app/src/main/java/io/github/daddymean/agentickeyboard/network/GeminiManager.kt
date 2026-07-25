@@ -140,7 +140,7 @@ object GeminiManager {
      * Summarizes long input message text.
      */
     suspend fun summarizeMessage(text: String, personalizationContext: String = "", bypassCache: Boolean = false): String = withContext(Dispatchers.IO) {
-        if (text.trim().split("\\s+".toRegex()).size < 10) {
+        if (text.trim().split(WHITESPACE_REGEX).size < 10) {
             return@withContext "Message is too short to summarize."
         }
 
@@ -385,10 +385,12 @@ object GeminiManager {
         fallback = { getOfflineRewrite(text, targetTone) }
     )
 
+    private val WHITESPACE_REGEX = "\\s+".toRegex()
+
     /** Rough count of differing words between original and corrected text. */
     private fun countWordChanges(original: String, corrected: String): Int {
-        val a = original.trim().split("\\s+".toRegex())
-        val b = corrected.trim().split("\\s+".toRegex())
+        val a = original.trim().split(WHITESPACE_REGEX)
+        val b = corrected.trim().split(WHITESPACE_REGEX)
         val diffs = a.zip(b).count { (x, y) -> x != y } + kotlin.math.abs(a.size - b.size)
         return diffs.coerceAtLeast(1)
     }
@@ -584,7 +586,7 @@ object GeminiManager {
     }
 
     private fun getOfflineSummary(text: String): String {
-        val words = text.trim().split("\\s+".toRegex())
+        val words = text.trim().split(WHITESPACE_REGEX)
         return if (words.size > 8) {
             "[Local Summary] Brief overview: " + words.take(6).joinToString(" ") + "... (" + words.size + " words total)"
         } else {
