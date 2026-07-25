@@ -76,6 +76,27 @@ data class CustomCommand(
     val instruction: String // rewrite style instruction forwarded to the AI
 )
 
+/**
+ * User-owned reusable text in the Snippet Vault. Aliases and tags are stored as
+ * newline-delimited strings so the Room contract stays simple and portable;
+ * SnippetListCodec owns normalization at the UI/repository boundary.
+ */
+@Entity(
+    tableName = "saved_snippets",
+    indices = [Index("title"), Index("usageCount"), Index("lastUsedAt")]
+)
+data class SavedSnippet(
+    @PrimaryKey(autoGenerate = true) val id: Int = 0,
+    val title: String,
+    val content: String,
+    val aliases: String = "",
+    val tags: String = "",
+    val usageCount: Int = 0,
+    val createdAt: Long = System.currentTimeMillis(),
+    val updatedAt: Long = createdAt,
+    val lastUsedAt: Long = 0L
+)
+
 @Dao
 interface ShortcutDao {
     @Query("SELECT * FROM shortcut_templates ORDER BY shortcut ASC")
@@ -157,6 +178,27 @@ interface CustomCommandDao {
 }
 
 @Dao
+interface SavedSnippetDao {
+    @Query("SELECT * FROM saved_snippets ORDER BY title COLLATE NOCASE ASC, id ASC")
+    fun getAll(): Flow<List<SavedSnippet>>
+
+    @Query("SELECT * FROM saved_snippets WHERE id = :id LIMIT 1")
+    suspend fun getById(id: Int): SavedSnippet?
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsert(snippet: SavedSnippet): Long
+
+    @Query("UPDATE saved_snippets SET usageCount = usageCount + 1, lastUsedAt = :usedAt WHERE id = :id")
+    suspend fun recordUse(id: Int, usedAt: Long): Int
+
+    @Query("DELETE FROM saved_snippets WHERE id = :id")
+    suspend fun deleteById(id: Int)
+
+    @Query("DELETE FROM saved_snippets")
+    suspend fun clearAll()
+}
+
+@Dao
 interface LearnedCorrectionDao {
     @Query("SELECT * FROM learned_corrections ORDER BY count DESC")
     fun getAllCorrections(): Flow<List<LearnedCorrection>>
@@ -214,9 +256,10 @@ interface UserVocabularyDao {
         UserVocabulary::class,
         WordBigram::class,
         AppPersona::class,
-        CustomCommand::class
+        CustomCommand::class,
+        SavedSnippet::class
     ],
-    version = 6,
+    version = 7,
     exportSchema = true
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -227,6 +270,7 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun wordBigramDao(): WordBigramDao
     abstract fun appPersonaDao(): AppPersonaDao
     abstract fun customCommandDao(): CustomCommandDao
+    abstract fun savedSnippetDao(): SavedSnippetDao
 
     companion object {
         @Volatile
@@ -248,6 +292,30 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
+        /** v7 adds the user-owned Snippet Vault without copying or deleting legacy stores. */
+        private val MIGRATION_6_7 = object : Migration(6, 7) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS `saved_snippets` (
+                        `id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                        `title` TEXT NOT NULL,
+                        `content` TEXT NOT NULL,
+                        `aliases` TEXT NOT NULL,
+                        `tags` TEXT NOT NULL,
+                        `usageCount` INTEGER NOT NULL,
+                        `createdAt` INTEGER NOT NULL,
+                        `updatedAt` INTEGER NOT NULL,
+                        `lastUsedAt` INTEGER NOT NULL
+                    )
+                    """.trimIndent()
+                )
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_saved_snippets_title` ON `saved_snippets` (`title`)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_saved_snippets_usageCount` ON `saved_snippets` (`usageCount`)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_saved_snippets_lastUsedAt` ON `saved_snippets` (`lastUsedAt`)")
+            }
+        }
+
         fun getDatabase(context: Context): AppDatabase {
             return INSTANCE ?: synchronized(this) {
                 val instance = Room.databaseBuilder(
@@ -258,7 +326,7 @@ abstract class AppDatabase : RoomDatabase() {
                 // Learned vocabulary/corrections ARE the product: real migrations
                 // from v4 on. Destructive fallback stays only for the pre-v4
                 // schemas that shipped before migrations existed.
-                .addMigrations(MIGRATION_4_5, MIGRATION_5_6)
+                .addMigrations(MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7)
                 .fallbackToDestructiveMigrationFrom(true, 1, 2, 3)
                 .build()
                 INSTANCE = instance
@@ -274,6 +342,7 @@ class KeyboardRepository(private val db: AppDatabase) {
     val allCorrections: Flow<List<LearnedCorrection>> = db.learnedCorrectionDao().getAllCorrections()
     val topVocabulary: Flow<List<UserVocabulary>> = db.userVocabularyDao().getTopVocabulary()
     val allCustomCommands: Flow<List<CustomCommand>> = db.customCommandDao().getAll()
+    val allSavedSnippets: Flow<List<SavedSnippet>> = db.savedSnippetDao().getAll()
 
     suspend fun insertShortcut(shortcut: ShortcutTemplate) {
         db.shortcutDao().insertShortcut(shortcut)
@@ -297,6 +366,24 @@ class KeyboardRepository(private val db: AppDatabase) {
 
     suspend fun clearLogs() {
         db.writingLogDao().clearAll()
+    }
+
+    // --- Snippet Vault ---
+
+    suspend fun getSavedSnippet(id: Int): SavedSnippet? = db.savedSnippetDao().getById(id)
+
+    suspend fun upsertSavedSnippet(snippet: SavedSnippet): Long = db.savedSnippetDao().upsert(snippet)
+
+    suspend fun recordSavedSnippetUse(id: Int, usedAt: Long = System.currentTimeMillis()): Boolean {
+        return db.savedSnippetDao().recordUse(id, usedAt) > 0
+    }
+
+    suspend fun deleteSavedSnippetById(id: Int) {
+        db.savedSnippetDao().deleteById(id)
+    }
+
+    suspend fun clearSavedSnippets() {
+        db.savedSnippetDao().clearAll()
     }
 
     // --- Next-word prediction (bigrams) ---
