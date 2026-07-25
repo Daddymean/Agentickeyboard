@@ -6,11 +6,11 @@ item: move it to **Shipped** with the PR number.
 
 ## Next up
 
-- **Snippet Vault, Phase 2** — wire the proven local model into the IME and
-  companion app. Combine saved snippets, shortcut templates, and custom commands
-  into `/v` and `/find` result chips; require an explicit tap before insert or
-  rewrite; bypass secure fields; record use only after selection; and add local
-  create/edit/tag/delete surfaces without introducing clipboard history.
+- **Snippet Vault, Phase 3** — add optional local clipboard history behind an
+  explicit opt-in. Reject credentials, one-time codes, payment data, and other
+  sensitive-looking content before persistence; never collect in secure fields;
+  bound retention and item count; collapse duplicates; support pin, pause,
+  delete, and Clear now; and keep clipboard data out of cloud AI and analytics.
 
 ## Later / unscheduled
 
@@ -27,7 +27,6 @@ item: move it to **Shipped** with the PR number.
   with the now-themed keyboard.
 - Multi-step undo: the AI-apply undo holds a single pending entry; an undo
   chip in the shelf could offer a small history instead of backspace-only.
-- Clipboard history (multiple recent clips, not just the current one).
 - Long-press accent/symbol popups on keys.
 - Multi-variant results: generate 2–3 rewrite candidates and let the user pick.
 - Streaming for Continue so the suggestion appears as it generates.
@@ -35,6 +34,13 @@ item: move it to **Shipped** with the PR number.
   builds the APK and runs pure-JVM tests).
 
 ## Shipped
+
+- **PR #75** — Snippet Vault recall and manager: added secure-field-aware `/v`
+  and `/find` result chips above the IME, explicit tap-to-insert behavior, staged
+  custom slash commands, and an optional `::` rewrite body that never runs until
+  selection. Saved-snippet use is recorded only after a tap. A non-exported local
+  manager supports create, edit, aliases, tags, and delete without clipboard
+  history, analytics, accounts, or a new network path.
 
 - **PR #74** — Snippet Vault local foundation: added a Room v7 `saved_snippets`
   boundary with non-destructive migration, repository CRUD and use tracking,
@@ -189,7 +195,7 @@ item: move it to **Shipped** with the PR number.
   `GeminiManager` (`offlineGrammarFix`/`offlineSummary`/`offlineRewrite`, also
   the cloud-error fallbacks), pure-JVM routing/tone-mapping tests with a fake,
   and a Style Hub availability row. Raised `minSdk` 24→26 (the ML Kit GenAI
-  AARs declare 26; no manifest changes. Runtime behavior still needs manual
+  AARs declare 26; no manifest changes). Runtime behavior still needs manual
   testing on an AICore device (Pixel 9/10, Galaxy S24+ class).
 
 - **(this branch)** — selection-scope indicator: the IME service mirrors the
