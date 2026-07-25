@@ -148,6 +148,7 @@ class KeyboardPassportImportPlannerTest {
         val plan = KeyboardPassportImportPlanner.plan(
             current = current.copy(
                 vocabulary = listOf(UserVocabulary("alpha", Int.MAX_VALUE, 1)),
+                corrections = emptyList(),
                 customCommands = emptyList()
             ),
             incoming = PassportPayload(
