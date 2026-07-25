@@ -7,7 +7,7 @@ import java.text.Normalizer
 import java.util.Locale
 import kotlin.math.min
 
-/** What selecting a vault result will do in the later keyboard UI slice. */
+/** What selecting a vault result will do in the keyboard UI. */
 enum class SnippetVaultAction {
     INSERT_TEXT,
     RUN_REWRITE
@@ -42,9 +42,18 @@ enum class SnippetRecallCommand(val token: String) {
     FIND("/find")
 }
 
+/**
+ * A recall query may optionally carry rewrite source text after `::`.
+ *
+ * Example: `/v boss :: move tomorrow's meeting to 3` searches for "boss" and,
+ * after an explicit result tap, runs the chosen custom rewrite against the text
+ * after the delimiter. Without a body, choosing a command only stages its normal
+ * slash token so nothing executes unexpectedly.
+ */
 data class SnippetRecallRequest(
     val command: SnippetRecallCommand,
-    val query: String
+    val query: String,
+    val body: String = ""
 )
 
 enum class SnippetMatchField {
@@ -59,6 +68,36 @@ data class SnippetVaultMatch(
     val score: Int,
     val matchedOn: Set<SnippetMatchField>
 )
+
+/** Explicit result-tap behavior, kept pure so the IME never improvises actions. */
+sealed interface SnippetVaultSelectionPlan {
+    data class InsertText(val text: String) : SnippetVaultSelectionPlan
+    data class StageCommand(val token: String) : SnippetVaultSelectionPlan
+    data class RunRewrite(
+        val sourceText: String,
+        val instruction: String
+    ) : SnippetVaultSelectionPlan
+}
+
+object SnippetVaultSelectionPlanner {
+    fun plan(
+        request: SnippetRecallRequest,
+        entry: SnippetVaultEntry
+    ): SnippetVaultSelectionPlan = when (entry.action) {
+        SnippetVaultAction.INSERT_TEXT -> SnippetVaultSelectionPlan.InsertText(entry.content)
+        SnippetVaultAction.RUN_REWRITE -> {
+            val body = request.body.trim()
+            if (body.isNotEmpty() && entry.content.isNotBlank()) {
+                SnippetVaultSelectionPlan.RunRewrite(
+                    sourceText = body,
+                    instruction = entry.content
+                )
+            } else {
+                SnippetVaultSelectionPlan.StageCommand(entry.title.trim())
+            }
+        }
+    }
+}
 
 /** Newline-delimited storage for aliases and tags. Empty and duplicate values disappear. */
 object SnippetListCodec {
@@ -85,7 +124,9 @@ object SnippetVaultSearch {
     private const val DEFAULT_LIMIT = 6
     private const val MAX_RESULTS = 20
     private const val MAX_QUERY_CHARS = 120
+    private const val MAX_REWRITE_BODY_CHARS = 4_000
     private const val MAX_SEARCHABLE_CONTENT_CHARS = 4_000
+    private const val REWRITE_BODY_DELIMITER = "::"
 
     private val combiningMarks = "\\p{M}+".toRegex()
     private val nonSearchCharacters = "[^\\p{L}\\p{N}]+".toRegex()
@@ -97,8 +138,11 @@ object SnippetVaultSearch {
         if (!trimmed.startsWith('/')) return null
         val token = trimmed.takeWhile { !it.isWhitespace() }.lowercase(Locale.ROOT)
         val command = SnippetRecallCommand.entries.firstOrNull { it.token == token } ?: return null
-        val query = trimmed.drop(token.length).trim().take(MAX_QUERY_CHARS)
-        return SnippetRecallRequest(command, query)
+        val remainder = trimmed.drop(token.length).trim()
+        val parts = remainder.split(REWRITE_BODY_DELIMITER, limit = 2)
+        val query = parts.firstOrNull().orEmpty().trim().take(MAX_QUERY_CHARS)
+        val body = parts.getOrNull(1).orEmpty().trim().take(MAX_REWRITE_BODY_CHARS)
+        return SnippetRecallRequest(command, query, body)
     }
 
     fun search(
@@ -259,3 +303,8 @@ fun CustomCommand.toVaultEntry(): SnippetVaultEntry = SnippetVaultEntry(
     action = SnippetVaultAction.RUN_REWRITE,
     source = SnippetVaultSource.CUSTOM_COMMAND
 )
+
+fun SnippetVaultEntry.savedSnippetIdOrNull(): Int? {
+    if (source != SnippetVaultSource.SAVED_SNIPPET) return null
+    return stableId.removePrefix("snippet:").toIntOrNull()
+}
