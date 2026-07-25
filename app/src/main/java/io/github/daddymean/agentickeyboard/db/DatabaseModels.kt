@@ -188,6 +188,12 @@ interface UserVocabularyDao {
     @Query("SELECT * FROM user_vocabulary WHERE word = :word LIMIT 1")
     suspend fun getWord(word: String): UserVocabulary?
 
+    @Query("SELECT * FROM user_vocabulary WHERE word IN (:words)")
+    suspend fun getWords(words: List<String>): List<UserVocabulary>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertWords(words: List<UserVocabulary>)
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertWord(word: UserVocabulary)
 
@@ -365,6 +371,14 @@ class KeyboardRepository(private val db: AppDatabase) {
 
     suspend fun clearCorrections() {
         db.learnedCorrectionDao().clearAll()
+    }
+
+    suspend fun getWords(words: List<String>): List<UserVocabulary> {
+        return db.userVocabularyDao().getWords(words)
+    }
+
+    suspend fun insertWords(words: List<UserVocabulary>) {
+        db.userVocabularyDao().insertWords(words)
     }
 
     suspend fun insertWord(word: UserVocabulary) {

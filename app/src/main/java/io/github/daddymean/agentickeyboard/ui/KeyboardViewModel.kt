@@ -1298,29 +1298,39 @@ class KeyboardViewModel(
                 return@launch
             }
             var imported = 0
-            model.typingPatterns?.vocabulary?.forEach { item ->
-                if (item.word.isNotBlank()) {
-                    val existing = repository.getWord(item.word)
-                    repository.insertWord(
+
+            model.typingPatterns?.vocabulary?.filter { it.word.isNotBlank() }?.let { validWords ->
+                validWords.chunked(900).forEach { chunk ->
+                    val existingWordsMap = repository.getWords(chunk.map { it.word }).associateBy { it.word }
+                    val wordsToInsert = chunk.map { item ->
+                        val existing = existingWordsMap[item.word]
                         UserVocabulary(
                             word = item.word,
                             count = (existing?.count ?: 0) + item.count,
                             lastUsed = maxOf(existing?.lastUsed ?: 0L, item.lastUsed, 1L)
                         )
-                    )
-                    imported++
+                    }
+                    repository.insertWords(wordsToInsert)
+                    imported += chunk.size
                 }
             }
-            model.correctionHistory.forEach { item ->
-                if (item.typo.isNotBlank() && item.correction.isNotBlank()) {
-                    val typo = item.typo.lowercase().trim()
-                    val existing = repository.getCorrectionForTypo(typo)
-                    if (existing != null) {
-                        repository.insertCorrection(existing.copy(correction = item.correction, count = existing.count + item.count))
-                    } else {
-                        repository.insertCorrection(LearnedCorrection(typo = typo, correction = item.correction, count = item.count))
+
+            model.correctionHistory.filter { it.typo.isNotBlank() && it.correction.isNotBlank() }.let { validCorrections ->
+                validCorrections.chunked(900).forEach { chunk ->
+                    val lowerTypos = chunk.map { it.typo.lowercase().trim() }
+                    val existingCorrectionsMap = repository.getCorrectionsForTypos(lowerTypos).associateBy { it.typo }
+
+                    val correctionsToInsert = chunk.map { item ->
+                        val typo = item.typo.lowercase().trim()
+                        val existing = existingCorrectionsMap[typo]
+                        if (existing != null) {
+                            existing.copy(correction = item.correction, count = existing.count + item.count)
+                        } else {
+                            LearnedCorrection(typo = typo, correction = item.correction, count = item.count)
+                        }
                     }
-                    imported++
+                    repository.insertCorrections(correctionsToInsert)
+                    imported += chunk.size
                 }
             }
             model.writingLogs.forEach { item ->
