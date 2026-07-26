@@ -29,6 +29,9 @@ class KeyboardSettings(context: Context) {
         const val KEY_SOURCE_LANG = "source_lang"
         const val KEY_TARGET_LANG = "target_lang"
         const val KEY_LOG_RETENTION_DAYS = "log_retention_days"
+        const val KEY_CLIPBOARD_HISTORY_ENABLED = "clipboard_history_enabled"
+        const val KEY_CLIPBOARD_HISTORY_PAUSED = "clipboard_history_paused"
+        const val KEY_CLIPBOARD_RETENTION_DAYS = "clipboard_retention_days"
         const val KEY_STAT_AUTOCORRECTIONS = "stat_autocorrections"
         const val KEY_STAT_SWIPE_WORDS = "stat_swipe_words"
         const val KEY_STAT_AI_APPLIES = "stat_ai_applies"
@@ -98,6 +101,32 @@ class KeyboardSettings(context: Context) {
     var logRetentionDays: Int
         get() = prefs.getInt(KEY_LOG_RETENTION_DAYS, 30)
         set(value) = prefs.edit().putInt(KEY_LOG_RETENTION_DAYS, value).apply()
+
+    /** Clipboard history is disabled until the user explicitly opts in. */
+    var isClipboardHistoryEnabled: Boolean
+        get() = prefs.getBoolean(KEY_CLIPBOARD_HISTORY_ENABLED, false)
+        set(value) = prefs.edit().putBoolean(KEY_CLIPBOARD_HISTORY_ENABLED, value).apply()
+
+    /** Pause preserves existing clips while blocking new foreground capture. */
+    var isClipboardHistoryPaused: Boolean
+        get() = prefs.getBoolean(KEY_CLIPBOARD_HISTORY_PAUSED, false)
+        set(value) = prefs.edit().putBoolean(KEY_CLIPBOARD_HISTORY_PAUSED, value).apply()
+
+    var clipboardRetentionDays: Int
+        get() = prefs.getInt(
+            KEY_CLIPBOARD_RETENTION_DAYS,
+            ClipboardHistoryLimits.DEFAULT_RETENTION_DAYS
+        ).coerceIn(
+            ClipboardHistoryLimits.MIN_RETENTION_DAYS,
+            ClipboardHistoryLimits.MAX_RETENTION_DAYS
+        )
+        set(value) = prefs.edit().putInt(
+            KEY_CLIPBOARD_RETENTION_DAYS,
+            value.coerceIn(
+                ClipboardHistoryLimits.MIN_RETENTION_DAYS,
+                ClipboardHistoryLimits.MAX_RETENTION_DAYS
+            )
+        ).apply()
 
     // --- Local usage statistics (never leave the device) ---
 
