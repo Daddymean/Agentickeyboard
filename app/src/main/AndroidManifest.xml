@@ -15,6 +15,12 @@
         android:supportsRtl="true"
         android:theme="@style/Theme.MyApplication">
         <activity
+            android:name=".ClipboardHistoryActivity"
+            android:exported="false"
+            android:label="Clipboard History"
+            android:theme="@style/Theme.MyApplication" />
+
+        <activity
             android:name=".SnippetVaultActivity"
             android:exported="false"
             android:label="Snippet Vault"

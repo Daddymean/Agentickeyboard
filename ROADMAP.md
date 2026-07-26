@@ -1,16 +1,18 @@
 # Roadmap
 
-Prioritized backlog for Agentic Keyboard. Work top-down, one item (or one
-paired item) per session/PR. Update this file in the same PR that ships an
-item: move it to **Shipped** with the PR number.
+Prioritized backlog for Agentic Keyboard. Work top-down, one cohesive milestone
+per PR. Bundle tightly related model, storage, UI, privacy, tests, and documentation
+when that accelerates validation without mixing unrelated product areas. Update this
+file in the same PR that ships a milestone: move it to **Shipped** with the PR number.
 
 ## Next up
 
-- **Snippet Vault, Phase 3** — add optional local clipboard history behind an
-  explicit opt-in. Reject credentials, one-time codes, payment data, and other
-  sensitive-looking content before persistence; never collect in secure fields;
-  bound retention and item count; collapse duplicates; support pin, pause,
-  delete, and Clear now; and keep clipboard data out of cloud AI and analytics.
+- **Release candidate stabilization and device testing** — execute
+  `docs/RELEASE_CANDIDATE_TEST_MATRIX.md`, add migration verification and focused
+  Compose/screenshot coverage for secure-field suppression, destructive
+  confirmations, Snippet Vault recall, and clipboard history; exercise the debug
+  artifact across supported Android eras; and fix P0/P1 regressions before adding
+  another feature milestone.
 
 ## Later / unscheduled
 
@@ -30,10 +32,17 @@ item: move it to **Shipped** with the PR number.
 - Long-press accent/symbol popups on keys.
 - Multi-variant results: generate 2–3 rewrite candidates and let the user pick.
 - Streaming for Continue so the suggestion appears as it generates.
-- Instrumented/screenshot tests for the keyboard layout (CI currently only
-  builds the APK and runs pure-JVM tests).
 
 ## Shipped
+
+- **PR #76** — optional local clipboard history milestone: added an explicit
+  opt-in with foreground-only capture and no clipboard listener; pre-storage
+  rejection for credentials, OTPs, payment data, private keys, government-ID
+  patterns, recovery phrases, blanks, and oversized clips; Room v8 storage with
+  duplicate collapse, bounded unpinned retention, pin limits, pause, individual
+  delete, and confirmed Clear now; secure-field suppression; keyboard history
+  chips; a non-exported manager; JVM privacy/retention tests; and a release-candidate
+  device/regression matrix. Stored history does not enter cloud AI or analytics.
 
 - **PR #75** — Snippet Vault recall and manager: added secure-field-aware `/v`
   and `/find` result chips above the IME, explicit tap-to-insert behavior, staged
