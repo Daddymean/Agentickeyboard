@@ -50,7 +50,15 @@ fun ClipboardHistoryBar(
     if (sensitiveField) return
 
     val colors = LocalKeyboardColors.current
-    val history by repository.allClipboardHistory.collectAsState(initial = emptyList())
+    // Do not open or collect the optional Room table merely to show the opt-in
+    // control. This keeps the keyboard startup path independent of clipboard
+    // history until the user actually enables it.
+    val history = if (enabled) {
+        val collected by repository.allClipboardHistory.collectAsState(initial = emptyList())
+        collected
+    } else {
+        emptyList()
+    }
 
     Column(
         modifier = Modifier
