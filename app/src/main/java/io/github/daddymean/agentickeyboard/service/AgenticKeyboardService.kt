@@ -1,5 +1,6 @@
 package io.github.daddymean.agentickeyboard.service
 
+import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
 import android.inputmethodservice.InputMethodService
@@ -8,6 +9,8 @@ import android.view.View
 import android.view.inputmethod.EditorInfo
 import android.view.inputmethod.InputMethodManager
 import androidx.compose.foundation.layout.Column
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.platform.ComposeView
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleOwner
@@ -22,15 +25,27 @@ import androidx.savedstate.SavedStateRegistryController
 import androidx.savedstate.SavedStateRegistryOwner
 import androidx.savedstate.setViewTreeSavedStateRegistryOwner
 import io.github.daddymean.agentickeyboard.AgenticKeyboardApplication
+import io.github.daddymean.agentickeyboard.ClipboardHistoryActivity
 import io.github.daddymean.agentickeyboard.SnippetVaultActivity
+import io.github.daddymean.agentickeyboard.db.ClipboardHistoryItem
 import io.github.daddymean.agentickeyboard.db.KeyboardRepository
 import io.github.daddymean.agentickeyboard.ui.AgenticKeyboardLayout
+import io.github.daddymean.agentickeyboard.ui.ClipboardHistoryBar
 import io.github.daddymean.agentickeyboard.ui.KeyboardViewModel
 import io.github.daddymean.agentickeyboard.ui.KeyboardViewModelFactory
 import io.github.daddymean.agentickeyboard.ui.ReplyCompletenessBar
 import io.github.daddymean.agentickeyboard.ui.SnippetVaultBar
 import io.github.daddymean.agentickeyboard.ui.TrustPrismBanner
+import io.github.daddymean.agentickeyboard.util.ClipboardCaptureDecision
+import io.github.daddymean.agentickeyboard.util.ClipboardHistoryPolicy
+import io.github.daddymean.agentickeyboard.util.KeyboardSettings
 import io.github.daddymean.agentickeyboard.util.ReplyCompletenessSession
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.launch
 
 class AgenticKeyboardService : InputMethodService(), LifecycleOwner, ViewModelStoreOwner, SavedStateRegistryOwner {
 
@@ -43,6 +58,10 @@ class AgenticKeyboardService : InputMethodService(), LifecycleOwner, ViewModelSt
     private val store = ViewModelStore()
     private val savedStateController = SavedStateRegistryController.create(this)
     private val replyCompletenessSession = ReplyCompletenessSession()
+    private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    private val clipboardHistoryEnabled = MutableStateFlow(false)
+    private val clipboardHistoryPaused = MutableStateFlow(false)
+    private val clipboardStatus = MutableStateFlow<String?>(null)
 
     override val lifecycle: Lifecycle get() = lifecycleRegistry
     override val viewModelStore: ViewModelStore get() = store
@@ -50,18 +69,20 @@ class AgenticKeyboardService : InputMethodService(), LifecycleOwner, ViewModelSt
 
     private lateinit var viewModel: KeyboardViewModel
     private lateinit var repository: KeyboardRepository
+    private lateinit var settings: KeyboardSettings
 
     override fun onCreate() {
         super.onCreate()
         savedStateController.performRestore(null)
         lifecycleRegistry.handleLifecycleEvent(Lifecycle.Event.ON_CREATE)
 
-        // Instantiate ViewModel with repo + settings from Application singleton
         val app = application as AgenticKeyboardApplication
         repository = app.repository
+        settings = app.settings
+        refreshClipboardSettings()
         viewModel = ViewModelProvider(
             this,
-            KeyboardViewModelFactory(repository, app.settings)
+            KeyboardViewModelFactory(repository, settings)
         )[KeyboardViewModel::class.java]
     }
 
@@ -72,6 +93,11 @@ class AgenticKeyboardService : InputMethodService(), LifecycleOwner, ViewModelSt
         composeView.setViewTreeSavedStateRegistryOwner(this)
 
         composeView.setContent {
+            val historyEnabled by clipboardHistoryEnabled.collectAsState()
+            val historyPaused by clipboardHistoryPaused.collectAsState()
+            val historyStatus by clipboardStatus.collectAsState()
+            val sensitiveField by viewModel.isSensitiveField.collectAsState()
+
             Column {
                 TrustPrismBanner(viewModel)
                 ReplyCompletenessBar(
@@ -85,6 +111,18 @@ class AgenticKeyboardService : InputMethodService(), LifecycleOwner, ViewModelSt
                     onReplaceDraft = { replaceDraftBeforeCursor(it) },
                     onOpenManager = { openSnippetVaultManager() }
                 )
+                ClipboardHistoryBar(
+                    repository = repository,
+                    enabled = historyEnabled,
+                    paused = historyPaused,
+                    sensitiveField = sensitiveField,
+                    statusMessage = historyStatus,
+                    onEnable = { enableClipboardHistory() },
+                    onTogglePause = { toggleClipboardHistoryPause() },
+                    onCaptureCurrent = { captureCurrentClipboard(silent = false) },
+                    onInsert = { insertClipboardItem(it) },
+                    onOpenManager = { openClipboardHistoryManager() }
+                )
                 AgenticKeyboardLayout(
                     viewModel = viewModel,
                     onKeyPress = { text ->
@@ -96,8 +134,6 @@ class AgenticKeyboardService : InputMethodService(), LifecycleOwner, ViewModelSt
                     onAction = { performEnterAction() },
                     onMicPress = { switchToVoiceInput() },
                     onCursorMove = { steps -> moveCursor(steps) },
-                    // Resolved lazily on every use: the active InputConnection changes
-                    // whenever the user switches editors, so it must never be captured.
                     inputConnectionProvider = { currentInputConnection }
                 )
             }
@@ -119,11 +155,88 @@ class AgenticKeyboardService : InputMethodService(), LifecycleOwner, ViewModelSt
         syncEditorText()
     }
 
+    private fun insertClipboardItem(item: ClipboardHistoryItem) {
+        if (viewModel.isSensitiveField.value) return
+        currentInputConnection?.commitText(item.content, 1) ?: return
+        clipboardStatus.value = "Inserted from local history."
+        serviceScope.launch { repository.recordClipboardUse(item.id) }
+    }
+
     /** Opens the local manager only after the user taps Manage in the vault bar. */
     private fun openSnippetVaultManager() {
         val intent = Intent(this, SnippetVaultActivity::class.java)
             .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         runCatching { startActivity(intent) }
+    }
+
+    private fun openClipboardHistoryManager() {
+        val intent = Intent(this, ClipboardHistoryActivity::class.java)
+            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        runCatching { startActivity(intent) }
+    }
+
+    private fun enableClipboardHistory() {
+        settings.isClipboardHistoryEnabled = true
+        settings.isClipboardHistoryPaused = false
+        refreshClipboardSettings()
+        clipboardStatus.value = "Enabled. Capturing the current clipboard locally."
+        captureCurrentClipboard(silent = false)
+    }
+
+    private fun toggleClipboardHistoryPause() {
+        if (!settings.isClipboardHistoryEnabled) return
+        settings.isClipboardHistoryPaused = !settings.isClipboardHistoryPaused
+        refreshClipboardSettings()
+        clipboardStatus.value = if (settings.isClipboardHistoryPaused) {
+            "Paused. Existing clips remain available."
+        } else {
+            "Resumed. Foreground capture is active."
+        }
+        if (!settings.isClipboardHistoryPaused) captureCurrentClipboard(silent = true)
+    }
+
+    private fun refreshClipboardSettings() {
+        clipboardHistoryEnabled.value = settings.isClipboardHistoryEnabled
+        clipboardHistoryPaused.value = settings.isClipboardHistoryPaused
+    }
+
+    /**
+     * Reads only the current primary text clip, only while the opted-in IME is in
+     * the foreground. There is deliberately no ClipboardManager listener.
+     */
+    private fun captureCurrentClipboard(silent: Boolean) {
+        refreshClipboardSettings()
+        if (!settings.isClipboardHistoryEnabled || settings.isClipboardHistoryPaused) return
+        if (viewModel.isSensitiveField.value) return
+
+        val manager = getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+        val text = manager.primaryClip
+            ?.takeIf { it.itemCount > 0 }
+            ?.getItemAt(0)
+            ?.text
+            ?.toString()
+            ?: run {
+                if (!silent) clipboardStatus.value = "Clipboard has no plain text to retain."
+                return
+            }
+
+        when (val decision = ClipboardHistoryPolicy.evaluate(text)) {
+            is ClipboardCaptureDecision.Accept -> {
+                serviceScope.launch {
+                    repository.captureClipboard(
+                        content = decision.content,
+                        contentHash = decision.contentHash,
+                        retentionDays = settings.clipboardRetentionDays
+                    )
+                }
+                if (!silent) clipboardStatus.value = "Saved locally. Duplicate clips collapse automatically."
+            }
+            is ClipboardCaptureDecision.Reject -> {
+                if (!silent) {
+                    clipboardStatus.value = ClipboardHistoryPolicy.rejectionMessage(decision.reason)
+                }
+            }
+        }
     }
 
     /**
@@ -139,9 +252,6 @@ class AgenticKeyboardService : InputMethodService(), LifecycleOwner, ViewModelSt
             (options and EditorInfo.IME_FLAG_NO_ENTER_ACTION) == 0
         if (hasAction && action == EditorInfo.IME_ACTION_SEND) {
             val draft = ic.getTextBeforeCursor(CONTEXT_CHARS, 0)?.toString() ?: ""
-            // Reply completeness and hostile-tone Send Guard are independent,
-            // reversible advisories. Completeness runs first only when the user
-            // explicitly attached incoming context from the clipboard.
             if (replyCompletenessSession.interceptSend(draft, viewModel.isSensitiveField.value)) return
             if (viewModel.interceptSend(draft)) return
         }
@@ -187,8 +297,6 @@ class AgenticKeyboardService : InputMethodService(), LifecycleOwner, ViewModelSt
     private fun syncEditorText() {
         val textBefore = currentInputConnection?.getTextBeforeCursor(CONTEXT_CHARS, 0)?.toString() ?: ""
         viewModel.setInputText(textBefore)
-        // Same non-blank rule as the layout's selectedText(): AI actions treat a
-        // whitespace-only selection as no selection.
         val selected = currentInputConnection?.getSelectedText(0)?.toString()
         viewModel.setSelectionActive(!selected.isNullOrBlank())
     }
@@ -207,23 +315,17 @@ class AgenticKeyboardService : InputMethodService(), LifecycleOwner, ViewModelSt
     override fun onStartInput(info: EditorInfo?, restarting: Boolean) {
         super.onStartInput(info, restarting)
         lifecycleRegistry.handleLifecycleEvent(Lifecycle.Event.ON_START)
-
-        // Reply context never crosses editor sessions, including secure fields.
-        // Clearing on every start is intentionally more conservative than trying
-        // to infer whether a framework restart still represents the same draft.
         replyCompletenessSession.clear()
+        clipboardStatus.value = null
 
-        // Detect password/secure fields (suppresses AI + learning) and restore the
-        // persona last used in this app. The IME has package visibility to the app
-        // it serves, so it can resolve a friendly label to store alongside.
         viewModel.onEditorStarted(info?.packageName, resolveAppLabel(info?.packageName), info?.inputType ?: 0)
+        refreshClipboardSettings()
 
-        // Fetch active editor contents to initialize suggestions/state, and drop
-        // any AI result that referred to the previous editor.
         if (!restarting) {
             viewModel.dismissResults()
         }
         syncEditorText()
+        captureCurrentClipboard(silent = true)
     }
 
     override fun onUpdateSelection(
@@ -235,14 +337,14 @@ class AgenticKeyboardService : InputMethodService(), LifecycleOwner, ViewModelSt
         candidatesEnd: Int
     ) {
         super.onUpdateSelection(oldSelStart, oldSelEnd, newSelStart, newSelEnd, candidatesStart, candidatesEnd)
-        // Keeps ViewModel state (and therefore the suggestion shelf) in sync with
-        // whatever the user types or where they move the cursor.
         syncEditorText()
     }
 
     override fun onWindowShown() {
         super.onWindowShown()
         lifecycleRegistry.handleLifecycleEvent(Lifecycle.Event.ON_RESUME)
+        refreshClipboardSettings()
+        captureCurrentClipboard(silent = true)
     }
 
     override fun onWindowHidden() {
@@ -252,12 +354,14 @@ class AgenticKeyboardService : InputMethodService(), LifecycleOwner, ViewModelSt
 
     override fun onFinishInput() {
         replyCompletenessSession.clear()
+        clipboardStatus.value = null
         lifecycleRegistry.handleLifecycleEvent(Lifecycle.Event.ON_STOP)
         super.onFinishInput()
     }
 
     override fun onDestroy() {
         lifecycleRegistry.handleLifecycleEvent(Lifecycle.Event.ON_DESTROY)
+        serviceScope.cancel()
         store.clear()
         super.onDestroy()
     }
