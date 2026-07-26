@@ -15,6 +15,9 @@ import androidx.room.RoomDatabase
 import androidx.room.Transaction
 import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
+import io.github.daddymean.agentickeyboard.util.ClipboardHistoryLimits
+import io.github.daddymean.agentickeyboard.util.ClipboardHistoryPruner
+import io.github.daddymean.agentickeyboard.util.ClipboardRetentionRecord
 import kotlinx.coroutines.flow.Flow
 
 @Entity(tableName = "shortcut_templates")
@@ -94,6 +97,28 @@ data class SavedSnippet(
     val usageCount: Int = 0,
     val createdAt: Long = System.currentTimeMillis(),
     val updatedAt: Long = createdAt,
+    val lastUsedAt: Long = 0L
+)
+
+/**
+ * A privacy-filtered clipboard item retained locally after explicit opt-in.
+ * contentHash is an opaque duplicate key; raw text never appears in lookup keys.
+ */
+@Entity(
+    tableName = "clipboard_history",
+    indices = [
+        Index(value = ["contentHash"], unique = true),
+        Index("pinned"),
+        Index("lastSeenAt")
+    ]
+)
+data class ClipboardHistoryItem(
+    @PrimaryKey(autoGenerate = true) val id: Int = 0,
+    val content: String,
+    val contentHash: String,
+    val pinned: Boolean = false,
+    val createdAt: Long = System.currentTimeMillis(),
+    val lastSeenAt: Long = createdAt,
     val lastUsedAt: Long = 0L
 )
 
@@ -199,6 +224,42 @@ interface SavedSnippetDao {
 }
 
 @Dao
+interface ClipboardHistoryDao {
+    @Query("SELECT * FROM clipboard_history ORDER BY pinned DESC, lastSeenAt DESC, id DESC")
+    fun getAll(): Flow<List<ClipboardHistoryItem>>
+
+    @Query("SELECT * FROM clipboard_history ORDER BY pinned DESC, lastSeenAt DESC, id DESC")
+    suspend fun getAllNow(): List<ClipboardHistoryItem>
+
+    @Query("SELECT * FROM clipboard_history WHERE id = :id LIMIT 1")
+    suspend fun getById(id: Int): ClipboardHistoryItem?
+
+    @Query("SELECT COUNT(*) FROM clipboard_history WHERE pinned = 1")
+    suspend fun countPinned(): Int
+
+    @Insert(onConflict = OnConflictStrategy.IGNORE)
+    suspend fun insert(item: ClipboardHistoryItem): Long
+
+    @Query("UPDATE clipboard_history SET content = :content, lastSeenAt = :seenAt WHERE contentHash = :contentHash")
+    suspend fun touchDuplicate(contentHash: String, content: String, seenAt: Long): Int
+
+    @Query("UPDATE clipboard_history SET pinned = :pinned WHERE id = :id")
+    suspend fun setPinned(id: Int, pinned: Boolean): Int
+
+    @Query("UPDATE clipboard_history SET lastUsedAt = :usedAt WHERE id = :id")
+    suspend fun recordUse(id: Int, usedAt: Long): Int
+
+    @Query("DELETE FROM clipboard_history WHERE id = :id")
+    suspend fun deleteById(id: Int)
+
+    @Query("DELETE FROM clipboard_history WHERE id IN (:ids)")
+    suspend fun deleteByIds(ids: List<Int>)
+
+    @Query("DELETE FROM clipboard_history")
+    suspend fun clearAll()
+}
+
+@Dao
 interface LearnedCorrectionDao {
     @Query("SELECT * FROM learned_corrections ORDER BY count DESC")
     fun getAllCorrections(): Flow<List<LearnedCorrection>>
@@ -257,9 +318,10 @@ interface UserVocabularyDao {
         WordBigram::class,
         AppPersona::class,
         CustomCommand::class,
-        SavedSnippet::class
+        SavedSnippet::class,
+        ClipboardHistoryItem::class
     ],
-    version = 7,
+    version = 8,
     exportSchema = true
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -271,6 +333,7 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun appPersonaDao(): AppPersonaDao
     abstract fun customCommandDao(): CustomCommandDao
     abstract fun savedSnippetDao(): SavedSnippetDao
+    abstract fun clipboardHistoryDao(): ClipboardHistoryDao
 
     companion object {
         @Volatile
@@ -316,6 +379,28 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
+        /** v8 adds opt-in, privacy-filtered clipboard history. Existing data is untouched. */
+        private val MIGRATION_7_8 = object : Migration(7, 8) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS `clipboard_history` (
+                        `id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                        `content` TEXT NOT NULL,
+                        `contentHash` TEXT NOT NULL,
+                        `pinned` INTEGER NOT NULL,
+                        `createdAt` INTEGER NOT NULL,
+                        `lastSeenAt` INTEGER NOT NULL,
+                        `lastUsedAt` INTEGER NOT NULL
+                    )
+                    """.trimIndent()
+                )
+                db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS `index_clipboard_history_contentHash` ON `clipboard_history` (`contentHash`)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_clipboard_history_pinned` ON `clipboard_history` (`pinned`)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_clipboard_history_lastSeenAt` ON `clipboard_history` (`lastSeenAt`)")
+            }
+        }
+
         fun getDatabase(context: Context): AppDatabase {
             return INSTANCE ?: synchronized(this) {
                 val instance = Room.databaseBuilder(
@@ -326,7 +411,7 @@ abstract class AppDatabase : RoomDatabase() {
                 // Learned vocabulary/corrections ARE the product: real migrations
                 // from v4 on. Destructive fallback stays only for the pre-v4
                 // schemas that shipped before migrations existed.
-                .addMigrations(MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7)
+                .addMigrations(MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8)
                 .fallbackToDestructiveMigrationFrom(true, 1, 2, 3)
                 .build()
                 INSTANCE = instance
@@ -343,6 +428,7 @@ class KeyboardRepository(private val db: AppDatabase) {
     val topVocabulary: Flow<List<UserVocabulary>> = db.userVocabularyDao().getTopVocabulary()
     val allCustomCommands: Flow<List<CustomCommand>> = db.customCommandDao().getAll()
     val allSavedSnippets: Flow<List<SavedSnippet>> = db.savedSnippetDao().getAll()
+    val allClipboardHistory: Flow<List<ClipboardHistoryItem>> = db.clipboardHistoryDao().getAll()
 
     suspend fun insertShortcut(shortcut: ShortcutTemplate) {
         db.shortcutDao().insertShortcut(shortcut)
@@ -384,6 +470,66 @@ class KeyboardRepository(private val db: AppDatabase) {
 
     suspend fun clearSavedSnippets() {
         db.savedSnippetDao().clearAll()
+    }
+
+    // --- Optional local clipboard history ---
+
+    suspend fun captureClipboard(
+        content: String,
+        contentHash: String,
+        seenAt: Long = System.currentTimeMillis(),
+        retentionDays: Int = ClipboardHistoryLimits.DEFAULT_RETENTION_DAYS
+    ) {
+        val dao = db.clipboardHistoryDao()
+        val inserted = dao.insert(
+            ClipboardHistoryItem(
+                content = content,
+                contentHash = contentHash,
+                createdAt = seenAt,
+                lastSeenAt = seenAt
+            )
+        )
+        if (inserted == -1L) {
+            dao.touchDuplicate(contentHash, content, seenAt)
+        }
+        pruneClipboardHistory(seenAt, retentionDays)
+    }
+
+    suspend fun setClipboardPinned(id: Int, pinned: Boolean): Boolean {
+        val dao = db.clipboardHistoryDao()
+        val existing = dao.getById(id) ?: return false
+        if (pinned && !existing.pinned && dao.countPinned() >= ClipboardHistoryLimits.MAX_PINNED_ITEMS) {
+            return false
+        }
+        return dao.setPinned(id, pinned) > 0
+    }
+
+    suspend fun recordClipboardUse(id: Int, usedAt: Long = System.currentTimeMillis()): Boolean {
+        return db.clipboardHistoryDao().recordUse(id, usedAt) > 0
+    }
+
+    suspend fun deleteClipboardItem(id: Int) {
+        db.clipboardHistoryDao().deleteById(id)
+    }
+
+    suspend fun clearClipboardHistory() {
+        db.clipboardHistoryDao().clearAll()
+    }
+
+    suspend fun pruneClipboardHistory(
+        now: Long = System.currentTimeMillis(),
+        retentionDays: Int = ClipboardHistoryLimits.DEFAULT_RETENTION_DAYS
+    ) {
+        val dao = db.clipboardHistoryDao()
+        val records = dao.getAllNow().map { item ->
+            ClipboardRetentionRecord(
+                id = item.id,
+                pinned = item.pinned,
+                lastSeenAt = item.lastSeenAt
+            )
+        }
+        val ids = ClipboardHistoryPruner.plan(records, now, retentionDays).idsToDelete
+        if (ids.isNotEmpty()) dao.deleteByIds(ids.toList())
     }
 
     // --- Next-word prediction (bigrams) ---
