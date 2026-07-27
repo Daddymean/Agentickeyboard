@@ -4,6 +4,7 @@ import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
 import android.inputmethodservice.InputMethodService
+import android.util.Log
 import android.view.KeyEvent
 import android.view.View
 import android.view.inputmethod.EditorInfo
@@ -50,6 +51,7 @@ import kotlinx.coroutines.launch
 class AgenticKeyboardService : InputMethodService(), LifecycleOwner, ViewModelStoreOwner, SavedStateRegistryOwner {
 
     private companion object {
+        const val TAG = "AgenticKeyboardIME"
         const val CONTEXT_CHARS = 1000
         const val MAX_CURSOR_STEPS = 20
     }
@@ -141,7 +143,6 @@ class AgenticKeyboardService : InputMethodService(), LifecycleOwner, ViewModelSt
         return composeView
     }
 
-    /** Replaces the bounded draft that triggered `/v` or `/find` recall. */
     private fun replaceDraftBeforeCursor(text: String) {
         val ic = currentInputConnection ?: return
         val existing = ic.getTextBeforeCursor(CONTEXT_CHARS, 0)?.length ?: 0
@@ -162,17 +163,18 @@ class AgenticKeyboardService : InputMethodService(), LifecycleOwner, ViewModelSt
         serviceScope.launch { repository.recordClipboardUse(item.id) }
     }
 
-    /** Opens the local manager only after the user taps Manage in the vault bar. */
     private fun openSnippetVaultManager() {
         val intent = Intent(this, SnippetVaultActivity::class.java)
             .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         runCatching { startActivity(intent) }
+            .onFailure { Log.w(TAG, "Unable to open Snippet Vault manager", it) }
     }
 
     private fun openClipboardHistoryManager() {
         val intent = Intent(this, ClipboardHistoryActivity::class.java)
             .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         runCatching { startActivity(intent) }
+            .onFailure { Log.w(TAG, "Unable to open clipboard manager", it) }
     }
 
     private fun enableClipboardHistory() {
@@ -202,32 +204,43 @@ class AgenticKeyboardService : InputMethodService(), LifecycleOwner, ViewModelSt
 
     /**
      * Reads only the current primary text clip, only while the opted-in IME is in
-     * the foreground. There is deliberately no ClipboardManager listener.
+     * the foreground. Android clipboard access can still be denied by an OEM,
+     * device policy, or a lifecycle race; those failures must never terminate the
+     * keyboard process.
      */
     private fun captureCurrentClipboard(silent: Boolean) {
         refreshClipboardSettings()
         if (!settings.isClipboardHistoryEnabled || settings.isClipboardHistoryPaused) return
         if (viewModel.isSensitiveField.value) return
 
-        val manager = getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-        val text = manager.primaryClip
-            ?.takeIf { it.itemCount > 0 }
-            ?.getItemAt(0)
-            ?.text
-            ?.toString()
-            ?: run {
-                if (!silent) clipboardStatus.value = "Clipboard has no plain text to retain."
-                return
-            }
+        val text = runCatching {
+            val manager = getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+            manager.primaryClip
+                ?.takeIf { it.itemCount > 0 }
+                ?.getItemAt(0)
+                ?.text
+                ?.toString()
+        }.onFailure {
+            Log.w(TAG, "Clipboard access unavailable; continuing without capture", it)
+        }.getOrNull()
+
+        if (text == null) {
+            if (!silent) clipboardStatus.value = "Clipboard is unavailable or has no plain text."
+            return
+        }
 
         when (val decision = ClipboardHistoryPolicy.evaluate(text)) {
             is ClipboardCaptureDecision.Accept -> {
                 serviceScope.launch {
-                    repository.captureClipboard(
-                        content = decision.content,
-                        contentHash = decision.contentHash,
-                        retentionDays = settings.clipboardRetentionDays
-                    )
+                    runCatching {
+                        repository.captureClipboard(
+                            content = decision.content,
+                            contentHash = decision.contentHash,
+                            retentionDays = settings.clipboardRetentionDays
+                        )
+                    }.onFailure {
+                        Log.e(TAG, "Clipboard history write failed", it)
+                    }
                 }
                 if (!silent) clipboardStatus.value = "Saved locally. Duplicate clips collapse automatically."
             }
@@ -239,10 +252,6 @@ class AgenticKeyboardService : InputMethodService(), LifecycleOwner, ViewModelSt
         }
     }
 
-    /**
-     * Triggers the editor-defined IME action (Send, Search, Done, ...) when one
-     * exists, otherwise synthesizes a full Enter key press/release pair.
-     */
     private fun performEnterAction() {
         val ic = currentInputConnection ?: return
         val options = currentInputEditorInfo?.imeOptions ?: EditorInfo.IME_NULL
@@ -263,7 +272,6 @@ class AgenticKeyboardService : InputMethodService(), LifecycleOwner, ViewModelSt
         }
     }
 
-    /** Moves the cursor left (negative) or right (positive) via DPAD key events. */
     private fun moveCursor(steps: Int) {
         if (steps == 0) return
         val ic = currentInputConnection ?: return
@@ -274,10 +282,6 @@ class AgenticKeyboardService : InputMethodService(), LifecycleOwner, ViewModelSt
         }
     }
 
-    /**
-     * Hands input off to an installed voice IME when one is enabled; otherwise
-     * shows the system input-method picker so the user can choose.
-     */
     private fun switchToVoiceInput() {
         val imm = getSystemService(Context.INPUT_METHOD_SERVICE) as InputMethodManager
         val voiceIme = imm.enabledInputMethodList.firstOrNull { imi ->
@@ -301,7 +305,6 @@ class AgenticKeyboardService : InputMethodService(), LifecycleOwner, ViewModelSt
         viewModel.setSelectionActive(!selected.isNullOrBlank())
     }
 
-    /** Friendly app name for [packageName], or "" if it can't be resolved. */
     @Suppress("DEPRECATION")
     private fun resolveAppLabel(packageName: String?): String {
         if (packageName.isNullOrBlank()) return ""
@@ -325,7 +328,8 @@ class AgenticKeyboardService : InputMethodService(), LifecycleOwner, ViewModelSt
             viewModel.dismissResults()
         }
         syncEditorText()
-        captureCurrentClipboard(silent = true)
+        // Do not read the clipboard here. On Android 13+ and some OEM builds,
+        // onStartInput can run before the IME window is recognized as foreground.
     }
 
     override fun onUpdateSelection(

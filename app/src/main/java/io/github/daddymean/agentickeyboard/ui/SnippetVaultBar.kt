@@ -43,8 +43,7 @@ import kotlinx.coroutines.launch
  * Local-only `/v` and `/find` recall surface shown above the keyboard.
  *
  * Results never insert or run merely by matching. A tap is always required, and
- * secure fields suppress the entire surface. The manager action opens a local
- * companion screen; no clipboard, network, account, or analytics path exists.
+ * secure fields suppress the entire surface.
  */
 @Composable
 fun SnippetVaultBar(
@@ -57,14 +56,17 @@ fun SnippetVaultBar(
     val draft by viewModel.inputText.collectAsState()
     val isSensitiveField by viewModel.isSensitiveField.collectAsState()
     val themeOverride by viewModel.themeOverride.collectAsState()
+
+    // Parse first and return before subscribing to any optional Room-backed vault
+    // streams. Normal typing must not open the Snippet Vault database surface.
+    val request = remember(draft, isSensitiveField) {
+        if (isSensitiveField) null else SnippetVaultSearch.parseRecall(draft)
+    } ?: return
+
     val shortcuts by viewModel.shortcuts.collectAsState()
     val customCommands by viewModel.customCommands.collectAsState()
     val savedSnippets by repository.allSavedSnippets.collectAsState(initial = emptyList())
     val scope = rememberCoroutineScope()
-
-    val request = remember(draft, isSensitiveField) {
-        if (isSensitiveField) null else SnippetVaultSearch.parseRecall(draft)
-    } ?: return
 
     val entries = remember(savedSnippets, shortcuts, customCommands) {
         buildList {
