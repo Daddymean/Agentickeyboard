@@ -29,10 +29,17 @@ class KeyboardSettings(context: Context) {
         const val KEY_SOURCE_LANG = "source_lang"
         const val KEY_TARGET_LANG = "target_lang"
         const val KEY_LOG_RETENTION_DAYS = "log_retention_days"
+        const val KEY_CLIPBOARD_HISTORY_ENABLED = "clipboard_history_enabled"
+        const val KEY_CLIPBOARD_HISTORY_PAUSED = "clipboard_history_paused"
+        const val KEY_CLIPBOARD_RETENTION_DAYS = "clipboard_retention_days"
         const val KEY_STAT_AUTOCORRECTIONS = "stat_autocorrections"
         const val KEY_STAT_SWIPE_WORDS = "stat_swipe_words"
         const val KEY_STAT_AI_APPLIES = "stat_ai_applies"
         const val KEY_STAT_SHORTCUT_EXPANSIONS = "stat_shortcut_expansions"
+        const val KEY_MASTERY_ENABLED = "mastery_enabled"
+        const val KEY_MASTERY_STATE = "mastery_state"
+        const val KEY_MASTERY_COMPANION_VISIBLE = "mastery_companion_visible"
+        const val KEY_MASTERY_AURA = "mastery_aura"
     }
 
     var isOfflineMode: Boolean
@@ -95,6 +102,32 @@ class KeyboardSettings(context: Context) {
         get() = prefs.getInt(KEY_LOG_RETENTION_DAYS, 30)
         set(value) = prefs.edit().putInt(KEY_LOG_RETENTION_DAYS, value).apply()
 
+    /** Clipboard history is disabled until the user explicitly opts in. */
+    var isClipboardHistoryEnabled: Boolean
+        get() = prefs.getBoolean(KEY_CLIPBOARD_HISTORY_ENABLED, false)
+        set(value) = prefs.edit().putBoolean(KEY_CLIPBOARD_HISTORY_ENABLED, value).apply()
+
+    /** Pause preserves existing clips while blocking new foreground capture. */
+    var isClipboardHistoryPaused: Boolean
+        get() = prefs.getBoolean(KEY_CLIPBOARD_HISTORY_PAUSED, false)
+        set(value) = prefs.edit().putBoolean(KEY_CLIPBOARD_HISTORY_PAUSED, value).apply()
+
+    var clipboardRetentionDays: Int
+        get() = prefs.getInt(
+            KEY_CLIPBOARD_RETENTION_DAYS,
+            ClipboardHistoryLimits.DEFAULT_RETENTION_DAYS
+        ).coerceIn(
+            ClipboardHistoryLimits.MIN_RETENTION_DAYS,
+            ClipboardHistoryLimits.MAX_RETENTION_DAYS
+        )
+        set(value) = prefs.edit().putInt(
+            KEY_CLIPBOARD_RETENTION_DAYS,
+            value.coerceIn(
+                ClipboardHistoryLimits.MIN_RETENTION_DAYS,
+                ClipboardHistoryLimits.MAX_RETENTION_DAYS
+            )
+        ).apply()
+
     // --- Local usage statistics (never leave the device) ---
 
     var statAutoCorrections: Int
@@ -112,6 +145,24 @@ class KeyboardSettings(context: Context) {
     var statShortcutExpansions: Int
         get() = prefs.getInt(KEY_STAT_SHORTCUT_EXPANSIONS, 0)
         set(value) = prefs.edit().putInt(KEY_STAT_SHORTCUT_EXPANSIONS, value).apply()
+
+    var isMasteryEnabled: Boolean
+        get() = prefs.getBoolean(KEY_MASTERY_ENABLED, true)
+        set(value) = prefs.edit().putBoolean(KEY_MASTERY_ENABLED, value).apply()
+
+    var masteryState: String
+        get() = prefs.getString(KEY_MASTERY_STATE, "") ?: ""
+        set(value) = prefs.edit().putString(KEY_MASTERY_STATE, value).apply()
+
+    /** Companion-app-only cosmetic visibility; it has no effect on the IME. */
+    var isMasteryCompanionVisible: Boolean
+        get() = prefs.getBoolean(KEY_MASTERY_COMPANION_VISIBLE, true)
+        set(value) = prefs.edit().putBoolean(KEY_MASTERY_COMPANION_VISIBLE, value).apply()
+
+    /** Selected cosmetic aura. Locked or unknown IDs safely fall back in the UI. */
+    var masteryAura: String
+        get() = prefs.getString(KEY_MASTERY_AURA, "starlight") ?: "starlight"
+        set(value) = prefs.edit().putString(KEY_MASTERY_AURA, value).apply()
 
     fun registerListener(listener: SharedPreferences.OnSharedPreferenceChangeListener) {
         prefs.registerOnSharedPreferenceChangeListener(listener)

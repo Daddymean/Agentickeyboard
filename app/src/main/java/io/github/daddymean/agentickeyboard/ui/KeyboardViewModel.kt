@@ -14,16 +14,21 @@ import io.github.daddymean.agentickeyboard.db.UserVocabulary
 import io.github.daddymean.agentickeyboard.db.WritingLog
 import io.github.daddymean.agentickeyboard.network.GeminiManager
 import io.github.daddymean.agentickeyboard.network.GrammarCorrectionResponse
-import io.github.daddymean.agentickeyboard.network.SuggestionsResponse
 import io.github.daddymean.agentickeyboard.network.ToneAnalysisResponse
 import io.github.daddymean.agentickeyboard.util.CommandPalette
 import io.github.daddymean.agentickeyboard.util.KeyboardSettings
+import io.github.daddymean.agentickeyboard.util.mastery.KeyboardMastery
+import io.github.daddymean.agentickeyboard.util.mastery.MasteryEvent
+import io.github.daddymean.agentickeyboard.util.mastery.MasteryState
+import io.github.daddymean.agentickeyboard.util.mastery.MasteryStateCodec
 import io.github.daddymean.agentickeyboard.util.PersonalModelSerializer
 import io.github.daddymean.agentickeyboard.util.ReplyIntents
 import io.github.daddymean.agentickeyboard.util.SendGuard
+import io.github.daddymean.agentickeyboard.util.VoiceMatchScorer
+import io.github.daddymean.agentickeyboard.util.VoiceSample
+import io.github.daddymean.agentickeyboard.util.VoiceVocabulary
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
-import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -48,6 +53,15 @@ data class UsageStats(
     val swipeWords: Int = 0,
     val aiApplies: Int = 0,
     val shortcutExpansions: Int = 0
+)
+
+/** Transient, local-only style match shown beside eligible AI writing results. */
+data class VoiceMatchState(
+    val percent: Int,
+    val confidence: Int,
+    val label: String,
+    val signals: List<String>,
+    val delta: Int? = null
 )
 
 class KeyboardViewModel(
@@ -129,51 +143,19 @@ class KeyboardViewModel(
         _hasSelection.value = active
     }
 
-    // AI states
-    private val _suggestions = MutableStateFlow<List<String>>(emptyList())
-    val suggestions = _suggestions.asStateFlow()
+    // Exactly one AI panel can be active at a time; the controller owns
+    // foreground request lifecycle and the backing result state.
+    private val aiSession = AiSessionController(viewModelScope)
+    private val _aiPanelState = aiSession.mutablePanelState
+    val aiPanelState = aiSession.panelState
 
-    // Message awaiting an intent choice (Accept/Decline/...) before reply
-    // suggestions are generated; non-null while the intent chips are shown.
-    private val _replyIntentContext = MutableStateFlow<String?>(null)
-    val replyIntentContext = _replyIntentContext.asStateFlow()
-
-    private val _grammarCorrection = MutableStateFlow<GrammarCorrectionResponse?>(null)
-    val grammarCorrection = _grammarCorrection.asStateFlow()
-
-    private val _toneAnalysis = MutableStateFlow<ToneAnalysisResponse?>(null)
-    val toneAnalysis = _toneAnalysis.asStateFlow()
-
-    private val _summary = MutableStateFlow<String?>(null)
-    val summary = _summary.asStateFlow()
-
-    private val _translation = MutableStateFlow<String?>(null)
-    val translation = _translation.asStateFlow()
-
-    private val _rewrite = MutableStateFlow<String?>(null)
-    val rewrite = _rewrite.asStateFlow()
-
-    private val _composeResult = MutableStateFlow<String?>(null)
-    val composeResult = _composeResult.asStateFlow()
-
-    private val _explanation = MutableStateFlow<String?>(null)
-    val explanation = _explanation.asStateFlow()
-
-    private val _continuation = MutableStateFlow<String?>(null)
-    val continuation = _continuation.asStateFlow()
-
-    // Text the pending result panel would replace, shown in the expanded
-    // original-vs-result preview; null for results with no original to compare
-    // (compose, continue, explain).
-    private val _aiResultSource = MutableStateFlow<String?>(null)
-    val aiResultSource = _aiResultSource.asStateFlow()
+    private val _voiceMatch = MutableStateFlow<VoiceMatchState?>(null)
+    val voiceMatch = _voiceMatch.asStateFlow()
+    private var pendingVoiceBaseline: Int? = null
 
     // Debounced background grammar check result (opt-in; see isProofreadEnabled)
     private val _proofreadHint = MutableStateFlow<GrammarCorrectionResponse?>(null)
     val proofreadHint = _proofreadHint.asStateFlow()
-
-    private val _isLoading = MutableStateFlow(false)
-    val isLoading = _isLoading.asStateFlow()
 
     // Settings-backed state (persisted when a KeyboardSettings store is provided)
     private val _isOfflineMode = MutableStateFlow(settings?.isOfflineMode ?: false)
@@ -230,6 +212,16 @@ class KeyboardViewModel(
     )
     val usageStats = _usageStats.asStateFlow()
 
+    private val _isMasteryEnabled = MutableStateFlow(settings?.isMasteryEnabled ?: true)
+    val isMasteryEnabled = _isMasteryEnabled.asStateFlow()
+
+    private val initialMasteryState = MasteryStateCodec.decode(
+        settings?.masteryState,
+        enabledFallback = _isMasteryEnabled.value
+    ).copy(enabled = _isMasteryEnabled.value)
+    private val _masteryState = MutableStateFlow(initialMasteryState)
+    val masteryState = _masteryState.asStateFlow()
+
     private var activeAppPackage: String? = null
     private var activeAppLabel: String = ""
     private var previousCommittedWord: String? = null
@@ -237,7 +229,6 @@ class KeyboardViewModel(
     private var pendingAiUndo: AiApplyUndo? = null
     private val correctionReverts = mutableMapOf<String, Int>()
     private var proofreadJob: Job? = null
-    private var aiJob: Job? = null
     private var predictionJob: Job? = null
 
     // Last text pushed through setInputText; null until the first sync so the
@@ -262,6 +253,15 @@ class KeyboardViewModel(
             KeyboardSettings.KEY_PERSONA -> _userPersonaPreference.value = s.persona
             KeyboardSettings.KEY_SOURCE_LANG -> _sourceLanguage.value = s.sourceLanguage
             KeyboardSettings.KEY_TARGET_LANG -> _targetLanguage.value = s.targetLanguage
+            KeyboardSettings.KEY_MASTERY_ENABLED -> {
+                _isMasteryEnabled.value = s.isMasteryEnabled
+                _masteryState.value = _masteryState.value.copy(enabled = s.isMasteryEnabled)
+            }
+            KeyboardSettings.KEY_MASTERY_STATE -> {
+                _masteryState.value = MasteryStateCodec.decode(
+                    s.masteryState, enabledFallback = s.isMasteryEnabled
+                ).copy(enabled = s.isMasteryEnabled)
+            }
         }
     }
 
@@ -298,20 +298,15 @@ class KeyboardViewModel(
     }
 
     override fun onCleared() {
+        aiSession.cancel()
         settings?.unregisterListener(prefsListener)
         super.onCleared()
     }
 
-    /**
-     * Cancels any in-flight AI request and starts a new one, so rapid taps never
-     * stack requests or leave a stale spinner.
-     */
     // Re-runs the most recent AI action with the response cache bypassed, so the
     // ↻ button on a result panel always produces a fresh variant.
-    private var regenerateAction: (() -> Unit)? = null
-
     fun regenerate() {
-        regenerateAction?.invoke()
+        aiSession.regenerate()
     }
 
     /**
@@ -319,49 +314,70 @@ class KeyboardViewModel(
      * clears the panels and rewrites the result text with the chip's instruction.
      */
     fun refineResult(adjustment: String) {
-        val current = _rewrite.value ?: _composeResult.value ?: _translation.value
-            ?: _summary.value ?: _continuation.value ?: _grammarCorrection.value?.corrected ?: return
+        val current = aiSession.currentState.refinableText ?: return
         val instruction = RESULT_REFINEMENTS[adjustment] ?: adjustment
+        val baseline = _voiceMatch.value?.percent
+        recordMastery(MasteryEvent.REFINEMENT)
         dismissResults()
+        pendingVoiceBaseline = baseline
         rewriteWithStyle(current, instruction, bypassCache = true)
     }
 
     private fun launchAi(block: suspend () -> Unit) {
-        val previous = aiJob
-        aiJob = viewModelScope.launch {
-            previous?.cancelAndJoin()
-            _isLoading.value = true
-            try {
-                block()
-            } catch (e: CancellationException) {
-                throw e
-            } catch (_: Exception) {
-                // Last-resort guard. Every action handles its own errors; this
-                // exists so a missed one degrades to "no result" instead of
-                // crashing the IME process and taking the keyboard down.
-            } finally {
-                _isLoading.value = false
-            }
-        }
+        _voiceMatch.value = null
+        aiSession.launch { block() }
     }
 
-    /**
-     * Clears every pending AI result panel (grammar, tone, summary, translation,
-     * rewrite, compose, explanation, continuation, and reply suggestions).
-     */
+    /** Clears the active AI panel and any armed send warning. */
     fun dismissResults() {
-        _grammarCorrection.value = null
-        _toneAnalysis.value = null
-        _summary.value = null
-        _translation.value = null
-        _rewrite.value = null
-        _composeResult.value = null
-        _explanation.value = null
-        _continuation.value = null
-        _suggestions.value = emptyList()
-        _replyIntentContext.value = null
+        aiSession.clear()
+        _voiceMatch.value = null
+        pendingVoiceBaseline = null
         _sendGuardWarning.value = null
-        _aiResultSource.value = null
+    }
+
+    private fun publishAiPanel(state: AiPanelState) {
+        _aiPanelState.value = state
+        val candidate = when (state) {
+            is AiPanelState.Grammar -> state.result.corrected.takeUnless {
+                state.result.explanation.startsWith("Error", ignoreCase = true)
+            }
+            is AiPanelState.Rewrite -> state.text
+            is AiPanelState.Compose -> state.text
+            is AiPanelState.Continuation -> state.text
+            else -> null
+        }?.takeUnless {
+            it.startsWith("Rewrite error", ignoreCase = true) ||
+                it.startsWith("Compose error", ignoreCase = true) ||
+                it.startsWith("[Offline:", ignoreCase = true)
+        }
+
+        val score = candidate
+            ?.takeIf { !_isSensitiveField.value }
+            ?.let { text ->
+                VoiceMatchScorer.score(
+                    candidate = text,
+                    vocabulary = topVocabulary.value.take(100).map {
+                        VoiceVocabulary(word = it.word, count = it.count)
+                    },
+                    samples = logs.value.asSequence()
+                        .filter { it.sentiment != "Corrected" }
+                        .take(30)
+                        .map { VoiceSample(text = it.originalText, wordCount = it.wordCount) }
+                        .toList()
+                )
+            }
+
+        _voiceMatch.value = score?.let {
+            VoiceMatchState(
+                percent = it.percent,
+                confidence = it.confidence,
+                label = it.label,
+                signals = it.signals,
+                delta = pendingVoiceBaseline?.let { baseline -> it.percent - baseline }
+            )
+        }
+        pendingVoiceBaseline = null
     }
 
     fun setInputText(text: String) {
@@ -500,6 +516,20 @@ class KeyboardViewModel(
     }
 
     fun getLogRetentionDays(): Int = settings?.logRetentionDays ?: 30
+
+    fun setMasteryEnabled(enabled: Boolean) {
+        _isMasteryEnabled.value = enabled
+        settings?.isMasteryEnabled = enabled
+        val updated = _masteryState.value.copy(enabled = enabled)
+        _masteryState.value = updated
+        settings?.masteryState = MasteryStateCodec.encode(updated)
+    }
+
+    fun resetMasteryProgress() {
+        val reset = MasteryState.fresh(enabled = _isMasteryEnabled.value)
+        _masteryState.value = reset
+        settings?.masteryState = MasteryStateCodec.encode(reset)
+    }
 
     fun setUserPersonaPreference(persona: String) {
         _userPersonaPreference.value = persona
@@ -691,10 +721,45 @@ class KeyboardViewModel(
         }
     }
 
-    fun recordAutoCorrectionStat() = updateStats { it.copy(autoCorrections = it.autoCorrections + 1) }
-    fun recordSwipeWordStat() = updateStats { it.copy(swipeWords = it.swipeWords + 1) }
-    fun recordAiApplyStat() = updateStats { it.copy(aiApplies = it.aiApplies + 1) }
-    fun recordShortcutExpansionStat() = updateStats { it.copy(shortcutExpansions = it.shortcutExpansions + 1) }
+    private fun recordMastery(event: MasteryEvent) {
+        val award = KeyboardMastery.record(
+            state = _masteryState.value,
+            event = event,
+            epochDay = System.currentTimeMillis() / DAY_MS,
+            isSensitiveField = _isSensitiveField.value
+        )
+        if (award.state != _masteryState.value) {
+            _masteryState.value = award.state
+            settings?.masteryState = MasteryStateCodec.encode(award.state)
+        }
+    }
+
+    fun recordAutoCorrectionStat() {
+        updateStats { it.copy(autoCorrections = it.autoCorrections + 1) }
+        recordMastery(MasteryEvent.AUTO_CORRECTION)
+    }
+
+    fun recordSwipeWordStat() {
+        updateStats { it.copy(swipeWords = it.swipeWords + 1) }
+        recordMastery(MasteryEvent.SWIPE_WORD)
+    }
+
+    fun recordAiApplyStat() {
+        updateStats { it.copy(aiApplies = it.aiApplies + 1) }
+        val event = when {
+            _isOfflineMode.value -> MasteryEvent.OFFLINE_AI_APPLY
+            aiSession.currentState is AiPanelState.Translation -> MasteryEvent.TRANSLATION_APPLY
+            _isVoiceLockEnabled.value && aiSession.currentState is AiPanelState.Rewrite ->
+                MasteryEvent.VOICE_LOCK_APPLY
+            else -> MasteryEvent.AI_APPLY
+        }
+        recordMastery(event)
+    }
+
+    fun recordShortcutExpansionStat() {
+        updateStats { it.copy(shortcutExpansions = it.shortcutExpansions + 1) }
+        recordMastery(MasteryEvent.SHORTCUT_EXPANSION)
+    }
 
     // --- Prediction ------------------------------------------------------------
 
@@ -792,7 +857,7 @@ class KeyboardViewModel(
     fun promoteProofreadHint() {
         _proofreadHint.value?.let {
             dismissResults()
-            _grammarCorrection.value = it
+            publishAiPanel(AiPanelState.Grammar(it))
             _proofreadHint.value = null
         }
     }
@@ -804,9 +869,8 @@ class KeyboardViewModel(
      */
     fun fixGrammar(text: String, bypassCache: Boolean = false) {
         if (text.isBlank() || _isSensitiveField.value) return
-        regenerateAction = { fixGrammar(text, bypassCache = true) }
+        aiSession.setRegenerateAction { fixGrammar(text, bypassCache = true) }
         launchAi {
-            _grammarCorrection.value = null
             try {
                 // Incorporate personalization preferences inside grammar suggestions
                 val personalization = getPersonalizationContext()
@@ -815,7 +879,7 @@ class KeyboardViewModel(
                 } else {
                     GeminiManager.fixGrammar(text, personalization, bypassCache)
                 }
-                _grammarCorrection.value = result
+                publishAiPanel(AiPanelState.Grammar(result))
 
                 // On-device learning: auto-extract spelling correction rules!
                 if (isLearningAllowed()) {
@@ -835,7 +899,11 @@ class KeyboardViewModel(
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
-                _grammarCorrection.value = GrammarCorrectionResponse(text, text, "Error: ${e.localizedMessage}", 0)
+                publishAiPanel(
+                    AiPanelState.Grammar(
+                        GrammarCorrectionResponse(text, text, "Error: ${e.localizedMessage}", 0)
+                    )
+                )
             }
         }
     }
@@ -881,9 +949,8 @@ class KeyboardViewModel(
      */
     fun suggestReplies(contextMessage: String, intent: String = "", bypassCache: Boolean = false) {
         if (contextMessage.isBlank() || _isSensitiveField.value) return
-        regenerateAction = { suggestReplies(contextMessage, intent, bypassCache = true) }
+        aiSession.setRegenerateAction { suggestReplies(contextMessage, intent, bypassCache = true) }
         launchAi {
-            _suggestions.value = emptyList()
             try {
                 val personalization = getPersonalizationContext()
                 val result = if (_isOfflineMode.value) {
@@ -891,12 +958,14 @@ class KeyboardViewModel(
                 } else {
                     GeminiManager.suggestReplies(contextMessage, personalization, intent, bypassCache)
                 }
-                _suggestions.value = result.suggestions
+                _aiPanelState.value = AiPanelState.Replies(result.suggestions)
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
-                _suggestions.value = ReplyIntents.offlineReplies(intent)
-                    ?: listOf("Sounds good!", "Sure thing", "Let me check.")
+                _aiPanelState.value = AiPanelState.Replies(
+                    ReplyIntents.offlineReplies(intent)
+                        ?: listOf("Sounds good!", "Sure thing", "Let me check.")
+                )
             }
         }
     }
@@ -908,13 +977,12 @@ class KeyboardViewModel(
     fun requestReplyIdeas(contextMessage: String) {
         if (contextMessage.isBlank() || _isSensitiveField.value) return
         dismissResults()
-        _replyIntentContext.value = contextMessage
+        _aiPanelState.value = AiPanelState.ReplyIntent(contextMessage)
     }
 
     /** Second step: generate replies steered by [intent], or unsteered when null. */
     fun chooseReplyIntent(intent: String?) {
-        val contextMessage = _replyIntentContext.value ?: return
-        _replyIntentContext.value = null
+        val contextMessage = (_aiPanelState.value as? AiPanelState.ReplyIntent)?.contextMessage ?: return
         suggestReplies(contextMessage, intent ?: "")
     }
 
@@ -923,10 +991,8 @@ class KeyboardViewModel(
      */
     fun summarizeMessage(text: String, bypassCache: Boolean = false) {
         if (text.isBlank() || _isSensitiveField.value) return
-        regenerateAction = { summarizeMessage(text, bypassCache = true) }
-        _aiResultSource.value = text
+        aiSession.setRegenerateAction { summarizeMessage(text, bypassCache = true) }
         launchAi {
-            _summary.value = null
             try {
                 val personalization = getPersonalizationContext()
                 val result = if (_isOfflineMode.value) {
@@ -934,11 +1000,13 @@ class KeyboardViewModel(
                 } else {
                     GeminiManager.summarizeMessage(text, personalization, bypassCache)
                 }
-                _summary.value = result
+                _aiPanelState.value = AiPanelState.Summary(result, text)
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
-                _summary.value = "Failed to summarize text: ${e.localizedMessage}"
+                _aiPanelState.value = AiPanelState.Summary(
+                    "Failed to summarize text: ${e.localizedMessage}", text
+                )
             }
         }
     }
@@ -948,10 +1016,8 @@ class KeyboardViewModel(
      */
     fun translateText(text: String, bypassCache: Boolean = false) {
         if (text.isBlank() || _isSensitiveField.value) return
-        regenerateAction = { translateText(text, bypassCache = true) }
-        _aiResultSource.value = text
+        aiSession.setRegenerateAction { translateText(text, bypassCache = true) }
         launchAi {
-            _translation.value = null
             try {
                 val personalization = getPersonalizationContext()
                 val result = if (_isOfflineMode.value) {
@@ -959,11 +1025,13 @@ class KeyboardViewModel(
                 } else {
                     GeminiManager.translateText(text, _sourceLanguage.value, _targetLanguage.value, personalization, bypassCache)
                 }
-                _translation.value = result
+                _aiPanelState.value = AiPanelState.Translation(result, text)
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
-                _translation.value = "Translation error: ${e.localizedMessage}"
+                _aiPanelState.value = AiPanelState.Translation(
+                    "Translation error: ${e.localizedMessage}", text
+                )
             }
         }
     }
@@ -973,10 +1041,8 @@ class KeyboardViewModel(
      */
     fun rewriteTone(text: String, bypassCache: Boolean = false) {
         if (text.isBlank() || _isSensitiveField.value) return
-        regenerateAction = { rewriteTone(text, bypassCache = true) }
-        _aiResultSource.value = text
+        aiSession.setRegenerateAction { rewriteTone(text, bypassCache = true) }
         launchAi {
-            _rewrite.value = null
             try {
                 val targetTone = effectivePersona()
                 val result = if (_isOfflineMode.value) {
@@ -984,11 +1050,15 @@ class KeyboardViewModel(
                 } else {
                     GeminiManager.rewriteWithTone(text, targetTone, getPersonalizationContext(), _isVoiceLockEnabled.value, bypassCache)
                 }
-                _rewrite.value = result
+                publishAiPanel(AiPanelState.Rewrite(result, text, targetTone))
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
-                _rewrite.value = "Rewrite error: ${e.localizedMessage}"
+                publishAiPanel(
+                    AiPanelState.Rewrite(
+                        "Rewrite error: ${e.localizedMessage}", text, targetTone
+                    )
+                )
             }
         }
     }
@@ -999,21 +1069,23 @@ class KeyboardViewModel(
      */
     fun rewriteWithStyle(text: String, styleInstruction: String, bypassCache: Boolean = false) {
         if (text.isBlank() || _isSensitiveField.value) return
-        regenerateAction = { rewriteWithStyle(text, styleInstruction, bypassCache = true) }
-        _aiResultSource.value = text
+        aiSession.setRegenerateAction { rewriteWithStyle(text, styleInstruction, bypassCache = true) }
         launchAi {
-            _rewrite.value = null
             try {
                 val result = if (_isOfflineMode.value) {
                     GeminiManager.offlineRewrite(text, styleInstruction)
                 } else {
                     GeminiManager.rewriteWithTone(text, styleInstruction, getPersonalizationContext(), _isVoiceLockEnabled.value, bypassCache)
                 }
-                _rewrite.value = result
+                publishAiPanel(AiPanelState.Rewrite(result, text, styleInstruction))
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
-                _rewrite.value = "Rewrite error: ${e.localizedMessage}"
+                publishAiPanel(
+                    AiPanelState.Rewrite(
+                        "Rewrite error: ${e.localizedMessage}", text, styleInstruction
+                    )
+                )
             }
         }
     }
@@ -1024,21 +1096,19 @@ class KeyboardViewModel(
      */
     fun composeFromInstruction(instruction: String, bypassCache: Boolean = false) {
         if (instruction.isBlank() || _isSensitiveField.value) return
-        regenerateAction = { composeFromInstruction(instruction, bypassCache = true) }
-        _aiResultSource.value = null
+        aiSession.setRegenerateAction { composeFromInstruction(instruction, bypassCache = true) }
         launchAi {
-            _composeResult.value = null
             try {
                 val result = if (_isOfflineMode.value) {
                     GeminiManager.offlineCompose(instruction, effectivePersona(), getPersonalizationContext(), _isVoiceLockEnabled.value)
                 } else {
                     GeminiManager.composeMessage(instruction, effectivePersona(), getPersonalizationContext(), _isVoiceLockEnabled.value, bypassCache)
                 }
-                _composeResult.value = result
+                publishAiPanel(AiPanelState.Compose(result))
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
-                _composeResult.value = "Compose error: ${e.localizedMessage}"
+                publishAiPanel(AiPanelState.Compose("Compose error: ${e.localizedMessage}"))
             }
         }
     }
@@ -1048,21 +1118,19 @@ class KeyboardViewModel(
      */
     fun explainText(text: String, bypassCache: Boolean = false) {
         if (text.isBlank() || _isSensitiveField.value) return
-        regenerateAction = { explainText(text, bypassCache = true) }
-        _aiResultSource.value = null
+        aiSession.setRegenerateAction { explainText(text, bypassCache = true) }
         launchAi {
-            _explanation.value = null
             try {
                 val result = if (_isOfflineMode.value) {
                     "[Offline: explanations need cloud mode]"
                 } else {
                     GeminiManager.explainText(text, bypassCache)
                 }
-                _explanation.value = result
+                _aiPanelState.value = AiPanelState.Explanation(result)
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
-                _explanation.value = "Explanation error: ${e.localizedMessage}"
+                _aiPanelState.value = AiPanelState.Explanation("Explanation error: ${e.localizedMessage}")
             }
         }
     }
@@ -1072,21 +1140,22 @@ class KeyboardViewModel(
      */
     fun continueDraft(text: String, bypassCache: Boolean = false) {
         if (text.isBlank() || _isSensitiveField.value) return
-        regenerateAction = { continueDraft(text, bypassCache = true) }
-        _aiResultSource.value = null
+        aiSession.setRegenerateAction { continueDraft(text, bypassCache = true) }
         launchAi {
-            _continuation.value = null
             try {
                 val result = if (_isOfflineMode.value) {
                     GeminiManager.offlineContinue(text, getPersonalizationContext(), _isVoiceLockEnabled.value)
                 } else {
                     GeminiManager.continueText(text, getPersonalizationContext(), _isVoiceLockEnabled.value, bypassCache)
                 }
-                _continuation.value = result.takeIf { it.isNotBlank() }
+                val panel = result.takeIf { it.isNotBlank() }
+                    ?.let(AiPanelState::Continuation)
+                    ?: AiPanelState.Idle
+                publishAiPanel(panel)
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
-                _continuation.value = null
+                _aiPanelState.value = AiPanelState.Idle
             }
         }
     }
@@ -1097,7 +1166,6 @@ class KeyboardViewModel(
     fun analyzeTone(text: String) {
         if (text.isBlank() || _isSensitiveField.value) return
         launchAi {
-            _toneAnalysis.value = null
             try {
                 val personalization = getPersonalizationContext()
                 val result = if (_isOfflineMode.value) {
@@ -1105,7 +1173,7 @@ class KeyboardViewModel(
                 } else {
                     GeminiManager.analyzeTone(text, personalization)
                 }
-                _toneAnalysis.value = result
+                _aiPanelState.value = AiPanelState.Tone(result)
 
                 // Record word usage of what was analyzed
                 recordWordUsage(text)
@@ -1122,7 +1190,9 @@ class KeyboardViewModel(
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
-                _toneAnalysis.value = ToneAnalysisResponse("Neutral", 0.5f, listOf("Error during analysis."))
+                _aiPanelState.value = AiPanelState.Tone(
+                    ToneAnalysisResponse("Neutral", 0.5f, listOf("Error during analysis."))
+                )
             }
         }
     }

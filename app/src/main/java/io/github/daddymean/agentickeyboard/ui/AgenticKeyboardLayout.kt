@@ -124,17 +124,21 @@ fun AgenticKeyboardLayout(
     var isNumberMode by remember { mutableStateOf(false) }
 
     // Collect states from ViewModel
-    val isLoading by viewModel.isLoading.collectAsState()
-    val suggestions by viewModel.suggestions.collectAsState()
-    val grammarCorrection by viewModel.grammarCorrection.collectAsState()
-    val toneAnalysis by viewModel.toneAnalysis.collectAsState()
-    val summary by viewModel.summary.collectAsState()
-    val translation by viewModel.translation.collectAsState()
-    val rewrite by viewModel.rewrite.collectAsState()
-    val composeResult by viewModel.composeResult.collectAsState()
-    val explanation by viewModel.explanation.collectAsState()
-    val continuation by viewModel.continuation.collectAsState()
-    val aiResultSource by viewModel.aiResultSource.collectAsState()
+    val aiPanelState by viewModel.aiPanelState.collectAsState()
+    val voiceMatch by viewModel.voiceMatch.collectAsState()
+    val isLoading = aiPanelState == AiPanelState.Loading
+    val suggestions = (aiPanelState as? AiPanelState.Replies)?.suggestions.orEmpty()
+    val grammarCorrection = (aiPanelState as? AiPanelState.Grammar)?.result
+    val toneAnalysis = (aiPanelState as? AiPanelState.Tone)?.result
+    val summary = (aiPanelState as? AiPanelState.Summary)?.text
+    val translation = (aiPanelState as? AiPanelState.Translation)?.text
+    val rewriteState = aiPanelState as? AiPanelState.Rewrite
+    val rewrite = rewriteState?.text
+    val composeResult = (aiPanelState as? AiPanelState.Compose)?.text
+    val explanation = (aiPanelState as? AiPanelState.Explanation)?.text
+    val continuation = (aiPanelState as? AiPanelState.Continuation)?.text
+    val aiResultSource = aiPanelState.sourceText
+    val replyIntentContext = (aiPanelState as? AiPanelState.ReplyIntent)?.contextMessage
     val proofreadHint by viewModel.proofreadHint.collectAsState()
     val isOfflineMode by viewModel.isOfflineMode.collectAsState()
     val predictiveSuggestions by viewModel.predictiveSuggestions.collectAsState()
@@ -149,7 +153,6 @@ fun AgenticKeyboardLayout(
     val isNumberRowEnabled by viewModel.isNumberRowEnabled.collectAsState()
     val isHapticsEnabled by viewModel.isHapticsEnabled.collectAsState()
     val isLearningPaused by viewModel.isLearningPaused.collectAsState()
-    val replyIntentContext by viewModel.replyIntentContext.collectAsState()
     val sendGuardWarning by viewModel.sendGuardWarning.collectAsState()
     val customCommands by viewModel.customCommands.collectAsState()
 
@@ -479,10 +482,10 @@ fun AgenticKeyboardLayout(
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .then(if (resultExpanded) Modifier.heightIn(min = 64.dp) else Modifier.height(64.dp))
+                .then(if (resultExpanded || voiceMatch != null) Modifier.heightIn(min = 64.dp) else Modifier.height(64.dp))
                 .animateContentSize()
                 .background(keyboardColors.shelf)
-                .padding(horizontal = 8.dp, vertical = if (resultExpanded) 8.dp else 0.dp),
+                .padding(horizontal = 8.dp, vertical = if (resultExpanded || voiceMatch != null) 8.dp else 0.dp),
             contentAlignment = Alignment.CenterStart
         ) {
             if (isLoading) {
@@ -689,7 +692,7 @@ fun AgenticKeyboardLayout(
                             horizontalArrangement = Arrangement.SpaceBetween
                         ) {
                             ExpandableResult(
-                                label = "Rewritten (${viewModel.effectivePersona()}):",
+                                label = "Rewritten (${rewriteState?.styleLabel ?: viewModel.effectivePersona()}):",
                                 labelColor = keyboardColors.labelRewrite,
                                 result = rewrite!!,
                                 expanded = resultExpanded,
@@ -922,6 +925,10 @@ fun AgenticKeyboardLayout(
                                 }
                             }
                         }
+                    }
+                    voiceMatch?.let { match ->
+                        Spacer(modifier = Modifier.height(4.dp))
+                        VoiceMatchBadge(match)
                     }
                     }
                     if (hasAiResult) {
@@ -1893,3 +1900,35 @@ val RowDefaultsButtonPadding = androidx.compose.foundation.layout.PaddingValues(
     horizontal = 12.dp,
     vertical = 0.dp
 )
+
+@Composable
+private fun VoiceMatchBadge(match: VoiceMatchState) {
+    val keyboardColors = LocalKeyboardColors.current
+    val deltaText = when {
+        match.delta == null -> ""
+        match.delta > 0 -> " · ↑ ${match.delta} after refine"
+        match.delta < 0 -> " · ${-match.delta} point shift"
+        else -> " · steady after refine"
+    }
+    val confidenceText = if (match.confidence < 35) " · early estimate" else ""
+    val signalText = match.signals.firstOrNull()?.let { " · $it" }.orEmpty()
+
+    Row(
+        modifier = Modifier
+            .clip(RoundedCornerShape(10.dp))
+            .background(keyboardColors.accent.copy(alpha = 0.12f))
+            .padding(horizontal = 8.dp, vertical = 3.dp)
+            .testTag("voice_match_badge"),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(
+            text = "🎙 ${match.percent}% your voice$deltaText$confidenceText$signalText",
+            color = keyboardColors.accent,
+            fontSize = 9.sp,
+            fontWeight = FontWeight.Bold,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
+        )
+    }
+}
+
