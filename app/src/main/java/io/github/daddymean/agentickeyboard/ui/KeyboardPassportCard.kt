@@ -111,8 +111,8 @@ fun KeyboardPassportCard() {
                 importedContent = content
                 importPassphrase = ""
                 opened = null
-                preview = KeyboardPassport.inspect(content)
-                when (val openResult = KeyboardPassport.open(content)) {
+                preview = withContext(Dispatchers.Default) { KeyboardPassport.inspect(content) }
+                when (val openResult = withContext(Dispatchers.Default) { KeyboardPassport.open(content) }) {
                     is KeyboardPassportOpenResult.Success -> {
                         opened = openResult
                         preview = openResult.preview
@@ -289,18 +289,29 @@ fun KeyboardPassportCard() {
                     Button(
                         onClick = {
                             val content = importedContent ?: return@Button
-                            when (val result = KeyboardPassport.open(content, importPassphrase)) {
-                                is KeyboardPassportOpenResult.Success -> {
-                                    opened = result
-                                    preview = result.preview
-                                    status = "Passport decrypted and verified. No data has been imported yet."
+                            val entered = importPassphrase
+                            // Key derivation runs at an iteration count taken from
+                            // the file, so it must never block the UI thread.
+                            scope.launch {
+                                busy = true
+                                val result = withContext(Dispatchers.Default) {
+                                    KeyboardPassport.open(content, entered)
                                 }
-                                is KeyboardPassportOpenResult.PassphraseRequired -> {
-                                    status = "Enter the passport passphrase."
+                                when (result) {
+                                    is KeyboardPassportOpenResult.Success -> {
+                                        opened = result
+                                        preview = result.preview
+                                        importPassphrase = ""
+                                        status = "Passport decrypted and verified. No data has been imported yet."
+                                    }
+                                    is KeyboardPassportOpenResult.PassphraseRequired -> {
+                                        status = "Enter the passport passphrase."
+                                    }
+                                    is KeyboardPassportOpenResult.Invalid -> {
+                                        status = result.reason
+                                    }
                                 }
-                                is KeyboardPassportOpenResult.Invalid -> {
-                                    status = result.reason
-                                }
+                                busy = false
                             }
                         },
                         enabled = importPassphrase.isNotBlank() && !busy,
