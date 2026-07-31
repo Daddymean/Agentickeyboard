@@ -1,11 +1,20 @@
 package io.github.daddymean.agentickeyboard.util
 
+import com.squareup.moshi.Moshi
 import io.github.daddymean.agentickeyboard.db.AppPersona
 import io.github.daddymean.agentickeyboard.db.CustomCommand
 import io.github.daddymean.agentickeyboard.db.LearnedCorrection
 import io.github.daddymean.agentickeyboard.db.ShortcutTemplate
 import io.github.daddymean.agentickeyboard.db.UserVocabulary
 import io.github.daddymean.agentickeyboard.db.WritingLog
+import java.nio.charset.StandardCharsets
+import java.security.MessageDigest
+import java.util.Base64
+import javax.crypto.Cipher
+import javax.crypto.SecretKeyFactory
+import javax.crypto.spec.GCMParameterSpec
+import javax.crypto.spec.PBEKeySpec
+import javax.crypto.spec.SecretKeySpec
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotEquals
@@ -185,7 +194,8 @@ class KeyboardPassportTest {
     @Test
     fun unsupportedFutureEnvelopeIsInspectableButNotOpened() {
         val serialized = KeyboardPassport.create(input, createdAt = 5_000L)
-        val future = serialized.replaceFirst("\"version\": 1", "\"version\": 99")
+        val future = serialized.replaceFirst("\"version\": 2", "\"version\": 99")
+        assertNotEquals(serialized, future)
 
         val preview = KeyboardPassport.inspect(future)
         assertNotNull(preview)
@@ -239,6 +249,100 @@ class KeyboardPassportTest {
         assertEquals("com.example.mail", plan.snapshot.appPersonas.single().packageName)
         assertEquals("adn", plan.snapshot.corrections.single().typo)
         assertEquals("Professional", plan.snapshot.personaPreference)
+    }
+
+    @Test
+    fun encryptedPassportChecksumCoversCiphertextNotPlaintext() {
+        val serialized = KeyboardPassport.create(
+            input = input,
+            options = KeyboardPassportOptions(passphrase = "portable-secret", redactSensitiveText = false),
+            createdAt = 7_000L
+        )
+
+        val ciphertext = Base64.getDecoder().decode(jsonField(serialized, "payloadBase64"))
+        assertEquals(sha256Hex(ciphertext), jsonField(serialized, "checksumSha256"))
+
+        // The digest of the decrypted payload must not appear anywhere in the file.
+        val opened = KeyboardPassport.open(serialized, "portable-secret")
+        assertTrue(opened is KeyboardPassportOpenResult.Success)
+        assertFalse(serialized.contains(sha256Hex(canonicalPayloadBytes(opened as KeyboardPassportOpenResult.Success))))
+    }
+
+    @Test
+    fun version1EncryptedPassportsRemainReadable() {
+        val plaintext = """{"schemaVersion":1,"vocabulary":[{"word":"fantastic","count":4,"lastUsed":123}]}"""
+            .toByteArray(StandardCharsets.UTF_8)
+        val salt = ByteArray(16) { it.toByte() }
+        val iv = ByteArray(12) { (it + 7).toByte() }
+        val key = SecretKeySpec(
+            SecretKeyFactory.getInstance("PBKDF2WithHmacSHA256")
+                .generateSecret(PBEKeySpec("legacy-secret".toCharArray(), salt, 210_000, 256))
+                .encoded,
+            "AES"
+        )
+        val ciphertext = Cipher.getInstance("AES/GCM/NoPadding").run {
+            init(Cipher.ENCRYPT_MODE, key, GCMParameterSpec(128, iv))
+            updateAAD("lumina-keyboard-passport:1".toByteArray(StandardCharsets.UTF_8))
+            doFinal(plaintext)
+        }
+        val encoder = Base64.getEncoder()
+        val envelope = { checksum: String ->
+            """
+            {
+              "format": "lumina-keyboard-passport",
+              "version": 1,
+              "createdAt": 1000,
+              "categories": ["vocabulary"],
+              "counts": { "vocabulary": 1 },
+              "checksumSha256": "$checksum",
+              "payloadEncoding": "base64-aes-gcm",
+              "encryption": {
+                "algorithm": "AES-256-GCM",
+                "keyDerivation": "PBKDF2-HMAC-SHA256",
+                "iterations": 210000,
+                "saltBase64": "${encoder.encodeToString(salt)}",
+                "ivBase64": "${encoder.encodeToString(iv)}"
+              },
+              "payloadBase64": "${encoder.encodeToString(ciphertext)}"
+            }
+            """.trimIndent()
+        }
+
+        val authentic = envelope(sha256Hex(plaintext))
+        assertTrue(KeyboardPassport.open(authentic) is KeyboardPassportOpenResult.PassphraseRequired)
+
+        val opened = KeyboardPassport.open(authentic, "legacy-secret")
+        assertTrue(opened is KeyboardPassportOpenResult.Success)
+        opened as KeyboardPassportOpenResult.Success
+        assertEquals(1, opened.preview.version)
+        assertTrue(opened.preview.compatible)
+        assertEquals("fantastic", opened.payload.vocabulary.single().word)
+
+        // A version 1 plaintext digest is no longer consulted; GCM authenticates it.
+        assertTrue(
+            KeyboardPassport.open(envelope("00".repeat(32)), "legacy-secret")
+                is KeyboardPassportOpenResult.Success
+        )
+        assertTrue(
+            KeyboardPassport.open(authentic, "wrong-secret") is KeyboardPassportOpenResult.Invalid
+        )
+    }
+
+    private fun canonicalPayloadBytes(opened: KeyboardPassportOpenResult.Success): ByteArray =
+        Moshi.Builder().build().adapter(PassportPayload::class.java)
+            .toJson(opened.payload)
+            .toByteArray(StandardCharsets.UTF_8)
+
+    private fun sha256Hex(bytes: ByteArray): String = MessageDigest.getInstance("SHA-256")
+        .digest(bytes)
+        .joinToString("") { "%02x".format(it) }
+
+    private fun jsonField(json: String, name: String): String {
+        val marker = "\"$name\": \""
+        val start = json.indexOf(marker)
+        assertTrue("missing field $name", start >= 0)
+        val from = start + marker.length
+        return json.substring(from, json.indexOf('"', from))
     }
 
     @Test

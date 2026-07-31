@@ -55,10 +55,30 @@ When a passphrase is supplied, the payload uses:
 
 The passphrase is used only during creation or opening and is never included in
 the envelope. Wrong passphrases and modified ciphertext fail safely with no
-partial payload.
+partial payload, and report the same message so a damaged file cannot be
+distinguished from a wrong passphrase.
 
-Unencrypted passports remain checksummed. A mismatch between the payload,
-checksum, or advertised record counts rejects the file before application.
+The checksum never covers the plaintext of an encrypted passport. Publishing a
+digest of the plaintext beside the ciphertext would let anyone holding the file
+confirm a guessed payload without the passphrase, and would reveal that two
+passports carry identical data. Encrypted passports checksum the ciphertext;
+their plaintext integrity comes from the GCM tag.
+
+Unencrypted passports remain checksummed over the payload. A mismatch between
+the payload, checksum, or advertised record counts rejects the file before
+application.
+
+## Envelope versions
+
+Version 2 is written today; version 1 is still read. The AAD is version-scoped
+(`lumina-keyboard-passport:<version>`), so version 1 payloads stay decryptable.
+
+Version 1 differs only in checksum meaning: it published a SHA-256 of the
+plaintext. That digest is never verified on read, because AES-GCM already
+authenticates the payload.
+
+App builds older than this one reject a version 2 file with an explicit
+unsupported-version message rather than a confusing checksum error.
 
 ## Preview and compatibility
 
@@ -74,6 +94,13 @@ report that a passphrase is required.
 
 Future envelope versions remain inspectable but are rejected as incompatible
 until a migration is implemented.
+
+Envelope metadata is not authenticated: the category list, counts and creation
+time sit outside both the GCM tag and the checksum, so `inspect` results are for
+display only. The categories reported alongside an opened payload are derived
+from the verified payload itself, so editing an envelope cannot widen what an
+import changes. A category carrying no records is not included in that set —
+replacing it with nothing would be a pure deletion the preview shows as `0`.
 
 ## Legacy exports
 

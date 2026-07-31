@@ -150,8 +150,19 @@ sealed interface KeyboardPassportOpenResult {
 object KeyboardPassport {
 
     const val FORMAT = "lumina-keyboard-passport"
-    const val CURRENT_VERSION = 1
+    const val CURRENT_VERSION = 2
     const val PAYLOAD_SCHEMA_VERSION = 1
+
+    /** Envelope versions this build can read. Version 1 is read-only legacy. */
+    val SUPPORTED_VERSIONS: Set<Int> = setOf(1, 2)
+
+    /**
+     * From version 2 the checksum covers the ciphertext. Version 1 published a
+     * SHA-256 of the *plaintext* next to the ciphertext, which let anyone holding
+     * the file confirm a guessed payload without the passphrase. That digest is
+     * never verified on read: AES-GCM already authenticates version 1 payloads.
+     */
+    private const val CIPHERTEXT_CHECKSUM_VERSION = 2
 
     private const val ALGORITHM = "AES-256-GCM"
     private const val CIPHER_TRANSFORMATION = "AES/GCM/NoPadding"
@@ -170,7 +181,10 @@ object KeyboardPassport {
     private val moshi = Moshi.Builder().build()
     private val envelopeAdapter = moshi.adapter(KeyboardPassportEnvelope::class.java).indent("  ")
     private val payloadAdapter = moshi.adapter(PassportPayload::class.java)
-    private val aad = "$FORMAT:$CURRENT_VERSION".toByteArray(StandardCharsets.UTF_8)
+
+    /** AAD is version-scoped so version 1 payloads stay decryptable. */
+    private fun aadFor(version: Int): ByteArray =
+        "$FORMAT:$version".toByteArray(StandardCharsets.UTF_8)
 
     fun create(
         input: KeyboardPassportInput,
@@ -244,10 +258,15 @@ object KeyboardPassport {
 
         val encryption: PassportEncryption?
         val encodedPayload: String
+        // Never publish a digest of the plaintext beside the ciphertext: it is a
+        // confirmation oracle for guessable payloads. Encrypted passports check
+        // the ciphertext instead, and GCM authenticates what was encrypted.
+        val checksum: String
         if (encrypted) {
             val salt = ByteArray(SALT_BYTES).also(secureRandom::nextBytes)
             val iv = ByteArray(IV_BYTES).also(secureRandom::nextBytes)
             val ciphertext = encrypt(plaintext, passphrase!!, salt, iv, PBKDF2_ITERATIONS)
+            checksum = sha256(ciphertext)
             encryption = PassportEncryption(
                 algorithm = ALGORITHM,
                 keyDerivation = KEY_DERIVATION,
@@ -258,6 +277,7 @@ object KeyboardPassport {
             encodedPayload = encodeBase64(ciphertext)
         } else {
             encryption = null
+            checksum = sha256(plaintext)
             encodedPayload = encodeBase64(plaintext)
         }
 
@@ -267,7 +287,7 @@ object KeyboardPassport {
             createdAt = createdAt,
             categories = categories.map { it.wireName }.sorted(),
             counts = countsOf(payload),
-            checksumSha256 = sha256(plaintext),
+            checksumSha256 = checksum,
             payloadEncoding = if (encrypted) ENCRYPTED_ENCODING else PLAIN_ENCODING,
             encryption = encryption,
             payloadBase64 = encodedPayload
@@ -304,7 +324,7 @@ object KeyboardPassport {
         if (envelope.format != FORMAT) {
             return KeyboardPassportOpenResult.Invalid("Unknown passport format.")
         }
-        if (envelope.version != CURRENT_VERSION) {
+        if (envelope.version !in SUPPORTED_VERSIONS) {
             return KeyboardPassportOpenResult.Invalid(
                 "Passport version ${envelope.version} is not supported by this app version."
             )
@@ -333,8 +353,15 @@ object KeyboardPassport {
             if (salt.size < 12 || iv.size != IV_BYTES) {
                 return KeyboardPassportOpenResult.Invalid("The encryption metadata is malformed.")
             }
+            // Same message as a decryption failure: a corrupt file and a wrong
+            // passphrase must stay indistinguishable to the caller.
+            if (envelope.version >= CIPHERTEXT_CHECKSUM_VERSION &&
+                !sha256(encodedBytes).equals(envelope.checksumSha256, ignoreCase = true)
+            ) {
+                return KeyboardPassportOpenResult.Invalid("Wrong passphrase or damaged passport.")
+            }
             try {
-                decrypt(encodedBytes, passphrase!!, salt, iv, metadata.iterations)
+                decrypt(encodedBytes, passphrase!!, salt, iv, metadata.iterations, envelope.version)
             } catch (_: Exception) {
                 return KeyboardPassportOpenResult.Invalid("Wrong passphrase or damaged passport.")
             }
@@ -342,11 +369,10 @@ object KeyboardPassport {
             if (envelope.payloadEncoding != PLAIN_ENCODING) {
                 return KeyboardPassportOpenResult.Invalid("The passport payload encoding is unsupported.")
             }
+            if (!sha256(encodedBytes).equals(envelope.checksumSha256, ignoreCase = true)) {
+                return KeyboardPassportOpenResult.Invalid("The passport checksum does not match.")
+            }
             encodedBytes
-        }
-
-        if (!sha256(plaintext).equals(envelope.checksumSha256, ignoreCase = true)) {
-            return KeyboardPassportOpenResult.Invalid("The passport checksum does not match.")
         }
 
         val payload = try {
@@ -415,7 +441,7 @@ object KeyboardPassport {
             counts = envelope.counts,
             encrypted = envelope.encryption != null,
             requiresPassphrase = envelope.encryption != null,
-            compatible = envelope.format == FORMAT && envelope.version == CURRENT_VERSION,
+            compatible = envelope.format == FORMAT && envelope.version in SUPPORTED_VERSIONS,
             legacy = false
         )
     }
@@ -472,7 +498,7 @@ object KeyboardPassport {
         val key = deriveKey(passphrase, salt, iterations)
         return Cipher.getInstance(CIPHER_TRANSFORMATION).run {
             init(Cipher.ENCRYPT_MODE, key, GCMParameterSpec(GCM_TAG_BITS, iv))
-            updateAAD(aad)
+            updateAAD(aadFor(CURRENT_VERSION))
             doFinal(plaintext)
         }
     }
@@ -482,12 +508,13 @@ object KeyboardPassport {
         passphrase: String,
         salt: ByteArray,
         iv: ByteArray,
-        iterations: Int
+        iterations: Int,
+        version: Int
     ): ByteArray {
         val key = deriveKey(passphrase, salt, iterations)
         return Cipher.getInstance(CIPHER_TRANSFORMATION).run {
             init(Cipher.DECRYPT_MODE, key, GCMParameterSpec(GCM_TAG_BITS, iv))
-            updateAAD(aad)
+            updateAAD(aadFor(version))
             doFinal(ciphertext)
         }
     }
