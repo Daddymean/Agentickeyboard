@@ -9,7 +9,7 @@ The existing telemetry JSON/Base64 card remains available for backward compatibi
 ## Export flow
 
 1. The user chooses whether to encrypt the passport.
-2. When encryption is enabled, the user enters a passphrase that Lumina never stores and cannot recover.
+2. When encryption is enabled, the user enters a passphrase of at least 12 characters that Lumina never stores and cannot recover. A passport is an offline file, so its passphrase is the only barrier against unlimited offline guessing; key stretching cannot compensate for a short one.
 3. Sensitive-identifier redaction is enabled by default.
 4. Raw writing logs are excluded by default and require a separate switch.
 5. Lumina builds the passport locally and opens Android's system document picker.
@@ -46,18 +46,24 @@ After verification, the user chooses one mode:
 
 ### Replace included
 
-Only categories explicitly listed in the passport are replaced. Categories absent from the file are untouched. An explicitly included category with zero records intentionally clears that category.
+Only categories the verified payload actually carries are replaced. Categories absent from the file are untouched.
+
+A category with zero records no longer clears that category. The included-category list lives in envelope metadata, outside the GCM tag and the checksum, so honouring it meant an edited file could clear shortcuts, commands, personas, corrections and logs it never contained — and the preview would show `0` for each. Clearing a category is now expressible only by the preview showing the records that will replace it.
 
 The UI requires a second confirmation after the mode is selected. Replace is never inferred from file contents and no automatic rollback is claimed.
 
 ## Privacy boundary
 
-- Passphrases live only in Compose state and are cleared after a successful import.
+- Passphrases live only in Compose state and are cleared once used — the import passphrase after the payload is verified, the export passphrase after the file is written.
+- Unencrypted and legacy passports are flagged in the preview as readable by anyone and carrying no tamper protection.
+- Key derivation and file parsing run off the UI thread, so a file declaring a very high iteration count cannot freeze the app.
 - Decrypted payloads and selected file contents live only in memory.
 - No passport data is logged, uploaded, analyzed by Gemini, or tied to Keyboard Mastery.
 - Android's Storage Access Framework grants access only to the file selected by the user.
 - Raw writing logs stay opt-in because they may contain full previously analyzed text.
 
-## Current transactional boundary
+## Transactional boundary
 
-Import planning is complete and deterministic before writes begin. Room category updates are then applied locally in a fixed order. A later hardening slice may wrap the multi-category application in one Room transaction if import interruption recovery becomes a release requirement.
+Import planning is complete and deterministic before writes begin. Every Room category update then runs inside a single transaction, so an interrupted or failed import leaves the existing personal model untouched rather than cleared. The global persona preference is written to SharedPreferences after that transaction commits, so it is never applied to a failed import.
+
+Replace does not clear bigrams. They are not a passport category and no payload carries them, so clearing them would destroy the next-word model with nothing to restore it.

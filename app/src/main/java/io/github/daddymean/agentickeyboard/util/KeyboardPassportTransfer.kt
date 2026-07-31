@@ -1,5 +1,6 @@
 package io.github.daddymean.agentickeyboard.util
 
+import androidx.room.withTransaction
 import io.github.daddymean.agentickeyboard.db.AppDatabase
 import io.github.daddymean.agentickeyboard.db.KeyboardRepository
 import io.github.daddymean.agentickeyboard.db.UserVocabulary
@@ -44,39 +45,47 @@ class KeyboardPassportTransfer(
             mode = mode
         )
 
-        if (PassportCategory.VOCABULARY in plan.affectedCategories) {
-            repository.clearVocabulary()
-            if (mode == KeyboardPassportImportMode.REPLACE) repository.clearBigrams()
-            plan.snapshot.vocabulary.forEach { repository.insertWord(it) }
-        }
-
-        if (PassportCategory.CORRECTIONS in plan.affectedCategories) {
-            repository.clearCorrections()
-            if (plan.snapshot.corrections.isNotEmpty()) {
-                repository.insertCorrections(plan.snapshot.corrections)
+        // One transaction for every category: an import either lands whole or
+        // leaves the existing personal model untouched. Without this, a failure
+        // or process death between a clear and its re-insert would destroy
+        // learned data that the passport was only meant to update.
+        //
+        // The rows to delete come from `current`, captured before the write, so
+        // no Room Flow is collected inside the transaction.
+        database.withTransaction {
+            if (PassportCategory.VOCABULARY in plan.affectedCategories) {
+                repository.clearVocabulary()
+                plan.snapshot.vocabulary.forEach { repository.insertWord(it) }
             }
-        }
 
-        if (PassportCategory.SHORTCUTS in plan.affectedCategories) {
-            repository.allShortcuts.first().forEach { repository.deleteShortcut(it) }
-            plan.snapshot.shortcuts.forEach { repository.insertShortcut(it) }
-        }
-
-        if (PassportCategory.CUSTOM_COMMANDS in plan.affectedCategories) {
-            repository.allCustomCommands.first().forEach { repository.deleteCustomCommandById(it.id) }
-            plan.snapshot.customCommands.forEach { repository.insertCustomCommand(it) }
-        }
-
-        if (PassportCategory.APP_PERSONAS in plan.affectedCategories) {
-            repository.allAppPersonas.first().forEach { repository.deleteAppPersona(it.packageName) }
-            plan.snapshot.appPersonas.forEach {
-                repository.setAppPersona(it.packageName, it.persona, it.appLabel)
+            if (PassportCategory.CORRECTIONS in plan.affectedCategories) {
+                repository.clearCorrections()
+                if (plan.snapshot.corrections.isNotEmpty()) {
+                    repository.insertCorrections(plan.snapshot.corrections)
+                }
             }
-        }
 
-        if (PassportCategory.WRITING_LOGS in plan.affectedCategories) {
-            repository.clearLogs()
-            plan.snapshot.writingLogs.forEach { repository.insertLog(it) }
+            if (PassportCategory.SHORTCUTS in plan.affectedCategories) {
+                current.shortcuts.forEach { repository.deleteShortcut(it) }
+                plan.snapshot.shortcuts.forEach { repository.insertShortcut(it) }
+            }
+
+            if (PassportCategory.CUSTOM_COMMANDS in plan.affectedCategories) {
+                current.customCommands.forEach { repository.deleteCustomCommandById(it.id) }
+                plan.snapshot.customCommands.forEach { repository.insertCustomCommand(it) }
+            }
+
+            if (PassportCategory.APP_PERSONAS in plan.affectedCategories) {
+                current.appPersonas.forEach { repository.deleteAppPersona(it.packageName) }
+                plan.snapshot.appPersonas.forEach {
+                    repository.setAppPersona(it.packageName, it.persona, it.appLabel)
+                }
+            }
+
+            if (PassportCategory.WRITING_LOGS in plan.affectedCategories) {
+                repository.clearLogs()
+                plan.snapshot.writingLogs.forEach { repository.insertLog(it) }
+            }
         }
 
         if (PassportCategory.PERSONA_PREFERENCE in plan.affectedCategories) {

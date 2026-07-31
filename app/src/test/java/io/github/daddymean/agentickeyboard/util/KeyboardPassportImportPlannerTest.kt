@@ -95,8 +95,13 @@ class KeyboardPassportImportPlannerTest {
         assertFalse(PassportCategory.CORRECTIONS in plan.affectedCategories)
     }
 
+    /**
+     * The planner honours the category set it is handed. Reaching this state from
+     * a file is prevented upstream: KeyboardPassport.open derives categories from
+     * the verified payload, and a category with no records is never among them.
+     */
     @Test
-    fun emptyIncludedCategoryCanIntentionallyClearItOnReplace() {
+    fun emptyIncludedCategoryIsClearedOnReplaceWhenTheCallerIncludesIt() {
         val plan = KeyboardPassportImportPlanner.plan(
             current = current,
             incoming = PassportPayload(shortcuts = emptyList()),

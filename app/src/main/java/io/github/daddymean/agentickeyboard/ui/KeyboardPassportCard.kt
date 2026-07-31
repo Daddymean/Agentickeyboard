@@ -57,6 +57,13 @@ import kotlinx.coroutines.withContext
 
 private const val MAX_PASSPORT_CHARS = 5_000_000
 
+/**
+ * A passport is an offline file, so its passphrase is the only thing standing
+ * between an attacker who obtains it and the whole personal model. Key
+ * stretching cannot rescue a short one.
+ */
+private const val MIN_PASSPHRASE_CHARS = 12
+
 /** Companion-app file export/import UI. Nothing in this surface renders in the IME. */
 @Composable
 fun KeyboardPassportCard() {
@@ -92,6 +99,7 @@ fun KeyboardPassportCard() {
             busy = true
             status = runCatching {
                 writePassport(context.contentResolver, uri, content)
+                exportPassphrase = ""
                 "Passport saved. Lumina did not upload or retain the file location."
             }.getOrElse { "Could not save passport: ${it.message ?: "file error"}" }
             busy = false
@@ -111,8 +119,8 @@ fun KeyboardPassportCard() {
                 importedContent = content
                 importPassphrase = ""
                 opened = null
-                preview = KeyboardPassport.inspect(content)
-                when (val openResult = KeyboardPassport.open(content)) {
+                preview = withContext(Dispatchers.Default) { KeyboardPassport.inspect(content) }
+                when (val openResult = withContext(Dispatchers.Default) { KeyboardPassport.open(content) }) {
                     is KeyboardPassportOpenResult.Success -> {
                         opened = openResult
                         preview = openResult.preview
@@ -181,6 +189,14 @@ fun KeyboardPassportCard() {
                     value = exportPassphrase,
                     onValueChange = { exportPassphrase = it },
                     label = { Text("Export passphrase") },
+                    supportingText = {
+                        Text(
+                            "At least $MIN_PASSPHRASE_CHARS characters. Anyone who obtains the " +
+                                "file can guess offline, so length is the only real protection.",
+                            fontSize = 9.sp,
+                            lineHeight = 12.sp
+                        )
+                    },
                     visualTransformation = PasswordVisualTransformation(),
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
                     singleLine = true,
@@ -204,8 +220,9 @@ fun KeyboardPassportCard() {
 
             Button(
                 onClick = {
-                    if (encryptExport && exportPassphrase.isBlank()) {
-                        status = "Enter a passphrase, or turn encryption off."
+                    if (encryptExport && exportPassphrase.length < MIN_PASSPHRASE_CHARS) {
+                        status = "Enter a passphrase of at least $MIN_PASSPHRASE_CHARS characters, " +
+                            "or turn encryption off."
                         return@Button
                     }
                     scope.launch {
@@ -289,18 +306,29 @@ fun KeyboardPassportCard() {
                     Button(
                         onClick = {
                             val content = importedContent ?: return@Button
-                            when (val result = KeyboardPassport.open(content, importPassphrase)) {
-                                is KeyboardPassportOpenResult.Success -> {
-                                    opened = result
-                                    preview = result.preview
-                                    status = "Passport decrypted and verified. No data has been imported yet."
+                            val entered = importPassphrase
+                            // Key derivation runs at an iteration count taken from
+                            // the file, so it must never block the UI thread.
+                            scope.launch {
+                                busy = true
+                                val result = withContext(Dispatchers.Default) {
+                                    KeyboardPassport.open(content, entered)
                                 }
-                                is KeyboardPassportOpenResult.PassphraseRequired -> {
-                                    status = "Enter the passport passphrase."
+                                when (result) {
+                                    is KeyboardPassportOpenResult.Success -> {
+                                        opened = result
+                                        preview = result.preview
+                                        importPassphrase = ""
+                                        status = "Passport decrypted and verified. No data has been imported yet."
+                                    }
+                                    is KeyboardPassportOpenResult.PassphraseRequired -> {
+                                        status = "Enter the passport passphrase."
+                                    }
+                                    is KeyboardPassportOpenResult.Invalid -> {
+                                        status = result.reason
+                                    }
                                 }
-                                is KeyboardPassportOpenResult.Invalid -> {
-                                    status = result.reason
-                                }
+                                busy = false
                             }
                         },
                         enabled = importPassphrase.isNotBlank() && !busy,
@@ -482,6 +510,15 @@ private fun PassportPreviewPanel(preview: KeyboardPassportPreview) {
             color = Color(0xFF7C3AED),
             fontSize = 9.sp
         )
+        if (!preview.encrypted) {
+            Text(
+                "Not encrypted. Anyone who can read this file can read its contents, and it " +
+                    "carries no tamper protection — import it only if you trust where it came from.",
+                color = Color(0xFFB3261E),
+                fontSize = 9.sp,
+                lineHeight = 12.sp
+            )
+        }
         if (!preview.compatible) {
             Text("This passport version is not compatible with this app.", color = Color(0xFFB3261E), fontSize = 9.sp)
         }
