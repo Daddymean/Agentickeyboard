@@ -364,7 +364,13 @@ object KeyboardPassport {
             return KeyboardPassportOpenResult.Invalid("The passport record summary does not match its payload.")
         }
 
-        return KeyboardPassportOpenResult.Success(payload, preview)
+        // The envelope's category list is outside the AEAD's authenticated data and
+        // outside the checksum, so it must never decide what an import may delete.
+        // Report the categories the verified payload actually carries instead.
+        return KeyboardPassportOpenResult.Success(
+            payload,
+            preview.copy(categories = categoriesOf(payload))
+        )
     }
 
     private fun parseEnvelope(content: String): KeyboardPassportEnvelope? {
@@ -393,6 +399,11 @@ object KeyboardPassport {
         )
     }
 
+    /**
+     * Display-only preview built from unverified envelope metadata. Callers that
+     * mutate storage must use the preview returned with an opened payload, whose
+     * categories are derived from verified content.
+     */
     private fun previewOf(envelope: KeyboardPassportEnvelope): KeyboardPassportPreview {
         val categories = envelope.categories.mapNotNull { wire ->
             PassportCategory.entries.firstOrNull { it.wireName == wire }
@@ -410,22 +421,33 @@ object KeyboardPassport {
     }
 
     private fun previewOfLegacy(payload: PassportPayload): KeyboardPassportPreview {
-        val categories = buildSet {
-            if (payload.personaPreference != null) add(PassportCategory.PERSONA_PREFERENCE)
-            if (payload.vocabulary.isNotEmpty()) add(PassportCategory.VOCABULARY)
-            if (payload.corrections.isNotEmpty()) add(PassportCategory.CORRECTIONS)
-            if (payload.writingLogs.isNotEmpty()) add(PassportCategory.WRITING_LOGS)
-        }
         return KeyboardPassportPreview(
             version = 0,
             createdAt = null,
-            categories = categories,
+            categories = categoriesOf(payload),
             counts = countsOf(payload),
             encrypted = false,
             requiresPassphrase = false,
             compatible = true,
             legacy = true
         )
+    }
+
+    /**
+     * Categories a payload actually carries. Import mutation scope is derived
+     * from this — never from envelope metadata — so that editing the envelope's
+     * category list cannot widen what a Replace import clears. A category that
+     * carries no records is not "included": replacing it with nothing would be a
+     * pure deletion the preview shows as `0`.
+     */
+    private fun categoriesOf(payload: PassportPayload): Set<PassportCategory> = buildSet {
+        if (!payload.personaPreference.isNullOrBlank()) add(PassportCategory.PERSONA_PREFERENCE)
+        if (payload.vocabulary.isNotEmpty()) add(PassportCategory.VOCABULARY)
+        if (payload.corrections.isNotEmpty()) add(PassportCategory.CORRECTIONS)
+        if (payload.shortcuts.isNotEmpty()) add(PassportCategory.SHORTCUTS)
+        if (payload.customCommands.isNotEmpty()) add(PassportCategory.CUSTOM_COMMANDS)
+        if (payload.appPersonas.isNotEmpty()) add(PassportCategory.APP_PERSONAS)
+        if (payload.writingLogs.isNotEmpty()) add(PassportCategory.WRITING_LOGS)
     }
 
     private fun countsOf(payload: PassportPayload): PassportRecordCounts = PassportRecordCounts(

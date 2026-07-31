@@ -195,6 +195,53 @@ class KeyboardPassportTest {
     }
 
     @Test
+    fun editedEnvelopeCategoriesCannotWidenImportScope() {
+        val serialized = KeyboardPassport.create(
+            input = input,
+            options = KeyboardPassportOptions(
+                includedCategories = setOf(PassportCategory.VOCABULARY),
+                passphrase = "portable-secret",
+                redactSensitiveText = false
+            ),
+            createdAt = 6_000L
+        )
+
+        // Ciphertext, counts and checksum all stay valid; only the unauthenticated
+        // envelope metadata is edited to claim categories the payload does not carry.
+        val tampered = serialized.replaceFirst(
+            "\"categories\": [\n    \"vocabulary\"\n  ]",
+            "\"categories\": [\n    \"appPersonas\",\n    \"corrections\",\n    \"customCommands\",\n" +
+                "    \"shortcuts\",\n    \"vocabulary\",\n    \"writingLogs\"\n  ]"
+        )
+        assertNotEquals(serialized, tampered)
+
+        val opened = KeyboardPassport.open(tampered, "portable-secret")
+        assertTrue(opened is KeyboardPassportOpenResult.Success)
+        opened as KeyboardPassportOpenResult.Success
+        assertEquals(setOf(PassportCategory.VOCABULARY), opened.preview.categories)
+
+        val plan = KeyboardPassportImportPlanner.plan(
+            current = KeyboardPassportSnapshot(
+                personaPreference = "Professional",
+                shortcuts = listOf(ShortcutTemplate(shortcut = "brb", template = "Be right back")),
+                customCommands = listOf(CustomCommand(token = "/tight", instruction = "Shorten this")),
+                appPersonas = listOf(AppPersona(packageName = "com.example.mail", persona = "Formal")),
+                corrections = listOf(LearnedCorrection(typo = "adn", correction = "and", count = 2))
+            ),
+            incoming = opened.payload,
+            categories = opened.preview.categories,
+            mode = KeyboardPassportImportMode.REPLACE
+        )
+
+        assertEquals(setOf(PassportCategory.VOCABULARY), plan.affectedCategories)
+        assertEquals("brb", plan.snapshot.shortcuts.single().shortcut)
+        assertEquals("/tight", plan.snapshot.customCommands.single().token)
+        assertEquals("com.example.mail", plan.snapshot.appPersonas.single().packageName)
+        assertEquals("adn", plan.snapshot.corrections.single().typo)
+        assertEquals("Professional", plan.snapshot.personaPreference)
+    }
+
+    @Test
     fun emptyAndArbitraryContentAreRejected() {
         assertNull(KeyboardPassport.inspect(""))
         assertNull(KeyboardPassport.inspect("{}"))
