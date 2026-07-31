@@ -218,5 +218,21 @@ class ExampleUnitTest {
         val matches = io.github.daddymean.agentickeyboard.util.SwipeToTypeEngine.getSwipeWordMatches(path)
         assertTrue(matches.contains("to"))
     }
+
+    @Test
+    fun testGetClosestCharExact() {
+        val qCenter = io.github.daddymean.agentickeyboard.util.SwipeToTypeEngine.keyCenters['q']!!
+        assertEquals('q', io.github.daddymean.agentickeyboard.util.SwipeToTypeEngine.getClosestChar(qCenter))
+
+        val aCenter = io.github.daddymean.agentickeyboard.util.SwipeToTypeEngine.keyCenters['a']!!
+        assertEquals('a', io.github.daddymean.agentickeyboard.util.SwipeToTypeEngine.getClosestChar(aCenter))
+    }
+
+    @Test
+    fun testGetClosestCharOffset() {
+        val qCenter = io.github.daddymean.agentickeyboard.util.SwipeToTypeEngine.keyCenters['q']!!
+        val offsetQ = io.github.daddymean.agentickeyboard.util.SwipePoint(qCenter.x + 0.2f, qCenter.y - 0.1f)
+        assertEquals('q', io.github.daddymean.agentickeyboard.util.SwipeToTypeEngine.getClosestChar(offsetQ))
+    }
 }
 
