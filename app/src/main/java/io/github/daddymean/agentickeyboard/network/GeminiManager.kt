@@ -40,7 +40,7 @@ object GeminiManager {
      * Checks if the API key is configured and seems valid.
      */
     fun isApiKeyAvailable(): Boolean {
-        return apiKey.isNotEmpty() && apiKey != "MY_GEMINI_API_KEY"
+        return apiKey.isNotEmpty() && apiKey.startsWith("AIza")
     }
 
     /**
