@@ -17,6 +17,12 @@ class SendGuardTest {
     }
 
     @Test
+    fun edgeCaseBlanksPassThrough() {
+        assertFalse(SendGuard.shouldWarn("\n"))
+        assertFalse(SendGuard.shouldWarn("\t\t"))
+    }
+
+    @Test
     fun hostileDraftsAreHeldBack() {
         assertTrue(SendGuard.shouldWarn("I am sick of this, you are useless"))
         assertTrue(SendGuard.shouldWarn("This is a stupid, ridiculous plan"))
@@ -28,5 +34,19 @@ class SendGuardTest {
         // A single sharp word or excited punctuation alone should not block sends.
         assertFalse(SendGuard.shouldWarn("That deadline is ridiculous but fine"))
         assertFalse(SendGuard.shouldWarn("So excited!! See you tonight"))
+    }
+
+    @Test
+    fun mediumRiskDraftsPassThrough() {
+        // A single hostile word yields score 2 (Medium Risk)
+        assertFalse(SendGuard.shouldWarn("This is completely stupid"))
+    }
+
+    @Test
+    fun mediumRiskEscalatedToHighRiskAreHeldBack() {
+        // A single hostile word (score 2) + "!!" (score 1) = 3 (High Risk)
+        assertTrue(SendGuard.shouldWarn("This is completely stupid!!"))
+        // A single hostile word (score 2) + "??" (score 1) = 3 (High Risk)
+        assertTrue(SendGuard.shouldWarn("Are you an idiot??"))
     }
 }
