@@ -18,6 +18,7 @@ import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.lazy.LazyColumn
+import io.github.daddymean.agentickeyboard.ui.components.AppScreenLazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -121,14 +122,7 @@ private fun ClipboardHistoryManagerScreen(
         }
     }
 
-    LazyColumn(
-        modifier = Modifier
-            .fillMaxSize()
-            .statusBarsPadding()
-            .navigationBarsPadding()
-            .padding(horizontal = 16.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp)
-    ) {
+    AppScreenLazyColumn {
         item {
             Row(
                 modifier = Modifier.fillMaxWidth(),
