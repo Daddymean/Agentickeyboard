@@ -426,13 +426,6 @@ class KeyboardViewModel(
 
     // --- Settings setters (persisted when a settings store is attached) ---
 
-    fun setLanguages(source: String, target: String) {
-        _sourceLanguage.value = source
-        _targetLanguage.value = target
-        settings?.sourceLanguage = source
-        settings?.targetLanguage = target
-    }
-
     fun toggleOfflineMode() {
         val newValue = !_isOfflineMode.value
         _isOfflineMode.value = newValue
