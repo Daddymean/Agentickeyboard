@@ -53,6 +53,44 @@ class WritingQualityMeterTest {
     }
 
     @Test
+    fun riskIsLowForNormalText() {
+        assertEquals(WritingQualityMeter.RISK_LOW, WritingQualityMeter.risk("Hello world. How are you today?"))
+    }
+
+    @Test
+    fun riskIsMediumForSingleHostileHit() {
+        assertEquals(WritingQualityMeter.RISK_MEDIUM, WritingQualityMeter.risk("This is stupid"))
+    }
+
+    @Test
+    fun riskIsMediumForMultiplePunctuation() {
+        assertEquals(WritingQualityMeter.RISK_MEDIUM, WritingQualityMeter.risk("What is this?? Tell me now!!"))
+    }
+
+    @Test
+    fun riskIsHighForShoutingWithoutWarmWords() {
+        // Needs at least 12 letters and >= 70% uppercase.
+        // "I AM VERY ANGRY ABOUT THIS" has 22 letters, all uppercase.
+        assertEquals(WritingQualityMeter.RISK_HIGH, WritingQualityMeter.risk("I AM VERY ANGRY ABOUT THIS"))
+    }
+
+    @Test
+    fun riskIsLowForShoutingWithWarmWords() {
+        assertEquals(WritingQualityMeter.RISK_LOW, WritingQualityMeter.risk("THANK YOU SO MUCH FOR YOUR HELP"))
+    }
+
+    @Test
+    fun riskIsLowForShortUppercaseText() {
+        // "HI THERE" has 7 letters, less than the 12 required for shouting.
+        assertEquals(WritingQualityMeter.RISK_LOW, WritingQualityMeter.risk("HI THERE"))
+    }
+
+    @Test
+    fun riskIsHighForHostilePlusPunctuation() {
+        assertEquals(WritingQualityMeter.RISK_HIGH, WritingQualityMeter.risk("This is stupid!!"))
+    }
+
+    @Test
     fun assessProducesNoteAndAllDimensions() {
         val hostile = WritingQualityMeter.assess("I am sick of this, you are useless")
         assertEquals(WritingQualityMeter.RISK_HIGH, hostile.risk)
