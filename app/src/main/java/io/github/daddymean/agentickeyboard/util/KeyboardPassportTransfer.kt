@@ -55,7 +55,9 @@ class KeyboardPassportTransfer(
         database.withTransaction {
             if (PassportCategory.VOCABULARY in plan.affectedCategories) {
                 repository.clearVocabulary()
-                plan.snapshot.vocabulary.forEach { repository.insertWord(it) }
+                if (plan.snapshot.vocabulary.isNotEmpty()) {
+                    repository.insertWords(plan.snapshot.vocabulary)
+                }
             }
 
             if (PassportCategory.CORRECTIONS in plan.affectedCategories) {
