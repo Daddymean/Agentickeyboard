@@ -66,8 +66,12 @@ class KeyboardPassportTransfer(
             }
 
             if (PassportCategory.SHORTCUTS in plan.affectedCategories) {
-                current.shortcuts.forEach { repository.deleteShortcut(it) }
-                plan.snapshot.shortcuts.forEach { repository.insertShortcut(it) }
+                if (current.shortcuts.isNotEmpty()) {
+                    repository.deleteShortcuts(current.shortcuts)
+                }
+                if (plan.snapshot.shortcuts.isNotEmpty()) {
+                    repository.insertShortcuts(plan.snapshot.shortcuts)
+                }
             }
 
             if (PassportCategory.CUSTOM_COMMANDS in plan.affectedCategories) {
