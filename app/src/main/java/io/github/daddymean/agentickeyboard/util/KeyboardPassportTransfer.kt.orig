@@ -84,7 +84,7 @@ class KeyboardPassportTransfer(
 
             if (PassportCategory.WRITING_LOGS in plan.affectedCategories) {
                 repository.clearLogs()
-                repository.insertLogs(plan.snapshot.writingLogs)
+                plan.snapshot.writingLogs.forEach { repository.insertLog(it) }
             }
         }
 
