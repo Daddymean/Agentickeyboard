@@ -198,8 +198,14 @@ interface CustomCommandDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insert(command: CustomCommand)
 
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertAll(commands: List<CustomCommand>)
+
     @Query("DELETE FROM custom_commands WHERE id = :id")
     suspend fun deleteById(id: Int)
+
+    @Query("DELETE FROM custom_commands WHERE id IN (:ids)")
+    suspend fun deleteByIds(ids: List<Int>)
 }
 
 @Dao
@@ -555,6 +561,14 @@ class KeyboardRepository(private val db: AppDatabase) {
 
     suspend fun deleteCustomCommandById(id: Int) {
         db.customCommandDao().deleteById(id)
+    }
+
+    suspend fun insertCustomCommands(commands: List<CustomCommand>) {
+        db.customCommandDao().insertAll(commands)
+    }
+
+    suspend fun deleteCustomCommandsByIds(ids: List<Int>) {
+        db.customCommandDao().deleteByIds(ids)
     }
 
     // --- Per-app persona memory ---
