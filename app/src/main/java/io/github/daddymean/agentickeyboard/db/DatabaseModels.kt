@@ -130,8 +130,14 @@ interface ShortcutDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertShortcut(shortcut: ShortcutTemplate)
 
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertShortcuts(shortcuts: List<ShortcutTemplate>)
+
     @Delete
     suspend fun deleteShortcut(shortcut: ShortcutTemplate)
+
+    @Delete
+    suspend fun deleteShortcuts(shortcuts: List<ShortcutTemplate>)
 
     @Query("DELETE FROM shortcut_templates WHERE id = :id")
     suspend fun deleteById(id: Int)
@@ -434,8 +440,16 @@ class KeyboardRepository(private val db: AppDatabase) {
         db.shortcutDao().insertShortcut(shortcut)
     }
 
+    suspend fun insertShortcuts(shortcuts: List<ShortcutTemplate>) {
+        db.shortcutDao().insertShortcuts(shortcuts)
+    }
+
     suspend fun deleteShortcut(shortcut: ShortcutTemplate) {
         db.shortcutDao().deleteShortcut(shortcut)
+    }
+
+    suspend fun deleteShortcuts(shortcuts: List<ShortcutTemplate>) {
+        db.shortcutDao().deleteShortcuts(shortcuts)
     }
 
     suspend fun deleteShortcutById(id: Int) {
