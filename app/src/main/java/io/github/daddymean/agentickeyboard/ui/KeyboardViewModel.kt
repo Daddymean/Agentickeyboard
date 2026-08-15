@@ -1244,22 +1244,6 @@ class KeyboardViewModel(
         }
     }
 
-    /**
-     * Save an on-device spelling auto-correction rule
-     */
-    fun addCorrection(typo: String, correction: String) {
-        if (typo.isBlank() || correction.isBlank()) return
-        viewModelScope.launch {
-            val cleanTypo = typo.lowercase().trim()
-            val existing = repository.getCorrectionForTypo(cleanTypo)
-            if (existing != null) {
-                repository.insertCorrection(existing.copy(correction = correction.trim(), count = existing.count + 1))
-            } else {
-                repository.insertCorrection(LearnedCorrection(typo = cleanTypo, correction = correction.trim()))
-            }
-        }
-    }
-
     fun deleteCorrection(id: Int) {
         viewModelScope.launch {
             repository.deleteCorrectionById(id)
