@@ -188,6 +188,9 @@ interface AppPersonaDao {
 
     @Query("DELETE FROM app_personas WHERE packageName = :packageName")
     suspend fun delete(packageName: String)
+
+    @Query("DELETE FROM app_personas WHERE packageName IN (:packageNames)")
+    suspend fun deleteAll(packageNames: List<String>)
 }
 
 @Dao
@@ -573,6 +576,10 @@ class KeyboardRepository(private val db: AppDatabase) {
 
     suspend fun deleteAppPersona(packageName: String) {
         db.appPersonaDao().delete(packageName)
+    }
+
+    suspend fun deleteAppPersonas(packageNames: List<String>) {
+        db.appPersonaDao().deleteAll(packageNames)
     }
 
     // New on-device personalization repository functions
