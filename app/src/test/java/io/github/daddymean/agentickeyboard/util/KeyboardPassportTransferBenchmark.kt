@@ -16,6 +16,7 @@ import kotlin.system.measureTimeMillis
 import org.robolectric.RobolectricTestRunner
 
 @RunWith(RobolectricTestRunner::class)
+@org.robolectric.annotation.Config(sdk = [35])
 class KeyboardPassportTransferBenchmark {
     private lateinit var db: AppDatabase
     private lateinit var repository: KeyboardRepository
