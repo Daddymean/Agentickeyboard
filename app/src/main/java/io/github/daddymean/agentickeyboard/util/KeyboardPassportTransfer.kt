@@ -71,8 +71,13 @@ class KeyboardPassportTransfer(
             }
 
             if (PassportCategory.CUSTOM_COMMANDS in plan.affectedCategories) {
-                current.customCommands.forEach { repository.deleteCustomCommandById(it.id) }
-                plan.snapshot.customCommands.forEach { repository.insertCustomCommand(it) }
+                val idsToDelete = current.customCommands.map { it.id }
+                if (idsToDelete.isNotEmpty()) {
+                    repository.deleteCustomCommandsByIds(idsToDelete)
+                }
+                if (plan.snapshot.customCommands.isNotEmpty()) {
+                    repository.insertCustomCommands(plan.snapshot.customCommands)
+                }
             }
 
             if (PassportCategory.APP_PERSONAS in plan.affectedCategories) {
