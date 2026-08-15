@@ -76,7 +76,9 @@ class KeyboardPassportTransfer(
             }
 
             if (PassportCategory.APP_PERSONAS in plan.affectedCategories) {
-                current.appPersonas.forEach { repository.deleteAppPersona(it.packageName) }
+                if (current.appPersonas.isNotEmpty()) {
+                    repository.deleteAppPersonas(current.appPersonas.map { it.packageName })
+                }
                 plan.snapshot.appPersonas.forEach {
                     repository.setAppPersona(it.packageName, it.persona, it.appLabel)
                 }
