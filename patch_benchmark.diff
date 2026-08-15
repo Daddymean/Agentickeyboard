@@ -1,0 +1,13 @@
+--- app/src/test/java/io/github/daddymean/agentickeyboard/util/KeyboardPassportTransferBenchmark.kt
++++ app/src/test/java/io/github/daddymean/agentickeyboard/util/KeyboardPassportTransferBenchmark.kt
+@@ -12,8 +12,10 @@
+ import org.junit.Test
+ import org.junit.runner.RunWith
+ import org.robolectric.RobolectricTestRunner
++import org.robolectric.annotation.Config
+ import kotlin.system.measureTimeMillis
+
+ @RunWith(RobolectricTestRunner::class)
++@Config(sdk = [35])
+ class KeyboardPassportTransferBenchmark {
+     private lateinit var database: AppDatabase
