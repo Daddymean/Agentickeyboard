@@ -1311,17 +1311,22 @@ class KeyboardViewModel(
                     imported++
                 }
             }
-            model.correctionHistory.forEach { item ->
-                if (item.typo.isNotBlank() && item.correction.isNotBlank()) {
+            val validCorrections = model.correctionHistory.filter { it.typo.isNotBlank() && it.correction.isNotBlank() }
+            if (validCorrections.isNotEmpty()) {
+                val typosToQuery = validCorrections.map { it.typo.lowercase().trim() }.distinct()
+                val existingCorrections = repository.getCorrectionsForTypos(typosToQuery).associateBy { it.typo }
+
+                val correctionsToInsert = validCorrections.map { item ->
                     val typo = item.typo.lowercase().trim()
-                    val existing = repository.getCorrectionForTypo(typo)
+                    val existing = existingCorrections[typo]
                     if (existing != null) {
-                        repository.insertCorrection(existing.copy(correction = item.correction, count = existing.count + item.count))
+                        existing.copy(correction = item.correction, count = existing.count + item.count)
                     } else {
-                        repository.insertCorrection(LearnedCorrection(typo = typo, correction = item.correction, count = item.count))
+                        LearnedCorrection(typo = typo, correction = item.correction, count = item.count)
                     }
-                    imported++
                 }
+                repository.insertCorrections(correctionsToInsert)
+                imported += correctionsToInsert.size
             }
             model.writingLogs.forEach { item ->
                 if (item.text.isNotBlank()) {
