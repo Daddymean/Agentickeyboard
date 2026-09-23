@@ -1323,19 +1323,20 @@ class KeyboardViewModel(
                     imported++
                 }
             }
-            model.writingLogs.forEach { item ->
+            val logsToInsert = model.writingLogs.mapNotNull { item ->
                 if (item.text.isNotBlank()) {
-                    repository.insertLog(
-                        WritingLog(
-                            originalText = item.text,
-                            sentiment = item.sentiment,
-                            toneScore = item.toneScore,
-                            wordCount = item.text.split(WHITESPACE_REGEX).size,
-                            timestamp = if (item.timestamp > 0) item.timestamp else System.currentTimeMillis()
-                        )
-                    )
                     imported++
-                }
+                    WritingLog(
+                        originalText = item.text,
+                        sentiment = item.sentiment,
+                        toneScore = item.toneScore,
+                        wordCount = item.text.split(WHITESPACE_REGEX).size,
+                        timestamp = if (item.timestamp > 0) item.timestamp else System.currentTimeMillis()
+                    )
+                } else null
+            }
+            if (logsToInsert.isNotEmpty()) {
+                repository.insertAllLogs(logsToInsert)
             }
             model.exportMetadata?.userPersonaPreference?.let { persona ->
                 if (persona in PERSONAS) setUserPersonaPreference(persona)
