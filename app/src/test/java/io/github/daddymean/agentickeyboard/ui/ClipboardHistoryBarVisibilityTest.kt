@@ -28,6 +28,9 @@ class ClipboardHistoryBarVisibilityTest {
     @get:Rule val composeTestRule = createComposeRule()
 
     private fun showBar(enabled: Boolean, sensitiveField: Boolean = false) {
+        // Collecting the Room-backed history flow keeps scheduling work, so drive
+        // the clock manually rather than waiting for an idle that never comes.
+        composeTestRule.mainClock.autoAdvance = false
         val context = ApplicationProvider.getApplicationContext<Context>()
         val repository = KeyboardRepository(AppDatabase.getDatabase(context))
         composeTestRule.setContent {
@@ -45,6 +48,7 @@ class ClipboardHistoryBarVisibilityTest {
                 )
             }
         }
+        composeTestRule.mainClock.advanceTimeByFrame()
     }
 
     @Test

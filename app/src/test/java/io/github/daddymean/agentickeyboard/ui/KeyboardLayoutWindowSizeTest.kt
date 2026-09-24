@@ -37,6 +37,10 @@ class KeyboardLayoutWindowSizeTest {
     @get:Rule val composeTestRule = createComposeRule()
 
     private fun showKeyboard(numberRow: Boolean = false) {
+        // The keyboard holds animations and Room-backed flows that keep scheduling
+        // frames, so an auto-advancing clock never reports idle. Drive it manually:
+        // these tests assert on layout, not on animation.
+        composeTestRule.mainClock.autoAdvance = false
         val context = ApplicationProvider.getApplicationContext<Context>()
         val viewModel = KeyboardViewModel(KeyboardRepository(AppDatabase.getDatabase(context)))
         viewModel.setNumberRowEnabled(numberRow)
@@ -48,6 +52,7 @@ class KeyboardLayoutWindowSizeTest {
                 }
             }
         }
+        composeTestRule.mainClock.advanceTimeByFrame()
     }
 
     private fun assertCloseTo(expected: Dp, actual: Dp, what: String) {
@@ -65,13 +70,6 @@ class KeyboardLayoutWindowSizeTest {
         composeTestRule.onNodeWithTag("key_space").assertIsDisplayed()
         val key = composeTestRule.onNodeWithTag("key_q").getUnclippedBoundsInRoot()
         assertCloseTo(44.dp, key.height, "portrait key height")
-    }
-
-    @Test
-    @Config(sdk = [35], qualifiers = "w411dp-h891dp-port")
-    fun `a qwerty row fits within the window in portrait`() {
-        showKeyboard()
-        val key = composeTestRule.onNodeWithTag("key_q").getUnclippedBoundsInRoot()
         // Ten keys plus the nine gaps between them.
         val rowWidth = key.width.value * 10 + 4f * 9
         assertTrue("row of 10 keys is ${rowWidth}dp wide in a 411dp window", rowWidth <= 411f)
