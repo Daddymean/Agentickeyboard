@@ -2030,7 +2030,31 @@ fun SetupTab() {
                 }
             )
         }
-        
+
+        item {
+            // The only route to the clipboard manager used to be a chip on the
+            // keyboard's own clipboard bar, which is hidden while the feature is off.
+            // That left the default-off state with no way in at all, so the companion
+            // app carries a permanent entry point.
+            SetupStepCard(
+                stepNumber = "4",
+                title = "Clipboard History (optional)",
+                description = "Off by default. Open the manager to turn on local clipboard history, review what is retained, or clear it.",
+                actionLabel = "Open Clipboard History",
+                onAction = {
+                    runCatching {
+                        context.startActivity(Intent(context, ClipboardHistoryActivity::class.java))
+                    }.onFailure {
+                        Toast.makeText(
+                            context,
+                            "Unable to open Clipboard History.",
+                            Toast.LENGTH_SHORT
+                        ).show()
+                    }
+                }
+            )
+        }
+
         item {
             Spacer(modifier = Modifier.height(16.dp))
         }

@@ -47,9 +47,11 @@ fun ClipboardHistoryBar(
     onOpenManager: () -> Unit
 ) {
     // While history is off the bar renders nothing at all: the keyboard must not
-    // spend permanent vertical space advertising a feature the user declined.
-    // The opt-in switch lives in ClipboardHistoryActivity. Returning here also
-    // keeps the optional Room table unopened until the user actually enables it.
+    // spend permanent vertical space advertising a feature the user declined. The
+    // opt-in switch and the manager stay reachable from the companion app's Setup
+    // Guide, which is the entry point that does not depend on this bar being drawn.
+    // Returning here also keeps the optional Room table unopened until the user
+    // actually enables it.
     if (sensitiveField || !enabled) return
 
     val colors = LocalKeyboardColors.current
