@@ -32,9 +32,9 @@ import io.github.daddymean.agentickeyboard.db.ClipboardHistoryItem
 import io.github.daddymean.agentickeyboard.db.KeyboardRepository
 import io.github.daddymean.agentickeyboard.ui.AgenticKeyboardLayout
 import io.github.daddymean.agentickeyboard.ui.ClipboardHistoryBar
-import io.github.daddymean.agentickeyboard.ui.ProvideKeyboardMetrics
 import io.github.daddymean.agentickeyboard.ui.KeyboardViewModel
 import io.github.daddymean.agentickeyboard.ui.KeyboardViewModelFactory
+import io.github.daddymean.agentickeyboard.ui.ProvideKeyboardMetrics
 import io.github.daddymean.agentickeyboard.ui.ReplyCompletenessBar
 import io.github.daddymean.agentickeyboard.ui.SnippetVaultBar
 import io.github.daddymean.agentickeyboard.ui.TrustPrismBanner
