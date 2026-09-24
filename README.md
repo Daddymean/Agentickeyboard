@@ -81,6 +81,21 @@ app/src/main/java/io/github/daddymean/agentickeyboard/
    (or go to Settings → System → Languages & input → On-screen keyboard).
 2. Enable **Agentic Keyboard**, then switch to it via the input-method picker.
 
+### Install a beta build without Android Studio
+
+Every **Android Build** run uploads an installable debug APK, so a build can be
+tested on a real device without a local toolchain:
+
+1. Open the [Actions tab](https://github.com/Daddymean/Agentickeyboard/actions),
+   pick the latest green **Android Build** run, and download the `app-debug`
+   artifact.
+2. Unzip it, then either `adb install -r app-debug.apk` or copy the APK to the
+   device and open it (allow installs from unknown sources).
+3. Enable the keyboard as above.
+
+CI builds carry no `GEMINI_API_KEY`, so cloud AI actions fall back to their
+offline equivalents. Build locally with a key to exercise the Gemini paths.
+
 ## Testing
 
 Unit tests (Robolectric, Roborazzi screenshots, and plain JUnit) live in
@@ -91,4 +106,5 @@ Unit tests (Robolectric, Roborazzi screenshots, and plain JUnit) live in
 ```
 
 Covered areas: cloud request redaction, privacy-aware export, JSON integrity,
-swipe-to-type decoding, and keyboard layout screenshots.
+swipe-to-type decoding, keyboard layout screenshots, and how the keyboard sizes
+itself to portrait, landscape and split-screen windows.
