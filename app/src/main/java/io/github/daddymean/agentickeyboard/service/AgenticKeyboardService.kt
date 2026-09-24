@@ -32,6 +32,7 @@ import io.github.daddymean.agentickeyboard.db.ClipboardHistoryItem
 import io.github.daddymean.agentickeyboard.db.KeyboardRepository
 import io.github.daddymean.agentickeyboard.ui.AgenticKeyboardLayout
 import io.github.daddymean.agentickeyboard.ui.ClipboardHistoryBar
+import io.github.daddymean.agentickeyboard.ui.ProvideKeyboardMetrics
 import io.github.daddymean.agentickeyboard.ui.KeyboardViewModel
 import io.github.daddymean.agentickeyboard.ui.KeyboardViewModelFactory
 import io.github.daddymean.agentickeyboard.ui.ReplyCompletenessBar
@@ -100,44 +101,47 @@ class AgenticKeyboardService : InputMethodService(), LifecycleOwner, ViewModelSt
             val historyStatus by clipboardStatus.collectAsState()
             val sensitiveField by viewModel.isSensitiveField.collectAsState()
 
-            Column {
-                TrustPrismBanner(viewModel)
-                ReplyCompletenessBar(
-                    viewModel = viewModel,
-                    session = replyCompletenessSession,
-                    onSendAnyway = { performEnterAction() }
-                )
-                SnippetVaultBar(
-                    viewModel = viewModel,
-                    repository = repository,
-                    onReplaceDraft = { replaceDraftBeforeCursor(it) },
-                    onOpenManager = { openSnippetVaultManager() }
-                )
-                ClipboardHistoryBar(
-                    repository = repository,
-                    enabled = historyEnabled,
-                    paused = historyPaused,
-                    sensitiveField = sensitiveField,
-                    statusMessage = historyStatus,
-                    onEnable = { enableClipboardHistory() },
-                    onTogglePause = { toggleClipboardHistoryPause() },
-                    onCaptureCurrent = { captureCurrentClipboard(silent = false) },
-                    onInsert = { insertClipboardItem(it) },
-                    onOpenManager = { openClipboardHistoryManager() }
-                )
-                AgenticKeyboardLayout(
-                    viewModel = viewModel,
-                    onKeyPress = { text ->
-                        currentInputConnection?.commitText(text, 1)
-                    },
-                    onDelete = {
-                        currentInputConnection?.deleteSurroundingText(1, 0)
-                    },
-                    onAction = { performEnterAction() },
-                    onMicPress = { switchToVoiceInput() },
-                    onCursorMove = { steps -> moveCursor(steps) },
-                    inputConnectionProvider = { currentInputConnection }
-                )
+            // Every surface below sizes itself from the window the IME was given,
+            // so the keyboard still leaves room for the field in short windows.
+            ProvideKeyboardMetrics {
+                Column {
+                    TrustPrismBanner(viewModel)
+                    ReplyCompletenessBar(
+                        viewModel = viewModel,
+                        session = replyCompletenessSession,
+                        onSendAnyway = { performEnterAction() }
+                    )
+                    SnippetVaultBar(
+                        viewModel = viewModel,
+                        repository = repository,
+                        onReplaceDraft = { replaceDraftBeforeCursor(it) },
+                        onOpenManager = { openSnippetVaultManager() }
+                    )
+                    ClipboardHistoryBar(
+                        repository = repository,
+                        enabled = historyEnabled,
+                        paused = historyPaused,
+                        sensitiveField = sensitiveField,
+                        statusMessage = historyStatus,
+                        onTogglePause = { toggleClipboardHistoryPause() },
+                        onCaptureCurrent = { captureCurrentClipboard(silent = false) },
+                        onInsert = { insertClipboardItem(it) },
+                        onOpenManager = { openClipboardHistoryManager() }
+                    )
+                    AgenticKeyboardLayout(
+                        viewModel = viewModel,
+                        onKeyPress = { text ->
+                            currentInputConnection?.commitText(text, 1)
+                        },
+                        onDelete = {
+                            currentInputConnection?.deleteSurroundingText(1, 0)
+                        },
+                        onAction = { performEnterAction() },
+                        onMicPress = { switchToVoiceInput() },
+                        onCursorMove = { steps -> moveCursor(steps) },
+                        inputConnectionProvider = { currentInputConnection }
+                    )
+                }
             }
         }
         return composeView
@@ -175,14 +179,6 @@ class AgenticKeyboardService : InputMethodService(), LifecycleOwner, ViewModelSt
             .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         runCatching { startActivity(intent) }
             .onFailure { Log.w(TAG, "Unable to open clipboard manager", it) }
-    }
-
-    private fun enableClipboardHistory() {
-        settings.isClipboardHistoryEnabled = true
-        settings.isClipboardHistoryPaused = false
-        refreshClipboardSettings()
-        clipboardStatus.value = "Enabled. Capturing the current clipboard locally."
-        captureCurrentClipboard(silent = false)
     }
 
     private fun toggleClipboardHistoryPause() {
