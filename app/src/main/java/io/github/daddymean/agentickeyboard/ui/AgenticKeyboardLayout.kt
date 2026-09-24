@@ -43,6 +43,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
@@ -79,6 +80,7 @@ import io.github.daddymean.agentickeyboard.util.CommandPalette
 import io.github.daddymean.agentickeyboard.util.ReplyIntents
 import io.github.daddymean.agentickeyboard.util.SwipePoint
 import io.github.daddymean.agentickeyboard.util.SwipeToTypeEngine
+import io.github.daddymean.agentickeyboard.util.commitTextWithCaret
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlin.math.abs
@@ -118,6 +120,13 @@ fun AgenticKeyboardLayout(
 ) {
     val haptic = LocalHapticFeedback.current
     val clipboardManager = LocalClipboardManager.current
+    // Lend the view model a clipboard reader only while the keyboard is on screen.
+    // It calls this back solely for a template that names {clipboard}, so an ordinary
+    // keystroke never touches the clipboard.
+    DisposableEffect(clipboardManager) {
+        viewModel.setClipboardProvider { clipboardManager.getText()?.text?.toString() }
+        onDispose { viewModel.setClipboardProvider(null) }
+    }
     var shiftState by remember { mutableStateOf(ShiftState.OFF) }
     var lastShiftTapTime by remember { mutableLongStateOf(0L) }
     var lastSpaceTime by remember { mutableLongStateOf(0L) }
@@ -221,7 +230,7 @@ fun AgenticKeyboardLayout(
      * replaces everything before the cursor. commitText on its own already
      * replaces a selection, so only the no-selection case needs a delete first.
      */
-    fun replaceActiveText(newText: String) {
+    fun replaceActiveText(newText: String, cursorOffset: Int? = null) {
         val original = aiSourceText()
         if (inPlaygroundMode) {
             onPlaygroundTextChange(newText)
@@ -230,7 +239,7 @@ fun AgenticKeyboardLayout(
                 if (conn.getSelectedText(0).isNullOrEmpty()) {
                     conn.deleteSurroundingText(currentText().length, 0)
                 }
-                conn.commitText(newText, 1)
+                conn.commitTextWithCaret(newText, cursorOffset)
             }
         }
         if (newText != original) {
@@ -273,7 +282,10 @@ fun AgenticKeyboardLayout(
                 } else {
                     inputConnectionProvider()?.let { conn ->
                         conn.deleteSurroundingText(lastWord.length, 0)
-                        conn.commitText("${replacement.replacement} ", 1)
+                        conn.commitTextWithCaret(
+                            "${replacement.replacement} ",
+                            replacement.cursorOffset
+                        )
                     }
                 }
                 viewModel.registerAutoCorrection(lastWord, replacement.replacement, replacement.fromLearnedRule)
@@ -383,9 +395,9 @@ fun AgenticKeyboardLayout(
                                 buzz(HapticFeedbackType.LongPress)
                                 val text = currentText()
                                 val expanded = viewModel.tryExpandAbbreviation(text)
-                                if (expanded != text) {
+                                if (expanded.text != text) {
                                     viewModel.recordShortcutExpansionStat()
-                                    replaceActiveText(expanded)
+                                    replaceActiveText(expanded.text, expanded.cursorOffset)
                                     gestureAlert = "Template Expanded! ⚡ (⌫ undoes)"
                                 } else {
                                     gestureAlert = "No abbreviations found to expand. ⚡"

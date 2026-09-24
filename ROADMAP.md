@@ -36,6 +36,21 @@ file in the same PR that ships a milestone: move it to **Shipped** with the PR n
 
 ## Shipped
 
+- **Dynamic snippet and shortcut tokens** — saved snippets and shortcut templates
+  were dead strings: "On my way!" could only ever be that. They are now small
+  templates. `{date}`, `{time}` and `{datetime}` take an offset and a format
+  (`{date+1d:EEEE}` for tomorrow's weekday), `{clipboard}` pulls in what was just
+  copied, and `{cursor}` decides where the caret lands after insertion, so a
+  standup note carries today's date and a letter drops you on the first line you
+  actually write. Expansion runs on every path a stored template becomes text:
+  shortcut-on-space, the expand gesture, and Snippet Vault insertion. Unknown or
+  malformed tokens are left exactly as typed, and `{{`/`}}` escape literal braces,
+  so JSON snippets survive. The clipboard is read only when a template names
+  `{clipboard}`, never in a sensitive field, and only through a reader the keyboard
+  UI lends the view model while it is on screen. Both editors show a live preview of
+  what the template will insert, which teaches the grammar without documentation.
+  Covered by JVM tests for the expansion engine and the editor hint.
+
 - **Adaptive keyboard sizing** — the IME had no orientation or window-size
   handling, so it asked for ~346dp (~396dp with the number row) in every window.
   A phone in landscape offers ~360-410dp of height in total, so the keyboard

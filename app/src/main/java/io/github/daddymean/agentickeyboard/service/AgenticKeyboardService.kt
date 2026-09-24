@@ -39,6 +39,7 @@ import io.github.daddymean.agentickeyboard.ui.ReplyCompletenessBar
 import io.github.daddymean.agentickeyboard.ui.SnippetVaultBar
 import io.github.daddymean.agentickeyboard.ui.TrustPrismBanner
 import io.github.daddymean.agentickeyboard.util.ClipboardCaptureDecision
+import io.github.daddymean.agentickeyboard.util.commitTextWithCaret
 import io.github.daddymean.agentickeyboard.util.ClipboardHistoryPolicy
 import io.github.daddymean.agentickeyboard.util.KeyboardSettings
 import io.github.daddymean.agentickeyboard.util.ReplyCompletenessSession
@@ -114,7 +115,7 @@ class AgenticKeyboardService : InputMethodService(), LifecycleOwner, ViewModelSt
                     SnippetVaultBar(
                         viewModel = viewModel,
                         repository = repository,
-                        onReplaceDraft = { replaceDraftBeforeCursor(it) },
+                        onReplaceDraft = { text, caret -> replaceDraftBeforeCursor(text, caret) },
                         onOpenManager = { openSnippetVaultManager() }
                     )
                     ClipboardHistoryBar(
@@ -147,13 +148,13 @@ class AgenticKeyboardService : InputMethodService(), LifecycleOwner, ViewModelSt
         return composeView
     }
 
-    private fun replaceDraftBeforeCursor(text: String) {
+    private fun replaceDraftBeforeCursor(text: String, cursorOffset: Int? = null) {
         val ic = currentInputConnection ?: return
         val existing = ic.getTextBeforeCursor(CONTEXT_CHARS, 0)?.length ?: 0
         ic.beginBatchEdit()
         try {
             if (existing > 0) ic.deleteSurroundingText(existing, 0)
-            ic.commitText(text, 1)
+            ic.commitTextWithCaret(text, cursorOffset)
         } finally {
             ic.endBatchEdit()
         }

@@ -98,6 +98,7 @@ import io.github.daddymean.agentickeyboard.ui.RowDefaultsButtonPadding
 import io.github.daddymean.agentickeyboard.ui.theme.MyApplicationTheme
 import io.github.daddymean.agentickeyboard.util.AppPersonas
 import io.github.daddymean.agentickeyboard.util.OnDeviceAiStatus
+import io.github.daddymean.agentickeyboard.util.TextExpansion
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -749,6 +750,9 @@ fun ShortcutsTab(viewModel: KeyboardViewModel) {
                         onValueChange = { newTemplate = it },
                         label = { Text("Phrase expansion") },
                         placeholder = { Text("On my way!") },
+                        // Same live preview as the Snippet Vault editor, so tokens are
+                        // discoverable from whichever screen the user reaches first.
+                        supportingText = { Text(TextExpansion.editorHint(newTemplate)) },
                         colors = OutlinedTextFieldDefaults.colors(
                             focusedBorderColor = Color(0xFF6750A4),
                             unfocusedBorderColor = Color(0xFFCBD5E1),

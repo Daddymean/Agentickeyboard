@@ -24,6 +24,7 @@ import io.github.daddymean.agentickeyboard.util.mastery.MasteryStateCodec
 import io.github.daddymean.agentickeyboard.util.PersonalModelSerializer
 import io.github.daddymean.agentickeyboard.util.ReplyIntents
 import io.github.daddymean.agentickeyboard.util.SendGuard
+import io.github.daddymean.agentickeyboard.util.TextExpansion
 import io.github.daddymean.agentickeyboard.util.VoiceMatchScorer
 import io.github.daddymean.agentickeyboard.util.VoiceSample
 import io.github.daddymean.agentickeyboard.util.VoiceVocabulary
@@ -38,8 +39,16 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
-/** What a committed word should become, and whether a learned typo rule produced it. */
-data class WordReplacement(val replacement: String, val fromLearnedRule: Boolean)
+/**
+ * What a committed word should become, and whether a learned typo rule produced it.
+ * [cursorOffset] is where the caret should land inside [replacement] when the
+ * expanded template declared a {cursor} marker.
+ */
+data class WordReplacement(
+    val replacement: String,
+    val fromLearnedRule: Boolean,
+    val cursorOffset: Int? = null
+)
 
 /** A just-applied auto-correction that backspace can revert. */
 data class AutoCorrectionUndo(val original: String, val replacement: String, val fromLearnedRule: Boolean)
@@ -71,6 +80,8 @@ class KeyboardViewModel(
 
     companion object {
         private val NON_ALPHA_REGEX = "[^a-zA-Z]".toRegex()
+        /** Only templates naming this token cause a clipboard read. */
+        private const val CLIPBOARD_TOKEN = "{clipboard}"
         private val WHITESPACE_REGEX = "\\s+".toRegex()
         val PERSONAS = listOf("Match my history", "Professional", "Joyful", "Empathetic", "Casual")
         /** Keyboard palette override choices (see KeyboardSettings.themeOverride). */
@@ -645,7 +656,12 @@ class KeyboardViewModel(
         val normalized = word.lowercase().trim()
         if (normalized.isEmpty()) return null
         shortcuts.value.find { it.shortcut == normalized }?.let {
-            return WordReplacement(it.template, fromLearnedRule = false)
+            val expanded = expandTemplate(it.template)
+            return WordReplacement(
+                expanded.text,
+                fromLearnedRule = false,
+                cursorOffset = expanded.cursorOffset
+            )
         }
         learnedCorrections.value.find { it.typo == normalized }?.let { correction ->
             // Preserve leading capitalization of the typed word
@@ -809,18 +825,49 @@ class KeyboardViewModel(
     /**
      * Expand custom shortcuts in text based on templates
      */
-    fun tryExpandAbbreviation(text: String): String {
-        if (text.isEmpty()) return text
+    fun tryExpandAbbreviation(text: String): TextExpansion.ExpandedText {
+        if (text.isEmpty()) return TextExpansion.ExpandedText(text)
         val words = text.split(WHITESPACE_REGEX)
-        if (words.isEmpty()) return text
+        if (words.isEmpty()) return TextExpansion.ExpandedText(text)
         val lastWord = words.last().lowercase().trim()
         val match = shortcuts.value.find { it.shortcut == lastWord }
-        return if (match != null) {
-            val prefix = text.substring(0, text.length - words.last().length)
-            prefix + match.template
+            ?: return TextExpansion.ExpandedText(text)
+        val prefix = text.substring(0, text.length - words.last().length)
+        val expanded = expandTemplate(match.template)
+        return TextExpansion.ExpandedText(
+            prefix + expanded.text,
+            expanded.cursorOffset?.let { prefix.length + it }
+        )
+    }
+
+    // --- Template tokens --------------------------------------------------------
+
+    /**
+     * Supplies clipboard text to the {clipboard} token. The view model never reaches
+     * for the system clipboard itself; the keyboard UI registers this while it is on
+     * screen, keeping clipboard reads on the same foreground-only path as the rest of
+     * the keyboard.
+     */
+    private var clipboardProvider: (() -> String?)? = null
+
+    fun setClipboardProvider(provider: (() -> String?)?) {
+        clipboardProvider = provider
+    }
+
+    /**
+     * Expands {date}, {time}, {clipboard} and {cursor} in a stored template.
+     *
+     * The clipboard is read only when the user's own template actually asks for it,
+     * and never in a sensitive field — the same treatment password and OTP inputs get
+     * everywhere else in the keyboard.
+     */
+    fun expandTemplate(template: String): TextExpansion.ExpandedText {
+        val clipboard = if (template.contains(CLIPBOARD_TOKEN) && !_isSensitiveField.value) {
+            clipboardProvider?.invoke()
         } else {
-            text
+            null
         }
+        return TextExpansion.expand(template, TextExpansion.ExpansionContext(clipboard = clipboard))
     }
 
     // --- Background proofread (opt-in) ------------------------------------------

@@ -49,7 +49,8 @@ import kotlinx.coroutines.launch
 fun SnippetVaultBar(
     viewModel: KeyboardViewModel,
     repository: KeyboardRepository,
-    onReplaceDraft: (String) -> Unit,
+    /** Replaces the draft with the text, optionally placing the caret inside it. */
+    onReplaceDraft: (String, Int?) -> Unit,
     onOpenManager: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -150,7 +151,8 @@ fun SnippetVaultBar(
                                     .clickable {
                                         when (val plan = SnippetVaultSelectionPlanner.plan(request, entry)) {
                                             is SnippetVaultSelectionPlan.InsertText -> {
-                                                onReplaceDraft(plan.text)
+                                                val expanded = viewModel.expandTemplate(plan.text)
+                                                onReplaceDraft(expanded.text, expanded.cursorOffset)
                                                 entry.savedSnippetIdOrNull()?.let { id ->
                                                     scope.launch { repository.recordSavedSnippetUse(id) }
                                                 }
@@ -159,10 +161,10 @@ fun SnippetVaultBar(
                                                 }
                                             }
                                             is SnippetVaultSelectionPlan.StageCommand -> {
-                                                onReplaceDraft("${plan.token} ")
+                                                onReplaceDraft("${plan.token} ", null)
                                             }
                                             is SnippetVaultSelectionPlan.RunRewrite -> {
-                                                onReplaceDraft(plan.sourceText)
+                                                onReplaceDraft(plan.sourceText, null)
                                                 viewModel.rewriteWithStyle(
                                                     plan.sourceText,
                                                     plan.instruction
