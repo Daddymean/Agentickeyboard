@@ -9,7 +9,6 @@ import android.view.KeyEvent
 import android.view.View
 import android.view.inputmethod.EditorInfo
 import android.view.inputmethod.InputMethodManager
-import androidx.compose.foundation.layout.Column
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.platform.ComposeView
@@ -30,14 +29,9 @@ import io.github.daddymean.agentickeyboard.ClipboardHistoryActivity
 import io.github.daddymean.agentickeyboard.SnippetVaultActivity
 import io.github.daddymean.agentickeyboard.db.ClipboardHistoryItem
 import io.github.daddymean.agentickeyboard.db.KeyboardRepository
-import io.github.daddymean.agentickeyboard.ui.AgenticKeyboardLayout
-import io.github.daddymean.agentickeyboard.ui.ClipboardHistoryBar
 import io.github.daddymean.agentickeyboard.ui.KeyboardViewModel
+import io.github.daddymean.agentickeyboard.ui.KeyboardImeContent
 import io.github.daddymean.agentickeyboard.ui.KeyboardViewModelFactory
-import io.github.daddymean.agentickeyboard.ui.ProvideKeyboardMetrics
-import io.github.daddymean.agentickeyboard.ui.ReplyCompletenessBar
-import io.github.daddymean.agentickeyboard.ui.SnippetVaultBar
-import io.github.daddymean.agentickeyboard.ui.TrustPrismBanner
 import io.github.daddymean.agentickeyboard.util.ClipboardCaptureDecision
 import io.github.daddymean.agentickeyboard.util.commitTextWithCaret
 import io.github.daddymean.agentickeyboard.util.ClipboardHistoryPolicy
@@ -102,48 +96,28 @@ class AgenticKeyboardService : InputMethodService(), LifecycleOwner, ViewModelSt
             val historyStatus by clipboardStatus.collectAsState()
             val sensitiveField by viewModel.isSensitiveField.collectAsState()
 
-            // Every surface below sizes itself from the window the IME was given,
-            // so the keyboard still leaves room for the field in short windows.
-            ProvideKeyboardMetrics {
-                Column {
-                    TrustPrismBanner(viewModel)
-                    ReplyCompletenessBar(
-                        viewModel = viewModel,
-                        session = replyCompletenessSession,
-                        onSendAnyway = { performEnterAction() }
-                    )
-                    SnippetVaultBar(
-                        viewModel = viewModel,
-                        repository = repository,
-                        onReplaceDraft = { text, caret -> replaceDraftBeforeCursor(text, caret) },
-                        onOpenManager = { openSnippetVaultManager() }
-                    )
-                    ClipboardHistoryBar(
-                        repository = repository,
-                        enabled = historyEnabled,
-                        paused = historyPaused,
-                        sensitiveField = sensitiveField,
-                        statusMessage = historyStatus,
-                        onTogglePause = { toggleClipboardHistoryPause() },
-                        onCaptureCurrent = { captureCurrentClipboard(silent = false) },
-                        onInsert = { insertClipboardItem(it) },
-                        onOpenManager = { openClipboardHistoryManager() }
-                    )
-                    AgenticKeyboardLayout(
-                        viewModel = viewModel,
-                        onKeyPress = { text ->
-                            currentInputConnection?.commitText(text, 1)
-                        },
-                        onDelete = {
-                            currentInputConnection?.deleteSurroundingText(1, 0)
-                        },
-                        onAction = { performEnterAction() },
-                        onMicPress = { switchToVoiceInput() },
-                        onCursorMove = { steps -> moveCursor(steps) },
-                        inputConnectionProvider = { currentInputConnection }
-                    )
-                }
-            }
+            KeyboardImeContent(
+                viewModel = viewModel,
+                repository = repository,
+                replyCompletenessSession = replyCompletenessSession,
+                historyEnabled = historyEnabled,
+                historyPaused = historyPaused,
+                historyStatus = historyStatus,
+                sensitiveField = sensitiveField,
+                onSendAnyway = { performEnterAction() },
+                onReplaceDraft = { text, caret -> replaceDraftBeforeCursor(text, caret) },
+                onOpenSnippetManager = { openSnippetVaultManager() },
+                onTogglePause = { toggleClipboardHistoryPause() },
+                onCaptureCurrent = { captureCurrentClipboard(silent = false) },
+                onInsertClipboard = { insertClipboardItem(it) },
+                onOpenClipboardManager = { openClipboardHistoryManager() },
+                onKeyPress = { currentInputConnection?.commitText(it, 1) },
+                onDelete = { currentInputConnection?.deleteSurroundingText(1, 0) },
+                onAction = { performEnterAction() },
+                onMicPress = { switchToVoiceInput() },
+                onCursorMove = { moveCursor(it) },
+                inputConnectionProvider = { currentInputConnection }
+            )
         }
         return composeView
     }

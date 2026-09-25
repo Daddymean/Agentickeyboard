@@ -38,12 +38,12 @@ Use the broadest available spread:
 
 ## Clipboard history privacy
 
-1. Confirm the clipboard-history bar says history is off before opt-in.
+1. Confirm the clipboard-history bar is absent before opt-in. Open Setup Guide → Clipboard History (optional) → Open Clipboard History; confirm the manager is reachable while history is disabled.
 2. Focus a password field and confirm:
    - the clipboard-history bar is absent;
    - no automatic capture occurs;
    - Capture cannot be invoked from the IME.
-3. Enable history in an ordinary text field and test manual capture rejection for:
+3. Enable history through the companion manager, return to an ordinary text field, and test manual capture rejection for:
    - `password: hunter2`;
    - a verification or one-time code;
    - a Luhn-valid payment-card number;
@@ -142,3 +142,39 @@ The release candidate may advance when:
 - no P0 or P1 regression remains open;
 - clipboard history has been exercised on at least two Android API levels, including one API 33+ device;
 - remaining lower-severity defects have reproduction steps and an explicit ship/fix decision.
+
+## PR #102 follow-up: physical-device sign-off (not yet executed)
+
+Record final SHA, artifact/run ID, device, Android API, navigation mode, display/font
+scale, host editor, expected/actual result and screenshot/log reference for each row.
+Start on the Pixel 10 Pro, then cover the Android eras listed above. Test native
+EditText, a Compose text field, and a WebView/browser editor. CI cannot sign off
+physical clipboard access, OEM IME window dimensions, or real insets.
+
+| Scenario | Procedure | Pass condition | Result |
+| --- | --- | --- | --- |
+| Rotation | Type with number row on; rotate both ways without closing IME | All keys and editor reachable, no text loss, row hides/restores | NOT RUN |
+| Split-screen | Resize both app positions with IME open; cross 479/480dp height | Metrics refresh, no clipping; record actual IME/configuration bounds | NOT RUN |
+| Maximum chrome | Populate history, recall Vault, open expanded AI result and applicable banners; increase font scale | Keys and host caret usable; every panel action reachable | NOT RUN |
+| Live tokens | Expand clipboard/date/cursor through space, gesture and Vault | Exact single insertion, correct caret and current date | NOT RUN |
+| Clipboard variants | Multiline/emoji, empty, unavailable, and non-text clipboard | No crash or duplicate insertion; empty fallback is understood | NOT RUN |
+| Clipboard privacy | Escaped token, password and numeric-password field, hide/reopen IME | No clipboard read for escaped/secure/hidden use | NOT RUN |
+| Ordinary OTP input | Exercise host OTP fields lacking password flags | Document classification; do not assume every OTP editor is detectable | NOT RUN |
+| Undo | Start/middle/end marker, emoji, selected text, surrounding text, then immediate backspace | Space/gesture undo restores original and preserves neighbors | NOT RUN |
+| Stale undo | Move caret, alter suffix, or change editor before backspace | Old transaction does not undo unrelated content | NOT RUN |
+| Existing snippets | Upgrade with nested JSON/code, unknown tokens and literal braces | No closing braces lost; data remains intact | NOT RUN |
+| Settings route | Fresh disabled state → manager → enable → disable → reopen → clear | Manager always reachable and bar/settings refresh correctly | NOT RUN |
+
+The core compact arithmetic is not the total IME height. Automated layout tests now
+render the service's shared view tree and exercise configuration changes, but do not
+establish maximum-chrome or OEM split-screen behavior. Do not approve beta until
+these rows and the existing migration/privacy gates pass on the final SHA.
+
+Token escape syntax: use a complete `{{token}}` block for literal `{token}`.
+Unpaired closing braces remain literal, preserving nested JSON/code. Recognized
+single-brace tokens remain dynamic, including when intentionally embedded in JSON.
+
+CodeQL now builds debug and release sequentially to avoid the reported shared
+Room schema export overlap in that workflow. This is a workflow mitigation, not
+a repository-wide per-variant schema migration; other concurrent build entry points
+still need investigation if the failure recurs.

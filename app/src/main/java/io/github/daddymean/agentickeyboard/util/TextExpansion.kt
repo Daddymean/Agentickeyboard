@@ -25,7 +25,7 @@ import java.util.TimeZone
  *   {date+1d:EEEE}                      "tomorrow's weekday name"
  *   {clipboard}                         current clipboard text, empty when unset
  *   {cursor}                            where the caret lands; emits nothing
- *   {{ and }}                           literal braces
+ *   {{token}}                           literal {token}; unpaired braces stay literal
  * ```
  * Offset units are `min`, `h`, `d`, `w`, `mo`, `y`. Month is `mo` and minute is
  * `min` so neither has to guess at a bare `m`.
@@ -89,11 +89,21 @@ object TextExpansion {
     fun hasTokens(template: String): Boolean =
         template.contains('{') || template.contains('}')
 
-    fun expand(template: String, context: ExpansionContext = ExpansionContext()): ExpandedText {
+    fun expand(
+        template: String,
+        context: ExpansionContext = ExpansionContext(),
+        clipboardReader: (() -> String?)? = null
+    ): ExpandedText {
         if (!template.contains('{') && !template.contains('}')) {
             return ExpandedText(template)
         }
 
+        // One read per expansion, only after parsing an actual clipboard token.
+        // Clipboard access can fail when an editor/window loses focus mid-action.
+        val clipboard by lazy {
+            if (clipboardReader == null) context.clipboard
+            else runCatching { clipboardReader.invoke() }.getOrNull()
+        }
         val out = StringBuilder(template.length)
         var cursorOffset: Int? = null
         var i = 0
@@ -101,19 +111,24 @@ object TextExpansion {
         while (i < template.length) {
             val c = template[i]
             when {
-                // Doubled braces are literals, so JSON and code snippets survive.
-                c == '{' && i + 1 < template.length && template[i + 1] == '{' -> {
-                    out.append('{')
-                    i += 2
-                }
-                c == '}' && i + 1 < template.length && template[i + 1] == '}' -> {
-                    out.append('}')
-                    i += 2
+                // Escape only a complete paired block. Never collapse arbitrary
+                // closing braces: existing nested JSON/code uses them structurally.
+                c == '{' && i + 1 < template.length && template[i + 1] == '{' &&
+                    template.indexOf("}}", i + 2).let { end ->
+                        end >= 0 && template.substring(i + 2, end).none { it == '{' || it == '}' }
+                    } -> {
+                    val end = template.indexOf("}}", i + 2)
+                    out.append('{').append(template, i + 2, end).append('}')
+                    i = end + 2
                 }
                 c == '{' -> {
                     val close = template.indexOf('}', i + 1)
                     val raw = if (close == -1) null else template.substring(i + 1, close)
-                    val resolved = raw?.let { resolve(it, context) }
+                    val resolved = raw?.let {
+                        resolve(it, if (it.equals("clipboard", ignoreCase = true)) {
+                            context.copy(clipboard = clipboard)
+                        } else context)
+                    }
                     when {
                         // Unclosed or unknown: emit verbatim, never drop the user's text.
                         raw == null || resolved == null -> {

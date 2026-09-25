@@ -1,6 +1,8 @@
 package io.github.daddymean.agentickeyboard.ui
 
 import android.view.inputmethod.InputConnection
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.fadeIn
@@ -81,6 +83,8 @@ import io.github.daddymean.agentickeyboard.util.ReplyIntents
 import io.github.daddymean.agentickeyboard.util.SwipePoint
 import io.github.daddymean.agentickeyboard.util.SwipeToTypeEngine
 import io.github.daddymean.agentickeyboard.util.commitTextWithCaret
+import io.github.daddymean.agentickeyboard.util.CommittedEditUndo
+import io.github.daddymean.agentickeyboard.util.captureCommittedEditUndo
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlin.math.abs
@@ -123,8 +127,13 @@ fun AgenticKeyboardLayout(
     // Lend the view model a clipboard reader only while the keyboard is on screen.
     // It calls this back solely for a template that names {clipboard}, so an ordinary
     // keystroke never touches the clipboard.
-    DisposableEffect(clipboardManager) {
-        viewModel.setClipboardProvider { clipboardManager.getText()?.text?.toString() }
+    val clipboardLifecycle = LocalLifecycleOwner.current.lifecycle
+    DisposableEffect(clipboardManager, clipboardLifecycle, viewModel) {
+        viewModel.setClipboardProvider {
+            if (clipboardLifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)) {
+                clipboardManager.getText()?.text?.toString()
+            } else null
+        }
         onDispose { viewModel.setClipboardProvider(null) }
     }
     var shiftState by remember { mutableStateOf(ShiftState.OFF) }
@@ -232,6 +241,7 @@ fun AgenticKeyboardLayout(
      */
     fun replaceActiveText(newText: String, cursorOffset: Int? = null) {
         val original = aiSourceText()
+        var editorUndo: CommittedEditUndo? = null
         if (inPlaygroundMode) {
             onPlaygroundTextChange(newText)
         } else {
@@ -240,10 +250,11 @@ fun AgenticKeyboardLayout(
                     conn.deleteSurroundingText(currentText().length, 0)
                 }
                 conn.commitTextWithCaret(newText, cursorOffset)
+                editorUndo = conn.captureCommittedEditUndo(original, newText, cursorOffset)
             }
         }
         if (newText != original) {
-            viewModel.registerAiApply(original, newText)
+            viewModel.registerAiApply(original, newText, editorUndo, if (inPlaygroundMode) null else cursorOffset)
             gestureAlert = "Applied ✨ (⌫ undoes)"
         }
     }
@@ -276,7 +287,8 @@ fun AgenticKeyboardLayout(
         if (lastWord.isNotEmpty()) {
             viewModel.onWordCommitted(lastWord)
             val replacement = viewModel.resolveWordCommit(lastWord)
-            if (replacement != null && replacement.replacement != lastWord) {
+            if (replacement != null && (replacement.replacement != lastWord || replacement.cursorOffset != null)) {
+                var editorUndo: CommittedEditUndo? = null
                 if (inPlaygroundMode) {
                     onPlaygroundTextChange(text.dropLast(lastWord.length) + replacement.replacement + " ")
                 } else {
@@ -286,9 +298,15 @@ fun AgenticKeyboardLayout(
                             "${replacement.replacement} ",
                             replacement.cursorOffset
                         )
+                        editorUndo = conn.captureCommittedEditUndo(
+                            "$lastWord ", "${replacement.replacement} ", replacement.cursorOffset
+                        )
                     }
                 }
-                viewModel.registerAutoCorrection(lastWord, replacement.replacement, replacement.fromLearnedRule)
+                viewModel.registerAutoCorrection(
+                    lastWord, replacement.replacement, replacement.fromLearnedRule,
+                    editorUndo, if (inPlaygroundMode) null else replacement.cursorOffset
+                )
                 if (replacement.fromLearnedRule) {
                     viewModel.recordAutoCorrectionStat()
                 } else {
@@ -309,7 +327,14 @@ fun AgenticKeyboardLayout(
     fun handleBackspace() {
         val pending = viewModel.peekPendingUndo()
         val text = currentText()
-        if (pending != null && text.endsWith(pending.replacement + " ")) {
+        if (!inPlaygroundMode && pending?.editorUndo != null &&
+            inputConnectionProvider()?.let { pending.editorUndo.undoIfUnchanged(it) } == true) {
+            viewModel.onUndoApplied()
+            gestureAlert = "Reverted to \"${pending.original}\""
+            return
+        }
+        if (pending != null && pending.editorUndo == null && pending.cursorOffset == null &&
+            text.endsWith(pending.replacement + " ")) {
             val restored = pending.original + " "
             if (inPlaygroundMode) {
                 onPlaygroundTextChange(text.dropLast(pending.replacement.length + 1) + restored)
@@ -326,7 +351,14 @@ fun AgenticKeyboardLayout(
         // Same idea for a just-applied AI result: one backspace restores the
         // draft/selection the Apply replaced.
         val aiPending = viewModel.peekPendingAiUndo()
-        if (aiPending != null && aiPending.replacement.isNotEmpty() && text.endsWith(aiPending.replacement)) {
+        if (!inPlaygroundMode && aiPending?.editorUndo != null &&
+            inputConnectionProvider()?.let { aiPending.editorUndo.undoIfUnchanged(it) } == true) {
+            viewModel.clearPendingAiUndo()
+            gestureAlert = "Restored original ↩️"
+            return
+        }
+        if (aiPending != null && aiPending.editorUndo == null && aiPending.cursorOffset == null &&
+            aiPending.replacement.isNotEmpty() && text.endsWith(aiPending.replacement)) {
             if (inPlaygroundMode) {
                 onPlaygroundTextChange(text.dropLast(aiPending.replacement.length) + aiPending.original)
             } else {
@@ -395,7 +427,7 @@ fun AgenticKeyboardLayout(
                                 buzz(HapticFeedbackType.LongPress)
                                 val text = currentText()
                                 val expanded = viewModel.tryExpandAbbreviation(text)
-                                if (expanded.text != text) {
+                                if (expanded.text != text || expanded.cursorOffset != null) {
                                     viewModel.recordShortcutExpansionStat()
                                     replaceActiveText(expanded.text, expanded.cursorOffset)
                                     gestureAlert = "Template Expanded! ⚡ (⌫ undoes)"

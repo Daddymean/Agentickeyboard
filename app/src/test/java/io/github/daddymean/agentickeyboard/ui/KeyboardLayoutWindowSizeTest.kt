@@ -1,6 +1,11 @@
 package io.github.daddymean.agentickeyboard.ui
 
 import android.content.Context
+import android.content.res.Configuration
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.ui.platform.LocalConfiguration
+import io.github.daddymean.agentickeyboard.util.ReplyCompletenessSession
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.getUnclippedBoundsInRoot
 import androidx.compose.ui.test.junit4.createComposeRule
@@ -36,20 +41,21 @@ class KeyboardLayoutWindowSizeTest {
 
     @get:Rule val composeTestRule = createComposeRule()
 
-    private fun showKeyboard(numberRow: Boolean = false) {
+    private fun showKeyboard(numberRow: Boolean = false, historyEnabled: Boolean = false) {
         // The keyboard holds animations and Room-backed flows that keep scheduling
         // frames, so an auto-advancing clock never reports idle. Drive it manually:
         // these tests assert on layout, not on animation.
         composeTestRule.mainClock.autoAdvance = false
         val context = ApplicationProvider.getApplicationContext<Context>()
-        val viewModel = KeyboardViewModel(KeyboardRepository(AppDatabase.getDatabase(context)))
+        val repository = KeyboardRepository(AppDatabase.getDatabase(context))
+        val viewModel = KeyboardViewModel(repository)
         viewModel.setNumberRowEnabled(numberRow)
         composeTestRule.setContent {
             MyApplicationTheme {
-                // Mirrors how AgenticKeyboardService wraps the IME view tree.
-                ProvideKeyboardMetrics {
-                    AgenticKeyboardLayout(viewModel = viewModel)
-                }
+                KeyboardImeContent(
+                    viewModel, repository, ReplyCompletenessSession(),
+                    historyEnabled, false, null, false
+                )
             }
         }
         composeTestRule.mainClock.advanceTimeByFrame()
@@ -100,5 +106,44 @@ class KeyboardLayoutWindowSizeTest {
         composeTestRule.onNodeWithTag("key_1").assertDoesNotExist()
         // The letters it was competing with are still there.
         composeTestRule.onNodeWithTag("key_q").assertIsDisplayed()
+    }
+    @Test
+    @Config(sdk = [35], qualifiers = "w891dp-h411dp-land")
+    fun `complete landscape IME includes enabled history and leaves editor space`() {
+        showKeyboard(numberRow = true, historyEnabled = true)
+        composeTestRule.onNodeWithTag("trust_prism_banner").assertIsDisplayed()
+        composeTestRule.onNodeWithTag("clipboard_history_bar").assertIsDisplayed()
+        composeTestRule.onNodeWithTag("key_enter").assertIsDisplayed()
+        val bounds = composeTestRule.onNodeWithTag("complete_ime").getUnclippedBoundsInRoot()
+        assertTrue("complete IME must leave at least 64dp for editor", bounds.height <= 347.dp)
+    }
+
+    @Test
+    @Config(sdk = [35], qualifiers = "w411dp-h891dp-port")
+    fun `open IME follows configuration resize and restores number row`() {
+        composeTestRule.mainClock.autoAdvance = false
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        val repository = KeyboardRepository(AppDatabase.getDatabase(context))
+        val viewModel = KeyboardViewModel(repository)
+        viewModel.setNumberRowEnabled(true)
+        val configuration = mutableStateOf(Configuration(context.resources.configuration))
+        composeTestRule.setContent {
+            CompositionLocalProvider(LocalConfiguration provides configuration.value) {
+                MyApplicationTheme {
+                    KeyboardImeContent(viewModel, repository, ReplyCompletenessSession(), false, false, null, false)
+                }
+            }
+        }
+        composeTestRule.mainClock.advanceTimeByFrame()
+        for (height in listOf(479, 480, 360, 891)) {
+            composeTestRule.runOnUiThread {
+                configuration.value = Configuration(configuration.value).apply { screenHeightDp = height }
+            }
+            composeTestRule.mainClock.advanceTimeByFrame()
+            val key = composeTestRule.onNodeWithTag("key_q").getUnclippedBoundsInRoot()
+            assertCloseTo(if (height < 480) 32.dp else 44.dp, key.height, "resize $height")
+            if (height < 480) composeTestRule.onNodeWithTag("key_1").assertDoesNotExist()
+            else composeTestRule.onNodeWithTag("key_1").assertIsDisplayed()
+        }
     }
 }
