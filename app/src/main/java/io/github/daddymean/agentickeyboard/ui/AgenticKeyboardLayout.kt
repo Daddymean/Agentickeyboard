@@ -81,8 +81,10 @@ import io.github.daddymean.agentickeyboard.ui.theme.LocalKeyboardColors
 import io.github.daddymean.agentickeyboard.util.AiApplyGuard
 import io.github.daddymean.agentickeyboard.util.CommandPalette
 import io.github.daddymean.agentickeyboard.util.CommittedEditUndo
+import io.github.daddymean.agentickeyboard.util.EditClipboardAction
 import io.github.daddymean.agentickeyboard.util.RedactionApplyGuard
 import io.github.daddymean.agentickeyboard.util.ReplyIntents
+import io.github.daddymean.agentickeyboard.util.SelectionCommand
 import io.github.daddymean.agentickeyboard.util.SwipePoint
 import io.github.daddymean.agentickeyboard.util.SwipeToTypeEngine
 import io.github.daddymean.agentickeyboard.util.TrustPrism
@@ -120,6 +122,8 @@ fun AgenticKeyboardLayout(
     onAction: () -> Unit = {},
     onMicPress: () -> Unit = {},
     onCursorMove: (Int) -> Unit = {},
+    onSelectionCommand: (SelectionCommand) -> Unit = {},
+    onClipboardAction: (EditClipboardAction) -> Unit = {},
     inputConnectionProvider: () -> InputConnection? = { null },
     inPlaygroundMode: Boolean = false,
     playgroundTextState: String = "",
@@ -415,6 +419,9 @@ fun AgenticKeyboardLayout(
 
     // Active AI actions visibility
     val showAiActions by viewModel.aiToolsExpanded.collectAsState()
+    // The edit bar is opt-in per session: it costs a row of vertical space, and
+    // most typing never needs it. The playground has no real editor to select in.
+    var showEditBar by remember { mutableStateOf(false) }
 
     // Keyboard palette follows the user's theme override ("System" defers to the
     // OS light/dark setting). Providing it here (once, at the root) themes both
@@ -1339,6 +1346,21 @@ fun AgenticKeyboardLayout(
                         modifier = Modifier.testTag("action_grammar")
                     )
 
+                    // Selection is the precondition for every action in this row,
+                    // so its entry point lives here rather than behind a gesture.
+                    if (!inPlaygroundMode) {
+                        AiActionButton(
+                            label = "Select",
+                            icon = "⌗",
+                            highlighted = showEditBar,
+                            onClick = {
+                                buzz(HapticFeedbackType.TextHandleMove)
+                                showEditBar = !showEditBar
+                            },
+                            modifier = Modifier.testTag("action_select")
+                        )
+                    }
+
                     AiActionButton(
                         label = "Compose",
                         icon = "✉️",
@@ -1455,6 +1477,20 @@ fun AgenticKeyboardLayout(
                 }
             }
         }
+
+        TextEditBar(
+            visible = showEditBar && !inPlaygroundMode && !isSensitiveField,
+            hasSelection = hasEditorSelection,
+            onCommand = { command ->
+                buzz(HapticFeedbackType.TextHandleMove)
+                onSelectionCommand(command)
+            },
+            onClipboardAction = { action ->
+                buzz(HapticFeedbackType.TextHandleMove)
+                onClipboardAction(action)
+            },
+            onDismiss = { showEditBar = false }
+        )
 
         Spacer(modifier = Modifier.height(4.dp))
 
