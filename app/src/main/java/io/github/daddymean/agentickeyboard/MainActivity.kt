@@ -2056,6 +2056,30 @@ fun SetupTab() {
         }
 
         item {
+            // The Snippet Vault bar only renders once the draft already starts with
+            // a recall command, so its Manage chip could only ever be found by
+            // someone who knew to type "/v" in the first place. That left the
+            // manager — and the feature itself — with no way in for everyone else.
+            SetupStepCard(
+                stepNumber = "5",
+                title = "Snippet Vault (optional)",
+                description = "Save reusable text, then recall it from the keyboard by typing /v followed by a search term. Open the manager to add your first snippet.",
+                actionLabel = "Open Snippet Vault",
+                onAction = {
+                    runCatching {
+                        context.startActivity(Intent(context, SnippetVaultActivity::class.java))
+                    }.onFailure {
+                        Toast.makeText(
+                            context,
+                            "Unable to open Snippet Vault.",
+                            Toast.LENGTH_SHORT
+                        ).show()
+                    }
+                }
+            )
+        }
+
+        item {
             Spacer(modifier = Modifier.height(16.dp))
         }
     }
