@@ -2,6 +2,7 @@ plugins {
   alias(libs.plugins.android.application)
   alias(libs.plugins.kotlin.compose)
   alias(libs.plugins.google.devtools.ksp)
+  alias(libs.plugins.androidx.room)
   alias(libs.plugins.roborazzi)
   alias(libs.plugins.secrets)
 }
@@ -80,7 +81,16 @@ android {
 }
 
 // Room schema history (exportSchema = true) so migrations are auditable.
-ksp { arg("room.schemaLocation", "$projectDir/schemas") }
+//
+// The Room Gradle plugin owns the schema directory rather than passing it to KSP
+// as a bare argument. Every variant used to be pointed at this one directory, so
+// a single Gradle invocation that builds more than one of them - `assemble`, or
+// anything CodeQL's autobuild runs - had kspDebugKotlin and kspReleaseKotlin
+// running Room's processor against it concurrently under org.gradle.parallel.
+// One would read a schema the other was still writing and the build died on
+// "Expected start of the object '{', but had 'EOF'". The plugin gives each
+// variant its own output and reconciles them, so the race cannot happen.
+room { schemaDirectory("$projectDir/schemas") }
 
 // Configure the Secrets Gradle Plugin to use .env and .env.example files
 // to match the convention used in Web projects.
