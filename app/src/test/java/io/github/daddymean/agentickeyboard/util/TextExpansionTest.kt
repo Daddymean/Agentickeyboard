@@ -158,4 +158,31 @@ class TextExpansionTest {
         assertTrue(TextExpansion.hasTokens("Due {date+1w}"))
         assertTrue(!TextExpansion.hasTokens("On my way!"))
     }
+    @Test
+    fun `existing nested JSON and unpaired code braces survive`() {
+        for (literal in listOf("{\"a\":{\"b\":1}}", "if (ok) { run { work() }}", "}}", "{{unfinished", "{unknown}}")) {
+            assertEquals(literal, expand(literal).text)
+        }
+    }
+
+    @Test
+    fun `clipboard is lazy case insensitive and read once`() {
+        var reads = 0
+        val reader = { reads++; "actual" }
+        for (literal in listOf("ordinary", "{{clipboard}}", "{clipboard:x}", "{clipboard+1d}")) {
+            TextExpansion.expand(literal, context(), reader)
+        }
+        assertEquals(0, reads)
+        assertEquals("actual actual", TextExpansion.expand("{CLIPBOARD} {clipboard}", context(), reader).text)
+        assertEquals(1, reads)
+        assertEquals("{clipboard}", TextExpansion.expand("{{clipboard}}", context(), reader).text)
+        assertEquals(1, reads)
+    }
+
+    @Test
+    fun `clipboard access failure and inserted tokens are not reexpanded`() {
+        assertEquals("", TextExpansion.expand("{clipboard}", context()) { error("focus lost") }.text)
+        assertEquals("{cursor}", TextExpansion.expand("{clipboard}", context()) { "{cursor}" }.text)
+    }
+
 }

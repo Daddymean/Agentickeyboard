@@ -24,6 +24,7 @@ import io.github.daddymean.agentickeyboard.util.mastery.MasteryStateCodec
 import io.github.daddymean.agentickeyboard.util.PersonalModelSerializer
 import io.github.daddymean.agentickeyboard.util.ReplyIntents
 import io.github.daddymean.agentickeyboard.util.SendGuard
+import io.github.daddymean.agentickeyboard.util.CommittedEditUndo
 import io.github.daddymean.agentickeyboard.util.TextExpansion
 import io.github.daddymean.agentickeyboard.util.VoiceMatchScorer
 import io.github.daddymean.agentickeyboard.util.VoiceSample
@@ -51,10 +52,18 @@ data class WordReplacement(
 )
 
 /** A just-applied auto-correction that backspace can revert. */
-data class AutoCorrectionUndo(val original: String, val replacement: String, val fromLearnedRule: Boolean)
+data class AutoCorrectionUndo(
+    val original: String, val replacement: String, val fromLearnedRule: Boolean,
+    val editorUndo: CommittedEditUndo? = null,
+    val cursorOffset: Int? = null
+)
 
 /** A just-applied AI result that backspace can revert to the original text. */
-data class AiApplyUndo(val original: String, val replacement: String)
+data class AiApplyUndo(
+    val original: String, val replacement: String,
+    val editorUndo: CommittedEditUndo? = null,
+    val cursorOffset: Int? = null
+)
 
 /** Local, on-device usage statistics shown in the Style Hub dashboard. */
 data class UsageStats(
@@ -80,8 +89,6 @@ class KeyboardViewModel(
 
     companion object {
         private val NON_ALPHA_REGEX = "[^a-zA-Z]".toRegex()
-        /** Only templates naming this token cause a clipboard read. */
-        private const val CLIPBOARD_TOKEN = "{clipboard}"
         private val WHITESPACE_REGEX = "\\s+".toRegex()
         val PERSONAS = listOf("Match my history", "Professional", "Joyful", "Empathetic", "Casual")
         /** Keyboard palette override choices (see KeyboardSettings.themeOverride). */
@@ -412,6 +419,7 @@ class KeyboardViewModel(
         activeAppLabel = appLabel
         previousCommittedWord = null
         pendingUndo = null
+        pendingAiUndo = null
         _proofreadHint.value = null
         if (packageName != null && !_isSensitiveField.value) {
             viewModelScope.launch {
@@ -677,8 +685,11 @@ class KeyboardViewModel(
 
     // --- Auto-correction undo -------------------------------------------------
 
-    fun registerAutoCorrection(original: String, replacement: String, fromLearnedRule: Boolean) {
-        pendingUndo = AutoCorrectionUndo(original, replacement, fromLearnedRule)
+    fun registerAutoCorrection(
+        original: String, replacement: String, fromLearnedRule: Boolean,
+        editorUndo: CommittedEditUndo? = null, cursorOffset: Int? = null
+    ) {
+        pendingUndo = AutoCorrectionUndo(original, replacement, fromLearnedRule, editorUndo, cursorOffset)
         pendingAiUndo = null
     }
 
@@ -713,9 +724,12 @@ class KeyboardViewModel(
      * restore [original]. Mirrors the auto-correction undo above but for whole
      * drafts/selections replaced through the result panels.
      */
-    fun registerAiApply(original: String, replacement: String) {
+    fun registerAiApply(
+        original: String, replacement: String,
+        editorUndo: CommittedEditUndo? = null, cursorOffset: Int? = null
+    ) {
         pendingUndo = null
-        pendingAiUndo = AiApplyUndo(original, replacement).takeIf { original != replacement }
+        pendingAiUndo = AiApplyUndo(original, replacement, editorUndo, cursorOffset).takeIf { original != replacement }
     }
 
     fun peekPendingAiUndo(): AiApplyUndo? = pendingAiUndo
@@ -862,12 +876,10 @@ class KeyboardViewModel(
      * everywhere else in the keyboard.
      */
     fun expandTemplate(template: String): TextExpansion.ExpandedText {
-        val clipboard = if (template.contains(CLIPBOARD_TOKEN) && !_isSensitiveField.value) {
-            clipboardProvider?.invoke()
-        } else {
-            null
-        }
-        return TextExpansion.expand(template, TextExpansion.ExpansionContext(clipboard = clipboard))
+        return TextExpansion.expand(
+            template,
+            clipboardReader = if (_isSensitiveField.value) null else clipboardProvider
+        )
     }
 
     // --- Background proofread (opt-in) ------------------------------------------
