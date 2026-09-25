@@ -41,24 +41,21 @@ fun ClipboardHistoryBar(
     paused: Boolean,
     sensitiveField: Boolean,
     statusMessage: String?,
-    onEnable: () -> Unit,
     onTogglePause: () -> Unit,
     onCaptureCurrent: () -> Unit,
     onInsert: (ClipboardHistoryItem) -> Unit,
     onOpenManager: () -> Unit
 ) {
-    if (sensitiveField) return
+    // While history is off the bar renders nothing at all: the keyboard must not
+    // spend permanent vertical space advertising a feature the user declined. The
+    // opt-in switch and the manager stay reachable from the companion app's Setup
+    // Guide, which is the entry point that does not depend on this bar being drawn.
+    // Returning here also keeps the optional Room table unopened until the user
+    // actually enables it.
+    if (sensitiveField || !enabled) return
 
     val colors = LocalKeyboardColors.current
-    // Do not open or collect the optional Room table merely to show the opt-in
-    // control. This keeps the keyboard startup path independent of clipboard
-    // history until the user actually enables it.
-    val history = if (enabled) {
-        val collected by repository.allClipboardHistory.collectAsState(initial = emptyList())
-        collected
-    } else {
-        emptyList()
-    }
+    val history by repository.allClipboardHistory.collectAsState(initial = emptyList())
 
     Column(
         modifier = Modifier
@@ -74,21 +71,17 @@ fun ClipboardHistoryBar(
         ) {
             Column(modifier = Modifier.weight(1f)) {
                 Text(
-                    text = when {
-                        !enabled -> "📋 Clipboard history is off"
-                        paused -> "⏸ Clipboard history paused"
-                        else -> "📋 Local clipboard history"
-                    },
+                    text = if (paused) "⏸ Clipboard history paused" else "📋 Local clipboard history",
                     color = colors.text,
                     fontSize = 11.sp,
                     fontWeight = FontWeight.Bold,
                     maxLines = 1
                 )
                 Text(
-                    text = statusMessage ?: when {
-                        !enabled -> "Nothing is retained until you opt in."
-                        paused -> "Existing clips remain; new capture is stopped."
-                        else -> "Foreground only • sensitive clips rejected"
+                    text = statusMessage ?: if (paused) {
+                        "Existing clips remain; new capture is stopped."
+                    } else {
+                        "Foreground only • sensitive clips rejected"
                     },
                     color = colors.textMuted,
                     fontSize = 9.sp,
@@ -97,22 +90,18 @@ fun ClipboardHistoryBar(
                 )
             }
             Spacer(modifier = Modifier.width(6.dp))
-            if (!enabled) {
-                ClipboardBarChip("Enable", onEnable, "enable_clipboard_history")
-            } else {
-                ClipboardBarChip(
-                    label = if (paused) "Resume" else "Pause",
-                    onClick = onTogglePause,
-                    testTag = "toggle_clipboard_history_pause"
-                )
-                Spacer(modifier = Modifier.width(4.dp))
-                ClipboardBarChip("Capture", onCaptureCurrent, "capture_current_clipboard")
-            }
+            ClipboardBarChip(
+                label = if (paused) "Resume" else "Pause",
+                onClick = onTogglePause,
+                testTag = "toggle_clipboard_history_pause"
+            )
+            Spacer(modifier = Modifier.width(4.dp))
+            ClipboardBarChip("Capture", onCaptureCurrent, "capture_current_clipboard")
             Spacer(modifier = Modifier.width(4.dp))
             ClipboardBarChip("Manage", onOpenManager, "manage_clipboard_history")
         }
 
-        if (enabled && history.isNotEmpty()) {
+        if (history.isNotEmpty()) {
             Spacer(modifier = Modifier.height(4.dp))
             LazyRow(
                 horizontalArrangement = Arrangement.spacedBy(6.dp),

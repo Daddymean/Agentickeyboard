@@ -43,6 +43,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
@@ -79,6 +80,7 @@ import io.github.daddymean.agentickeyboard.util.CommandPalette
 import io.github.daddymean.agentickeyboard.util.ReplyIntents
 import io.github.daddymean.agentickeyboard.util.SwipePoint
 import io.github.daddymean.agentickeyboard.util.SwipeToTypeEngine
+import io.github.daddymean.agentickeyboard.util.commitTextWithCaret
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlin.math.abs
@@ -118,6 +120,13 @@ fun AgenticKeyboardLayout(
 ) {
     val haptic = LocalHapticFeedback.current
     val clipboardManager = LocalClipboardManager.current
+    // Lend the view model a clipboard reader only while the keyboard is on screen.
+    // It calls this back solely for a template that names {clipboard}, so an ordinary
+    // keystroke never touches the clipboard.
+    DisposableEffect(clipboardManager) {
+        viewModel.setClipboardProvider { clipboardManager.getText()?.text?.toString() }
+        onDispose { viewModel.setClipboardProvider(null) }
+    }
     var shiftState by remember { mutableStateOf(ShiftState.OFF) }
     var lastShiftTapTime by remember { mutableLongStateOf(0L) }
     var lastSpaceTime by remember { mutableLongStateOf(0L) }
@@ -151,6 +160,11 @@ fun AgenticKeyboardLayout(
     val isSwipeToTypeEnabled by viewModel.isSwipeEnabled.collectAsState()
     val isAutoCapitalizeEnabled by viewModel.isAutoCapitalizeEnabled.collectAsState()
     val isNumberRowEnabled by viewModel.isNumberRowEnabled.collectAsState()
+    // Size budget for the window the IME was actually given. In a short window
+    // (phone in landscape, split screen) the optional number row is the first
+    // thing dropped so the keyboard still leaves room for the field being edited.
+    val metrics = LocalKeyboardMetrics.current
+    val showNumberRow = isNumberRowEnabled && !metrics.isCompact
     val isHapticsEnabled by viewModel.isHapticsEnabled.collectAsState()
     val isLearningPaused by viewModel.isLearningPaused.collectAsState()
     val sendGuardWarning by viewModel.sendGuardWarning.collectAsState()
@@ -216,7 +230,7 @@ fun AgenticKeyboardLayout(
      * replaces everything before the cursor. commitText on its own already
      * replaces a selection, so only the no-selection case needs a delete first.
      */
-    fun replaceActiveText(newText: String) {
+    fun replaceActiveText(newText: String, cursorOffset: Int? = null) {
         val original = aiSourceText()
         if (inPlaygroundMode) {
             onPlaygroundTextChange(newText)
@@ -225,7 +239,7 @@ fun AgenticKeyboardLayout(
                 if (conn.getSelectedText(0).isNullOrEmpty()) {
                     conn.deleteSurroundingText(currentText().length, 0)
                 }
-                conn.commitText(newText, 1)
+                conn.commitTextWithCaret(newText, cursorOffset)
             }
         }
         if (newText != original) {
@@ -268,7 +282,10 @@ fun AgenticKeyboardLayout(
                 } else {
                     inputConnectionProvider()?.let { conn ->
                         conn.deleteSurroundingText(lastWord.length, 0)
-                        conn.commitText("${replacement.replacement} ", 1)
+                        conn.commitTextWithCaret(
+                            "${replacement.replacement} ",
+                            replacement.cursorOffset
+                        )
                     }
                 }
                 viewModel.registerAutoCorrection(lastWord, replacement.replacement, replacement.fromLearnedRule)
@@ -347,7 +364,7 @@ fun AgenticKeyboardLayout(
         modifier = modifier
             .fillMaxWidth()
             .background(keyboardColors.background)
-            .padding(bottom = 8.dp)
+            .padding(bottom = metrics.bottomPadding)
             .pointerInput(Unit) {
                 detectDragGestures(
                     onDragEnd = {
@@ -378,9 +395,9 @@ fun AgenticKeyboardLayout(
                                 buzz(HapticFeedbackType.LongPress)
                                 val text = currentText()
                                 val expanded = viewModel.tryExpandAbbreviation(text)
-                                if (expanded != text) {
+                                if (expanded.text != text) {
                                     viewModel.recordShortcutExpansionStat()
-                                    replaceActiveText(expanded)
+                                    replaceActiveText(expanded.text, expanded.cursorOffset)
                                     gestureAlert = "Template Expanded! ⚡ (⌫ undoes)"
                                 } else {
                                     gestureAlert = "No abbreviations found to expand. ⚡"
@@ -482,7 +499,10 @@ fun AgenticKeyboardLayout(
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .then(if (resultExpanded || voiceMatch != null) Modifier.heightIn(min = 64.dp) else Modifier.height(64.dp))
+                .then(
+                    if (resultExpanded || voiceMatch != null) Modifier.heightIn(min = metrics.shelfHeight)
+                    else Modifier.height(metrics.shelfHeight)
+                )
                 .animateContentSize()
                 .background(keyboardColors.shelf)
                 .padding(horizontal = 8.dp, vertical = if (resultExpanded || voiceMatch != null) 8.dp else 0.dp),
@@ -1345,7 +1365,7 @@ fun AgenticKeyboardLayout(
             )
         } else {
             buildList {
-                if (isNumberRowEnabled) add(digitRow)
+                if (showNumberRow) add(digitRow)
                 add(listOf("q", "w", "e", "r", "t", "y", "u", "i", "o", "p"))
                 add(listOf("a", "s", "d", "f", "g", "h", "j", "k", "l"))
                 add(listOf("z", "x", "c", "v", "b", "n", "m"))
@@ -1360,11 +1380,11 @@ fun AgenticKeyboardLayout(
                     keysAreaWidth = size.width.toFloat()
                     keysAreaHeight = size.height.toFloat()
                 }
-                .pointerInput(isSwipeToTypeEnabled, isNumberMode, isNumberRowEnabled) {
+                .pointerInput(isSwipeToTypeEnabled, isNumberMode, showNumberRow) {
                     if (isSwipeToTypeEnabled && !isNumberMode) {
                         // The swipe decoder maps onto the 3 QWERTY rows; skip the
                         // optional number row band when it is shown.
-                        val rowCount = if (isNumberRowEnabled) 4f else 3f
+                        val rowCount = if (showNumberRow) 4f else 3f
                         val yOffsetRows = rowCount - 3f
                         detectDragGestures(
                             onDragStart = { startOffset ->
@@ -1440,7 +1460,7 @@ fun AgenticKeyboardLayout(
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(vertical = 3.dp),
+                            .padding(vertical = metrics.rowGap),
                         horizontalArrangement = Arrangement.Center
                     ) {
                         val currentRow = qwertyRows[rowIndex]
@@ -1467,10 +1487,10 @@ fun AgenticKeyboardLayout(
                                 isSpecial = true,
                                 isHighlighted = shiftState != ShiftState.OFF,
                                 modifier = Modifier
-                                    .width(44.dp)
+                                    .width(metrics.wideKeyWidth)
                                     .testTag("key_shift")
                             )
-                            Spacer(modifier = Modifier.width(4.dp))
+                            Spacer(modifier = Modifier.width(metrics.keyGap))
                         }
 
                         // Standard characters
@@ -1502,7 +1522,7 @@ fun AgenticKeyboardLayout(
                                 },
                                 modifier = Modifier.testTag("key_$char")
                             )
-                            Spacer(modifier = Modifier.width(4.dp))
+                            Spacer(modifier = Modifier.width(metrics.keyGap))
                         }
 
                         // Bottom row Backspace Key (undo-aware, repeats on hold)
@@ -1516,7 +1536,7 @@ fun AgenticKeyboardLayout(
                                 isSpecial = true,
                                 repeatOnHold = true,
                                 modifier = Modifier
-                                    .width(44.dp)
+                                    .width(metrics.wideKeyWidth)
                                     .testTag("key_backspace")
                             )
                         }
@@ -1526,7 +1546,7 @@ fun AgenticKeyboardLayout(
 
             // Visual trailing gesture path canvas overlay
             if (isSwipeToTypeEnabled && swipePathPoints.size > 1) {
-                val rowCount = if (isNumberRowEnabled && !isNumberMode) 4f else 3f
+                val rowCount = if (showNumberRow && !isNumberMode) 4f else 3f
                 val yOffsetRows = rowCount - 3f
                 Canvas(modifier = Modifier.matchParentSize()) {
                     val path = androidx.compose.ui.graphics.Path()
@@ -1573,11 +1593,11 @@ fun AgenticKeyboardLayout(
                 },
                 isSpecial = true,
                 modifier = Modifier
-                    .width(56.dp)
+                    .width(metrics.extraWideKeyWidth)
                     .testTag("key_mode")
             )
 
-            Spacer(modifier = Modifier.width(4.dp))
+            Spacer(modifier = Modifier.width(metrics.keyGap))
 
             // Global/Local Privacy Mode Fast Switch
             KeyButton(
@@ -1589,11 +1609,11 @@ fun AgenticKeyboardLayout(
                 },
                 isSpecial = true,
                 modifier = Modifier
-                    .width(40.dp)
+                    .width(metrics.mediumKeyWidth)
                     .testTag("key_privacy_toggle")
             )
 
-            Spacer(modifier = Modifier.width(4.dp))
+            Spacer(modifier = Modifier.width(metrics.keyGap))
 
             // Voice input handoff
             KeyButton(
@@ -1608,11 +1628,11 @@ fun AgenticKeyboardLayout(
                 },
                 isSpecial = true,
                 modifier = Modifier
-                    .width(40.dp)
+                    .width(metrics.mediumKeyWidth)
                     .testTag("key_mic")
             )
 
-            Spacer(modifier = Modifier.width(4.dp))
+            Spacer(modifier = Modifier.width(metrics.keyGap))
 
             // Space Key (smart: expands shortcuts, applies learned auto-corrections,
             // inserts a period on double-tap, and slides to move the cursor)
@@ -1628,7 +1648,7 @@ fun AgenticKeyboardLayout(
                     .testTag("key_space")
             )
 
-            Spacer(modifier = Modifier.width(4.dp))
+            Spacer(modifier = Modifier.width(metrics.keyGap))
 
             // Period key with punctuation variants on long-press
             KeyButton(
@@ -1643,11 +1663,11 @@ fun AgenticKeyboardLayout(
                     onKeyPress(variant)
                 },
                 modifier = Modifier
-                    .width(36.dp)
+                    .width(metrics.smallKeyWidth)
                     .testTag("key_period")
             )
 
-            Spacer(modifier = Modifier.width(4.dp))
+            Spacer(modifier = Modifier.width(metrics.keyGap))
 
             // Action/Enter Key
             KeyButton(
@@ -1658,7 +1678,7 @@ fun AgenticKeyboardLayout(
                 },
                 isSpecial = true,
                 modifier = Modifier
-                    .width(56.dp)
+                    .width(metrics.extraWideKeyWidth)
                     .testTag("key_enter")
             )
         }
@@ -1784,6 +1804,7 @@ fun KeyButton(
     onHorizontalDrag: ((Int) -> Unit)? = null
 ) {
     val colors = LocalKeyboardColors.current
+    val keyMetrics = LocalKeyboardMetrics.current
     val isEnter = text == "Enter"
     val containerColor = when {
         isEnter -> colors.accent
@@ -1849,7 +1870,7 @@ fun KeyButton(
 
     Box(
         modifier = modifier
-            .size(width = 32.dp, height = 44.dp)
+            .size(width = keyMetrics.keyWidth, height = keyMetrics.keyHeight)
             .shadow(1.dp, RoundedCornerShape(6.dp))
             .clip(RoundedCornerShape(6.dp))
             .background(containerColor)

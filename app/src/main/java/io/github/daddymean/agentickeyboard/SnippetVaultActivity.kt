@@ -47,6 +47,7 @@ import io.github.daddymean.agentickeyboard.db.KeyboardRepository
 import io.github.daddymean.agentickeyboard.db.SavedSnippet
 import io.github.daddymean.agentickeyboard.ui.theme.MyApplicationTheme
 import io.github.daddymean.agentickeyboard.util.SnippetListCodec
+import io.github.daddymean.agentickeyboard.util.TextExpansion
 import kotlinx.coroutines.launch
 
 /** Dedicated companion-app surface for local Snippet Vault management. */
@@ -193,6 +194,9 @@ private fun SnippetVaultManagerScreen(
                         placeholder = { Text("Your reusable message or information") },
                         minLines = 3,
                         maxLines = 8,
+                        // Teach the tokens by showing what this snippet will actually
+                        // insert, rather than documenting them somewhere nobody looks.
+                        supportingText = { Text(TextExpansion.editorHint(content)) },
                         modifier = Modifier
                             .fillMaxWidth()
                             .testTag("snippet_content_input")

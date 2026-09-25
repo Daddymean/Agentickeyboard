@@ -10,9 +10,10 @@ file in the same PR that ships a milestone: move it to **Shipped** with the PR n
 - **Release candidate stabilization and device testing** — execute
   `docs/RELEASE_CANDIDATE_TEST_MATRIX.md`, add migration verification and focused
   Compose/screenshot coverage for secure-field suppression, destructive
-  confirmations, Snippet Vault recall, and clipboard history; exercise the debug
-  artifact across supported Android eras; and fix P0/P1 regressions before adding
-  another feature milestone.
+  confirmations, and Snippet Vault recall; exercise the debug artifact across
+  supported Android eras; and fix P0/P1 regressions before adding another feature
+  milestone. Window sizing and clipboard-bar visibility now have Compose coverage
+  (see Shipped); the rest of the matrix is still manual.
 
 ## Later / unscheduled
 
@@ -34,6 +35,36 @@ file in the same PR that ships a milestone: move it to **Shipped** with the PR n
 - Streaming for Continue so the suggestion appears as it generates.
 
 ## Shipped
+
+- **Dynamic snippet and shortcut tokens** — saved snippets and shortcut templates
+  were dead strings: "On my way!" could only ever be that. They are now small
+  templates. `{date}`, `{time}` and `{datetime}` take an offset and a format
+  (`{date+1d:EEEE}` for tomorrow's weekday), `{clipboard}` pulls in what was just
+  copied, and `{cursor}` decides where the caret lands after insertion, so a
+  standup note carries today's date and a letter drops you on the first line you
+  actually write. Expansion runs on every path a stored template becomes text:
+  shortcut-on-space, the expand gesture, and Snippet Vault insertion. Unknown or
+  malformed tokens are left exactly as typed, and `{{`/`}}` escape literal braces,
+  so JSON snippets survive. The clipboard is read only when a template names
+  `{clipboard}`, never in a sensitive field, and only through a reader the keyboard
+  UI lends the view model while it is on screen. Both editors show a live preview of
+  what the template will insert, which teaches the grammar without documentation.
+  Covered by JVM tests for the expansion engine and the editor hint.
+
+- **Adaptive keyboard sizing** — the IME had no orientation or window-size
+  handling, so it asked for ~346dp (~396dp with the number row) in every window.
+  A phone in landscape offers ~360-410dp of height in total, so the keyboard
+  consumed the screen and clipped, leaving no room for the field being edited.
+  `KeyboardMetrics` now derives key size, spacing, shelf height and padding from
+  the current window: key width scales with the window (clamped 28-64dp) so a
+  10-key row fits anything at least 320dp wide, and windows under 480dp tall go
+  compact — shorter keys, tighter gaps, a 40dp shelf, no optional number row —
+  bringing the keyboard's own height to 186dp. The threshold is on height rather
+  than orientation, so split-screen compacts while a tablet in landscape does not.
+  Also stopped rendering the clipboard history bar while the feature is off, which
+  was ~36dp of permanent chrome for a declined opt-in. Covered by JVM metrics
+  tests plus Robolectric Compose tests that render the keyboard at concrete
+  portrait and landscape windows in the existing unit-test job.
 
 - **PR #76** — optional local clipboard history milestone: added an explicit
   opt-in with foreground-only capture and no clipboard listener; pre-storage
