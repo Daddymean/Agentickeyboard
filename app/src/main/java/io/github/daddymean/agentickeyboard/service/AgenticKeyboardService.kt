@@ -8,6 +8,7 @@ import android.util.Log
 import android.view.KeyEvent
 import android.view.View
 import android.view.inputmethod.EditorInfo
+import android.view.inputmethod.ExtractedTextRequest
 import android.view.inputmethod.InputMethodManager
 import androidx.compose.foundation.layout.Column
 import androidx.compose.runtime.collectAsState
@@ -42,7 +43,11 @@ import io.github.daddymean.agentickeyboard.util.ClipboardCaptureDecision
 import io.github.daddymean.agentickeyboard.util.commitTextWithCaret
 import io.github.daddymean.agentickeyboard.util.ClipboardHistoryPolicy
 import io.github.daddymean.agentickeyboard.util.KeyboardSettings
+import io.github.daddymean.agentickeyboard.util.EditClipboardAction
 import io.github.daddymean.agentickeyboard.util.ReplyCompletenessSession
+import io.github.daddymean.agentickeyboard.util.SelectionCommand
+import io.github.daddymean.agentickeyboard.util.SelectionPlanner
+import io.github.daddymean.agentickeyboard.util.SelectionRange
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -140,6 +145,8 @@ class AgenticKeyboardService : InputMethodService(), LifecycleOwner, ViewModelSt
                         onAction = { performEnterAction() },
                         onMicPress = { switchToVoiceInput() },
                         onCursorMove = { steps -> moveCursor(steps) },
+                        onSelectionCommand = { command -> applySelectionCommand(command) },
+                        onClipboardAction = { action -> performClipboardAction(action) },
                         inputConnectionProvider = { currentInputConnection }
                     )
                 }
@@ -277,6 +284,46 @@ class AgenticKeyboardService : InputMethodService(), LifecycleOwner, ViewModelSt
             ic.sendKeyEvent(KeyEvent(KeyEvent.ACTION_DOWN, keyCode))
             ic.sendKeyEvent(KeyEvent(KeyEvent.ACTION_UP, keyCode))
         }
+    }
+
+    /**
+     * Runs one edit-bar command against the focused field.
+     *
+     * Cursor movement via DPAD events (see [moveCursor]) cannot express a
+     * selection, so the edit bar goes through the extracted text instead: it
+     * reads the real offsets, asks [SelectionPlanner] where the selection
+     * belongs, and sets it in one call. Fields that refuse to extract their
+     * text — some password and WebView editors do — report no offsets, and the
+     * command is dropped rather than guessed at.
+     */
+    private fun applySelectionCommand(command: SelectionCommand) {
+        val ic = currentInputConnection ?: return
+        val extracted = ic.getExtractedText(ExtractedTextRequest(), 0) ?: return
+        val text = extracted.text?.toString() ?: return
+        val start = extracted.selectionStart
+        val end = extracted.selectionEnd
+        if (start < 0 || end < 0) return
+
+        val next = SelectionPlanner.plan(text, SelectionRange(start, end), command)
+        // No explicit state push here: setSelection makes the host call
+        // onUpdateSelection, which runs syncEditorText and keeps one definition
+        // of "has a selection" for the whole keyboard.
+        ic.setSelection(next.start, next.end)
+    }
+
+    /**
+     * Cut / copy / paste handed to the host editor, which owns the real
+     * clipboard interaction and its own permission prompts.
+     */
+    private fun performClipboardAction(action: EditClipboardAction) {
+        val ic = currentInputConnection ?: return
+        val id = when (action) {
+            EditClipboardAction.Cut -> android.R.id.cut
+            EditClipboardAction.Copy -> android.R.id.copy
+            EditClipboardAction.Paste -> android.R.id.paste
+        }
+        ic.performContextMenuAction(id)
+        syncEditorText()
     }
 
     private fun switchToVoiceInput() {
