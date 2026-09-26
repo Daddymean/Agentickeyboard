@@ -2,7 +2,17 @@ package dev.context.core.model
 
 import kotlinx.serialization.Serializable
 
-/** The "current state" the distiller publishes and the keyboard reads (FROZEN CONTRACT). */
+/**
+ * The "current state" the distiller publishes and the keyboard reads (FROZEN
+ * CONTRACT, plus the additive `maxSensitivity`).
+ *
+ * The distiller publishes two of these:
+ * - a **local** one from all inputs (served by `getSnapshot` to the keyboard), and
+ * - a **sync** one built only from inputs with sensitivity <=
+ *   [Sensitivity.SYNC_MAX], with [maxSensitivity] set accordingly.
+ *
+ * Only the second may be uploaded. [forSync] is the gate.
+ */
 @Serializable
 data class Snapshot(
   val generatedAtMs: Long,
@@ -10,19 +20,24 @@ data class Snapshot(
   val activeEpisode: Episode? = null,
   val nextEvent: NextEvent? = null,
   val recentNotes: List<String> = emptyList(),
-) {
   /**
-   * Copy safe to leave the device, as far as the contract allows: drops an
-   * active episode above [Sensitivity.SYNC_MAX]. `today` and `recentNotes`
-   * carry no sensitivity, so the producer must build them from syncable data
-   * (see CONTRACT CHANGE REQUEST in the PR).
+   * The highest sensitivity of any input this snapshot was built from, as
+   * declared by its producer. Defaults to [Sensitivity.DEVICE_ONLY], so a
+   * snapshot that doesn't declare it can never be synced (fail closed).
    */
-  fun redactedForSync(): Snapshot =
-    if (activeEpisode != null && !Sensitivity.isSyncable(activeEpisode.sensitivity)) {
-      copy(activeEpisode = null)
-    } else {
-      this
-    }
+  val maxSensitivity: Int = Sensitivity.DEVICE_ONLY,
+) {
+  /** True when this snapshot may leave the device. */
+  val isSyncable: Boolean
+    get() = Sensitivity.isSyncable(maxSensitivity) &&
+      (activeEpisode == null || Sensitivity.isSyncable(activeEpisode.sensitivity))
+
+  /**
+   * This snapshot if it may leave the device, otherwise null. Nothing is
+   * redacted: `today` and `recentNotes` carry no per-item sensitivity, so a
+   * snapshot is either built syncable or not synced at all.
+   */
+  fun forSync(): Snapshot? = if (isSyncable) this else null
 
   companion object {
     /** Snapshot for "nothing known yet"; lets callers avoid null checks. */
