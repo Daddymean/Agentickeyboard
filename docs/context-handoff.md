@@ -20,7 +20,10 @@ It covers only what you need to plug in. Background and rationale are in
 | Client SDK | `dev.context.core.client.ContextClient` |
 | Permission, bind action, size limits | `dev.context.core.ContextContract` |
 
-The frozen contract is implemented unchanged.
+The frozen contract is implemented with two **additive** changes, both
+accepted and in schema v2 (see §4): `Episode.updatedMs` and
+`Snapshot.maxSensitivity`. Old JSON still decodes and every new field has a
+default. Nothing was removed from the contract.
 
 ## 2. Rules every part must follow
 
@@ -81,9 +84,23 @@ override fun getSnapshot(): String = latestSnapshotJson  // yours: see below
   distiller. Never compute it inside the binder call. Return
   `encodeSnapshot(Snapshot.empty(now))` before the first distill, never null.
 - **Distiller.** It shares a process with the database, so use the DAOs
-  directly (`EventDao.overlapping*`, `EpisodeDao.upsertAll`, `activeAt`). Don't
-  bind to yourself. DAOs block; call them from `Worker.doWork` or
-  `withContext(IO)`.
+  directly (`EventDao.overlapping*`, `EpisodeDao.activeAt`). Don't bind to
+  yourself. DAOs block; call them from `Worker.doWork` or `withContext(IO)`.
+- **Write episodes with `EpisodeDao.upsertChanged(episodes, nowMs)`**, not
+  `upsertAll`. It stamps `updatedMs` (the sync cursor) only on episodes whose
+  content changed, so re-deriving a day doesn't cause re-uploads. Never set
+  `updatedMs` yourself.
+- **Re-derive episodes in place; avoid `deleteByIds`.** A hard delete is
+  invisible to the sync cursor, so the cloud keeps a copy.
+- **Publish two snapshots on every distill:**
+  - **Local:** built from all inputs, served by `getSnapshot`.
+    `maxSensitivity` is the highest sensitivity among its inputs.
+  - **Sync:** built only from events and episodes with sensitivity ≤ 1, with
+    `maxSensitivity = Sensitivity.PERSONAL` (or lower). Hand it to sync; never
+    serve it over AIDL in place of the local one.
+
+  `maxSensitivity` defaults to `DEVICE_ONLY`. A snapshot that doesn't set it
+  can never sync.
 - **Retention.** Call `EventDao.deleteStartedBefore(cutoff)` from a periodic
   worker. Raw heart-rate at one sample per minute is about 1.4 K rows a day.
 - Use `ContextDatabase.get(context)`, the process singleton. Don't build a
@@ -120,11 +137,20 @@ override fun getSnapshot(): String = latestSnapshotJson  // yours: see below
 
 ### Sync (phone → Supabase)
 
-- **Episodes:** read with `EpisodeDao.overlappingUpTo(from, to, Sensitivity.SYNC_MAX)`.
-  `episodes.eventIds` is a JSON **string**. Either parse it into `jsonb` or
-  store it as text, and tell the MCP part which you chose.
-- **`daily_state`:** upload `snapshot.redactedForSync()`, never the raw
-  snapshot (see open question 1).
+- **Episodes, incrementally:** page with
+  `EpisodeDao.changedSince(sinceMs, afterId, limit)`. Start from `(0, "")`,
+  then pass the last row's `(updatedMs, id)`, and persist that pair only after
+  the upload succeeds.
+  - It returns **every** sensitivity. **Upsert** rows where
+    `Sensitivity.isSyncable(it.sensitivity)`, and **delete** the remote row for
+    the rest: that's how an episode that later became private leaves the cloud.
+  - Never upload a non-syncable row "to delete it later".
+- `episodes.eventIds` is a JSON **string**. Either parse it into `jsonb` or
+  store it as text, and tell the MCP part which you chose. `updatedMs` does not
+  need to be a column in Supabase; it is a device-local cursor.
+- **`daily_state`:** upload only `syncSnapshot.forSync()`. If it returns null,
+  upload nothing. There is no redaction step: a snapshot is either built
+  syncable by the distiller or not synced at all.
 - **Notes:** filter `kb.note` events with `Sensitivity.isSyncable` and take
   `text` from the payload.
 - Run it from WorkManager with network and battery-not-low constraints.
@@ -134,20 +160,27 @@ override fun getSnapshot(): String = latestSnapshotJson  // yours: see below
 
 - Row shapes mirror the `Episode` fields and the `Snapshot` JSON exactly as
   `ContextJson` emits them. Every key is present and nulls are explicit.
-- `get_state_now()` returns the latest `daily_state.state`. It is already
-  redacted by the phone. Don't assume it contains anything above sensitivity 1.
+- `get_state_now()` returns the latest `daily_state.state`. It is the sync
+  snapshot, built from sensitivity ≤ 1 inputs only, and carries a
+  `maxSensitivity` key (≤ 1). Reject rows where it is missing or > 1.
 - `record_note` inserts into `notes` only. Nothing in the contract pulls cloud
   notes back to the phone. If you want that, raise it (open question 5).
 
-## 4. Open questions — need a decision before sync and MCP ship
+## 4. Contract changes
 
-1. **The snapshot has no sensitivity.** `today.places`, `today.topApps` and
-   `recentNotes` can't be filtered, and `redactedForSync()` only drops
-   `activeEpisode`. *Proposal:* the distiller writes a second, sync-only
-   snapshot built from sensitivity ≤ 1 inputs.
-2. **Episode has no `updatedMs`.** Sync has no change cursor and must re-scan
-   by time. *Proposal:* add `updatedMs: Long`, indexed. This is a Room schema
-   bump to v2 in `:core`.
+**Accepted and implemented in `:core` (schema v2):**
+
+1. **`Snapshot.maxSensitivity`** (default `DEVICE_ONLY`) plus the
+   `Snapshot.forSync()` gate. The distiller publishes a separate sync snapshot;
+   see the `:context-app` section. The old `redactedForSync()` was removed
+   because it leaked `today` and `recentNotes`.
+2. **`Episode.updatedMs`** (indexed, default 0), stamped by
+   `EpisodeDao.upsertChanged`, and paged with `EpisodeDao.changedSince`. The
+   v1→v2 migration is `ContextDatabase.MIGRATION_1_2`, applied automatically by
+   `ContextDatabase.get`.
+
+**Still open:**
+
 3. **No snapshot push.** The keyboard polls. *Proposal:*
    `oneway void registerListener(ISnapshotListener)`.
 4. **`queryRange` has no explicit cursor.** Paging works today by inferring
@@ -155,6 +188,9 @@ override fun getSnapshot(): String = latestSnapshotJson  // yours: see below
    *Proposal:* return `{events, nextFromMs}`.
 5. **Note direction.** `record_note` writes to the cloud only. Decide whether
    cloud notes should reach the phone (and the keyboard's `recentNotes`).
+6. **Episode deletes don't sync.** `changedSince` can't see hard deletes.
+   *Proposal, if in-place re-derivation turns out to be insufficient:* a
+   tombstone table in `:core`.
 
 If any of these is accepted, the change starts in `:core`. Ask for it there
 rather than working around it in your part.
