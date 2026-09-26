@@ -65,6 +65,8 @@ app/src/main/java/io/github/daddymean/agentickeyboard/
     ├── SwipeToTypeEngine.kt        # Swipe path-matching decoder + loadable dictionary
     ├── KeyboardSettings.kt         # SharedPreferences-backed persistent settings
     └── PersonalModelSerializer.kt  # Privacy-aware personalization export/import
+
+core/src/main/java/dev/context/core/  # :core — context platform contract (Room, Snapshot, AIDL, ContextClient); see docs/context-core.md
 ```
 
 ## Conventions

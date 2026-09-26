@@ -25,3 +25,4 @@ dependencyResolutionManagement {
 rootProject.name = "AgenticKeyboard"
 
 include(":app")
+include(":core")

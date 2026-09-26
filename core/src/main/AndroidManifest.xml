@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+  <!--
+    Declared here (in the shared library) rather than only in :context-app so
+    every app built on :core defines it. With a signature permission that is
+    safe — only same-certificate apps can co-define it — and it removes the
+    install-order trap where the keyboard is installed first and its
+    <uses-permission> is silently never granted.
+  -->
+  <permission
+      android:name="dev.context.permission.ACCESS"
+      android:protectionLevel="signature" />
+
+  <uses-permission android:name="dev.context.permission.ACCESS" />
+
+  <!-- Android 11+ package visibility: lets ContextClient resolve the service. -->
+  <queries>
+    <intent>
+      <action android:name="dev.context.action.BIND_CONTEXT_SERVICE" />
+    </intent>
+  </queries>
+</manifest>

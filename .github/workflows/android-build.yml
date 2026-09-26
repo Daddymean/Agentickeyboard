@@ -46,7 +46,9 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: unit-test-reports
-          path: app/build/reports/tests/testDebugUnitTest
+          path: |
+            app/build/reports/tests/testDebugUnitTest
+            core/build/reports/tests/testDebugUnitTest
           if-no-files-found: ignore
 
       - name: Upload debug APK
