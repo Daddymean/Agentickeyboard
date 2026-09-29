@@ -23,6 +23,10 @@ The sanitizer replaces values with neutral markers and never logs the original r
 
 This first slice is intentionally always on. A later Trust Prism UI can expose local/cloud/redacted state and user controls after CI proves the request-boundary implementation.
 
+## Applying results (ADR-0002)
+
+Round-trip actions (fix grammar, summarize, translate, rewrite, compose, continue) write the model's output back into the draft, and the model only ever saw markers. `RedactionApplyGuard` refuses Apply/Replace/Insert/Use/Append when the result contains a `[REDACTED_*]` marker the source text did not already contain; the result stays on screen to copy, and the keyboard says which values were hidden. Redaction itself is unchanged. Restoring originals into the result (placeholder round-trip) is a possible later step.
+
 ## Validation checklist
 
 - `CloudTextSanitizerTest` passes.
@@ -30,3 +34,5 @@ This first slice is intentionally always on. A later Trust Prism UI can expose l
 - Release/R8 build succeeds.
 - A request containing an email or credential-shaped value reaches the network layer with a redaction marker instead of the original value.
 - Ordinary writing without sensitive patterns is unchanged.
+- `RedactionApplyGuardTest` passes: a draft containing a phone/email/long number never acquires a marker through Apply.
+- On device: Fix Grammar on `call me at 555-123-4567` → Apply is refused with a message and the draft keeps the number.
