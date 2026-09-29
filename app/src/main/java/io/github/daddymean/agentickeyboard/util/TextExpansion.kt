@@ -25,13 +25,15 @@ import java.util.TimeZone
  *   {date+1d:EEEE}                      "tomorrow's weekday name"
  *   {clipboard}                         current clipboard text, empty when unset
  *   {cursor}                            where the caret lands; emits nothing
- *   {{ and }}                           literal braces
+ *   {{date}}                            literal {date}; escapes a real token only
  * ```
  * Offset units are `min`, `h`, `d`, `w`, `mo`, `y`. Month is `mo` and minute is
  * `min` so neither has to guess at a bare `m`.
  *
- * Anything unrecognised is left exactly as typed. A user who writes `{foo}`, or a
- * JSON snippet full of braces, gets their own text back rather than silent loss.
+ * Anything unrecognised is left exactly as typed. A user who writes `{foo}`, a
+ * JSON snippet full of braces, or a `{{mustache}}` template gets their own text back
+ * rather than silent loss: a template with no recognised token is returned unchanged,
+ * which matters because snippets saved before tokens existed are expanded too.
  */
 object TextExpansion {
 
@@ -89,9 +91,26 @@ object TextExpansion {
     fun hasTokens(template: String): Boolean =
         template.contains('{') || template.contains('}')
 
-    fun expand(template: String, context: ExpansionContext = ExpansionContext()): ExpandedText {
+    /**
+     * @param clipboardReader when set, supplies `{clipboard}` instead of
+     *   [ExpansionContext.clipboard]. It is called at most once, and only when the
+     *   template holds a real, unescaped clipboard token — reading the clipboard
+     *   shows a system notice on Android 12+, so a snippet that merely mentions
+     *   `{{clipboard}}` must not trigger one.
+     */
+    fun expand(
+        template: String,
+        context: ExpansionContext = ExpansionContext(),
+        clipboardReader: (() -> String?)? = null
+    ): ExpandedText {
         if (!template.contains('{') && !template.contains('}')) {
             return ExpandedText(template)
+        }
+
+        // Clipboard access can throw when the editor or window loses focus mid-action.
+        val clipboard by lazy {
+            if (clipboardReader == null) context.clipboard
+            else runCatching { clipboardReader.invoke() }.getOrNull()
         }
 
         val out = StringBuilder(template.length)
@@ -101,19 +120,19 @@ object TextExpansion {
         while (i < template.length) {
             val c = template[i]
             when {
-                // Doubled braces are literals, so JSON and code snippets survive.
-                c == '{' && i + 1 < template.length && template[i + 1] == '{' -> {
-                    out.append('{')
-                    i += 2
-                }
-                c == '}' && i + 1 < template.length && template[i + 1] == '}' -> {
-                    out.append('}')
-                    i += 2
+                // `{{token}}` escapes a token the user wants literally. Only a real
+                // token is unescaped: collapsing every doubled brace corrupted nested
+                // JSON ("}}") and mustache templates. The probe never reads the clipboard.
+                c == '{' && i + 1 < template.length && template[i + 1] == '{' &&
+                    escapedTokenEnd(template, i, context) != -1 -> {
+                    val end = escapedTokenEnd(template, i, context)
+                    out.append('{').append(template, i + 2, end).append('}')
+                    i = end + 2
                 }
                 c == '{' -> {
                     val close = template.indexOf('}', i + 1)
                     val raw = if (close == -1) null else template.substring(i + 1, close)
-                    val resolved = raw?.let { resolve(it, context) }
+                    val resolved = raw?.let { resolve(it, context) { clipboard.orEmpty() } }
                     when {
                         // Unclosed or unknown: emit verbatim, never drop the user's text.
                         raw == null || resolved == null -> {
@@ -140,11 +159,23 @@ object TextExpansion {
         return ExpandedText(out.toString(), cursorOffset)
     }
 
+    /**
+     * For `{{inner}}` starting at [start], the index of the closing `}}` when `inner`
+     * is a token that would expand on its own, else -1.
+     */
+    private fun escapedTokenEnd(template: String, start: Int, context: ExpansionContext): Int {
+        val end = template.indexOf("}}", start + 2)
+        if (end == -1) return -1
+        val inner = template.substring(start + 2, end)
+        if (inner.any { it == '{' || it == '}' }) return -1
+        return if (resolve(inner, context) { "" } != null) end else -1
+    }
+
     /** Sentinel distinguishing "caret marker" from "expanded to empty string". */
     private val CURSOR = String("\u0000cursor".toCharArray())
 
     /** Returns the replacement, [CURSOR] for a caret marker, or null when unknown. */
-    private fun resolve(inner: String, context: ExpansionContext): String? {
+    private fun resolve(inner: String, context: ExpansionContext, clipboard: () -> String): String? {
         if (inner.isEmpty()) return null
         val separator = inner.indexOf(':')
         val spec = if (separator == -1) inner else inner.substring(0, separator)
@@ -158,7 +189,7 @@ object TextExpansion {
 
         return when (name) {
             "cursor" -> if (pattern == null && sign.isEmpty()) CURSOR else null
-            "clipboard" -> if (pattern == null && sign.isEmpty()) context.clipboard.orEmpty() else null
+            "clipboard" -> if (pattern == null && sign.isEmpty()) clipboard() else null
             "date" -> formatMoment(DEFAULT_DATE_PATTERN, pattern, sign, amount, unit, context)
             "time" -> formatMoment(DEFAULT_TIME_PATTERN, pattern, sign, amount, unit, context)
             "datetime" -> formatMoment(DEFAULT_DATETIME_PATTERN, pattern, sign, amount, unit, context)

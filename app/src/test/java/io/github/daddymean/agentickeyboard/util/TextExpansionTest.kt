@@ -88,9 +88,43 @@ class TextExpansionTest {
     }
 
     @Test
-    fun `doubled braces produce literal braces`() {
+    fun `doubled braces around a real token produce the literal token`() {
         assertEquals("{date}", expand("{{date}}").text)
-        assertEquals("{\"a\": 1}", expand("{{\"a\": 1}}").text)
+        assertEquals("{Clipboard}", expand("{{Clipboard}}", clipboard = "secret").text)
+        assertEquals("Use {cursor} here", expand("Use {{cursor}} here").text)
+        assertNull(expand("{{cursor}}").cursorOffset)
+    }
+
+    @Test
+    fun `braces that are not an escaped token are never collapsed`() {
+        // Snippets saved before tokens existed are expanded too; JSON, code and
+        // mustache templates must come back byte-for-byte.
+        val nestedJson = "{\"a\":{\"b\":1}}"
+        assertEquals(nestedJson, expand(nestedJson).text)
+        assertEquals("{{\"a\": 1}}", expand("{{\"a\": 1}}").text)
+        assertEquals("Hi {{name}}!", expand("Hi {{name}}!").text)
+        assertEquals("if (x) {{ y() }}", expand("if (x) {{ y() }}").text)
+        assertEquals("}} {{", expand("}} {{").text)
+        assertEquals("{\"d\":\"2026-03-04\"}", expand("{\"d\":\"{date:yyyy-MM-dd}\"}").text)
+    }
+
+    @Test
+    fun `clipboard is read once and only for a real clipboard token`() {
+        var reads = 0
+        val reader = { reads++; "copied" }
+        TextExpansion.expand("literal {{clipboard}} and {date}", context(), reader)
+        assertEquals(0, reads)
+        TextExpansion.expand("no tokens {here}", context(), reader)
+        assertEquals(0, reads)
+        val result = TextExpansion.expand("{CLIPBOARD} / {clipboard}", context(), reader)
+        assertEquals("copied / copied", result.text)
+        assertEquals(1, reads)
+    }
+
+    @Test
+    fun `a failing clipboard read expands to empty instead of crashing`() {
+        val result = TextExpansion.expand("Ref: {clipboard}", context()) { error("focus lost") }
+        assertEquals("Ref: ", result.text)
     }
 
     @Test
