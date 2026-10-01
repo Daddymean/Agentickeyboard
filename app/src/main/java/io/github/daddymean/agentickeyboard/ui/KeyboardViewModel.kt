@@ -80,8 +80,6 @@ class KeyboardViewModel(
 
     companion object {
         private val NON_ALPHA_REGEX = "[^a-zA-Z]".toRegex()
-        /** Only templates naming this token cause a clipboard read. */
-        private const val CLIPBOARD_TOKEN = "{clipboard}"
         private val WHITESPACE_REGEX = "\\s+".toRegex()
         val PERSONAS = listOf("Match my history", "Professional", "Joyful", "Empathetic", "Casual")
         /** Keyboard palette override choices (see KeyboardSettings.themeOverride). */
@@ -412,6 +410,8 @@ class KeyboardViewModel(
         activeAppLabel = appLabel
         previousCommittedWord = null
         pendingUndo = null
+        // A backspace in the next app must never splice in text from this one.
+        pendingAiUndo = null
         _proofreadHint.value = null
         if (packageName != null && !_isSensitiveField.value) {
             viewModelScope.launch {
@@ -857,17 +857,15 @@ class KeyboardViewModel(
     /**
      * Expands {date}, {time}, {clipboard} and {cursor} in a stored template.
      *
-     * The clipboard is read only when the user's own template actually asks for it,
-     * and never in a sensitive field — the same treatment password and OTP inputs get
+     * The clipboard is read only when the template holds a real `{clipboard}` token
+     * (any case, not the escaped `{{clipboard}}`), and never in a sensitive field — the same treatment password and OTP inputs get
      * everywhere else in the keyboard.
      */
     fun expandTemplate(template: String): TextExpansion.ExpandedText {
-        val clipboard = if (template.contains(CLIPBOARD_TOKEN) && !_isSensitiveField.value) {
-            clipboardProvider?.invoke()
-        } else {
-            null
-        }
-        return TextExpansion.expand(template, TextExpansion.ExpansionContext(clipboard = clipboard))
+        return TextExpansion.expand(
+            template,
+            clipboardReader = if (_isSensitiveField.value) null else clipboardProvider
+        )
     }
 
     // --- Background proofread (opt-in) ------------------------------------------

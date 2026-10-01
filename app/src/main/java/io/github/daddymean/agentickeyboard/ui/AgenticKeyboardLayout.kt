@@ -77,6 +77,7 @@ import androidx.compose.ui.window.Popup
 import io.github.daddymean.agentickeyboard.ui.theme.KeyboardTheme
 import io.github.daddymean.agentickeyboard.ui.theme.LocalKeyboardColors
 import io.github.daddymean.agentickeyboard.util.CommandPalette
+import io.github.daddymean.agentickeyboard.util.RedactionApplyGuard
 import io.github.daddymean.agentickeyboard.util.ReplyIntents
 import io.github.daddymean.agentickeyboard.util.SwipePoint
 import io.github.daddymean.agentickeyboard.util.SwipeToTypeEngine
@@ -246,6 +247,23 @@ fun AgenticKeyboardLayout(
             viewModel.registerAiApply(original, newText)
             gestureAlert = "Applied ✨ (⌫ undoes)"
         }
+    }
+
+    /**
+     * Applies an AI result unless it carries redaction markers the user never typed
+     * (ADR-0002): the cloud only saw placeholders for phone numbers, emails and the
+     * like, and writing them back would replace the user's real values. Returns false
+     * when refused, so the caller keeps the result on screen to copy or dismiss.
+     */
+    fun applyAiResult(result: String): Boolean {
+        val introduced = RedactionApplyGuard.introducedMarkers(aiSourceText(), result)
+        if (introduced.isNotEmpty()) {
+            buzz(HapticFeedbackType.LongPress)
+            gestureAlert = RedactionApplyGuard.blockedMessage(introduced)
+            return false
+        }
+        replaceActiveText(result)
+        return true
     }
 
     /**
@@ -571,9 +589,10 @@ fun AgenticKeyboardLayout(
                             Button(
                                 onClick = {
                                     buzz(HapticFeedbackType.LongPress)
-                                    replaceActiveText(correction.corrected)
-                                    viewModel.recordAiApplyStat()
-                                    viewModel.dismissResults()
+                                    if (applyAiResult(correction.corrected)) {
+                                        viewModel.recordAiApplyStat()
+                                        viewModel.dismissResults()
+                                    }
                                 },
                                 colors = ButtonDefaults.buttonColors(containerColor = keyboardColors.accent),
                                 modifier = Modifier.height(32.dp),
@@ -666,9 +685,10 @@ fun AgenticKeyboardLayout(
                             )
                             Button(
                                 onClick = {
-                                    replaceActiveText(summary!!)
-                                    viewModel.recordAiApplyStat()
-                                    viewModel.dismissResults()
+                                    if (applyAiResult(summary!!)) {
+                                        viewModel.recordAiApplyStat()
+                                        viewModel.dismissResults()
+                                    }
                                 },
                                 colors = ButtonDefaults.buttonColors(containerColor = keyboardColors.accent),
                                 modifier = Modifier.height(32.dp),
@@ -694,9 +714,10 @@ fun AgenticKeyboardLayout(
                             )
                             Button(
                                 onClick = {
-                                    replaceActiveText(translation!!)
-                                    viewModel.recordAiApplyStat()
-                                    viewModel.dismissResults()
+                                    if (applyAiResult(translation!!)) {
+                                        viewModel.recordAiApplyStat()
+                                        viewModel.dismissResults()
+                                    }
                                 },
                                 colors = ButtonDefaults.buttonColors(containerColor = keyboardColors.accent),
                                 modifier = Modifier.height(32.dp),
@@ -723,9 +744,10 @@ fun AgenticKeyboardLayout(
                             Button(
                                 onClick = {
                                     buzz(HapticFeedbackType.LongPress)
-                                    replaceActiveText(rewrite!!)
-                                    viewModel.recordAiApplyStat()
-                                    viewModel.dismissResults()
+                                    if (applyAiResult(rewrite!!)) {
+                                        viewModel.recordAiApplyStat()
+                                        viewModel.dismissResults()
+                                    }
                                 },
                                 colors = ButtonDefaults.buttonColors(containerColor = keyboardColors.accent),
                                 modifier = Modifier.height(32.dp),
@@ -751,9 +773,10 @@ fun AgenticKeyboardLayout(
                             Button(
                                 onClick = {
                                     buzz(HapticFeedbackType.LongPress)
-                                    replaceActiveText(composeResult!!)
-                                    viewModel.recordAiApplyStat()
-                                    viewModel.dismissResults()
+                                    if (applyAiResult(composeResult!!)) {
+                                        viewModel.recordAiApplyStat()
+                                        viewModel.dismissResults()
+                                    }
                                 },
                                 colors = ButtonDefaults.buttonColors(containerColor = keyboardColors.accent),
                                 modifier = Modifier.height(32.dp),
@@ -780,13 +803,18 @@ fun AgenticKeyboardLayout(
                                 onClick = {
                                     buzz(HapticFeedbackType.LongPress)
                                     val text = currentText()
-                                    val separator = if (text.isEmpty() || text.last().isWhitespace()) "" else " "
-                                    onKeyPress(separator + continuation!!)
-                                    // Undo of an append restores by deleting it (empty original)
-                                    viewModel.registerAiApply("", separator + continuation!!)
-                                    gestureAlert = "Appended ✨ (⌫ undoes)"
-                                    viewModel.recordAiApplyStat()
-                                    viewModel.dismissResults()
+                                    val introduced = RedactionApplyGuard.introducedMarkers(text, continuation!!)
+                                    if (introduced.isNotEmpty()) {
+                                        gestureAlert = RedactionApplyGuard.blockedMessage(introduced)
+                                    } else {
+                                        val separator = if (text.isEmpty() || text.last().isWhitespace()) "" else " "
+                                        onKeyPress(separator + continuation!!)
+                                        // Undo of an append restores by deleting it (empty original)
+                                        viewModel.registerAiApply("", separator + continuation!!)
+                                        gestureAlert = "Appended ✨ (⌫ undoes)"
+                                        viewModel.recordAiApplyStat()
+                                        viewModel.dismissResults()
+                                    }
                                 },
                                 colors = ButtonDefaults.buttonColors(containerColor = keyboardColors.accent),
                                 modifier = Modifier.height(32.dp),
