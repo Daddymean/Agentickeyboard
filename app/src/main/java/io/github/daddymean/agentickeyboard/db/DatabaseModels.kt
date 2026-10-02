@@ -13,6 +13,7 @@ import androidx.room.Query
 import androidx.room.Room
 import androidx.room.RoomDatabase
 import androidx.room.Transaction
+import androidx.room.withTransaction
 import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
 import io.github.daddymean.agentickeyboard.util.ClipboardHistoryLimits
@@ -130,11 +131,17 @@ interface ShortcutDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertShortcut(shortcut: ShortcutTemplate)
 
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertAll(shortcuts: List<ShortcutTemplate>)
+
     @Delete
     suspend fun deleteShortcut(shortcut: ShortcutTemplate)
 
     @Query("DELETE FROM shortcut_templates WHERE id = :id")
     suspend fun deleteById(id: Int)
+
+    @Query("DELETE FROM shortcut_templates WHERE id IN (:ids)")
+    suspend fun deleteByIds(ids: List<Int>)
 }
 
 @Dao
@@ -144,6 +151,9 @@ interface WritingLogDao {
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertLog(log: WritingLog)
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertAll(logs: List<WritingLog>)
 
     @Query("DELETE FROM writing_logs WHERE timestamp < :cutoff")
     suspend fun deleteOlderThan(cutoff: Long)
@@ -186,8 +196,14 @@ interface AppPersonaDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsert(persona: AppPersona)
 
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsertAll(personas: List<AppPersona>)
+
     @Query("DELETE FROM app_personas WHERE packageName = :packageName")
     suspend fun delete(packageName: String)
+
+    @Query("DELETE FROM app_personas WHERE packageName IN (:packageNames)")
+    suspend fun deleteAll(packageNames: List<String>)
 }
 
 @Dao
@@ -198,8 +214,14 @@ interface CustomCommandDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insert(command: CustomCommand)
 
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertAll(commands: List<CustomCommand>)
+
     @Query("DELETE FROM custom_commands WHERE id = :id")
     suspend fun deleteById(id: Int)
+
+    @Query("DELETE FROM custom_commands WHERE id IN (:ids)")
+    suspend fun deleteByIds(ids: List<Int>)
 }
 
 @Dao
@@ -291,8 +313,14 @@ interface UserVocabularyDao {
     @Query("SELECT * FROM user_vocabulary WHERE word = :word LIMIT 1")
     suspend fun getWord(word: String): UserVocabulary?
 
+    @Query("SELECT * FROM user_vocabulary WHERE word IN (:words)")
+    suspend fun getWords(words: List<String>): List<UserVocabulary>
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertWord(word: UserVocabulary)
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertWords(words: List<UserVocabulary>)
 
     @Query("UPDATE user_vocabulary SET count = count + 1, lastUsed = :now WHERE word = :word")
     suspend fun incrementWordCount(word: String, now: Long): Int
@@ -615,5 +643,115 @@ class KeyboardRepository(private val db: AppDatabase) {
 
     suspend fun clearVocabulary() {
         db.userVocabularyDao().clearAll()
+    }
+
+    // --- Batch writes for imports ---
+    //
+    // Passport and personal-model imports used to issue one DAO call per record
+    // (and the personal-model import ran outside any transaction, so one commit
+    // per record). These helpers move a whole category in a few statements.
+    // Lists that become SQL bind arguments are chunked: the SQLite shipped on
+    // API 26-29 caps a statement at 999 host parameters.
+
+    suspend fun insertWords(words: List<UserVocabulary>) {
+        if (words.isNotEmpty()) db.userVocabularyDao().insertWords(words)
+    }
+
+    suspend fun insertShortcuts(shortcuts: List<ShortcutTemplate>) {
+        if (shortcuts.isNotEmpty()) db.shortcutDao().insertAll(shortcuts)
+    }
+
+    suspend fun deleteShortcutsByIds(ids: List<Int>) {
+        ids.chunked(MAX_BIND_ARGS).forEach { db.shortcutDao().deleteByIds(it) }
+    }
+
+    suspend fun insertCustomCommands(commands: List<CustomCommand>) {
+        if (commands.isNotEmpty()) db.customCommandDao().insertAll(commands)
+    }
+
+    suspend fun deleteCustomCommandsByIds(ids: List<Int>) {
+        ids.chunked(MAX_BIND_ARGS).forEach { db.customCommandDao().deleteByIds(it) }
+    }
+
+    suspend fun upsertAppPersonas(personas: List<AppPersona>) {
+        if (personas.isNotEmpty()) db.appPersonaDao().upsertAll(personas)
+    }
+
+    suspend fun deleteAppPersonas(packageNames: List<String>) {
+        packageNames.chunked(MAX_BIND_ARGS).forEach { db.appPersonaDao().deleteAll(it) }
+    }
+
+    suspend fun insertLogs(logs: List<WritingLog>) {
+        if (logs.isNotEmpty()) db.writingLogDao().insertAll(logs)
+    }
+
+    /**
+     * Merges a personal-model export into the local model in one transaction:
+     * the import lands whole or not at all.
+     *
+     * The result matches the former record-at-a-time loop: vocabulary counts
+     * add up and keep the newest lastUsed; a correction adds its count to the
+     * stored row for its typo and takes the incoming correction text (the last
+     * one wins when a typo repeats); logs are appended. [corrections] must
+     * already carry normalized (lowercase, trimmed) typos.
+     */
+    suspend fun importPersonalModel(
+        vocabulary: List<UserVocabulary>,
+        corrections: List<LearnedCorrection>,
+        logs: List<WritingLog>
+    ) {
+        db.withTransaction {
+            mergeVocabulary(vocabulary)
+            mergeCorrections(corrections)
+            insertLogs(logs)
+        }
+    }
+
+    private suspend fun mergeVocabulary(incoming: List<UserVocabulary>) {
+        // Fold repeats first so a word listed twice adds both counts, as it did
+        // when each row read back the one written before it.
+        val folded = LinkedHashMap<String, UserVocabulary>()
+        incoming.forEach { item ->
+            folded.merge(item.word, item) { a, b ->
+                a.copy(count = a.count + b.count, lastUsed = maxOf(a.lastUsed, b.lastUsed))
+            }
+        }
+        val dao = db.userVocabularyDao()
+        folded.values.chunked(MAX_BIND_ARGS).forEach { chunk ->
+            val existing = dao.getWords(chunk.map { it.word }).associateBy { it.word }
+            dao.insertWords(chunk.map { item ->
+                val stored = existing[item.word]
+                UserVocabulary(
+                    word = item.word,
+                    count = (stored?.count ?: 0) + item.count,
+                    lastUsed = maxOf(stored?.lastUsed ?: 0L, item.lastUsed, 1L)
+                )
+            })
+        }
+    }
+
+    private suspend fun mergeCorrections(incoming: List<LearnedCorrection>) {
+        val folded = LinkedHashMap<String, LearnedCorrection>()
+        incoming.forEach { item ->
+            folded.merge(item.typo, item) { a, b -> b.copy(count = a.count + b.count) }
+        }
+        val dao = db.learnedCorrectionDao()
+        folded.values.chunked(MAX_BIND_ARGS).forEach { chunk ->
+            // getCorrectionForTypo (LIMIT 1) returned the oldest row if a typo
+            // was ever stored twice; keep updating that one.
+            val existing = dao.getCorrectionsForTypos(chunk.map { it.typo })
+                .groupBy { it.typo }
+                .mapValues { (_, rows) -> rows.minBy { it.id } }
+            dao.insertCorrections(chunk.map { item ->
+                existing[item.typo]
+                    ?.let { it.copy(correction = item.correction, count = it.count + item.count) }
+                    ?: item
+            })
+        }
+    }
+
+    private companion object {
+        /** Headroom under SQLITE_MAX_VARIABLE_NUMBER (999 before SQLite 3.32 / API 30). */
+        const val MAX_BIND_ARGS = 900
     }
 }
