@@ -863,7 +863,9 @@ fun AgenticKeyboardLayout(
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.SpaceBetween
                         ) {
-                            Column(modifier = Modifier.weight(1f)) {
+                            // A compact (landscape) shelf is 40dp: stacking the status label over
+                            // the active line clips the second line, so place them side by side.
+                            val statusLabel: @Composable () -> Unit = {
                                 Text(
                                     text = when {
                                         isSensitiveField -> "🔒 Secure field — AI & learning disabled"
@@ -875,6 +877,8 @@ fun AgenticKeyboardLayout(
                                     fontSize = 11.sp,
                                     fontWeight = FontWeight.Bold
                                 )
+                            }
+                            val activeLine: @Composable () -> Unit = {
                                 if (liveSwipePreviewWord != null) {
                                     Text(
                                         text = "Swiping: ${liveSwipePreviewWord!!} ✍️",
@@ -937,6 +941,21 @@ fun AgenticKeyboardLayout(
                                         fontSize = 13.sp,
                                         maxLines = 1
                                     )
+                                }
+                            }
+                            if (metrics.isCompact) {
+                                Row(
+                                    modifier = Modifier.weight(1f),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    statusLabel()
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Box(modifier = Modifier.weight(1f)) { activeLine() }
+                                }
+                            } else {
+                                Column(modifier = Modifier.weight(1f)) {
+                                    statusLabel()
+                                    activeLine()
                                 }
                             }
                             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -1266,12 +1285,12 @@ fun AgenticKeyboardLayout(
 
                     AiActionButton(
                         label = "Compose",
-                        icon = "🪄",
+                        icon = "✉️",
                         onClick = {
                             buzz(HapticFeedbackType.TextHandleMove)
                             val text = aiSourceText()
                             if (text.isBlank()) {
-                                gestureAlert = "Type an instruction first, e.g. \"tell her I'm 20 min late\" 🪄"
+                                gestureAlert = "Type an instruction first, e.g. \"tell her I'm 20 min late\" ✉️"
                             } else {
                                 viewModel.composeFromInstruction(text)
                             }

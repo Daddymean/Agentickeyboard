@@ -1,7 +1,11 @@
 package io.github.daddymean.agentickeyboard.ui
 
 import android.content.Context
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Box
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onRoot
 import androidx.test.core.app.ApplicationProvider
@@ -62,5 +66,9 @@ class KeyboardScreenshotTest {
     fun keyboardLandscape() = capture("keyboard_landscape", keyboard)
 
     @Test
-    fun setupScreen() = capture("setup_screen") { viewModel -> SetupTab(viewModel) }
+    fun setupScreen() = capture("setup_screen") { viewModel ->
+        // SetupTab draws no background of its own; MainAppScreen's Scaffold supplies
+        // this light container colour. Without it the dark title is unreadable.
+        Box(modifier = Modifier.background(Color(0xFFF3F4F9))) { SetupTab(viewModel) }
+    }
 }

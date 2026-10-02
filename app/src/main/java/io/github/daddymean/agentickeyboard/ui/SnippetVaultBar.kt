@@ -101,7 +101,7 @@ fun SnippetVaultBar(
                 ) {
                     Column(modifier = Modifier.weight(1f)) {
                         Text(
-                            text = "🧰 Snippet Vault",
+                            text = "📚 Snippet Vault",
                             color = colors.text,
                             fontSize = 11.sp,
                             fontWeight = FontWeight.Bold
