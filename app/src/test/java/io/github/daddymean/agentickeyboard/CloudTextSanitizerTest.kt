@@ -85,6 +85,32 @@ class CloudTextSanitizerTest {
     }
 
     @Test
+    fun credentialRuleConsumesMatchingQuotesWithoutLeavingAStrayOne() {
+        assertRedacts(
+            "my password: \"hunter2\"" to "my password=[REDACTED_SECRET]",
+            "api_key = 'x'" to "api_key=[REDACTED_SECRET]",
+            "token check: secret=\"a b c\", next" to "token check: secret=[REDACTED_SECRET], next",
+            "access_token:'abc;def' done" to "access_token=[REDACTED_SECRET] done",
+            "password: \"a\" and \"b\"" to "password=[REDACTED_SECRET] and \"b\""
+        )
+    }
+
+    @Test
+    fun credentialRuleHandlesUnbalancedOrEmptyQuotesSafely() {
+        // Unterminated quote: the bare-token fallback still redacts the value.
+        val open = CloudTextSanitizer.sanitize("password: \"hunter2 and more")
+        assertEquals("password=[REDACTED_SECRET] and more", open.text)
+        // A quote that is not closed on the same line does not swallow the next line.
+        val multi = CloudTextSanitizer.sanitize("secret: \"abc\nnext line\"")
+        assertFalse(multi.text.contains("abc"))
+        assertTrue(multi.text.contains("next line"))
+        // Mismatched quotes are not treated as a pair; the value is still redacted.
+        assertEquals("api_key=[REDACTED_SECRET]'", CloudTextSanitizer.sanitize("api_key=\"xyz'").text)
+        // Empty quotes have nothing to redact.
+        assertEquals("password: \"\"", CloudTextSanitizer.sanitize("password: \"\"").text)
+    }
+
+    @Test
     fun redactsEmails() {
         assertRedacts(
             "My email is user.name+tag@example.co.uk" to "My email is [REDACTED_EMAIL]",
