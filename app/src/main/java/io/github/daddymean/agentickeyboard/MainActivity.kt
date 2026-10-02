@@ -66,6 +66,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.key
 import androidx.compose.runtime.getValue
@@ -80,6 +81,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontFamily
@@ -97,6 +99,7 @@ import io.github.daddymean.agentickeyboard.ui.KeyboardViewModelFactory
 import io.github.daddymean.agentickeyboard.ui.RowDefaultsButtonPadding
 import io.github.daddymean.agentickeyboard.ui.theme.MyApplicationTheme
 import io.github.daddymean.agentickeyboard.util.AppPersonas
+import io.github.daddymean.agentickeyboard.util.KeyboardSetupStatus
 import io.github.daddymean.agentickeyboard.util.OnDeviceAiStatus
 import io.github.daddymean.agentickeyboard.util.TextExpansion
 
@@ -226,7 +229,7 @@ fun MainAppScreen(viewModel: KeyboardViewModel) {
                 0 -> PlaygroundTab(viewModel) { selectedTab = 1 }
                 1 -> ShortcutsTab(viewModel)
                 2 -> ExportTab(viewModel)
-                3 -> SetupTab()
+                3 -> SetupTab(viewModel)
             }
         }
     }
@@ -1958,9 +1961,30 @@ fun ExportTab(viewModel: KeyboardViewModel) {
     }
 }
 
+/** Reads whether this keyboard is enabled and active; see [KeyboardSetupStatus]. */
+private fun readKeyboardSetupStatus(context: Context): KeyboardSetupStatus {
+    val enabled = runCatching {
+        context.getSystemService(InputMethodManager::class.java)
+            ?.enabledInputMethodList?.map { it.packageName }
+    }.getOrNull().orEmpty()
+    val defaultIme = runCatching {
+        Settings.Secure.getString(context.contentResolver, Settings.Secure.DEFAULT_INPUT_METHOD)
+    }.getOrNull()
+    return KeyboardSetupStatus.of(context.packageName, enabled, defaultIme)
+}
+
 @Composable
-fun SetupTab() {
+fun SetupTab(viewModel: KeyboardViewModel) {
     val context = LocalContext.current
+    val isOfflineMode by viewModel.isOfflineMode.collectAsState()
+
+    // Both setup actions leave this window (system settings, the picker dialog) and
+    // come back to it, so re-read the status each time the window regains focus.
+    val windowFocused = LocalWindowInfo.current.isWindowFocused
+    var setupStatus by remember { mutableStateOf(readKeyboardSetupStatus(context)) }
+    LaunchedEffect(windowFocused) {
+        if (windowFocused) setupStatus = readKeyboardSetupStatus(context)
+    }
 
     LazyColumn(
         modifier = Modifier
@@ -1989,8 +2013,13 @@ fun SetupTab() {
             SetupStepCard(
                 stepNumber = "1",
                 title = "Enable Keyboard in Settings",
-                description = "Enable Lumina Keyboard inside your Android system Language & Input settings panel.",
+                description = if (setupStatus.enabled) {
+                    "Done: Lumina Keyboard is enabled in your system keyboard settings."
+                } else {
+                    "Enable Lumina Keyboard inside your Android system Language & Input settings panel."
+                },
                 actionLabel = "Open System Keyboards",
+                done = setupStatus.enabled,
                 onAction = {
                     try {
                         val intent = Intent(Settings.ACTION_INPUT_METHOD_SETTINGS)
@@ -2006,8 +2035,13 @@ fun SetupTab() {
             SetupStepCard(
                 stepNumber = "2",
                 title = "Select as Active Input",
-                description = "Trigger the keyboard selector dialog to choose Lumina AI as your standard input.",
+                description = if (setupStatus.selected) {
+                    "Done: Lumina AI is your active keyboard."
+                } else {
+                    "Trigger the keyboard selector dialog to choose Lumina AI as your standard input."
+                },
                 actionLabel = "Switch Active Input method",
+                done = setupStatus.selected,
                 onAction = {
                     try {
                         val imm = context.getSystemService(Context.INPUT_METHOD_SERVICE) as InputMethodManager
@@ -2020,14 +2054,20 @@ fun SetupTab() {
         }
 
         item {
+            // Reflects the real setting. This step used to report "offline containment
+            // active" on every tap, even with offline mode off and cloud AI in use.
             SetupStepCard(
                 stepNumber = "3",
-                title = "Verify Absolute Offline Privacy",
-                description = "Confirm local processing state. Toggling Local Lock blocks cloud connection for ultimate confidentiality.",
-                actionLabel = "Security Protocol Verified",
-                onAction = {
-                    Toast.makeText(context, "Lumina offline containment active!", Toast.LENGTH_SHORT).show()
-                }
+                title = "Offline Mode (optional)",
+                description = if (isOfflineMode) {
+                    "On: AI features run on this device only and nothing is sent to the cloud."
+                } else {
+                    "Off: cloud AI features send your text to Gemini, with phone numbers, emails " +
+                        "and similar values redacted first. Turn on to keep all AI on this device."
+                },
+                actionLabel = if (isOfflineMode) "Turn Offline Mode Off" else "Turn Offline Mode On",
+                done = isOfflineMode,
+                onAction = { viewModel.toggleOfflineMode() }
             )
         }
 
@@ -2147,6 +2187,7 @@ fun SetupStepCard(
     title: String,
     description: String,
     actionLabel: String,
+    done: Boolean = false,
     onAction: () -> Unit
 ) {
     Card(
@@ -2163,12 +2204,12 @@ fun SetupStepCard(
                     modifier = Modifier
                         .size(32.dp)
                         .clip(CircleShape)
-                        .background(Color(0xFFE8DEF8)),
+                        .background(if (done) Color(0xFF2E7D32) else Color(0xFFE8DEF8)),
                     contentAlignment = Alignment.Center
                 ) {
                     Text(
-                        stepNumber,
-                        color = Color(0xFF21005D),
+                        if (done) "✓" else stepNumber,
+                        color = if (done) Color.White else Color(0xFF21005D),
                         fontWeight = FontWeight.Bold,
                         fontSize = 14.sp
                     )
