@@ -33,10 +33,23 @@ class KeyboardPassportTransfer(
         )
     }
 
+    /**
+     * @param unverifiedReplaceAcknowledged the user explicitly accepted that an
+     *   unverified (legacy) file will replace existing data; required for REPLACE
+     *   of such a file. See [KeyboardPassportImportPolicy].
+     */
     suspend fun apply(
         opened: KeyboardPassportOpenResult.Success,
-        mode: KeyboardPassportImportMode
+        mode: KeyboardPassportImportMode,
+        unverifiedReplaceAcknowledged: Boolean = false
     ): KeyboardPassportApplyResult = withContext(Dispatchers.IO) {
+        check(KeyboardPassportImportPolicy.canConfirm(opened.preview, mode, unverifiedReplaceAcknowledged)) {
+            if (opened.preview.compatible) {
+                "Replacing data with an unverified file needs explicit confirmation."
+            } else {
+                "This passport version is not compatible with this app."
+            }
+        }
         val current = snapshot()
         val plan = KeyboardPassportImportPlanner.plan(
             current = current,

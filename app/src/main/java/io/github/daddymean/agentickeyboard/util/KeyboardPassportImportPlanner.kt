@@ -10,6 +10,33 @@ import io.github.daddymean.agentickeyboard.db.WritingLog
 /** Import behavior selected explicitly by the user after previewing a passport. */
 enum class KeyboardPassportImportMode { MERGE, REPLACE }
 
+/**
+ * Which import modes may be confirmed for a preview (issue #101). Kept pure so the
+ * rules the UI and [KeyboardPassportTransfer.apply] enforce are unit-tested.
+ *
+ * A legacy export cannot be verified (no checksum, no per-category counts), so a
+ * damaged-but-parseable file is indistinguishable from a good one. Merge is always
+ * the starting mode, and Replace — which clears the included categories first —
+ * needs a separate, explicit acknowledgement for an unverified file.
+ */
+object KeyboardPassportImportPolicy {
+
+    /** Mode preselected whenever a new file is opened: never the destructive one. */
+    val DEFAULT_MODE: KeyboardPassportImportMode = KeyboardPassportImportMode.MERGE
+
+    fun requiresUnverifiedReplaceAcknowledgement(
+        preview: KeyboardPassportPreview,
+        mode: KeyboardPassportImportMode
+    ): Boolean = mode == KeyboardPassportImportMode.REPLACE && !preview.verified
+
+    fun canConfirm(
+        preview: KeyboardPassportPreview,
+        mode: KeyboardPassportImportMode,
+        unverifiedReplaceAcknowledged: Boolean
+    ): Boolean = preview.compatible &&
+        (!requiresUnverifiedReplaceAcknowledgement(preview, mode) || unverifiedReplaceAcknowledged)
+}
+
 /** Complete local model snapshot used to plan an import before any database write. */
 data class KeyboardPassportSnapshot(
     val personaPreference: String,
