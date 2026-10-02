@@ -16,6 +16,7 @@ import io.github.daddymean.agentickeyboard.network.GeminiManager
 import io.github.daddymean.agentickeyboard.network.GrammarCorrectionResponse
 import io.github.daddymean.agentickeyboard.network.ToneAnalysisResponse
 import io.github.daddymean.agentickeyboard.util.CommandPalette
+import io.github.daddymean.agentickeyboard.util.CommittedEditUndo
 import io.github.daddymean.agentickeyboard.util.KeyboardSettings
 import io.github.daddymean.agentickeyboard.util.mastery.KeyboardMastery
 import io.github.daddymean.agentickeyboard.util.mastery.MasteryEvent
@@ -50,11 +51,27 @@ data class WordReplacement(
     val cursorOffset: Int? = null
 )
 
-/** A just-applied auto-correction that backspace can revert. */
-data class AutoCorrectionUndo(val original: String, val replacement: String, val fromLearnedRule: Boolean)
+/**
+ * A just-applied auto-correction that backspace can revert. [editorUndo] is an
+ * exact-range revert, tried first. When the caret was left inside the replacement
+ * ([cursorOffset] non-null) it is the only revert: a suffix match on the text before
+ * the caret cannot find such an edit.
+ */
+data class AutoCorrectionUndo(
+    val original: String,
+    val replacement: String,
+    val fromLearnedRule: Boolean,
+    val editorUndo: CommittedEditUndo? = null,
+    val cursorOffset: Int? = null
+)
 
-/** A just-applied AI result that backspace can revert to the original text. */
-data class AiApplyUndo(val original: String, val replacement: String)
+/** A just-applied AI result that backspace can revert; see [AutoCorrectionUndo]. */
+data class AiApplyUndo(
+    val original: String,
+    val replacement: String,
+    val editorUndo: CommittedEditUndo? = null,
+    val cursorOffset: Int? = null
+)
 
 /** Local, on-device usage statistics shown in the Style Hub dashboard. */
 data class UsageStats(
@@ -677,8 +694,14 @@ class KeyboardViewModel(
 
     // --- Auto-correction undo -------------------------------------------------
 
-    fun registerAutoCorrection(original: String, replacement: String, fromLearnedRule: Boolean) {
-        pendingUndo = AutoCorrectionUndo(original, replacement, fromLearnedRule)
+    fun registerAutoCorrection(
+        original: String,
+        replacement: String,
+        fromLearnedRule: Boolean,
+        editorUndo: CommittedEditUndo? = null,
+        cursorOffset: Int? = null
+    ) {
+        pendingUndo = AutoCorrectionUndo(original, replacement, fromLearnedRule, editorUndo, cursorOffset)
         pendingAiUndo = null
     }
 
@@ -713,9 +736,15 @@ class KeyboardViewModel(
      * restore [original]. Mirrors the auto-correction undo above but for whole
      * drafts/selections replaced through the result panels.
      */
-    fun registerAiApply(original: String, replacement: String) {
+    fun registerAiApply(
+        original: String,
+        replacement: String,
+        editorUndo: CommittedEditUndo? = null,
+        cursorOffset: Int? = null
+    ) {
         pendingUndo = null
-        pendingAiUndo = AiApplyUndo(original, replacement).takeIf { original != replacement }
+        pendingAiUndo = AiApplyUndo(original, replacement, editorUndo, cursorOffset)
+            .takeIf { original != replacement }
     }
 
     fun peekPendingAiUndo(): AiApplyUndo? = pendingAiUndo
