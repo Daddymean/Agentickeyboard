@@ -23,7 +23,13 @@ data class ImportedLog(val text: String, val sentiment: String = "", val toneSco
 data class ImportedTypingPatterns(val vocabulary: List<ImportedVocabulary> = emptyList())
 
 @JsonClass(generateAdapter = true)
-data class ImportedMetadata(val userPersonaPreference: String? = null)
+data class ImportedMetadata(
+    val userPersonaPreference: String? = null,
+    // Written by serialize() but optional on import: hand-made or very old files may
+    // omit them. Used only for legacy sanity checks (see KeyboardPassport.legacyProblem).
+    val exportVersion: String? = null,
+    val totalRecordsExported: Int? = null
+)
 
 @JsonClass(generateAdapter = true)
 data class ImportedModel(

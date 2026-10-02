@@ -123,7 +123,14 @@ data class KeyboardPassportPreview(
     val requiresPassphrase: Boolean,
     val compatible: Boolean,
     val legacy: Boolean
-)
+) {
+    /**
+     * False for legacy exports: they carry no checksum or per-category counts, so
+     * a damaged-but-parseable file cannot be told apart from a good one. The UI
+     * must say so and must not make Replace the easy path for such a file.
+     */
+    val verified: Boolean get() = !legacy
+}
 
 sealed interface KeyboardPassportOpenResult {
     data class Success(
@@ -152,6 +159,8 @@ object KeyboardPassport {
     const val FORMAT = "lumina-keyboard-passport"
     const val CURRENT_VERSION = 2
     const val PAYLOAD_SCHEMA_VERSION = 1
+    /** Major version of `exportMetadata.exportVersion` written by PersonalModelSerializer. */
+    private const val LEGACY_EXPORT_MAJOR_VERSION = "1"
 
     /** Envelope versions this build can read. Version 1 is read-only legacy. */
     val SUPPORTED_VERSIONS: Set<Int> = setOf(1, 2)
@@ -304,8 +313,8 @@ object KeyboardPassport {
             return previewOf(envelope)
         }
 
-        val legacy = parseLegacy(trimmed) ?: return null
-        return previewOfLegacy(legacy)
+        val legacy = parseLegacyModel(trimmed) ?: return null
+        return previewOfLegacy(payloadOfLegacy(legacy))
     }
 
     /** Opens a passport or a legacy JSON/Base64 export without mutating storage. */
@@ -315,9 +324,14 @@ object KeyboardPassport {
 
         val envelope = parseEnvelope(trimmed)
         if (envelope == null) {
-            val legacy = parseLegacy(trimmed)
+            val legacy = parseLegacyModel(trimmed)
                 ?: return KeyboardPassportOpenResult.Invalid("This is not a recognized Lumina export.")
-            return KeyboardPassportOpenResult.Success(legacy, previewOfLegacy(legacy))
+            // Legacy exports predate the envelope's checksum and counts, so they can
+            // never be *verified*; the checks below only reject files that are
+            // structurally impossible for a real export, i.e. obviously damaged.
+            legacyProblem(legacy)?.let { return KeyboardPassportOpenResult.Invalid(it) }
+            val payload = payloadOfLegacy(legacy)
+            return KeyboardPassportOpenResult.Success(payload, previewOfLegacy(payload))
         }
 
         val preview = previewOf(envelope)
@@ -410,13 +424,50 @@ object KeyboardPassport {
         }
     }
 
-    private fun parseLegacy(content: String): PassportPayload? {
+    private fun parseLegacyModel(content: String): ImportedModel? {
         val legacy = PersonalModelSerializer.parseImport(content) ?: return null
         val hasContent = legacy.exportMetadata != null ||
             legacy.typingPatterns?.vocabulary?.isNotEmpty() == true ||
             legacy.correctionHistory.isNotEmpty() ||
             legacy.writingLogs.isNotEmpty()
-        if (!hasContent) return null
+        return legacy.takeIf { hasContent }
+    }
+
+    /**
+     * Best-effort structural checks for a legacy export (issue #101). These cannot
+     * prove a file is intact — the format has no checksum — but they reject content
+     * that `PersonalModelSerializer.serialize` could never have written, so obviously
+     * damaged files fail closed instead of importing garbage. Returns a user-facing
+     * reason, or null when nothing is wrong.
+     */
+    internal fun legacyProblem(legacy: ImportedModel): String? {
+        val metadata = legacy.exportMetadata
+        val version = metadata?.exportVersion
+        if (version != null && version.trim().substringBefore('.') != LEGACY_EXPORT_MAJOR_VERSION) {
+            return "Legacy export version $version is not supported by this app version."
+        }
+
+        val vocabulary = legacy.typingPatterns?.vocabulary.orEmpty()
+        val actualTotal = vocabulary.size.toLong() + legacy.correctionHistory.size + legacy.writingLogs.size
+        val declaredTotal = metadata?.totalRecordsExported
+        if (declaredTotal != null && declaredTotal.toLong() != actualTotal) {
+            return "This older export says it has $declaredTotal record(s) but contains $actualTotal. " +
+                "The file may be damaged."
+        }
+
+        if (vocabulary.any { it.word.isBlank() || it.count < 0 || it.lastUsed < 0 }) {
+            return "This older export has malformed vocabulary entries. The file may be damaged."
+        }
+        if (legacy.correctionHistory.any { it.typo.isBlank() || it.correction.isBlank() || it.count < 0 }) {
+            return "This older export has malformed corrections. The file may be damaged."
+        }
+        if (legacy.writingLogs.any { !it.toneScore.isFinite() || it.timestamp < 0 }) {
+            return "This older export has malformed writing logs. The file may be damaged."
+        }
+        return null
+    }
+
+    private fun payloadOfLegacy(legacy: ImportedModel): PassportPayload {
         return PassportPayload(
             personaPreference = legacy.exportMetadata?.userPersonaPreference,
             vocabulary = legacy.typingPatterns?.vocabulary.orEmpty(),
