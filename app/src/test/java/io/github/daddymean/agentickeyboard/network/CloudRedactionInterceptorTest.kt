@@ -57,8 +57,18 @@ class CloudRedactionInterceptorTest {
 
     @Test
     fun redactsQuotedPasswordAndKeepsJsonValid() {
-        val sent = assertRedactsTo("my password: \"hunter2\" ok", "my password=[REDACTED_SECRET]\" ok")
+        val sent = assertRedactsTo("my password: \"hunter2\" ok", "my password=[REDACTED_SECRET] ok")
         assertFalse(sent.contains("hunter2"))
+    }
+
+    @Test
+    fun redactsSingleQuotedAndSpacedSecretsWithoutStrayQuotesAndKeepsJsonValid() {
+        assertRedactsTo("api_key = 'x'", "api_key=[REDACTED_SECRET]")
+        val sent = assertRedactsTo(
+            "line one\nsecret: \"two words\", then \"quoted\" text",
+            "line one\nsecret=[REDACTED_SECRET], then \"quoted\" text"
+        )
+        assertFalse(sent.contains("two words"))
     }
 
     @Test

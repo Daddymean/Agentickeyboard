@@ -30,6 +30,28 @@ class GeminiManagerTest {
     }
 
     @Test
+    fun stripDraftEchoDoesNotStripAPrefixThatEndsMidWord() {
+        // The draft must end on a word boundary in the continuation to count as an echo.
+        assertEquals("hello", GeminiManager.stripDraftEcho("he", "hello"))
+        assertEquals("and then we left", GeminiManager.stripDraftEcho("a", "and then we left"))
+        assertEquals("Thanksgiving plans?", GeminiManager.stripDraftEcho("thanks", "Thanksgiving plans?"))
+        assertEquals("I said hello there", GeminiManager.stripDraftEcho("I said he", "I said hello there"))
+        assertEquals("route 66b", GeminiManager.stripDraftEcho("route 66", "route 66b"))
+        // A contraction continues the word, so "I" is not an echo inside "I'll".
+        assertEquals("I'll be there", GeminiManager.stripDraftEcho("I", "I'll be there"))
+        assertEquals("don\u2019t worry", GeminiManager.stripDraftEcho("don", "don\u2019t worry"))
+    }
+
+    @Test
+    fun stripDraftEchoStripsAtWhitespaceOrPunctuationBoundaries() {
+        assertEquals(", see you soon", GeminiManager.stripDraftEcho("hello", "hello, see you soon"))
+        assertEquals("!", GeminiManager.stripDraftEcho("hello", "hello!"))
+        // A draft that itself ends in punctuation or a space is always a clean boundary.
+        assertEquals("world", GeminiManager.stripDraftEcho("hello,", "hello,world"))
+        assertEquals("there", GeminiManager.stripDraftEcho("hi ", "hi there"))
+    }
+
+    @Test
     fun stripDraftEchoNeverReturnsEmptyForAPureEcho() {
         assertEquals("hello", GeminiManager.stripDraftEcho("hello", "hello"))
         assertEquals("hello", GeminiManager.stripDraftEcho("hello", " hello   "))

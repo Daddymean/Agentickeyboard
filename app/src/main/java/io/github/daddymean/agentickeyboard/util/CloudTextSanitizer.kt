@@ -21,10 +21,15 @@ object CloudTextSanitizer {
     private data class Rule(val regex: Regex, val replacement: String)
 
     private val rules = listOf(
-        // Explicit credential-like assignments: password=..., api_key: ..., token "..."
+        // Explicit credential-like assignments: password=..., api_key: ..., token "...".
+        // A value wrapped in matching quotes is consumed together with both quotes, so
+        // `password: "hunter2"` becomes `password=[REDACTED_SECRET]` with no stray `"`.
+        // A quoted value may contain spaces but not a line break, and is capped so an
+        // unbalanced quote cannot swallow a whole paragraph; an unterminated quote falls
+        // back to the bare-token form, which drops just the opening quote.
         Rule(
             Regex(
-                pattern = """(?i)\b(password|passcode|api[_ -]?key|access[_ -]?token|auth[_ -]?token|secret)\b\s*[:=]\s*[\"']?[^\s,;\"'}]+"""
+                pattern = """(?i)\b(password|passcode|api[_ -]?key|access[_ -]?token|auth[_ -]?token|secret)\b\s*[:=]\s*(?:"[^"\r\n]{1,256}"|'[^'\r\n]{1,256}'|[\"']?[^\s,;\"'}]+)"""
             ),
             replacement = "\$1=[REDACTED_SECRET]"
         ),

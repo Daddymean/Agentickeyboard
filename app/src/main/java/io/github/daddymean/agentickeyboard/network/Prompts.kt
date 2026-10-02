@@ -9,6 +9,19 @@ import io.github.daddymean.agentickeyboard.util.ReplyIntents
  */
 object Prompts {
 
+    /** Indentation of the template bodies below; see [keepIndent]. */
+    private const val TEMPLATE_INDENT = "        "
+
+    /**
+     * Re-indents every continuation line of an interpolated value to the template's
+     * own indentation. `trimIndent()` strips the *smallest* common indent, so a
+     * multi-line value (user text, personalization context) whose later lines start
+     * at column 0 would otherwise stop it from removing the template's indentation
+     * at all. With this, `trimIndent()` removes exactly [TEMPLATE_INDENT] and the
+     * value comes out verbatim.
+     */
+    private fun String.keepIndent(): String = replace("\n", "\n$TEMPLATE_INDENT")
+
     const val VOICE_LOCK_DIRECTIVE =
         "IMPORTANT: Preserve the user's own phrasing and word choices as much as possible. " +
             "Make only the minimal edits needed. Do not add flourishes, filler, emojis, or an " +
@@ -18,9 +31,9 @@ object Prompts {
         Analyze the following text for spelling, punctuation, styling, or grammar errors. Correct them perfectly.
         Provide a clear, brief explanation of the key correction made.
         
-        ${if (personalizationContext.isNotEmpty()) "Context of the user's preferred style:\n$personalizationContext\n" else ""}
+        ${(if (personalizationContext.isNotEmpty()) "Context of the user's preferred style:\n$personalizationContext\n" else "").keepIndent()}
         
-        Input text: "$text"
+        Input text: "${text.keepIndent()}"
         
         Return raw JSON with this exact structure:
         {
@@ -33,15 +46,15 @@ object Prompts {
 
     fun suggestReplies(contextMessage: String, personalizationContext: String, intent: String): String = """
         You are an expert keyboard assistant. The user received this message:
-        "$contextMessage"
+        "${contextMessage.keepIndent()}"
 
-        ${if (personalizationContext.isNotEmpty()) "Personalization Context (match user's writing habits):\n$personalizationContext\n" else ""}
-        ${if (intent.isNotEmpty()) "Reply direction chosen by the user: $intent. ${ReplyIntents.promptDirective(intent)}\n" else ""}
+        ${(if (personalizationContext.isNotEmpty()) "Personalization Context (match user's writing habits):\n$personalizationContext\n" else "").keepIndent()}
+        ${(if (intent.isNotEmpty()) "Reply direction chosen by the user: $intent. ${ReplyIntents.promptDirective(intent)}\n" else "").keepIndent()}
         Generate exactly 3 smart, natural, conversational, and highly context-appropriate replies, at three lengths:
         1. Very short (4 words or fewer)
         2. Medium (roughly 8-12 words)
         3. Detailed (1-2 full sentences)
-        ${if (personalizationContext.isNotEmpty()) "Ensure the replies naturally blend with the user's habitual vocabulary, tone, or style of expression if indicated in the personalization context." else ""}
+        ${(if (personalizationContext.isNotEmpty()) "Ensure the replies naturally blend with the user's habitual vocabulary, tone, or style of expression if indicated in the personalization context." else "").keepIndent()}
 
         Return raw JSON with this exact structure:
         {
@@ -51,37 +64,37 @@ object Prompts {
 
     fun summarizeMessage(personalizationContext: String, text: String): String = """
         Summarize the following text extremely briefly in 1-2 short sentences, suitable for quick reading on a phone screen.
-        ${if (personalizationContext.isNotEmpty()) "Adapt the summary explanation to align with the user's style preferences:\n$personalizationContext\n" else ""}
+        ${(if (personalizationContext.isNotEmpty()) "Adapt the summary explanation to align with the user's style preferences:\n$personalizationContext\n" else "").keepIndent()}
         
         Text to summarize:
-        $text
+        ${text.keepIndent()}
     """.trimIndent()
 
     fun translateText(sourceLang: String, targetLang: String, personalizationContext: String, text: String): String = """
         Translate the following text from $sourceLang to $targetLang. Return ONLY the translated string with absolutely no introductory or extra text.
-        ${if (personalizationContext.isNotEmpty()) "Maintain the style level (formality, tone) matching the personalization preference:\n$personalizationContext\n" else ""}
+        ${(if (personalizationContext.isNotEmpty()) "Maintain the style level (formality, tone) matching the personalization preference:\n$personalizationContext\n" else "").keepIndent()}
         
         Text:
-        $text
+        ${text.keepIndent()}
     """.trimIndent()
 
     fun rewriteWithTone(targetTone: String, personalizationContext: String, preserveVoice: Boolean, text: String): String = """
         Rewrite the following text so it reads in a "$targetTone" tone. Preserve the original meaning and approximate length.
         Return ONLY the rewritten text with absolutely no introductory or extra text.
-        ${if (personalizationContext.isNotEmpty()) "Blend in the user's habitual vocabulary where natural:\n$personalizationContext\n" else ""}
-        ${if (preserveVoice) "$VOICE_LOCK_DIRECTIVE\n" else ""}
+        ${(if (personalizationContext.isNotEmpty()) "Blend in the user's habitual vocabulary where natural:\n$personalizationContext\n" else "").keepIndent()}
+        ${(if (preserveVoice) "$VOICE_LOCK_DIRECTIVE\n" else "").keepIndent()}
         Text:
-        $text
+        ${text.keepIndent()}
     """.trimIndent()
 
     fun composeMessage(instruction: String, targetTone: String, personalizationContext: String, preserveVoice: Boolean): String = """
         The user wants you to write a message on their behalf. Their instruction describes what the message should say:
-        "$instruction"
+        "${instruction.keepIndent()}"
 
         Write the actual message they should send, in a "$targetTone" tone, suitable for a mobile chat. Keep it natural and concise.
         Return ONLY the message text with absolutely no introductory or extra text.
-        ${if (personalizationContext.isNotEmpty()) "Match the user's habitual voice:\n$personalizationContext\n" else ""}
-        ${if (preserveVoice) "$VOICE_LOCK_DIRECTIVE\n" else ""}
+        ${(if (personalizationContext.isNotEmpty()) "Match the user's habitual voice:\n$personalizationContext\n" else "").keepIndent()}
+        ${(if (preserveVoice) "$VOICE_LOCK_DIRECTIVE\n" else "").keepIndent()}
     """.trimIndent()
 
     fun explainText(text: String): String = """
@@ -89,16 +102,16 @@ object Prompts {
         Keep the explanation to 1-3 short sentences suitable for a phone screen. Return ONLY the explanation.
 
         Text:
-        $text
+        ${text.keepIndent()}
     """.trimIndent()
 
     fun continueText(text: String, personalizationContext: String, preserveVoice: Boolean): String = """
         The user is drafting a message and wants you to continue it naturally in their voice:
-        "$text"
+        "${text.keepIndent()}"
 
         Write the next 5-20 words that continue the draft. Return ONLY the continuation text - do NOT repeat the original draft, do not add quotes or commentary. If the draft ends mid-word, complete that word first.
-        ${if (personalizationContext.isNotEmpty()) "Match the user's habitual voice:\n$personalizationContext\n" else ""}
-        ${if (preserveVoice) "$VOICE_LOCK_DIRECTIVE\n" else ""}
+        ${(if (personalizationContext.isNotEmpty()) "Match the user's habitual voice:\n$personalizationContext\n" else "").keepIndent()}
+        ${(if (preserveVoice) "$VOICE_LOCK_DIRECTIVE\n" else "").keepIndent()}
     """.trimIndent()
 
     // --- On-device (Gemini Nano) variants ---
@@ -108,9 +121,9 @@ object Prompts {
     // already say "Return ONLY the … text").
 
     fun onDeviceReplies(contextMessage: String, personalizationContext: String, intent: String): String = """
-        You received this message: "$contextMessage"
-        ${if (intent.isNotEmpty()) "Reply direction: $intent. ${ReplyIntents.promptDirective(intent)}" else ""}
-        ${if (personalizationContext.isNotEmpty()) "Match this style: $personalizationContext" else ""}
+        You received this message: "${contextMessage.keepIndent()}"
+        ${(if (intent.isNotEmpty()) "Reply direction: $intent. ${ReplyIntents.promptDirective(intent)}" else "").keepIndent()}
+        ${(if (personalizationContext.isNotEmpty()) "Match this style: $personalizationContext" else "").keepIndent()}
         Write exactly 3 natural reply options, one per line: a very short one, a medium one, and a one-sentence one.
         Output only the 3 replies, each on its own line. No numbering, no quotes, no extra text.
     """.trimIndent()
@@ -119,13 +132,13 @@ object Prompts {
     fun onDeviceTone(text: String): String = """
         Classify the tone of this message in ONE word, chosen from exactly this list:
         Professional, Joyful, Empathetic, Apologetic, Urgent, Neutral.
-        Message: "$text"
+        Message: "${text.keepIndent()}"
         Answer with only that one word.
     """.trimIndent()
 
     fun analyzeTone(personalizationContext: String, text: String): String = """
         Analyze the sentiment and communication tone of this keyboard text input:
-        "$text"
+        "${text.keepIndent()}"
         
         Identify the primary tone category (e.g. Professional, Joyful, Empathetic, Aggressive, Sarcastic, Apologetic, Urgent).
         Estimate a tone score / confidence value between 0.0 and 1.0.
@@ -137,7 +150,7 @@ object Prompts {
         - risk: how likely the message lands badly — exactly one of "Low", "Medium", "High"
         And write "note": one plain-language remark of at most 8 words (e.g. "clear but cold", "friendly but hedged").
 
-        ${if (personalizationContext.isNotEmpty()) "Contrast this text against the user's baseline writing habit to provide tailored recommendations:\n$personalizationContext\n" else ""}
+        ${(if (personalizationContext.isNotEmpty()) "Contrast this text against the user's baseline writing habit to provide tailored recommendations:\n$personalizationContext\n" else "").keepIndent()}
 
         Return raw JSON with this exact structure:
         {

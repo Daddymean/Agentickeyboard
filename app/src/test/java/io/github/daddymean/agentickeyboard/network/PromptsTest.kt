@@ -7,7 +7,7 @@ import org.junit.Test
 
 class PromptsTest {
 
-    // Interpolated multi-line context defeats trimIndent(), so compare trimmed lines.
+    // Compares trimmed lines so these checks don't depend on indentation details.
     private fun lines(prompt: String) = prompt.lines().map { it.trim() }
 
     private fun assertEndsWithText(prompt: String, text: String) {
@@ -25,6 +25,33 @@ class PromptsTest {
         assertTrue(plain.contains("from English to Spanish"))
         assertFalse(plain.contains("personalization preference"))
         assertEndsWithText(plain, "Where is the library?")
+    }
+
+    @Test
+    fun multiLineValuesNoLongerDefeatTrimIndent() {
+        val context = "Uses short sentences.\nPrefers \"cheers\" as a sign-off."
+        val text = "first line\n    indented second line\nthird"
+        val prompts = listOf(
+            Prompts.fixGrammar(context, text),
+            Prompts.suggestReplies(text, context, "Accept"),
+            Prompts.summarizeMessage(context, text),
+            Prompts.translateText("English", "French", context, text),
+            Prompts.rewriteWithTone("Friendly", context, true, text),
+            Prompts.composeMessage(text, "Friendly", context, true),
+            Prompts.explainText(text),
+            Prompts.continueText(text, context, true),
+            Prompts.onDeviceReplies(text, context, "Accept"),
+            Prompts.onDeviceTone(text),
+            Prompts.analyzeTone(context, text)
+        )
+        prompts.forEachIndexed { i, prompt ->
+            // The template's own indentation is fully removed...
+            assertFalse("prompt $i keeps template indentation", prompt.lines().any { it.startsWith("        ") })
+            assertFalse("prompt $i starts indented", prompt.first().isWhitespace())
+            // ...and interpolated values come through verbatim, including their own indentation.
+            assertTrue("prompt $i mangles the text", prompt.contains(text))
+        }
+        assertTrue(Prompts.fixGrammar(context, text).contains("Context of the user's preferred style:\n$context\n"))
     }
 
     @Test
