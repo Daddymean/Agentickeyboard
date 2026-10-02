@@ -11,10 +11,11 @@ data class CloudRedactionResult(
 /**
  * Redacts common sensitive values before a request leaves the device.
  *
- * This deliberately operates on the final serialized request body, rather than
- * individual AI actions, so every current and future Gemini request receives the
- * same protection. Replacement markers are plain ASCII and safe inside JSON
- * strings.
+ * The patterns are written for plain text. `CloudRequestRedactor` applies them at
+ * the network boundary, so every current and future Gemini request receives the
+ * same protection: to each decoded string value of a JSON body (never to the
+ * escaped JSON text), or to the whole body when it is not JSON. Replacement
+ * markers are plain ASCII.
  */
 object CloudTextSanitizer {
     private data class Rule(val regex: Regex, val replacement: String)

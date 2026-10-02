@@ -1,6 +1,14 @@
 # Cloud redaction guard
 
-The keyboard sanitizes the final serialized Gemini request body immediately before OkHttp sends it.
+The keyboard sanitizes the outgoing Gemini request body immediately before OkHttp sends it.
+
+## How a body is redacted
+
+`CloudRequestRedactor` (in `CloudRedactionInterceptor.kt`) parses a JSON body, runs `CloudTextSanitizer` on each string *value* as the plain text it decodes to, and re-serializes the document. Object keys, numbers, booleans and nulls are copied through unchanged.
+
+Running the plain-text patterns over the serialized JSON instead does not work: JSON writes a line break as `\n` and a quote as `\"`, so a card number, SSN, IP or URL at the start of a line was not matched, and a quoted secret or URL (`password: "hunter2"`, `Read "https://…"`) was cut mid-escape, leaking the value and producing invalid JSON that made the AI request fail.
+
+The redactor fails closed: a body that is not JSON, or is labelled JSON but does not parse, gets whole-text sanitization rather than being sent as is.
 
 ## Why the network boundary
 
@@ -30,6 +38,7 @@ Round-trip actions (fix grammar, summarize, translate, rewrite, compose, continu
 ## Validation checklist
 
 - `CloudTextSanitizerTest` passes.
+- `CloudRedactionInterceptorTest` passes: production-serialized request bodies with values at line starts, quoted secrets and quoted URLs come out redacted and as valid JSON that round-trips.
 - Debug APK builds.
 - Release/R8 build succeeds.
 - A request containing an email or credential-shaped value reaches the network layer with a redaction marker instead of the original value.
