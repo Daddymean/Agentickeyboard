@@ -13,6 +13,9 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.platform.ComposeView
+import androidx.compose.ui.platform.LocalDensity
+import androidx.core.view.ViewCompat
+import androidx.core.view.WindowInsetsCompat
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleOwner
 import androidx.lifecycle.LifecycleRegistry
@@ -66,6 +69,7 @@ class AgenticKeyboardService : InputMethodService(), LifecycleOwner, ViewModelSt
     private val clipboardHistoryEnabled = MutableStateFlow(false)
     private val clipboardHistoryPaused = MutableStateFlow(false)
     private val clipboardStatus = MutableStateFlow<String?>(null)
+    private val navigationBarInsetPx = MutableStateFlow(0)
 
     override val lifecycle: Lifecycle get() = lifecycleRegistry
     override val viewModelStore: ViewModelStore get() = store
@@ -104,12 +108,22 @@ class AgenticKeyboardService : InputMethodService(), LifecycleOwner, ViewModelSt
         composeView.setViewTreeLifecycleOwner(this)
         composeView.setViewTreeViewModelStoreOwner(this)
         composeView.setViewTreeSavedStateRegistryOwner(this)
+        // With edge-to-edge (targetSdk 35+) the IME window is laid out behind the
+        // navigation bar, so the bottom key row would sit under the system's
+        // back/home/gesture area. Track the bar's height and lift the keys by it.
+        ViewCompat.setOnApplyWindowInsetsListener(composeView) { _, insets ->
+            navigationBarInsetPx.value =
+                insets.getInsets(WindowInsetsCompat.Type.navigationBars()).bottom
+            insets
+        }
 
         composeView.setContent {
             val historyEnabled by clipboardHistoryEnabled.collectAsState()
             val historyPaused by clipboardHistoryPaused.collectAsState()
             val historyStatus by clipboardStatus.collectAsState()
             val sensitiveField by viewModel.isSensitiveField.collectAsState()
+            val navInsetPx by navigationBarInsetPx.collectAsState()
+            val navigationBarInset = with(LocalDensity.current) { navInsetPx.toDp() }
 
             // Every surface below sizes itself from the window the IME was given,
             // so the keyboard still leaves room for the field in short windows.
@@ -149,7 +163,8 @@ class AgenticKeyboardService : InputMethodService(), LifecycleOwner, ViewModelSt
                         onAction = { performEnterAction() },
                         onMicPress = { switchToVoiceInput() },
                         onCursorMove = { steps -> moveCursor(steps) },
-                        inputConnectionProvider = { currentInputConnection }
+                        inputConnectionProvider = { currentInputConnection },
+                        navigationBarInset = navigationBarInset
                     )
                 }
             }

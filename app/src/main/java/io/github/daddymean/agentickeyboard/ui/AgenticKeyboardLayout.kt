@@ -70,6 +70,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -119,7 +120,10 @@ fun AgenticKeyboardLayout(
     inputConnectionProvider: () -> InputConnection? = { null },
     inPlaygroundMode: Boolean = false,
     playgroundTextState: String = "",
-    onPlaygroundTextChange: (String) -> Unit = {}
+    onPlaygroundTextChange: (String) -> Unit = {},
+    // Height of the system navigation bar the IME window extends behind; the
+    // keyboard background fills it while the keys stay above it.
+    navigationBarInset: Dp = 0.dp
 ) {
     val haptic = LocalHapticFeedback.current
     val clipboardManager = LocalClipboardManager.current
@@ -417,7 +421,7 @@ fun AgenticKeyboardLayout(
         modifier = modifier
             .fillMaxWidth()
             .background(keyboardColors.background)
-            .padding(bottom = metrics.bottomPadding)
+            .padding(bottom = metrics.bottomPadding + navigationBarInset)
             .pointerInput(Unit) {
                 detectDragGestures(
                     onDragEnd = {
