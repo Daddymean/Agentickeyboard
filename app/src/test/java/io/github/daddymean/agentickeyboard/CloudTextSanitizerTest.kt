@@ -62,4 +62,98 @@ class CloudTextSanitizerTest {
         assertEquals("", CloudTextSanitizer.sanitize("").text)
         assertEquals(0, CloudTextSanitizer.sanitize("   ").replacements)
     }
+
+    // --- Per-rule coverage (from #89) ---
+
+    @Test
+    fun redactsCredentialAssignmentsInEverySpelling() {
+        val cases = mapOf(
+            "password=my_secret_pwd" to "my_secret_pwd",
+            "passcode: 123456" to "123456",
+            "api_key = 'abcdef12345'" to "abcdef12345",
+            "access-token:\"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9\"" to "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9",
+            "auth_token=supersecret123" to "supersecret123",
+            "secret : my-secret-value" to "my-secret-value"
+        )
+
+        cases.forEach { (input, secret) ->
+            val result = CloudTextSanitizer.sanitize(input)
+            assertTrue(input, result.changed)
+            assertTrue(input, result.text.contains("=[REDACTED_SECRET]"))
+            assertFalse(input, result.text.contains(secret))
+        }
+    }
+
+    @Test
+    fun redactsEmails() {
+        assertRedacts(
+            "My email is user.name+tag@example.co.uk" to "My email is [REDACTED_EMAIL]",
+            "Contact info@company.com today." to "Contact [REDACTED_EMAIL] today.",
+            "test_123@sub.domain.org" to "[REDACTED_EMAIL]"
+        )
+    }
+
+    @Test
+    fun redactsCardNumbersAndLeavesShorterRunsToTheNumericRule() {
+        assertRedacts(
+            "Card: 4111 1111 1111 1111" to "Card: [REDACTED_FINANCIAL]",
+            "Visa: 4111-1111-1111-1111" to "Visa: [REDACTED_FINANCIAL]",
+            "Amex: 341234567890123" to "Amex: [REDACTED_FINANCIAL]",
+            "No spaces: 4111111111111111" to "No spaces: [REDACTED_FINANCIAL]",
+            "Too short: 123456789012" to "Too short: [REDACTED_NUMERIC_ID]"
+        )
+    }
+
+    @Test
+    fun redactsSsn() {
+        assertRedacts(
+            "My SSN is 123-45-6789" to "My SSN is [REDACTED_SSN]",
+            "SSN: 987-65-4321." to "SSN: [REDACTED_SSN]."
+        )
+    }
+
+    @Test
+    fun redactsNumericIdsOfEightOrMoreDigitsOnly() {
+        assertRedacts(
+            "Order 12345678" to "Order [REDACTED_NUMERIC_ID]",
+            "claim 9876543210" to "claim [REDACTED_NUMERIC_ID]",
+            "short 1234567" to "short 1234567"
+        )
+    }
+
+    @Test
+    fun redactsPhoneNumberFormats() {
+        assertRedacts(
+            "Call (555) 123-4567" to "Call [REDACTED_PHONE]",
+            "Mobile: 555-123-4567" to "Mobile: [REDACTED_PHONE]",
+            "Intl: +1 555 123 4567" to "Intl: [REDACTED_PHONE]",
+            "Dots: 555.123.4567" to "Dots: [REDACTED_PHONE]",
+            "Spaced: 555 123 4567" to "Spaced: [REDACTED_PHONE]"
+        )
+    }
+
+    @Test
+    fun redactsValidIpv4AddressesOnly() {
+        assertRedacts(
+            "Local: 192.168.1.1" to "Local: [REDACTED_IP]",
+            "Google: 8.8.8.8" to "Google: [REDACTED_IP]",
+            "Max: 255.255.255.255" to "Max: [REDACTED_IP]",
+            "Not an IP: 256.256.256.256" to "Not an IP: 256.256.256.256"
+        )
+    }
+
+    @Test
+    fun redactsUrls() {
+        assertRedacts(
+            "Visit http://example.com" to "Visit [REDACTED_URL]",
+            "Secure https://test.org/path?q=1" to "Secure [REDACTED_URL]",
+            "FTP ftp://files.server.net/folder" to "FTP [REDACTED_URL]"
+        )
+    }
+
+    private fun assertRedacts(vararg cases: Pair<String, String>) {
+        cases.forEach { (input, expected) ->
+            assertEquals(input, expected, CloudTextSanitizer.sanitize(input).text)
+        }
+    }
 }

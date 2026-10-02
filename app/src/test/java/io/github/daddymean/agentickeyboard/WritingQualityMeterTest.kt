@@ -53,6 +53,22 @@ class WritingQualityMeterTest {
     }
 
     @Test
+    fun riskScoreBoundaries() {
+        assertEquals(WritingQualityMeter.RISK_LOW, WritingQualityMeter.risk("Hello world. How are you today?"))
+        // One hostile word, or "!!" plus "??", scores 2: medium.
+        assertEquals(WritingQualityMeter.RISK_MEDIUM, WritingQualityMeter.risk("This is stupid"))
+        assertEquals(WritingQualityMeter.RISK_MEDIUM, WritingQualityMeter.risk("What is this?? Tell me now!!"))
+        assertEquals(WritingQualityMeter.RISK_HIGH, WritingQualityMeter.risk("This is stupid!!"))
+    }
+
+    @Test
+    fun shoutingNeedsTwelveLettersAndNoWarmWords() {
+        assertEquals(WritingQualityMeter.RISK_HIGH, WritingQualityMeter.risk("I AM VERY ANGRY ABOUT THIS"))
+        assertEquals(WritingQualityMeter.RISK_LOW, WritingQualityMeter.risk("THANK YOU SO MUCH FOR YOUR HELP"))
+        assertEquals(WritingQualityMeter.RISK_LOW, WritingQualityMeter.risk("HI THERE"))
+    }
+
+    @Test
     fun assessProducesNoteAndAllDimensions() {
         val hostile = WritingQualityMeter.assess("I am sick of this, you are useless")
         assertEquals(WritingQualityMeter.RISK_HIGH, hostile.risk)
