@@ -23,4 +23,15 @@ class AppPersonasTest {
     fun usesWholePackageWhenNoDotOrSegment() {
         assertEquals("Standalone", AppPersonas.friendlyName(null, "standalone"))
     }
+
+    @Test
+    fun trimsStoredLabel() {
+        assertEquals("WhatsApp", AppPersonas.friendlyName(" WhatsApp ", "com.whatsapp"))
+    }
+
+    @Test
+    fun usesLastSegmentOfDeepPackages() {
+        assertEquals("Messaging", AppPersonas.friendlyName(null, "com.google.android.apps.messaging"))
+        assertEquals("X", AppPersonas.friendlyName(null, "com.twitter.x"))
+    }
 }
