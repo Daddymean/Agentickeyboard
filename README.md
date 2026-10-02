@@ -41,7 +41,7 @@ flight.
 - **Always-on cloud request redaction** — every string value in the outgoing Gemini request is sanitized immediately before transmission (the JSON stays valid), replacing credential-shaped secrets, emails, phone numbers, financial identifiers, SSNs, IP addresses, URLs, and long numeric IDs with neutral markers.
 - **Pause learning** — an incognito switch for the personalization engine.
 - **Data retention** — writing logs auto-expire after 7/30/90 days (your choice).
-- **Cloud backup disabled** — your typing history never leaves the device via Android backup.
+- **Cloud backup and device transfer disabled** — your typing history never leaves the device via Android cloud backup or phone-to-phone transfer (all data domains are excluded in `data_extraction_rules.xml` and `backup_rules.xml`).
 - **No request logging in release builds**; the API key is sent as a header and redacted from debug logs.
 - **Style Hub export & import** — serialize your personalization model to JSON (or Base64) with optional redaction of emails, phone numbers, financial numbers, IPs, URLs, and numeric IDs, then restore it on another device.
 - **Usage dashboard** — on-device stats for auto-fixes, swipes, AI applies, and shortcut expansions.
