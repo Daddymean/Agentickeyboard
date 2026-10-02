@@ -266,7 +266,11 @@ class KeyboardViewModel(
     private val prefsListener = SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
         val s = settings ?: return@OnSharedPreferenceChangeListener
         when (key) {
-            KeyboardSettings.KEY_OFFLINE_MODE -> _isOfflineMode.value = s.isOfflineMode
+            KeyboardSettings.KEY_OFFLINE_MODE -> {
+                _isOfflineMode.value = s.isOfflineMode
+                // Turned on from the companion app: drop any proofread still queued.
+                if (s.isOfflineMode) proofreadJob?.cancel()
+            }
             KeyboardSettings.KEY_SWIPE_ENABLED -> _isSwipeEnabled.value = s.isSwipeEnabled
             KeyboardSettings.KEY_AUTO_CAPITALIZE -> _isAutoCapitalizeEnabled.value = s.isAutoCapitalizeEnabled
             KeyboardSettings.KEY_NUMBER_ROW -> _isNumberRowEnabled.value = s.isNumberRowEnabled
@@ -465,6 +469,7 @@ class KeyboardViewModel(
         val newValue = !_isOfflineMode.value
         _isOfflineMode.value = newValue
         settings?.isOfflineMode = newValue
+        if (newValue) proofreadJob?.cancel()
     }
 
     fun setSwipeEnabled(enabled: Boolean) {
@@ -912,6 +917,9 @@ class KeyboardViewModel(
         if (_proofreadHint.value?.original == text) return
         proofreadJob = viewModelScope.launch {
             delay(2500)
+            // Offline mode (or a secure field) may have started during the delay; the
+            // companion app promises nothing leaves the device once it is on.
+            if (_isOfflineMode.value || !_isProofreadEnabled.value || _isSensitiveField.value) return@launch
             try {
                 val result = GeminiManager.fixGrammar(text, getPersonalizationContext())
                 _proofreadHint.value = if (result.correctionsCount > 0 && result.corrected.isNotBlank() && result.corrected != text) {

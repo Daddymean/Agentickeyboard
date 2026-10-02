@@ -27,7 +27,9 @@ jobs:
         run: chmod +x ./gradlew
 
       - name: Build debug APK and run unit tests
-        run: ./gradlew assembleDebug testDebugUnitTest --stacktrace
+        # Record mode makes Roborazzi write KeyboardScreenshotTest's PNGs (it writes
+        # nothing otherwise); they are uploaded below as `ui-screenshots`.
+        run: ./gradlew assembleDebug testDebugUnitTest -Proborazzi.test.record=true --stacktrace
 
       # Compiles the R8-minified release APK (unsigned - CI has no keystore) so
       # shrinking/obfuscation problems surface on every push, not at ship time.
@@ -50,6 +52,14 @@ jobs:
             app/build/reports/tests/testDebugUnitTest
             core/build/reports/tests/testDebugUnitTest
           if-no-files-found: ignore
+
+      - name: Upload UI screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ui-screenshots
+          path: app/build/outputs/roborazzi/*.png
+          if-no-files-found: warn
 
       - name: Upload debug APK
         uses: actions/upload-artifact@v4
