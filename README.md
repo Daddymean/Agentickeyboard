@@ -88,10 +88,51 @@ tested on a real device without a local toolchain:
 
 1. Open the [Actions tab](https://github.com/Daddymean/Agentickeyboard/actions),
    pick the latest green **Android Build** run, and download the `app-debug`
-   artifact.
+   artifact (or `app-release` from a run on `main`, once release signing is set
+   up below).
 2. Unzip it, then either `adb install -r app-debug.apk` or copy the APK to the
    device and open it (allow installs from unknown sources).
 3. Enable the keyboard as above.
+
+An `app-release-unsigned` artifact cannot be installed: Android rejects
+unsigned APKs. It only proves the R8 release build compiles.
+
+### CI signing keys (repository secrets)
+
+Add these under **Settings → Secrets and variables → Actions → New repository
+secret**. Without them CI still builds, with the limits noted below.
+
+**Fixed debug key**: lets every CI `app-debug` install over the previous one.
+Without it each run signs with a new throwaway key, so you must uninstall
+before installing a newer build. Generate it once (the alias and passwords
+must stay as shown; `app/build.gradle.kts` expects them):
+
+```bash
+keytool -genkeypair -keystore debug.keystore -storepass android \
+  -alias androiddebugkey -keypass android -keyalg RSA -keysize 2048 \
+  -validity 10000 -dname "CN=Android Debug,O=Android,C=US"
+base64 -w0 debug.keystore   # macOS: base64 -i debug.keystore
+```
+
+| Secret | Value |
+| --- | --- |
+| `DEBUG_KEYSTORE_BASE64` | the base64 output above |
+
+**Release (upload) key**: makes runs on `main` publish a signed `app-release`
+artifact. It is never exposed to pull-request builds, because those run the
+PR branch's own build scripts; PR runs keep producing `app-release-unsigned`.
+
+| Secret | Value |
+| --- | --- |
+| `RELEASE_KEYSTORE_BASE64` | `base64 -w0 my-upload-key.jks` |
+| `RELEASE_STORE_PASSWORD` | keystore password |
+| `RELEASE_KEY_PASSWORD` | key password |
+| `RELEASE_KEY_ALIAS` | key alias (optional; defaults to `upload`) |
+
+Each run's **Show APK signing certificates** step prints the SHA-256 of the
+key that signed each APK. A build installs over an earlier one only if the
+digests match. An APK signed with the upload key will not update a copy
+installed from Google Play, which re-signs with Google's app signing key.
 
 CI builds carry no `GEMINI_API_KEY`, so cloud AI actions fall back to their
 offline equivalents. Build locally with a key to exercise the Gemini paths.
