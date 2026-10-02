@@ -130,11 +130,17 @@ interface ShortcutDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertShortcut(shortcut: ShortcutTemplate)
 
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertAll(shortcuts: List<ShortcutTemplate>)
+
     @Delete
     suspend fun deleteShortcut(shortcut: ShortcutTemplate)
 
     @Query("DELETE FROM shortcut_templates WHERE id = :id")
     suspend fun deleteById(id: Int)
+
+    @Query("DELETE FROM shortcut_templates WHERE id IN (:ids)")
+    suspend fun deleteByIds(ids: List<Int>)
 }
 
 @Dao
@@ -144,6 +150,9 @@ interface WritingLogDao {
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertLog(log: WritingLog)
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertAll(logs: List<WritingLog>)
 
     @Query("DELETE FROM writing_logs WHERE timestamp < :cutoff")
     suspend fun deleteOlderThan(cutoff: Long)
@@ -186,8 +195,14 @@ interface AppPersonaDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsert(persona: AppPersona)
 
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsertAll(personas: List<AppPersona>)
+
     @Query("DELETE FROM app_personas WHERE packageName = :packageName")
     suspend fun delete(packageName: String)
+
+    @Query("DELETE FROM app_personas WHERE packageName IN (:packageNames)")
+    suspend fun deleteAll(packageNames: List<String>)
 }
 
 @Dao
@@ -198,8 +213,14 @@ interface CustomCommandDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insert(command: CustomCommand)
 
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertAll(commands: List<CustomCommand>)
+
     @Query("DELETE FROM custom_commands WHERE id = :id")
     suspend fun deleteById(id: Int)
+
+    @Query("DELETE FROM custom_commands WHERE id IN (:ids)")
+    suspend fun deleteByIds(ids: List<Int>)
 }
 
 @Dao
@@ -293,6 +314,9 @@ interface UserVocabularyDao {
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertWord(word: UserVocabulary)
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertWords(words: List<UserVocabulary>)
 
     @Query("UPDATE user_vocabulary SET count = count + 1, lastUsed = :now WHERE word = :word")
     suspend fun incrementWordCount(word: String, now: Long): Int
@@ -615,5 +639,49 @@ class KeyboardRepository(private val db: AppDatabase) {
 
     suspend fun clearVocabulary() {
         db.userVocabularyDao().clearAll()
+    }
+
+    // --- Batch writes for imports ---
+    //
+    // Passport imports used to issue one DAO call per record. These helpers
+    // move a whole category in a few statements.
+    // Lists that become SQL bind arguments are chunked: the SQLite shipped on
+    // API 26-29 caps a statement at 999 host parameters.
+
+    suspend fun insertWords(words: List<UserVocabulary>) {
+        if (words.isNotEmpty()) db.userVocabularyDao().insertWords(words)
+    }
+
+    suspend fun insertShortcuts(shortcuts: List<ShortcutTemplate>) {
+        if (shortcuts.isNotEmpty()) db.shortcutDao().insertAll(shortcuts)
+    }
+
+    suspend fun deleteShortcutsByIds(ids: List<Int>) {
+        ids.chunked(MAX_BIND_ARGS).forEach { db.shortcutDao().deleteByIds(it) }
+    }
+
+    suspend fun insertCustomCommands(commands: List<CustomCommand>) {
+        if (commands.isNotEmpty()) db.customCommandDao().insertAll(commands)
+    }
+
+    suspend fun deleteCustomCommandsByIds(ids: List<Int>) {
+        ids.chunked(MAX_BIND_ARGS).forEach { db.customCommandDao().deleteByIds(it) }
+    }
+
+    suspend fun upsertAppPersonas(personas: List<AppPersona>) {
+        if (personas.isNotEmpty()) db.appPersonaDao().upsertAll(personas)
+    }
+
+    suspend fun deleteAppPersonas(packageNames: List<String>) {
+        packageNames.chunked(MAX_BIND_ARGS).forEach { db.appPersonaDao().deleteAll(it) }
+    }
+
+    suspend fun insertLogs(logs: List<WritingLog>) {
+        if (logs.isNotEmpty()) db.writingLogDao().insertAll(logs)
+    }
+
+    private companion object {
+        /** Headroom under SQLITE_MAX_VARIABLE_NUMBER (999 before SQLite 3.32 / API 30). */
+        const val MAX_BIND_ARGS = 900
     }
 }
