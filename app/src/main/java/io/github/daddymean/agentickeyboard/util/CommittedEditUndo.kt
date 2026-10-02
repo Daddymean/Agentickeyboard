@@ -22,7 +22,12 @@ class CommittedEditUndo internal constructor(
 ) {
     private val connection = WeakReference(connection)
 
-    /** Restores [original] and returns true, or changes nothing and returns false. */
+    /**
+     * Restores [original] and returns true, or changes nothing and returns false.
+     * Once the replacement has been deleted the undo counts as handled even if the
+     * editor then rejects the restore: reporting false there would send backspace
+     * on to its fallbacks, which would delete more text from a draft already changed.
+     */
     fun undoIfUnchanged(current: InputConnection): Boolean {
         if (current !== connection.get()) return false
         val caret = current.absoluteCaret() ?: return false
@@ -34,7 +39,12 @@ class CommittedEditUndo internal constructor(
         ) return false
         current.beginBatchEdit()
         return try {
-            current.deleteSurroundingText(before.length, after.length) && current.commitText(original, 1)
+            if (!current.deleteSurroundingText(before.length, after.length)) {
+                false
+            } else {
+                current.commitText(original, 1)
+                true
+            }
         } finally {
             current.endBatchEdit()
         }

@@ -4,6 +4,7 @@ import android.app.Activity
 import android.text.InputType
 import android.view.inputmethod.EditorInfo
 import android.view.inputmethod.InputConnection
+import android.view.inputmethod.InputConnectionWrapper
 import android.widget.EditText
 import org.junit.Assert.*
 import org.junit.Test
@@ -79,5 +80,21 @@ class CaretCommitTest {
         }
         connection.commitTextWithCaret("", 0)
         assertEquals("abc", view.text.toString())
+    }
+
+    @Test fun `a rejected restore after a successful delete still counts as handled`() {
+        val (view, real) = editor("", 0)
+        // Only this wrapper instance is used, so it is the connection the undo captures.
+        val connection = object : InputConnectionWrapper(real, true) {
+            var rejectCommits = false
+            override fun commitText(text: CharSequence?, newCursorPosition: Int): Boolean =
+                if (rejectCommits) false else super.commitText(text, newCursorPosition)
+        }
+        connection.commitTextWithCaret("abcXYZ", 3)
+        val undo = requireNotNull(connection.captureCommittedEditUndo("old", "abcXYZ", 3))
+        connection.rejectCommits = true
+        // The replacement is gone; backspace must not go on to delete anything else.
+        assertTrue(undo.undoIfUnchanged(connection))
+        assertEquals("", view.text.toString())
     }
 }
