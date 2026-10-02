@@ -142,3 +142,29 @@ The release candidate may advance when:
 - no P0 or P1 regression remains open;
 - clipboard history has been exercised on at least two Android API levels, including one API 33+ device;
 - remaining lower-severity defects have reproduction steps and an explicit ship/fix decision.
+
+## Build identity and evidence handoff
+
+The `app-debug` CI artifact includes `build-manifest.json` alongside the APK. It
+records the full source commit, Actions run URL, APK SHA-256 and byte size. Verify
+`sha256sum app-debug.apk` against the manifest before installing, and keep both
+files together. For pull-request builds, the commit can be GitHub's tested merge
+commit; never relabel it as the PR head or a later main commit.
+
+Successful unit-test HTML and XML reports are retained as `unit-test-reports`,
+including both app and core results. Screenshots remain a separate artifact.
+Neither Robolectric screenshots nor a manifest proves physical-device behavior.
+
+Nexus holds the narrow KEYBOARD-001 device record and its instructions:
+`projects/agentickeyboard/DEVICE-TEST.md`. Record the exact installed APK, commit,
+device and observations there. Its completeness validator does not replace this
+broader release matrix or authorize release.
+
+For an older Actions APK without a manifest, generate one from the downloaded file:
+
+```sh
+python3 tools/build_manifest.py app-debug.apk --commit FULL_40_CHARACTER_SHA --run-url https://github.com/Daddymean/Agentickeyboard/actions/runs/RUN_ID --output build-manifest.json
+```
+
+This locally generated manifest binds the supplied metadata to those bytes; check
+the source run yourself. It is not a signature or independent proof of origin.
