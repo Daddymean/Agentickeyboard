@@ -91,6 +91,15 @@ class AgenticKeyboardService : InputMethodService(), LifecycleOwner, ViewModelSt
     }
 
     override fun onCreateInputView(): View {
+        // Compose builds its recomposer from the root of the window, not from the
+        // ComposeView, so the owners must be on the IME window's decor view too —
+        // otherwise the first time the keyboard is shown it throws
+        // "ViewTreeLifecycleOwner not found" and the IME process dies.
+        window?.window?.decorView?.let { decor ->
+            decor.setViewTreeLifecycleOwner(this)
+            decor.setViewTreeViewModelStoreOwner(this)
+            decor.setViewTreeSavedStateRegistryOwner(this)
+        }
         val composeView = ComposeView(this)
         composeView.setViewTreeLifecycleOwner(this)
         composeView.setViewTreeViewModelStoreOwner(this)
