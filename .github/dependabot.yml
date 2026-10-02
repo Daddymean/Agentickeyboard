@@ -1,0 +1,51 @@
+# Dependabot version updates: weekly, grouped, and capped so they stay reviewable.
+# Security updates are governed by the repository's Dependabot security settings
+# and are not limited by these groups or caps.
+version: 2
+updates:
+  - package-ecosystem: "gradle"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      timezone: "America/Los_Angeles"
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: "deps"
+    groups:
+      # AGP, Kotlin (incl. its compose/serialization plugins) and KSP must move
+      # together or the build breaks, so they always arrive in one PR.
+      build-toolchain:
+        patterns:
+          - "com.android.*"
+          - "org.jetbrains.kotlin.*"
+          - "org.jetbrains.kotlin:*"
+          - "com.google.devtools.ksp*"
+      androidx:
+        patterns:
+          - "androidx.*"
+      test-libraries:
+        patterns:
+          - "junit*"
+          - "org.robolectric*"
+          - "io.github.takahirom.roborazzi*"
+      # Everything else: a single PR for minor/patch bumps. Majors outside the
+      # groups above still arrive individually so they get a deliberate review.
+      minor-and-patch:
+        update-types:
+          - "minor"
+          - "patch"
+
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      timezone: "America/Los_Angeles"
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: "ci"
+    groups:
+      github-actions:
+        patterns:
+          - "*"
