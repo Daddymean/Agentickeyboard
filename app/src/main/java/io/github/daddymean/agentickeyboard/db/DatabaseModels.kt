@@ -368,7 +368,7 @@ abstract class AppDatabase : RoomDatabase() {
         private var INSTANCE: AppDatabase? = null
 
         /** v5 adds indices for the per-keystroke lookups; no data changes. */
-        private val MIGRATION_4_5 = object : Migration(4, 5) {
+        internal val MIGRATION_4_5 = object : Migration(4, 5) {
             override fun migrate(db: SupportSQLiteDatabase) {
                 db.execSQL("CREATE INDEX IF NOT EXISTS `index_writing_logs_timestamp` ON `writing_logs` (`timestamp`)")
                 db.execSQL("CREATE INDEX IF NOT EXISTS `index_learned_corrections_typo` ON `learned_corrections` (`typo`)")
@@ -377,14 +377,14 @@ abstract class AppDatabase : RoomDatabase() {
         }
 
         /** v6 stores a human-readable app label alongside each per-app persona. */
-        private val MIGRATION_5_6 = object : Migration(5, 6) {
+        internal val MIGRATION_5_6 = object : Migration(5, 6) {
             override fun migrate(db: SupportSQLiteDatabase) {
                 db.execSQL("ALTER TABLE `app_personas` ADD COLUMN `appLabel` TEXT NOT NULL DEFAULT ''")
             }
         }
 
         /** v7 adds the user-owned Snippet Vault without copying or deleting legacy stores. */
-        private val MIGRATION_6_7 = object : Migration(6, 7) {
+        internal val MIGRATION_6_7 = object : Migration(6, 7) {
             override fun migrate(db: SupportSQLiteDatabase) {
                 db.execSQL(
                     """
@@ -408,7 +408,7 @@ abstract class AppDatabase : RoomDatabase() {
         }
 
         /** v8 adds opt-in, privacy-filtered clipboard history. Existing data is untouched. */
-        private val MIGRATION_7_8 = object : Migration(7, 8) {
+        internal val MIGRATION_7_8 = object : Migration(7, 8) {
             override fun migrate(db: SupportSQLiteDatabase) {
                 db.execSQL(
                     """

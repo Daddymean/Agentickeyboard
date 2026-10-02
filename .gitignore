@@ -10,6 +10,8 @@
 /.idea/assetWizardSettings.xml
 .DS_Store
 /build
+# Module build output. app/ has its own .gitignore; core/ does not.
+/core/build
 /captures
 .externalNativeBuild
 .cxx
