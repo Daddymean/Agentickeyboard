@@ -38,7 +38,7 @@ jobs:
             echo "$DEBUG_KEYSTORE_BASE64" | base64 --decode > debug.keystore
             echo "app-debug will be signed with the fixed CI debug key."
           else
-            echo "::warning::DEBUG_KEYSTORE_BASE64 is not set: app-debug is signed with a throwaway key and will not install over an earlier CI build."
+            echo "Using the committed debug.keystore (set DEBUG_KEYSTORE_BASE64 to override)."
           fi
 
       - name: Build debug APK and run unit tests
