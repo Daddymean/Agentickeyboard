@@ -1379,46 +1379,27 @@ class KeyboardViewModel(
                 onResult(-1)
                 return@launch
             }
-            var imported = 0
-            model.typingPatterns?.vocabulary?.forEach { item ->
-                if (item.word.isNotBlank()) {
-                    val existing = repository.getWord(item.word)
-                    repository.insertWord(
-                        UserVocabulary(
-                            word = item.word,
-                            count = (existing?.count ?: 0) + item.count,
-                            lastUsed = maxOf(existing?.lastUsed ?: 0L, item.lastUsed, 1L)
-                        )
+            val vocabulary = model.typingPatterns?.vocabulary.orEmpty()
+                .filter { it.word.isNotBlank() }
+                .map { UserVocabulary(word = it.word, count = it.count, lastUsed = it.lastUsed) }
+            val corrections = model.correctionHistory
+                .filter { it.typo.isNotBlank() && it.correction.isNotBlank() }
+                .map { LearnedCorrection(typo = it.typo.lowercase().trim(), correction = it.correction, count = it.count) }
+            val logs = model.writingLogs
+                .filter { it.text.isNotBlank() }
+                .map { item ->
+                    WritingLog(
+                        originalText = item.text,
+                        sentiment = item.sentiment,
+                        toneScore = item.toneScore,
+                        wordCount = item.text.split(WHITESPACE_REGEX).size,
+                        timestamp = if (item.timestamp > 0) item.timestamp else System.currentTimeMillis()
                     )
-                    imported++
                 }
-            }
-            model.correctionHistory.forEach { item ->
-                if (item.typo.isNotBlank() && item.correction.isNotBlank()) {
-                    val typo = item.typo.lowercase().trim()
-                    val existing = repository.getCorrectionForTypo(typo)
-                    if (existing != null) {
-                        repository.insertCorrection(existing.copy(correction = item.correction, count = existing.count + item.count))
-                    } else {
-                        repository.insertCorrection(LearnedCorrection(typo = typo, correction = item.correction, count = item.count))
-                    }
-                    imported++
-                }
-            }
-            model.writingLogs.forEach { item ->
-                if (item.text.isNotBlank()) {
-                    repository.insertLog(
-                        WritingLog(
-                            originalText = item.text,
-                            sentiment = item.sentiment,
-                            toneScore = item.toneScore,
-                            wordCount = item.text.split(WHITESPACE_REGEX).size,
-                            timestamp = if (item.timestamp > 0) item.timestamp else System.currentTimeMillis()
-                        )
-                    )
-                    imported++
-                }
-            }
+            // Batched lookups and writes in one transaction, instead of a read
+            // plus a write per record.
+            repository.importPersonalModel(vocabulary, corrections, logs)
+            val imported = vocabulary.size + corrections.size + logs.size
             model.exportMetadata?.userPersonaPreference?.let { persona ->
                 if (persona in PERSONAS) setUserPersonaPreference(persona)
             }
