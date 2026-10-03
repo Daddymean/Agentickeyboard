@@ -101,6 +101,13 @@ import io.github.daddymean.agentickeyboard.util.OnDeviceAiStatus
 import io.github.daddymean.agentickeyboard.util.TextExpansion
 
 class MainActivity : ComponentActivity() {
+    companion object {
+        /** Int extra: bottom-navigation tab to open (see MainAppScreen). */
+        const val EXTRA_TAB = "io.github.daddymean.agentickeyboard.extra.TAB"
+        /** "Style Hub" tab, which holds the Keyboard Settings card. */
+        const val TAB_SETTINGS = 2
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
@@ -111,7 +118,7 @@ class MainActivity : ComponentActivity() {
 
         setContent {
             MyApplicationTheme {
-                MainAppScreen(viewModel)
+                MainAppScreen(viewModel, initialTab = intent.getIntExtra(EXTRA_TAB, 0))
             }
         }
     }
@@ -119,8 +126,8 @@ class MainActivity : ComponentActivity() {
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun MainAppScreen(viewModel: KeyboardViewModel) {
-    var selectedTab by remember { mutableStateOf(0) }
+fun MainAppScreen(viewModel: KeyboardViewModel, initialTab: Int = 0) {
+    var selectedTab by remember { mutableStateOf(initialTab.coerceIn(0, 3)) }
     val isOfflineMode by viewModel.isOfflineMode.collectAsState()
 
     // Light-theme slate/grey background matching Bento style

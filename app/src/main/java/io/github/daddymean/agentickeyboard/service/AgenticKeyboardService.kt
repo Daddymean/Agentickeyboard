@@ -30,6 +30,7 @@ import androidx.savedstate.SavedStateRegistryOwner
 import androidx.savedstate.setViewTreeSavedStateRegistryOwner
 import io.github.daddymean.agentickeyboard.AgenticKeyboardApplication
 import io.github.daddymean.agentickeyboard.ClipboardHistoryActivity
+import io.github.daddymean.agentickeyboard.MainActivity
 import io.github.daddymean.agentickeyboard.SnippetVaultActivity
 import io.github.daddymean.agentickeyboard.db.ClipboardHistoryItem
 import io.github.daddymean.agentickeyboard.db.KeyboardRepository
@@ -122,6 +123,7 @@ class AgenticKeyboardService : InputMethodService(), LifecycleOwner, ViewModelSt
             val historyPaused by clipboardHistoryPaused.collectAsState()
             val historyStatus by clipboardStatus.collectAsState()
             val sensitiveField by viewModel.isSensitiveField.collectAsState()
+            val aiToolsExpanded by viewModel.aiToolsExpanded.collectAsState()
             val navInsetPx by navigationBarInsetPx.collectAsState()
             val navigationBarInset = with(LocalDensity.current) { navInsetPx.toDp() }
 
@@ -133,7 +135,8 @@ class AgenticKeyboardService : InputMethodService(), LifecycleOwner, ViewModelSt
                     ReplyCompletenessBar(
                         viewModel = viewModel,
                         session = replyCompletenessSession,
-                        onSendAnyway = { performEnterAction() }
+                        onSendAnyway = { performEnterAction() },
+                        showIdle = aiToolsExpanded
                     )
                     SnippetVaultBar(
                         viewModel = viewModel,
@@ -164,7 +167,8 @@ class AgenticKeyboardService : InputMethodService(), LifecycleOwner, ViewModelSt
                         onMicPress = { switchToVoiceInput() },
                         onCursorMove = { steps -> moveCursor(steps) },
                         inputConnectionProvider = { currentInputConnection },
-                        navigationBarInset = navigationBarInset
+                        navigationBarInset = navigationBarInset,
+                        onOpenSettings = { openKeyboardSettings() }
                     )
                 }
             }
@@ -190,6 +194,15 @@ class AgenticKeyboardService : InputMethodService(), LifecycleOwner, ViewModelSt
         currentInputConnection?.commitText(item.content, 1) ?: return
         clipboardStatus.value = "Inserted from local history."
         serviceScope.launch { repository.recordClipboardUse(item.id) }
+    }
+
+    private fun openKeyboardSettings() {
+        val intent = Intent(this, MainActivity::class.java)
+            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
+            .putExtra(MainActivity.EXTRA_TAB, MainActivity.TAB_SETTINGS)
+        requestHideSelf(0)
+        runCatching { startActivity(intent) }
+            .onFailure { Log.w(TAG, "Unable to open keyboard settings", it) }
     }
 
     private fun openSnippetVaultManager() {

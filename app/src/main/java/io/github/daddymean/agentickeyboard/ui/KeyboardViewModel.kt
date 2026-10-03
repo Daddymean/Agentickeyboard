@@ -187,6 +187,15 @@ class KeyboardViewModel(
     private val _isOfflineMode = MutableStateFlow(settings?.isOfflineMode ?: false)
     val isOfflineMode = _isOfflineMode.asStateFlow()
 
+    // Whether the AI tools panel (action chips, reply coach) is open above the keys.
+    // Collapsed by default so the keyboard opens as a single slim toolbar.
+    private val _aiToolsExpanded = MutableStateFlow(false)
+    val aiToolsExpanded = _aiToolsExpanded.asStateFlow()
+
+    fun setAiToolsExpanded(expanded: Boolean) {
+        _aiToolsExpanded.value = expanded
+    }
+
     private val _isSwipeEnabled = MutableStateFlow(settings?.isSwipeEnabled ?: true)
     val isSwipeEnabled = _isSwipeEnabled.asStateFlow()
 

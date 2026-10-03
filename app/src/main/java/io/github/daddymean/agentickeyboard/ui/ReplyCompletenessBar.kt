@@ -43,7 +43,9 @@ fun ReplyCompletenessBar(
     viewModel: KeyboardViewModel,
     session: ReplyCompletenessSession,
     onSendAnyway: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    // When false, the bar only appears for an incomplete-reply warning.
+    showIdle: Boolean = true
 ) {
     val clipboardManager = LocalClipboardManager.current
     val uiState by session.state.collectAsState()
@@ -60,6 +62,7 @@ fun ReplyCompletenessBar(
     }
 
     if (isSensitiveField) return
+    if (uiState.warning == null && !showIdle) return
 
     KeyboardTheme(
         darkTheme = when (themeOverride) {
