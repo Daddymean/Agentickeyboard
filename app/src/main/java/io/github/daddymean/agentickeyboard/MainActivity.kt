@@ -92,6 +92,7 @@ import io.github.daddymean.agentickeyboard.ui.AgenticKeyboardLayout
 import io.github.daddymean.agentickeyboard.ui.AiPanelState
 import io.github.daddymean.agentickeyboard.ui.KeyboardViewModel
 import io.github.daddymean.agentickeyboard.ui.KeyboardMasteryCard
+import io.github.daddymean.agentickeyboard.ui.GeminiApiKeyCard
 import io.github.daddymean.agentickeyboard.ui.KeyboardViewModelFactory
 import io.github.daddymean.agentickeyboard.ui.RowDefaultsButtonPadding
 import io.github.daddymean.agentickeyboard.ui.theme.MyApplicationTheme
@@ -1063,6 +1064,174 @@ fun ExportTab(viewModel: KeyboardViewModel) {
             .padding(horizontal = 16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
+        // Opened directly by the keyboard's settings gear, so these come first.
+        item { GeminiApiKeyCard() }
+        // Keyboard behavior settings (persisted across restarts)
+        item {
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .shadow(1.dp, RoundedCornerShape(24.dp)),
+                colors = CardDefaults.cardColors(containerColor = Color.White),
+                shape = RoundedCornerShape(24.dp),
+                border = BorderStroke(1.dp, Color(0xFFE2E8F0))
+            ) {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    Text(
+                        "⌨️ Keyboard Settings",
+                        color = Color(0xFF1C1B1F),
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 14.sp
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    SettingSwitchRow(
+                        title = "Auto-capitalize sentences",
+                        description = "Shift arms itself after . ! ? and at the start of a field.",
+                        checked = isAutoCapitalize,
+                        onCheckedChange = { viewModel.setAutoCapitalizeEnabled(it) }
+                    )
+                    SettingSwitchRow(
+                        title = "Number row",
+                        description = "Show a dedicated 1-0 row above the letters.",
+                        checked = isNumberRow,
+                        onCheckedChange = { viewModel.setNumberRowEnabled(it) }
+                    )
+                    SettingSwitchRow(
+                        title = "Proofread as you type",
+                        description = "Quietly checks grammar in the background and offers one-tap fixes. Sends drafts to the cloud, so it is off by default.",
+                        checked = isProofread,
+                        onCheckedChange = { viewModel.setProofreadEnabled(it) }
+                    )
+                    SettingSwitchRow(
+                        title = "Pause learning",
+                        description = "Incognito for the personalization engine: stop learning vocabulary, word pairs, and corrections.",
+                        checked = isLearningPaused,
+                        onCheckedChange = { viewModel.setLearningPaused(it) }
+                    )
+                    SettingSwitchRow(
+                        title = "Haptic feedback",
+                        description = "Vibrate on key presses and gestures.",
+                        checked = isHaptics,
+                        onCheckedChange = { viewModel.setHapticsEnabled(it) }
+                    )
+                    SettingSwitchRow(
+                        title = "Voice-lock",
+                        description = "AI rewrite, compose, and continue keep your own phrasing: minimal edits, no overproduced tone.",
+                        checked = isVoiceLock,
+                        onCheckedChange = { viewModel.setVoiceLockEnabled(it) }
+                    )
+                    SettingSwitchRow(
+                        title = "Send-guard",
+                        description = "Pauses Send once when a draft reads hostile so you can confirm or soften it. Checked locally on-device.",
+                        checked = isSendGuard,
+                        onCheckedChange = { viewModel.setSendGuardEnabled(it) }
+                    )
+
+                    Spacer(modifier = Modifier.height(10.dp))
+                    val themeOverride by viewModel.themeOverride.collectAsState()
+                    Text(
+                        "Keyboard theme",
+                        color = Color(0xFF1C1B1F),
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 12.sp
+                    )
+                    Text(
+                        "Pin the keyboard to Light or Dark, or follow the system setting.",
+                        color = Color(0xFF5F5D6B),
+                        fontSize = 10.sp
+                    )
+                    Spacer(modifier = Modifier.height(6.dp))
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        KeyboardViewModel.THEME_MODES.forEach { mode ->
+                            val isSelected = themeOverride == mode
+                            Box(
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .clip(RoundedCornerShape(12.dp))
+                                    .background(if (isSelected) Color(0xFFE8DEF8) else Color(0xFFF1F5F9))
+                                    .clickable { viewModel.setThemeOverride(mode) }
+                                    .border(1.dp, if (isSelected) Color(0xFF6750A4) else Color.Transparent, RoundedCornerShape(12.dp))
+                                    .padding(vertical = 8.dp),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text(
+                                    mode,
+                                    color = if (isSelected) Color(0xFF21005D) else Color(0xFF49454F),
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(10.dp))
+                    val onDeviceAiStatus by (context.applicationContext as AgenticKeyboardApplication)
+                        .onDeviceAi.status.collectAsState()
+                    Text(
+                        "On-device AI",
+                        color = Color(0xFF1C1B1F),
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 12.sp
+                    )
+                    Text(
+                        when (onDeviceAiStatus) {
+                            OnDeviceAiStatus.AVAILABLE -> "Available — offline Fix Grammar, Rewrite, Summarize, replies, compose, continue, and tone run on this device (Gemini Nano)."
+                            OnDeviceAiStatus.DOWNLOADING -> "Downloading the on-device model…"
+                            OnDeviceAiStatus.CHECKING -> "Checking device support…"
+                            OnDeviceAiStatus.UNSUPPORTED -> "Not supported on this device — offline mode uses basic local helpers."
+                        },
+                        color = Color(0xFF5F5D6B),
+                        fontSize = 10.sp
+                    )
+
+                    Spacer(modifier = Modifier.height(10.dp))
+                    Text(
+                        "Writing-log retention",
+                        color = Color(0xFF1C1B1F),
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 12.sp
+                    )
+                    Text(
+                        "Logs older than this are deleted automatically.",
+                        color = Color(0xFF5F5D6B),
+                        fontSize = 10.sp
+                    )
+                    Spacer(modifier = Modifier.height(6.dp))
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        listOf(7, 30, 90).forEach { days ->
+                            val isSelected = retentionDays == days
+                            Box(
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .clip(RoundedCornerShape(12.dp))
+                                    .background(if (isSelected) Color(0xFFE8DEF8) else Color(0xFFF1F5F9))
+                                    .clickable {
+                                        retentionDays = days
+                                        viewModel.setLogRetentionDays(days)
+                                    }
+                                    .border(1.dp, if (isSelected) Color(0xFF6750A4) else Color.Transparent, RoundedCornerShape(12.dp))
+                                    .padding(vertical = 8.dp),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text(
+                                    "$days days",
+                                    color = if (isSelected) Color(0xFF21005D) else Color(0xFF49454F),
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        }
         item {
             Spacer(modifier = Modifier.height(4.dp))
             Text(
@@ -1259,173 +1428,6 @@ fun ExportTab(viewModel: KeyboardViewModel) {
                                         )
                                     }
                                 }
-                            }
-                        }
-                    }
-                }
-            }
-        }
-
-        // Keyboard behavior settings (persisted across restarts)
-        item {
-            Card(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .shadow(1.dp, RoundedCornerShape(24.dp)),
-                colors = CardDefaults.cardColors(containerColor = Color.White),
-                shape = RoundedCornerShape(24.dp),
-                border = BorderStroke(1.dp, Color(0xFFE2E8F0))
-            ) {
-                Column(modifier = Modifier.padding(16.dp)) {
-                    Text(
-                        "⌨️ Keyboard Settings",
-                        color = Color(0xFF1C1B1F),
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 14.sp
-                    )
-                    Spacer(modifier = Modifier.height(8.dp))
-
-                    SettingSwitchRow(
-                        title = "Auto-capitalize sentences",
-                        description = "Shift arms itself after . ! ? and at the start of a field.",
-                        checked = isAutoCapitalize,
-                        onCheckedChange = { viewModel.setAutoCapitalizeEnabled(it) }
-                    )
-                    SettingSwitchRow(
-                        title = "Number row",
-                        description = "Show a dedicated 1-0 row above the letters.",
-                        checked = isNumberRow,
-                        onCheckedChange = { viewModel.setNumberRowEnabled(it) }
-                    )
-                    SettingSwitchRow(
-                        title = "Proofread as you type",
-                        description = "Quietly checks grammar in the background and offers one-tap fixes. Sends drafts to the cloud, so it is off by default.",
-                        checked = isProofread,
-                        onCheckedChange = { viewModel.setProofreadEnabled(it) }
-                    )
-                    SettingSwitchRow(
-                        title = "Pause learning",
-                        description = "Incognito for the personalization engine: stop learning vocabulary, word pairs, and corrections.",
-                        checked = isLearningPaused,
-                        onCheckedChange = { viewModel.setLearningPaused(it) }
-                    )
-                    SettingSwitchRow(
-                        title = "Haptic feedback",
-                        description = "Vibrate on key presses and gestures.",
-                        checked = isHaptics,
-                        onCheckedChange = { viewModel.setHapticsEnabled(it) }
-                    )
-                    SettingSwitchRow(
-                        title = "Voice-lock",
-                        description = "AI rewrite, compose, and continue keep your own phrasing: minimal edits, no overproduced tone.",
-                        checked = isVoiceLock,
-                        onCheckedChange = { viewModel.setVoiceLockEnabled(it) }
-                    )
-                    SettingSwitchRow(
-                        title = "Send-guard",
-                        description = "Pauses Send once when a draft reads hostile so you can confirm or soften it. Checked locally on-device.",
-                        checked = isSendGuard,
-                        onCheckedChange = { viewModel.setSendGuardEnabled(it) }
-                    )
-
-                    Spacer(modifier = Modifier.height(10.dp))
-                    val themeOverride by viewModel.themeOverride.collectAsState()
-                    Text(
-                        "Keyboard theme",
-                        color = Color(0xFF1C1B1F),
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 12.sp
-                    )
-                    Text(
-                        "Pin the keyboard to Light or Dark, or follow the system setting.",
-                        color = Color(0xFF5F5D6B),
-                        fontSize = 10.sp
-                    )
-                    Spacer(modifier = Modifier.height(6.dp))
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(6.dp)
-                    ) {
-                        KeyboardViewModel.THEME_MODES.forEach { mode ->
-                            val isSelected = themeOverride == mode
-                            Box(
-                                modifier = Modifier
-                                    .weight(1f)
-                                    .clip(RoundedCornerShape(12.dp))
-                                    .background(if (isSelected) Color(0xFFE8DEF8) else Color(0xFFF1F5F9))
-                                    .clickable { viewModel.setThemeOverride(mode) }
-                                    .border(1.dp, if (isSelected) Color(0xFF6750A4) else Color.Transparent, RoundedCornerShape(12.dp))
-                                    .padding(vertical = 8.dp),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Text(
-                                    mode,
-                                    color = if (isSelected) Color(0xFF21005D) else Color(0xFF49454F),
-                                    fontSize = 11.sp,
-                                    fontWeight = FontWeight.Bold
-                                )
-                            }
-                        }
-                    }
-
-                    Spacer(modifier = Modifier.height(10.dp))
-                    val onDeviceAiStatus by (context.applicationContext as AgenticKeyboardApplication)
-                        .onDeviceAi.status.collectAsState()
-                    Text(
-                        "On-device AI",
-                        color = Color(0xFF1C1B1F),
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 12.sp
-                    )
-                    Text(
-                        when (onDeviceAiStatus) {
-                            OnDeviceAiStatus.AVAILABLE -> "Available — offline Fix Grammar, Rewrite, Summarize, replies, compose, continue, and tone run on this device (Gemini Nano)."
-                            OnDeviceAiStatus.DOWNLOADING -> "Downloading the on-device model…"
-                            OnDeviceAiStatus.CHECKING -> "Checking device support…"
-                            OnDeviceAiStatus.UNSUPPORTED -> "Not supported on this device — offline mode uses basic local helpers."
-                        },
-                        color = Color(0xFF5F5D6B),
-                        fontSize = 10.sp
-                    )
-
-                    Spacer(modifier = Modifier.height(10.dp))
-                    Text(
-                        "Writing-log retention",
-                        color = Color(0xFF1C1B1F),
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 12.sp
-                    )
-                    Text(
-                        "Logs older than this are deleted automatically.",
-                        color = Color(0xFF5F5D6B),
-                        fontSize = 10.sp
-                    )
-                    Spacer(modifier = Modifier.height(6.dp))
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(6.dp)
-                    ) {
-                        listOf(7, 30, 90).forEach { days ->
-                            val isSelected = retentionDays == days
-                            Box(
-                                modifier = Modifier
-                                    .weight(1f)
-                                    .clip(RoundedCornerShape(12.dp))
-                                    .background(if (isSelected) Color(0xFFE8DEF8) else Color(0xFFF1F5F9))
-                                    .clickable {
-                                        retentionDays = days
-                                        viewModel.setLogRetentionDays(days)
-                                    }
-                                    .border(1.dp, if (isSelected) Color(0xFF6750A4) else Color.Transparent, RoundedCornerShape(12.dp))
-                                    .padding(vertical = 8.dp),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Text(
-                                    "$days days",
-                                    color = if (isSelected) Color(0xFF21005D) else Color(0xFF49454F),
-                                    fontSize = 11.sp,
-                                    fontWeight = FontWeight.Bold
-                                )
                             }
                         }
                     }

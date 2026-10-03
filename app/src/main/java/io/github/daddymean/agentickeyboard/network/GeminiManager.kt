@@ -14,8 +14,20 @@ import kotlinx.coroutines.withContext
 object GeminiManager {
     private const val TAG = "GeminiManager"
 
-    // We fetch the API key safely from BuildConfig
-    private val apiKey: String = BuildConfig.GEMINI_API_KEY
+    /**
+     * Key the user saved in Keyboard Settings (decrypted from GeminiKeyStore at
+     * startup and updated on save/remove). Takes precedence over a build-time
+     * `.env` key, which only local builds carry.
+     */
+    @Volatile
+    var userApiKey: String? = null
+
+    private val apiKey: String
+        get() = userApiKey?.takeIf { it.isNotBlank() } ?: BuildConfig.GEMINI_API_KEY
+
+    /** True when a usable key was compiled in from `.env` (local builds only). */
+    fun hasBuildTimeKey(): Boolean =
+        BuildConfig.GEMINI_API_KEY.isNotEmpty() && BuildConfig.GEMINI_API_KEY != "MY_GEMINI_API_KEY"
 
     private val moshi: Moshi = RetrofitClient.moshi
 
