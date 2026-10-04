@@ -97,9 +97,27 @@ class KeyboardMetricsTest {
     }
 
     @Test
-    fun `a short window caps the key size boost so the field stays visible`() {
+    fun `a short window gets no key size boost so the field stays visible`() {
         val m = keyboardMetricsFor(screenWidthDp = 780, screenHeightDp = 360, keyHeightScale = 1.3f)
-        assertEquals(37.dp, m.keyHeight) // 32dp base capped at x1.15
-        assertTrue(coreHeightDp(m) <= 215f)
+        assertEquals(32.dp, m.keyHeight)
+        assertTrue(coreHeightDp(m) <= 190f)
+    }
+
+    @Test
+    fun `a borderline split-screen window does not take the extra large boost`() {
+        val m = keyboardMetricsFor(screenWidthDp = 412, screenHeightDp = 480, keyHeightScale = 1.3f)
+        assertEquals(44.dp, m.keyHeight)
+    }
+
+    @Test
+    fun `the boost is trimmed to fit the height budget rather than dropped`() {
+        val m = keyboardMetricsFor(screenWidthDp = 360, screenHeightDp = 800, keyHeightScale = 1.3f)
+        assertEquals(56.dp, m.keyHeight) // 57dp requested, 55.6dp fits
+    }
+
+    @Test
+    fun `smaller key sizes are never inflated by the budget`() {
+        val m = keyboardMetricsFor(screenWidthDp = 412, screenHeightDp = 915, keyHeightScale = 0.9f)
+        assertEquals(40.dp, m.keyHeight)
     }
 }

@@ -65,7 +65,10 @@ const val COMPACT_HEIGHT_THRESHOLD_DP = 480
 
 private const val KEY_SCALE_MIN = 0.8f
 private const val KEY_SCALE_MAX = 1.5f
-private const val KEY_SCALE_MAX_COMPACT = 1.15f
+/** Largest share of the window a boosted keyboard may take. */
+private const val KEYBOARD_HEIGHT_BUDGET = 0.45f
+/** Number row + three letter rows + bottom command row. */
+private const val MAX_KEY_ROWS = 5
 
 /**
  * Derives the keyboard's size budget from the current window. Pure arithmetic so
@@ -81,17 +84,25 @@ fun keyboardMetricsFor(
     val keyWidth = (usableWidth / KEYS_PER_ROW).coerceIn(MIN_KEY_WIDTH_DP, MAX_KEY_WIDTH_DP)
     val compact = screenHeightDp < COMPACT_HEIGHT_THRESHOLD_DP
     // Width is already the full screen split ten ways, so "bigger keys" can only
-    // mean taller ones. A short window caps the boost to keep the field visible.
-    val scale = keyHeightScale.coerceIn(KEY_SCALE_MIN, if (compact) KEY_SCALE_MAX_COMPACT else KEY_SCALE_MAX)
+    // mean taller ones. A boost is granted only while the tallest layout (five key
+    // rows with the number row) stays within KEYBOARD_HEIGHT_BUDGET of the window,
+    // so borderline split-screen heights never squeeze out the field being edited.
     val baseKeyHeight = if (compact) 32f else 44f
+    val rowGap = if (compact) 2f else 3f
+    val toolbarHeight = if (compact) 36f else 44f
+    val bottomPadding = if (compact) 2f else 8f
+    val requested = baseKeyHeight * keyHeightScale.coerceIn(KEY_SCALE_MIN, KEY_SCALE_MAX)
+    val fitting = (screenHeightDp * KEYBOARD_HEIGHT_BUDGET - toolbarHeight - bottomPadding) /
+        MAX_KEY_ROWS - rowGap * 2
+    val keyHeight = if (requested <= baseKeyHeight) requested else minOf(requested, maxOf(fitting, baseKeyHeight))
     return KeyboardMetrics(
         keyWidth = keyWidth.dp,
-        keyHeight = Math.round(baseKeyHeight * scale).dp,
-        rowGap = if (compact) 2.dp else 3.dp,
+        keyHeight = Math.round(keyHeight).dp,
+        rowGap = rowGap.dp,
         keyGap = KEY_GAP_DP.dp,
         shelfHeight = if (compact) 40.dp else 64.dp,
-        toolbarHeight = if (compact) 36.dp else 44.dp,
-        bottomPadding = if (compact) 2.dp else 8.dp,
+        toolbarHeight = toolbarHeight.dp,
+        bottomPadding = bottomPadding.dp,
         isCompact = compact
     )
 }

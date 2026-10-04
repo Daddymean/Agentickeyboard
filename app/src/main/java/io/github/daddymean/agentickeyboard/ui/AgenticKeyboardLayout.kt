@@ -1976,9 +1976,18 @@ fun KeyButton(
         Text(
             text = text,
             color = contentColor,
-            // Letters and digits grow with the key (about 20sp on a 44dp key);
-            // word labels (?123, Space, Enter) stay compact so they never wrap.
-            fontSize = if (text.length == 1) (keyMetrics.keyHeight.value * 0.45f).coerceIn(16f, 28f).sp else 14.sp,
+            // Letters and digits grow with the key (about 20dp on a 44dp key) but stay
+            // inside its width, and are sized in dp so the system font scale cannot
+            // push a wide glyph like "W" past a fixed-size key. Word labels (?123,
+            // Space, Enter) stay compact so they never wrap.
+            fontSize = if (text.length == 1) {
+                with(density) {
+                    minOf(keyMetrics.keyHeight.value * 0.45f, keyMetrics.keyWidth.value * 0.6f)
+                        .coerceIn(14f, 28f).dp.toSp()
+                }
+            } else {
+                14.sp
+            },
             fontWeight = FontWeight.Medium
         )
 
