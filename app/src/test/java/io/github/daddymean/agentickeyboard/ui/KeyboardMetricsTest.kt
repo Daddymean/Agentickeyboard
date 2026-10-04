@@ -85,4 +85,21 @@ class KeyboardMetricsTest {
         assertEquals(40.dp, m.mediumKeyWidth)     // privacy, voice
         assertEquals(36.dp, m.smallKeyWidth)      // punctuation
     }
+
+    @Test
+    fun `key size setting makes keys taller but never wider than the screen allows`() {
+        val normal = keyboardMetricsFor(screenWidthDp = 412, screenHeightDp = 915)
+        val large = keyboardMetricsFor(screenWidthDp = 412, screenHeightDp = 915, keyHeightScale = 1.15f)
+        val extra = keyboardMetricsFor(screenWidthDp = 412, screenHeightDp = 915, keyHeightScale = 1.3f)
+        assertEquals(51.dp, large.keyHeight)
+        assertEquals(57.dp, extra.keyHeight)
+        assertEquals(normal.keyWidth, extra.keyWidth)
+    }
+
+    @Test
+    fun `a short window caps the key size boost so the field stays visible`() {
+        val m = keyboardMetricsFor(screenWidthDp = 780, screenHeightDp = 360, keyHeightScale = 1.3f)
+        assertEquals(37.dp, m.keyHeight) // 32dp base capped at x1.15
+        assertTrue(coreHeightDp(m) <= 215f)
+    }
 }

@@ -63,18 +63,30 @@ private const val KEY_GAP_DP = 4
  */
 const val COMPACT_HEIGHT_THRESHOLD_DP = 480
 
+private const val KEY_SCALE_MIN = 0.8f
+private const val KEY_SCALE_MAX = 1.5f
+private const val KEY_SCALE_MAX_COMPACT = 1.15f
+
 /**
  * Derives the keyboard's size budget from the current window. Pure arithmetic so
  * it can be exercised by JVM unit tests.
  */
-fun keyboardMetricsFor(screenWidthDp: Int, screenHeightDp: Int): KeyboardMetrics {
+fun keyboardMetricsFor(
+    screenWidthDp: Int,
+    screenHeightDp: Int,
+    keyHeightScale: Float = 1f
+): KeyboardMetrics {
     val gaps = KEY_GAP_DP * (KEYS_PER_ROW - 1)
     val usableWidth = screenWidthDp - SIDE_MARGIN_DP - gaps
     val keyWidth = (usableWidth / KEYS_PER_ROW).coerceIn(MIN_KEY_WIDTH_DP, MAX_KEY_WIDTH_DP)
     val compact = screenHeightDp < COMPACT_HEIGHT_THRESHOLD_DP
+    // Width is already the full screen split ten ways, so "bigger keys" can only
+    // mean taller ones. A short window caps the boost to keep the field visible.
+    val scale = keyHeightScale.coerceIn(KEY_SCALE_MIN, if (compact) KEY_SCALE_MAX_COMPACT else KEY_SCALE_MAX)
+    val baseKeyHeight = if (compact) 32f else 44f
     return KeyboardMetrics(
         keyWidth = keyWidth.dp,
-        keyHeight = if (compact) 32.dp else 44.dp,
+        keyHeight = Math.round(baseKeyHeight * scale).dp,
         rowGap = if (compact) 2.dp else 3.dp,
         keyGap = KEY_GAP_DP.dp,
         shelfHeight = if (compact) 40.dp else 64.dp,
@@ -92,10 +104,10 @@ val LocalKeyboardMetrics = staticCompositionLocalOf { keyboardMetricsFor(360, 80
  * the top; descendants read LocalKeyboardMetrics.current.
  */
 @Composable
-fun ProvideKeyboardMetrics(content: @Composable () -> Unit) {
+fun ProvideKeyboardMetrics(keyHeightScale: Float = 1f, content: @Composable () -> Unit) {
     val configuration = LocalConfiguration.current
-    val metrics = remember(configuration.screenWidthDp, configuration.screenHeightDp) {
-        keyboardMetricsFor(configuration.screenWidthDp, configuration.screenHeightDp)
+    val metrics = remember(configuration.screenWidthDp, configuration.screenHeightDp, keyHeightScale) {
+        keyboardMetricsFor(configuration.screenWidthDp, configuration.screenHeightDp, keyHeightScale)
     }
     CompositionLocalProvider(LocalKeyboardMetrics provides metrics) {
         content()

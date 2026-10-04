@@ -205,6 +205,11 @@ class KeyboardViewModel(
     private val _isNumberRowEnabled = MutableStateFlow(settings?.isNumberRowEnabled ?: false)
     val isNumberRowEnabled = _isNumberRowEnabled.asStateFlow()
 
+    private val _keyHeightScale = MutableStateFlow(
+        settings?.keyHeightScale ?: KeyboardSettings.DEFAULT_KEY_HEIGHT_SCALE
+    )
+    val keyHeightScale = _keyHeightScale.asStateFlow()
+
     private val _isProofreadEnabled = MutableStateFlow(settings?.isProofreadEnabled ?: false)
     val isProofreadEnabled = _isProofreadEnabled.asStateFlow()
 
@@ -283,6 +288,7 @@ class KeyboardViewModel(
             KeyboardSettings.KEY_SWIPE_ENABLED -> _isSwipeEnabled.value = s.isSwipeEnabled
             KeyboardSettings.KEY_AUTO_CAPITALIZE -> _isAutoCapitalizeEnabled.value = s.isAutoCapitalizeEnabled
             KeyboardSettings.KEY_NUMBER_ROW -> _isNumberRowEnabled.value = s.isNumberRowEnabled
+            KeyboardSettings.KEY_KEY_HEIGHT_SCALE -> _keyHeightScale.value = s.keyHeightScale
             KeyboardSettings.KEY_PROOFREAD -> _isProofreadEnabled.value = s.isProofreadEnabled
             KeyboardSettings.KEY_LEARNING_PAUSED -> _isLearningPaused.value = s.isLearningPaused
             KeyboardSettings.KEY_HAPTICS -> _isHapticsEnabled.value = s.isHapticsEnabled
@@ -489,6 +495,11 @@ class KeyboardViewModel(
     fun setAutoCapitalizeEnabled(enabled: Boolean) {
         _isAutoCapitalizeEnabled.value = enabled
         settings?.isAutoCapitalizeEnabled = enabled
+    }
+
+    fun setKeyHeightScale(scale: Float) {
+        _keyHeightScale.value = scale
+        settings?.keyHeightScale = scale
     }
 
     fun setNumberRowEnabled(enabled: Boolean) {
