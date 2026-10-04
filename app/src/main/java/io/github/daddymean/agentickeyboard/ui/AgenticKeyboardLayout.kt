@@ -1976,7 +1976,9 @@ fun KeyButton(
         Text(
             text = text,
             color = contentColor,
-            fontSize = 14.sp,
+            // Letters and digits grow with the key (about 20sp on a 44dp key);
+            // word labels (?123, Space, Enter) stay compact so they never wrap.
+            fontSize = if (text.length == 1) (keyMetrics.keyHeight.value * 0.45f).coerceIn(16f, 28f).sp else 14.sp,
             fontWeight = FontWeight.Medium
         )
 
