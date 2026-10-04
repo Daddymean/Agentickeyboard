@@ -354,18 +354,28 @@ class KeyboardViewModel(
      */
     fun refineResult(adjustment: String) {
         val current = aiSession.currentState.refinableText ?: return
+        // The refined text still lands on the draft the first result was for.
+        val draftSource = aiSession.resultSource ?: current
         val instruction = RESULT_REFINEMENTS[adjustment] ?: adjustment
         val baseline = _voiceMatch.value?.percent
         recordMastery(MasteryEvent.REFINEMENT)
         dismissResults()
         pendingVoiceBaseline = baseline
-        rewriteWithStyle(current, instruction, bypassCache = true)
+        rewriteWithStyle(current, instruction, bypassCache = true, source = draftSource)
     }
 
-    private fun launchAi(block: suspend () -> Unit) {
+    /**
+     * Starts a foreground AI action. [source] is the editor text the result will
+     * be applied over; Apply refuses once the draft no longer matches it.
+     */
+    private fun launchAi(source: String? = null, block: suspend () -> Unit) {
         _voiceMatch.value = null
-        aiSession.launch { block() }
+        aiSession.launch(source) { block() }
     }
+
+    /** Editor text the shown result was generated from (see AiApplyGuard). */
+    val aiResultSource: String?
+        get() = aiSession.resultSource
 
     /** Clears the active AI panel and any armed send warning. */
     fun dismissResults() {
@@ -948,6 +958,8 @@ class KeyboardViewModel(
     fun promoteProofreadHint() {
         _proofreadHint.value?.let {
             dismissResults()
+            // The background check ran on this draft; typing since then makes it stale.
+            aiSession.bindResultSource(it.original)
             publishAiPanel(AiPanelState.Grammar(it))
             _proofreadHint.value = null
         }
@@ -961,7 +973,7 @@ class KeyboardViewModel(
     fun fixGrammar(text: String, bypassCache: Boolean = false) {
         if (text.isBlank() || _isSensitiveField.value) return
         aiSession.setRegenerateAction { fixGrammar(text, bypassCache = true) }
-        launchAi {
+        launchAi(text) {
             try {
                 // Incorporate personalization preferences inside grammar suggestions
                 val personalization = getPersonalizationContext()
@@ -1083,7 +1095,7 @@ class KeyboardViewModel(
     fun summarizeMessage(text: String, bypassCache: Boolean = false) {
         if (text.isBlank() || _isSensitiveField.value) return
         aiSession.setRegenerateAction { summarizeMessage(text, bypassCache = true) }
-        launchAi {
+        launchAi(text) {
             try {
                 val personalization = getPersonalizationContext()
                 val result = if (_isOfflineMode.value) {
@@ -1108,7 +1120,7 @@ class KeyboardViewModel(
     fun translateText(text: String, bypassCache: Boolean = false) {
         if (text.isBlank() || _isSensitiveField.value) return
         aiSession.setRegenerateAction { translateText(text, bypassCache = true) }
-        launchAi {
+        launchAi(text) {
             try {
                 val personalization = getPersonalizationContext()
                 val result = if (_isOfflineMode.value) {
@@ -1133,7 +1145,7 @@ class KeyboardViewModel(
     fun rewriteTone(text: String, bypassCache: Boolean = false) {
         if (text.isBlank() || _isSensitiveField.value) return
         aiSession.setRegenerateAction { rewriteTone(text, bypassCache = true) }
-        launchAi {
+        launchAi(text) {
             try {
                 val targetTone = effectivePersona()
                 val result = if (_isOfflineMode.value) {
@@ -1158,10 +1170,16 @@ class KeyboardViewModel(
      * Rewrite with an explicit style instruction (command palette, iterate
      * chips) instead of the selected persona.
      */
-    fun rewriteWithStyle(text: String, styleInstruction: String, bypassCache: Boolean = false) {
+    fun rewriteWithStyle(
+        text: String,
+        styleInstruction: String,
+        bypassCache: Boolean = false,
+        // Draft the result will replace; a refinement keeps the original draft.
+        source: String = text
+    ) {
         if (text.isBlank() || _isSensitiveField.value) return
-        aiSession.setRegenerateAction { rewriteWithStyle(text, styleInstruction, bypassCache = true) }
-        launchAi {
+        aiSession.setRegenerateAction { rewriteWithStyle(text, styleInstruction, bypassCache = true, source = source) }
+        launchAi(source) {
             try {
                 val result = if (_isOfflineMode.value) {
                     GeminiManager.offlineRewrite(text, styleInstruction)
@@ -1188,7 +1206,7 @@ class KeyboardViewModel(
     fun composeFromInstruction(instruction: String, bypassCache: Boolean = false) {
         if (instruction.isBlank() || _isSensitiveField.value) return
         aiSession.setRegenerateAction { composeFromInstruction(instruction, bypassCache = true) }
-        launchAi {
+        launchAi(instruction) {
             try {
                 val result = if (_isOfflineMode.value) {
                     GeminiManager.offlineCompose(instruction, effectivePersona(), getPersonalizationContext(), _isVoiceLockEnabled.value)
@@ -1210,7 +1228,7 @@ class KeyboardViewModel(
     fun explainText(text: String, bypassCache: Boolean = false) {
         if (text.isBlank() || _isSensitiveField.value) return
         aiSession.setRegenerateAction { explainText(text, bypassCache = true) }
-        launchAi {
+        launchAi(text) {
             try {
                 val result = if (_isOfflineMode.value) {
                     "[Offline: explanations need cloud mode]"
@@ -1232,7 +1250,7 @@ class KeyboardViewModel(
     fun continueDraft(text: String, bypassCache: Boolean = false) {
         if (text.isBlank() || _isSensitiveField.value) return
         aiSession.setRegenerateAction { continueDraft(text, bypassCache = true) }
-        launchAi {
+        launchAi(text) {
             try {
                 val result = if (_isOfflineMode.value) {
                     GeminiManager.offlineContinue(text, getPersonalizationContext(), _isVoiceLockEnabled.value)
@@ -1256,7 +1274,7 @@ class KeyboardViewModel(
      */
     fun analyzeTone(text: String) {
         if (text.isBlank() || _isSensitiveField.value) return
-        launchAi {
+        launchAi(text) {
             try {
                 val personalization = getPersonalizationContext()
                 val result = if (_isOfflineMode.value) {

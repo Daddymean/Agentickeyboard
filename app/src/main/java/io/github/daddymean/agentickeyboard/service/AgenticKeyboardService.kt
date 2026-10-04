@@ -391,6 +391,9 @@ class AgenticKeyboardService : InputMethodService(), LifecycleOwner, ViewModelSt
     }
 
     override fun onFinishInput() {
+        // The field is gone: cancel any in-flight AI action so its result cannot
+        // appear later in a different editor.
+        viewModel.dismissResults()
         replyCompletenessSession.clear()
         clipboardStatus.value = null
         lifecycleRegistry.handleLifecycleEvent(Lifecycle.Event.ON_STOP)

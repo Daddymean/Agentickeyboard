@@ -36,6 +36,20 @@ internal class AiSessionController(
     private var activeJob: Job? = null
     private var regenerateAction: (() -> Unit)? = null
 
+    /**
+     * The editor text the current result was generated from, captured when the
+     * action launched. Apply compares it with the live draft so a result can
+     * never overwrite text typed or selected after the request (see AiApplyGuard).
+     * Null when no result is bound to a draft.
+     */
+    var resultSource: String? = null
+        private set
+
+    /** Binds the shown result to [source] (e.g. a surfaced background proofread). */
+    fun bindResultSource(source: String?) {
+        resultSource = source
+    }
+
     fun setRegenerateAction(action: (() -> Unit)?) {
         regenerateAction = action
     }
@@ -48,7 +62,16 @@ internal class AiSessionController(
         _panelState.value = state
     }
 
+    /**
+     * Dismisses the panel and invalidates the session: the in-flight action is
+     * cancelled so a late response cannot republish into the panel after the
+     * user dismissed it or moved to another editor.
+     */
     fun clear() {
+        activeJob?.cancel()
+        activeJob = null
+        regenerateAction = null
+        resultSource = null
         _panelState.value = AiPanelState.Idle
     }
 
@@ -57,8 +80,9 @@ internal class AiSessionController(
      * action exits or fails without publishing a result, the loading state is
      * cleared automatically.
      */
-    fun launch(block: suspend AiSessionController.() -> Unit) {
+    fun launch(source: String? = null, block: suspend AiSessionController.() -> Unit) {
         val previous = activeJob
+        resultSource = source
         activeJob = scope.launch {
             previous?.cancelAndJoin()
             publish(AiPanelState.Loading)
@@ -71,7 +95,7 @@ internal class AiSessionController(
                 // guard keeps an unexpected failure from crashing the IME.
             } finally {
                 if (currentState == AiPanelState.Loading) {
-                    clear()
+                    _panelState.value = AiPanelState.Idle
                 }
             }
         }
@@ -81,7 +105,7 @@ internal class AiSessionController(
         activeJob?.cancel()
         activeJob = null
         if (currentState == AiPanelState.Loading) {
-            clear()
+            _panelState.value = AiPanelState.Idle
         }
     }
 }

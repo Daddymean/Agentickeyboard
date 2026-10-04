@@ -88,4 +88,46 @@ class AiSessionControllerTest {
 
         assertEquals(AiPanelState.Idle, controller.currentState)
     }
+
+    @Test
+    fun dismissingCancelsInFlightActionSoALateResultNeverAppears() = runTest {
+        val controller = AiSessionController(this)
+
+        controller.launch(source = "draft A") {
+            delay(1_000)
+            publish(AiPanelState.Rewrite("late rewrite", "draft A", "Polished"))
+        }
+        runCurrent()
+        assertEquals(AiPanelState.Loading, controller.currentState)
+
+        controller.clear() // user dismisses, or the editor changes
+        advanceUntilIdle()
+
+        assertEquals(AiPanelState.Idle, controller.currentState)
+        assertEquals(null, controller.resultSource)
+    }
+
+    @Test
+    fun resultStaysBoundToTheDraftItWasRequestedFor() = runTest {
+        val controller = AiSessionController(this)
+        val result = AiPanelState.Rewrite("Polished A", "draft A", "Polished")
+
+        controller.launch(source = "draft A") { publish(result) }
+        advanceUntilIdle()
+
+        assertEquals(result, controller.currentState)
+        assertEquals("draft A", controller.resultSource)
+    }
+
+    @Test
+    fun newerActionRebindsTheSource() = runTest {
+        val controller = AiSessionController(this)
+
+        controller.launch(source = "draft A") { delay(Long.MAX_VALUE) }
+        runCurrent()
+        controller.launch(source = "draft B") { publish(AiPanelState.Compose("for B")) }
+        advanceUntilIdle()
+
+        assertEquals("draft B", controller.resultSource)
+    }
 }
