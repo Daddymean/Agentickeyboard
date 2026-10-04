@@ -55,7 +55,7 @@ class KeyboardSettings(context: Context) {
         set(value) = prefs.edit().putBoolean(KEY_AUTO_CAPITALIZE, value).apply()
 
     var isNumberRowEnabled: Boolean
-        get() = prefs.getBoolean(KEY_NUMBER_ROW, false)
+        get() = prefs.getBoolean(KEY_NUMBER_ROW, true)
         set(value) = prefs.edit().putBoolean(KEY_NUMBER_ROW, value).apply()
 
     /** Background grammar checking sends drafts to the cloud, so it is opt-in. */

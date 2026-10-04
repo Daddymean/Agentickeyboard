@@ -23,6 +23,8 @@ data class KeyboardMetrics(
     val rowGap: Dp,
     val keyGap: Dp,
     val shelfHeight: Dp,
+    // Height of the idle toolbar strip (no AI result showing).
+    val toolbarHeight: Dp,
     val bottomPadding: Dp,
     /** True when the window is too short to afford the full portrait layout. */
     val isCompact: Boolean
@@ -76,6 +78,7 @@ fun keyboardMetricsFor(screenWidthDp: Int, screenHeightDp: Int): KeyboardMetrics
         rowGap = if (compact) 2.dp else 3.dp,
         keyGap = KEY_GAP_DP.dp,
         shelfHeight = if (compact) 40.dp else 64.dp,
+        toolbarHeight = if (compact) 36.dp else 44.dp,
         bottomPadding = if (compact) 2.dp else 8.dp,
         isCompact = compact
     )
