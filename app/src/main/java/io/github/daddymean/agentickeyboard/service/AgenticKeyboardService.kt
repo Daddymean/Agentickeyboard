@@ -124,12 +124,13 @@ class AgenticKeyboardService : InputMethodService(), LifecycleOwner, ViewModelSt
             val historyStatus by clipboardStatus.collectAsState()
             val sensitiveField by viewModel.isSensitiveField.collectAsState()
             val aiToolsExpanded by viewModel.aiToolsExpanded.collectAsState()
+            val keyHeightScale by viewModel.keyHeightScale.collectAsState()
             val navInsetPx by navigationBarInsetPx.collectAsState()
             val navigationBarInset = with(LocalDensity.current) { navInsetPx.toDp() }
 
             // Every surface below sizes itself from the window the IME was given,
             // so the keyboard still leaves room for the field in short windows.
-            ProvideKeyboardMetrics {
+            ProvideKeyboardMetrics(keyHeightScale) {
                 Column {
                     TrustPrismBanner(viewModel)
                     ReplyCompletenessBar(

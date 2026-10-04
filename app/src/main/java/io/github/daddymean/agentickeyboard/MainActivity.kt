@@ -97,6 +97,7 @@ import io.github.daddymean.agentickeyboard.ui.KeyboardViewModelFactory
 import io.github.daddymean.agentickeyboard.ui.RowDefaultsButtonPadding
 import io.github.daddymean.agentickeyboard.ui.theme.MyApplicationTheme
 import io.github.daddymean.agentickeyboard.util.AppPersonas
+import io.github.daddymean.agentickeyboard.util.KeyboardSettings
 import io.github.daddymean.agentickeyboard.util.KeyboardSetupStatus
 import io.github.daddymean.agentickeyboard.util.OnDeviceAiStatus
 import io.github.daddymean.agentickeyboard.util.TextExpansion
@@ -1033,6 +1034,7 @@ fun ExportTab(viewModel: KeyboardViewModel) {
     val usageStats by viewModel.usageStats.collectAsState()
     val isAutoCapitalize by viewModel.isAutoCapitalizeEnabled.collectAsState()
     val isNumberRow by viewModel.isNumberRowEnabled.collectAsState()
+    val keyHeightScale by viewModel.keyHeightScale.collectAsState()
     val isProofread by viewModel.isProofreadEnabled.collectAsState()
     val isLearningPaused by viewModel.isLearningPaused.collectAsState()
     val isHaptics by viewModel.isHapticsEnabled.collectAsState()
@@ -1097,6 +1099,37 @@ fun ExportTab(viewModel: KeyboardViewModel) {
                         checked = isNumberRow,
                         onCheckedChange = { viewModel.setNumberRowEnabled(it) }
                     )
+                    // Key size: width already fills the screen, so this sets key height
+                    // (and letter size with it).
+                    Column(modifier = Modifier.padding(vertical = 8.dp)) {
+                        Text("Key size", color = Color(0xFF1C1B1F), fontSize = 13.sp, fontWeight = FontWeight.Medium)
+                        Text(
+                            "Taller keys and bigger letters for easier typing.",
+                            color = Color(0xFF79747E),
+                            fontSize = 11.sp
+                        )
+                        Spacer(modifier = Modifier.height(6.dp))
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            KeyboardSettings.KEY_SIZE_PRESETS.forEach { (label, scale) ->
+                                val selected = kotlin.math.abs(keyHeightScale - scale) < 0.01f
+                                Box(
+                                    modifier = Modifier
+                                        .clip(RoundedCornerShape(16.dp))
+                                        .background(if (selected) Color(0xFF6750A4) else Color(0xFFF3F4F9))
+                                        .clickable { viewModel.setKeyHeightScale(scale) }
+                                        .padding(horizontal = 14.dp, vertical = 8.dp)
+                                        .testTag("key_size_$label")
+                                ) {
+                                    Text(
+                                        label,
+                                        color = if (selected) Color.White else Color(0xFF1C1B1F),
+                                        fontSize = 12.sp,
+                                        fontWeight = FontWeight.Medium
+                                    )
+                                }
+                            }
+                        }
+                    }
                     SettingSwitchRow(
                         title = "Proofread as you type",
                         description = "Quietly checks grammar in the background and offers one-tap fixes. Sends drafts to the cloud, so it is off by default.",

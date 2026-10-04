@@ -19,6 +19,11 @@ class KeyboardSettings(context: Context) {
         const val KEY_SWIPE_ENABLED = "swipe_enabled"
         const val KEY_AUTO_CAPITALIZE = "auto_capitalize"
         const val KEY_NUMBER_ROW = "number_row"
+        const val KEY_KEY_HEIGHT_SCALE = "key_height_scale"
+
+        /** Key-size presets offered in settings (label to key-height multiplier). */
+        val KEY_SIZE_PRESETS = listOf("Normal" to 1.0f, "Large" to 1.15f, "Extra large" to 1.3f)
+        const val DEFAULT_KEY_HEIGHT_SCALE = 1.15f
         const val KEY_PROOFREAD = "proofread_as_you_type"
         const val KEY_LEARNING_PAUSED = "learning_paused"
         const val KEY_HAPTICS = "haptics_enabled"
@@ -57,6 +62,11 @@ class KeyboardSettings(context: Context) {
     var isNumberRowEnabled: Boolean
         get() = prefs.getBoolean(KEY_NUMBER_ROW, true)
         set(value) = prefs.edit().putBoolean(KEY_NUMBER_ROW, value).apply()
+
+    /** Multiplier on the base key height; see KEY_SIZE_PRESETS. */
+    var keyHeightScale: Float
+        get() = prefs.getFloat(KEY_KEY_HEIGHT_SCALE, DEFAULT_KEY_HEIGHT_SCALE)
+        set(value) = prefs.edit().putFloat(KEY_KEY_HEIGHT_SCALE, value).apply()
 
     /** Background grammar checking sends drafts to the cloud, so it is opt-in. */
     var isProofreadEnabled: Boolean
