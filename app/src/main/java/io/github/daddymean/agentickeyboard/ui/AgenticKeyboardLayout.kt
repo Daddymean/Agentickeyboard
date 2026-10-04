@@ -78,6 +78,7 @@ import androidx.compose.ui.window.Popup
 import io.github.daddymean.agentickeyboard.network.CloudPrivacyPolicy
 import io.github.daddymean.agentickeyboard.ui.theme.KeyboardTheme
 import io.github.daddymean.agentickeyboard.ui.theme.LocalKeyboardColors
+import io.github.daddymean.agentickeyboard.util.AiApplyGuard
 import io.github.daddymean.agentickeyboard.util.CommandPalette
 import io.github.daddymean.agentickeyboard.util.CommittedEditUndo
 import io.github.daddymean.agentickeyboard.util.RedactionApplyGuard
@@ -269,6 +270,13 @@ fun AgenticKeyboardLayout(
      * when refused, so the caller keeps the result on screen to copy or dismiss.
      */
     fun applyAiResult(result: String): Boolean {
+        // A result is bound to the draft it was generated from; never write it over
+        // text the user typed or selected afterwards.
+        if (AiApplyGuard.isStale(viewModel.aiResultSource, aiSourceText())) {
+            buzz(HapticFeedbackType.LongPress)
+            gestureAlert = AiApplyGuard.STALE_MESSAGE
+            return false
+        }
         val introduced = RedactionApplyGuard.introducedMarkers(aiSourceText(), result)
         if (introduced.isNotEmpty()) {
             buzz(HapticFeedbackType.LongPress)
