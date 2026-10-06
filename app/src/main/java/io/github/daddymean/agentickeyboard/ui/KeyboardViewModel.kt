@@ -204,6 +204,18 @@ class KeyboardViewModel(
     private val _aiToolsExpanded = MutableStateFlow(false)
     val aiToolsExpanded = _aiToolsExpanded.asStateFlow()
 
+    // Whether the edit bar is open. This lives here rather than in a Compose
+    // remember{} because the IME rebuilds its input view on configuration and
+    // theme changes, which would silently close the bar mid-edit; the view model
+    // is owned by the service and outlives onCreateInputView. The AI toolbar
+    // above already moved here for the same reason.
+    private val _editBarExpanded = MutableStateFlow(false)
+    val editBarExpanded = _editBarExpanded.asStateFlow()
+
+    fun setEditBarExpanded(expanded: Boolean) {
+        _editBarExpanded.value = expanded
+    }
+
     fun setAiToolsExpanded(expanded: Boolean) {
         _aiToolsExpanded.value = expanded
     }
