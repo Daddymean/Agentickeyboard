@@ -68,6 +68,15 @@ object ReplyCompletenessCoach {
         RegexOption.IGNORE_CASE
     )
 
+    // Compiled once rather than on every assess() call.
+    private val andSecondQuestion = Regex("\\s+and\\s+(?=${secondQuestionAhead.pattern})", RegexOption.IGNORE_CASE)
+    private val commaAnd = Regex(",\\s*(?:and\\s+)?", RegexOption.IGNORE_CASE)
+    private val andRequestVerb = Regex("\\s+and\\s+(?=${requestVerbAhead.pattern})", RegexOption.IGNORE_CASE)
+    private val timeQuestion = Regex("\\b(?:what time|when|which day|what date)\\b", RegexOption.IGNORE_CASE)
+    private val nonWordChars = Regex("[^a-z' ]")
+    private val whitespaceRun = Regex("\\s+")
+    private val clockTime = Regex("\\b(?:[01]?\\d|2[0-3])(?::[0-5]\\d)?\\s*(?:a\\.?m\\.?|p\\.?m\\.?)?\\b", RegexOption.IGNORE_CASE)
+
     private val rhetoricalPatterns = listOf(
         Regex("^(?:who knows|why bother|what's the point|what is the point|seriously|right)\\??$", RegexOption.IGNORE_CASE),
         Regex("\\b(?:don't you think|wouldn't you agree|isn't that obvious|how should i know)\\b", RegexOption.IGNORE_CASE)
@@ -165,19 +174,17 @@ object ReplyCompletenessCoach {
             return splitRequestList(leadRemoved)
         }
 
-        if (clean.endsWith("?") && Regex("\\s+and\\s+(?=$secondQuestionAhead)", RegexOption.IGNORE_CASE).containsMatchIn(withoutQuestion)) {
-            return Regex("\\s+and\\s+(?=$secondQuestionAhead)", RegexOption.IGNORE_CASE)
-                .split(withoutQuestion)
+        if (clean.endsWith("?") && andSecondQuestion.containsMatchIn(withoutQuestion)) {
+            return andSecondQuestion.split(withoutQuestion)
         }
 
         return listOf(clean)
     }
 
     private fun splitRequestList(text: String): List<String> {
-        val commaParts = text.split(Regex(",\\s*(?:and\\s+)?", RegexOption.IGNORE_CASE))
+        val commaParts = text.split(commaAnd)
         return commaParts.flatMap { part ->
-            Regex("\\s+and\\s+(?=$requestVerbAhead)", RegexOption.IGNORE_CASE)
-                .split(part)
+            andRequestVerb.split(part)
         }.map { it.trim() }.filter { it.isNotBlank() }
     }
 
@@ -207,7 +214,7 @@ object ReplyCompletenessCoach {
             else -> 10
         }
         val expectsTime = rawTokens.any { stem(it) in temporalWords } ||
-            Regex("\\b(?:what time|when|which day|what date)\\b", RegexOption.IGNORE_CASE).containsMatchIn(trimmed)
+            timeQuestion.containsMatchIn(trimmed)
 
         return Obligation(
             label = label,
@@ -218,8 +225,8 @@ object ReplyCompletenessCoach {
     }
 
     private fun isRhetoricalOrCasual(text: String): Boolean {
-        val normalized = text.lowercase().replace(Regex("[^a-z' ]"), " ")
-            .replace(Regex("\\s+"), " ").trim()
+        val normalized = text.lowercase().replace(nonWordChars, " ")
+            .replace(whitespaceRun, " ").trim()
         if (normalized in casualQuestions) return true
         return rhetoricalPatterns.any { it.containsMatchIn(text.trim()) }
     }
@@ -243,8 +250,7 @@ object ReplyCompletenessCoach {
 
     private fun containsTemporalValue(text: String, tokens: Set<String>): Boolean {
         if (tokens.any { it in temporalWords }) return true
-        return Regex("\\b(?:[01]?\\d|2[0-3])(?::[0-5]\\d)?\\s*(?:a\\.?m\\.?|p\\.?m\\.?)?\\b", RegexOption.IGNORE_CASE)
-            .containsMatchIn(text)
+        return clockTime.containsMatchIn(text)
     }
 
     private fun confidenceFor(obligations: List<Obligation>): Int {

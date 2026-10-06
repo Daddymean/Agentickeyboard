@@ -4,6 +4,8 @@ import io.github.daddymean.agentickeyboard.db.LearnedCorrection
 import io.github.daddymean.agentickeyboard.db.UserVocabulary
 import io.github.daddymean.agentickeyboard.db.WritingLog
 import io.github.daddymean.agentickeyboard.util.PersonalModelSerializer
+import io.github.daddymean.agentickeyboard.util.SwipePoint
+import io.github.daddymean.agentickeyboard.util.SwipeToTypeEngine
 import org.junit.Assert.*
 import org.junit.Test
 
@@ -218,5 +220,13 @@ class ExampleUnitTest {
         val matches = io.github.daddymean.agentickeyboard.util.SwipeToTypeEngine.getSwipeWordMatches(path)
         assertTrue(matches.contains("to"))
     }
-}
 
+    @Test
+    fun closestCharIsTheKeyUnderOrNearestThePoint() {
+        for (key in listOf('q', 'a', 'm', 'p')) {
+            assertEquals(key, SwipeToTypeEngine.getClosestChar(SwipeToTypeEngine.keyCenters.getValue(key)))
+        }
+        val q = SwipeToTypeEngine.keyCenters.getValue('q')
+        assertEquals('q', SwipeToTypeEngine.getClosestChar(SwipePoint(q.x + 0.2f, q.y - 0.1f)))
+    }
+}

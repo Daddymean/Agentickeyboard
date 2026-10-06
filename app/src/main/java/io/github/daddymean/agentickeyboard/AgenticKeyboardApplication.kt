@@ -5,6 +5,7 @@ import android.util.Log
 import io.github.daddymean.agentickeyboard.db.AppDatabase
 import io.github.daddymean.agentickeyboard.db.KeyboardRepository
 import io.github.daddymean.agentickeyboard.network.GeminiManager
+import io.github.daddymean.agentickeyboard.util.GeminiKeyStore
 import io.github.daddymean.agentickeyboard.util.KeyboardSettings
 import io.github.daddymean.agentickeyboard.util.MlKitOnDeviceAi
 import io.github.daddymean.agentickeyboard.util.OnDeviceAi
@@ -29,6 +30,7 @@ class AgenticKeyboardApplication : Application() {
     override fun onCreate() {
         super.onCreate()
         GeminiManager.onDeviceAi = onDeviceAi
+        GeminiManager.userApiKey = GeminiKeyStore.load(this)
         // Load the frequency-ranked swipe dictionary off the main thread.
         appScope.launch {
             try {

@@ -11,19 +11,25 @@ data class CloudRedactionResult(
 /**
  * Redacts common sensitive values before a request leaves the device.
  *
- * This deliberately operates on the final serialized request body, rather than
- * individual AI actions, so every current and future Gemini request receives the
- * same protection. Replacement markers are plain ASCII and safe inside JSON
- * strings.
+ * The patterns are written for plain text. `CloudRequestRedactor` applies them at
+ * the network boundary, so every current and future Gemini request receives the
+ * same protection: to each decoded string value of a JSON body (never to the
+ * escaped JSON text), or to the whole body when it is not JSON. Replacement
+ * markers are plain ASCII.
  */
 object CloudTextSanitizer {
     private data class Rule(val regex: Regex, val replacement: String)
 
     private val rules = listOf(
-        // Explicit credential-like assignments: password=..., api_key: ..., token "..."
+        // Explicit credential-like assignments: password=..., api_key: ..., token "...".
+        // A value wrapped in matching quotes is consumed together with both quotes, so
+        // `password: "hunter2"` becomes `password=[REDACTED_SECRET]` with no stray `"`.
+        // A quoted value may contain spaces but not a line break, and is capped so an
+        // unbalanced quote cannot swallow a whole paragraph; an unterminated quote falls
+        // back to the bare-token form, which drops just the opening quote.
         Rule(
             Regex(
-                pattern = """(?i)\b(password|passcode|api[_ -]?key|access[_ -]?token|auth[_ -]?token|secret)\b\s*[:=]\s*[\"']?[^\s,;\"'}]+"""
+                pattern = """(?i)\b(password|passcode|api[_ -]?key|access[_ -]?token|auth[_ -]?token|secret)\b\s*[:=]\s*(?:"[^"\r\n]{1,256}"|'[^'\r\n]{1,256}'|[\"']?[^\s,;\"'}]+)"""
             ),
             replacement = "\$1=[REDACTED_SECRET]"
         ),

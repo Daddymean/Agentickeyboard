@@ -14,8 +14,20 @@ import kotlinx.coroutines.withContext
 object GeminiManager {
     private const val TAG = "GeminiManager"
 
-    // We fetch the API key safely from BuildConfig
-    private val apiKey: String = BuildConfig.GEMINI_API_KEY
+    /**
+     * Key the user saved in Keyboard Settings (decrypted from GeminiKeyStore at
+     * startup and updated on save/remove). Takes precedence over a build-time
+     * `.env` key, which only local builds carry.
+     */
+    @Volatile
+    var userApiKey: String? = null
+
+    private val apiKey: String
+        get() = userApiKey?.takeIf { it.isNotBlank() } ?: BuildConfig.GEMINI_API_KEY
+
+    /** True when a usable key was compiled in from `.env` (local builds only). */
+    fun hasBuildTimeKey(): Boolean =
+        BuildConfig.GEMINI_API_KEY.isNotEmpty() && BuildConfig.GEMINI_API_KEY != "MY_GEMINI_API_KEY"
 
     private val moshi: Moshi = RetrofitClient.moshi
 
@@ -467,14 +479,33 @@ object GeminiManager {
         }
     }
 
-    /** Drop a leading verbatim echo of the draft the continuation model may repeat. */
-    private fun stripDraftEcho(draft: String, continuation: String): String {
+    /**
+     * Drop a leading verbatim echo of the draft the continuation model may repeat.
+     * Only a whole-word echo is dropped: "he" is not stripped from "hello".
+     */
+    internal fun stripDraftEcho(draft: String, continuation: String): String {
         val c = continuation.trim()
         val d = draft.trim()
-        if (d.isNotEmpty() && c.regionMatches(0, d, 0, d.length, ignoreCase = true)) {
+        if (d.isNotEmpty() && c.regionMatches(0, d, 0, d.length, ignoreCase = true) && endsAtBoundary(d, c)) {
             return c.substring(d.length).trimStart().ifEmpty { c }
         }
         return c
+    }
+
+    /**
+     * True when the echoed [draft] prefix of [continuation] ends on a word boundary:
+     * the continuation ends there, or the draft's last char and the next char are not
+     * both word characters. Stops "he" from eating the front of "hello". An apostrophe
+     * followed by a letter ("I'll", "don’t") counts as part of the word.
+     */
+    private fun endsAtBoundary(draft: String, continuation: String): Boolean {
+        val end = draft.length
+        if (continuation.length == end) return true
+        if (!draft[end - 1].isLetterOrDigit()) return true
+        val next = continuation[end]
+        if (next.isLetterOrDigit()) return false
+        val contraction = (next == '\'' || next == '\u2019') && continuation.getOrNull(end + 1)?.isLetter() == true
+        return !contraction
     }
 
     /** Build a tone response for a known [sentiment], filling dimensions locally. */

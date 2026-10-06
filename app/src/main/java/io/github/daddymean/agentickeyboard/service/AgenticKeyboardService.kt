@@ -13,6 +13,9 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.platform.ComposeView
+import androidx.compose.ui.platform.LocalDensity
+import androidx.core.view.ViewCompat
+import androidx.core.view.WindowInsetsCompat
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleOwner
 import androidx.lifecycle.LifecycleRegistry
@@ -27,6 +30,7 @@ import androidx.savedstate.SavedStateRegistryOwner
 import androidx.savedstate.setViewTreeSavedStateRegistryOwner
 import io.github.daddymean.agentickeyboard.AgenticKeyboardApplication
 import io.github.daddymean.agentickeyboard.ClipboardHistoryActivity
+import io.github.daddymean.agentickeyboard.MainActivity
 import io.github.daddymean.agentickeyboard.SnippetVaultActivity
 import io.github.daddymean.agentickeyboard.db.ClipboardHistoryItem
 import io.github.daddymean.agentickeyboard.db.KeyboardRepository
@@ -66,6 +70,7 @@ class AgenticKeyboardService : InputMethodService(), LifecycleOwner, ViewModelSt
     private val clipboardHistoryEnabled = MutableStateFlow(false)
     private val clipboardHistoryPaused = MutableStateFlow(false)
     private val clipboardStatus = MutableStateFlow<String?>(null)
+    private val navigationBarInsetPx = MutableStateFlow(0)
 
     override val lifecycle: Lifecycle get() = lifecycleRegistry
     override val viewModelStore: ViewModelStore get() = store
@@ -91,26 +96,48 @@ class AgenticKeyboardService : InputMethodService(), LifecycleOwner, ViewModelSt
     }
 
     override fun onCreateInputView(): View {
+        // Compose builds its recomposer from the root of the window, not from the
+        // ComposeView, so the owners must be on the IME window's decor view too —
+        // otherwise the first time the keyboard is shown it throws
+        // "ViewTreeLifecycleOwner not found" and the IME process dies.
+        window?.window?.decorView?.let { decor ->
+            decor.setViewTreeLifecycleOwner(this)
+            decor.setViewTreeViewModelStoreOwner(this)
+            decor.setViewTreeSavedStateRegistryOwner(this)
+        }
         val composeView = ComposeView(this)
         composeView.setViewTreeLifecycleOwner(this)
         composeView.setViewTreeViewModelStoreOwner(this)
         composeView.setViewTreeSavedStateRegistryOwner(this)
+        // With edge-to-edge (targetSdk 35+) the IME window is laid out behind the
+        // navigation bar, so the bottom key row would sit under the system's
+        // back/home/gesture area. Track the bar's height and lift the keys by it.
+        ViewCompat.setOnApplyWindowInsetsListener(composeView) { _, insets ->
+            navigationBarInsetPx.value =
+                insets.getInsets(WindowInsetsCompat.Type.navigationBars()).bottom
+            insets
+        }
 
         composeView.setContent {
             val historyEnabled by clipboardHistoryEnabled.collectAsState()
             val historyPaused by clipboardHistoryPaused.collectAsState()
             val historyStatus by clipboardStatus.collectAsState()
             val sensitiveField by viewModel.isSensitiveField.collectAsState()
+            val aiToolsExpanded by viewModel.aiToolsExpanded.collectAsState()
+            val keyHeightScale by viewModel.keyHeightScale.collectAsState()
+            val navInsetPx by navigationBarInsetPx.collectAsState()
+            val navigationBarInset = with(LocalDensity.current) { navInsetPx.toDp() }
 
             // Every surface below sizes itself from the window the IME was given,
             // so the keyboard still leaves room for the field in short windows.
-            ProvideKeyboardMetrics {
+            ProvideKeyboardMetrics(keyHeightScale) {
                 Column {
                     TrustPrismBanner(viewModel)
                     ReplyCompletenessBar(
                         viewModel = viewModel,
                         session = replyCompletenessSession,
-                        onSendAnyway = { performEnterAction() }
+                        onSendAnyway = { performEnterAction() },
+                        showIdle = aiToolsExpanded
                     )
                     SnippetVaultBar(
                         viewModel = viewModel,
@@ -140,7 +167,9 @@ class AgenticKeyboardService : InputMethodService(), LifecycleOwner, ViewModelSt
                         onAction = { performEnterAction() },
                         onMicPress = { switchToVoiceInput() },
                         onCursorMove = { steps -> moveCursor(steps) },
-                        inputConnectionProvider = { currentInputConnection }
+                        inputConnectionProvider = { currentInputConnection },
+                        navigationBarInset = navigationBarInset,
+                        onOpenSettings = { openKeyboardSettings() }
                     )
                 }
             }
@@ -166,6 +195,15 @@ class AgenticKeyboardService : InputMethodService(), LifecycleOwner, ViewModelSt
         currentInputConnection?.commitText(item.content, 1) ?: return
         clipboardStatus.value = "Inserted from local history."
         serviceScope.launch { repository.recordClipboardUse(item.id) }
+    }
+
+    private fun openKeyboardSettings() {
+        val intent = Intent(this, MainActivity::class.java)
+            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
+            .putExtra(MainActivity.EXTRA_TAB, MainActivity.TAB_SETTINGS)
+        requestHideSelf(0)
+        runCatching { startActivity(intent) }
+            .onFailure { Log.w(TAG, "Unable to open keyboard settings", it) }
     }
 
     private fun openSnippetVaultManager() {
@@ -354,6 +392,9 @@ class AgenticKeyboardService : InputMethodService(), LifecycleOwner, ViewModelSt
     }
 
     override fun onFinishInput() {
+        // The field is gone: cancel any in-flight AI action so its result cannot
+        // appear later in a different editor.
+        viewModel.dismissResults()
         replyCompletenessSession.clear()
         clipboardStatus.value = null
         lifecycleRegistry.handleLifecycleEvent(Lifecycle.Event.ON_STOP)

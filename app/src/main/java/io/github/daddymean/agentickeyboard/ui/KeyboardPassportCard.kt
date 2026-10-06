@@ -21,6 +21,7 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.Checkbox
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
@@ -46,6 +47,7 @@ import io.github.daddymean.agentickeyboard.AgenticKeyboardApplication
 import io.github.daddymean.agentickeyboard.util.DEFAULT_PASSPORT_CATEGORIES
 import io.github.daddymean.agentickeyboard.util.KeyboardPassport
 import io.github.daddymean.agentickeyboard.util.KeyboardPassportImportMode
+import io.github.daddymean.agentickeyboard.util.KeyboardPassportImportPolicy
 import io.github.daddymean.agentickeyboard.util.KeyboardPassportOpenResult
 import io.github.daddymean.agentickeyboard.util.KeyboardPassportOptions
 import io.github.daddymean.agentickeyboard.util.KeyboardPassportPreview
@@ -63,6 +65,10 @@ private const val MAX_PASSPORT_CHARS = 5_000_000
  * stretching cannot rescue a short one.
  */
 private const val MIN_PASSPHRASE_CHARS = 12
+
+/** Shown for legacy exports, which have no checksum or record counts to check (issue #101). */
+internal const val UNVERIFIED_WARNING =
+    "This file can't be verified. It is an older export with no checksum, so damaged data may import silently."
 
 /** Companion-app file export/import UI. Nothing in this surface renders in the IME. */
 @Composable
@@ -84,7 +90,8 @@ fun KeyboardPassportCard() {
     var preview by remember { mutableStateOf<KeyboardPassportPreview?>(null) }
     var opened by remember { mutableStateOf<KeyboardPassportOpenResult.Success?>(null) }
     var importPassphrase by remember { mutableStateOf("") }
-    var importMode by remember { mutableStateOf(KeyboardPassportImportMode.MERGE) }
+    var importMode by remember { mutableStateOf(KeyboardPassportImportPolicy.DEFAULT_MODE) }
+    var unverifiedReplaceAcknowledged by remember { mutableStateOf(false) }
     var confirmImport by remember { mutableStateOf(false) }
     var status by remember { mutableStateOf<String?>(null) }
     var busy by remember { mutableStateOf(false) }
@@ -119,12 +126,19 @@ fun KeyboardPassportCard() {
                 importedContent = content
                 importPassphrase = ""
                 opened = null
+                // Every newly selected file starts on Merge, never a previous file's Replace.
+                importMode = KeyboardPassportImportPolicy.DEFAULT_MODE
+                unverifiedReplaceAcknowledged = false
                 preview = withContext(Dispatchers.Default) { KeyboardPassport.inspect(content) }
                 when (val openResult = withContext(Dispatchers.Default) { KeyboardPassport.open(content) }) {
                     is KeyboardPassportOpenResult.Success -> {
                         opened = openResult
                         preview = openResult.preview
-                        status = "Passport verified. Review it before choosing Merge or Replace."
+                        status = if (openResult.preview.verified) {
+                            "Passport verified. Review it before choosing Merge or Replace."
+                        } else {
+                            "Older export loaded, but it can't be verified. Merge is selected; check the counts before importing."
+                        }
                     }
                     is KeyboardPassportOpenResult.PassphraseRequired -> {
                         preview = openResult.preview
@@ -354,7 +368,10 @@ fun KeyboardPassportCard() {
                         label = "Merge",
                         selected = importMode == KeyboardPassportImportMode.MERGE,
                         modifier = Modifier.weight(1f)
-                    ) { importMode = KeyboardPassportImportMode.MERGE }
+                    ) {
+                        importMode = KeyboardPassportImportMode.MERGE
+                        unverifiedReplaceAcknowledged = false
+                    }
                     PassportModeChip(
                         label = "Replace included",
                         selected = importMode == KeyboardPassportImportMode.REPLACE,
@@ -371,10 +388,35 @@ fun KeyboardPassportCard() {
                     fontSize = 9.sp,
                     lineHeight = 12.sp
                 )
+                if (KeyboardPassportImportPolicy.requiresUnverifiedReplaceAcknowledgement(verified.preview, importMode)) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(top = 6.dp)
+                            .testTag("passport_unverified_replace_ack"),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Checkbox(
+                            checked = unverifiedReplaceAcknowledged,
+                            onCheckedChange = { unverifiedReplaceAcknowledged = it }
+                        )
+                        Text(
+                            "I understand this file can't be verified, and Replace will clear my current " +
+                                "data in these categories even if the file is damaged.",
+                            color = Color(0xFFB3261E),
+                            fontSize = 9.sp,
+                            lineHeight = 12.sp
+                        )
+                    }
+                }
                 Spacer(modifier = Modifier.height(8.dp))
                 Button(
                     onClick = { confirmImport = true },
-                    enabled = !busy && verified.preview.compatible,
+                    enabled = !busy && KeyboardPassportImportPolicy.canConfirm(
+                        verified.preview,
+                        importMode,
+                        unverifiedReplaceAcknowledged
+                    ),
                     colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF6D28D9)),
                     shape = RoundedCornerShape(12.dp),
                     modifier = Modifier
@@ -407,12 +449,18 @@ fun KeyboardPassportCard() {
             onDismissRequest = { confirmImport = false },
             title = { Text("Import this Keyboard Passport?") },
             text = {
+                val unverified = verified?.preview?.verified == false
                 Text(
-                    when (importMode) {
-                        KeyboardPassportImportMode.MERGE ->
-                            "Lumina will merge the verified passport into the categories shown in the preview. Existing records outside those categories stay unchanged."
-                        KeyboardPassportImportMode.REPLACE ->
-                            "Lumina will replace only the categories shown in the preview. This cannot be undone automatically. Categories absent from the file stay unchanged."
+                    buildString {
+                        if (unverified) append("$UNVERIFIED_WARNING\n\n")
+                        append(
+                            when (importMode) {
+                                KeyboardPassportImportMode.MERGE ->
+                                    "Lumina will merge ${if (unverified) "this older export" else "the verified passport"} into the categories shown in the preview. Existing records outside those categories stay unchanged."
+                                KeyboardPassportImportMode.REPLACE ->
+                                    "Lumina will replace only the categories shown in the preview. This cannot be undone automatically. Categories absent from the file stay unchanged."
+                            }
+                        )
                     }
                 )
             },
@@ -423,13 +471,15 @@ fun KeyboardPassportCard() {
                         if (verified == null) return@Button
                         scope.launch {
                             busy = true
-                            runCatching { transfer.apply(verified, importMode) }
+                            runCatching { transfer.apply(verified, importMode, unverifiedReplaceAcknowledged) }
                                 .onSuccess { result ->
                                     status = "Imported ${result.incomingRecordCount} record(s) across ${result.affectedCategories.size} category area(s) using ${result.mode.name.lowercase()}."
                                     importedContent = null
                                     preview = null
                                     opened = null
                                     importPassphrase = ""
+                                    importMode = KeyboardPassportImportPolicy.DEFAULT_MODE
+                                    unverifiedReplaceAcknowledged = false
                                 }
                                 .onFailure {
                                     status = "Could not apply passport: ${it.message ?: "import error"}"
@@ -491,7 +541,7 @@ private fun PassportPreviewPanel(preview: KeyboardPassportPreview) {
             buildString {
                 append(if (preview.encrypted) "🔐 Encrypted" else "🔓 Unencrypted")
                 append(" · v${preview.version}")
-                if (preview.legacy) append(" · Legacy")
+                if (preview.legacy) append(" · Legacy (unverified)")
             },
             color = Color(0xFF3B0764),
             fontSize = 11.sp,
@@ -510,6 +560,16 @@ private fun PassportPreviewPanel(preview: KeyboardPassportPreview) {
             color = Color(0xFF7C3AED),
             fontSize = 9.sp
         )
+        if (!preview.verified) {
+            Text(
+                UNVERIFIED_WARNING,
+                color = Color(0xFFB3261E),
+                fontSize = 9.sp,
+                fontWeight = FontWeight.Bold,
+                lineHeight = 12.sp,
+                modifier = Modifier.testTag("passport_unverified_warning")
+            )
+        }
         if (!preview.encrypted) {
             Text(
                 "Not encrypted. Anyone who can read this file can read its contents, and it " +

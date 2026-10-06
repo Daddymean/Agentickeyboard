@@ -115,6 +115,32 @@ class OnDeviceAiRoutingTest {
     }
 
     @Test
+    fun toneForMatchesEveryKeywordCaseInsensitively() {
+        val expected = mapOf(
+            "make it shorter" to OnDeviceTone.SHORTEN,
+            "shorten this" to OnDeviceTone.SHORTEN,
+            "tighter please" to OnDeviceTone.SHORTEN,
+            "be concise" to OnDeviceTone.SHORTEN,
+            "make it longer" to OnDeviceTone.ELABORATE,
+            "expand on this" to OnDeviceTone.ELABORATE,
+            "give me More Detail" to OnDeviceTone.ELABORATE,
+            "elaborate please" to OnDeviceTone.ELABORATE,
+            "FORMAL" to OnDeviceTone.PROFESSIONAL,
+            "sound professional" to OnDeviceTone.PROFESSIONAL,
+            "warmer tone" to OnDeviceTone.FRIENDLY,
+            "more FriendlY" to OnDeviceTone.FRIENDLY,
+            "joyful response" to OnDeviceTone.FRIENDLY,
+            "keep it casual" to OnDeviceTone.FRIENDLY,
+            "be empathetic" to OnDeviceTone.FRIENDLY
+        )
+        expected.forEach { (instruction, tone) ->
+            assertEquals(instruction, tone, OnDeviceAi.toneFor(instruction))
+        }
+        assertNull(OnDeviceAi.toneFor("make it sound angry"))
+        assertNull(OnDeviceAi.toneFor("   "))
+    }
+
+    @Test
     fun unknownTonesStayOnHeuristics() {
         assertNull(OnDeviceAi.toneFor(""))
         assertNull(OnDeviceAi.toneFor("like a pirate"))

@@ -31,7 +31,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.KeyboardArrowDown
-import androidx.compose.material.icons.filled.KeyboardArrowUp
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -70,18 +70,22 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Popup
+import io.github.daddymean.agentickeyboard.network.CloudPrivacyPolicy
 import io.github.daddymean.agentickeyboard.ui.theme.KeyboardTheme
 import io.github.daddymean.agentickeyboard.ui.theme.LocalKeyboardColors
+import io.github.daddymean.agentickeyboard.util.AiApplyGuard
 import io.github.daddymean.agentickeyboard.util.CommandPalette
 import io.github.daddymean.agentickeyboard.util.CommittedEditUndo
 import io.github.daddymean.agentickeyboard.util.RedactionApplyGuard
 import io.github.daddymean.agentickeyboard.util.ReplyIntents
 import io.github.daddymean.agentickeyboard.util.SwipePoint
 import io.github.daddymean.agentickeyboard.util.SwipeToTypeEngine
+import io.github.daddymean.agentickeyboard.util.TrustPrism
 import io.github.daddymean.agentickeyboard.util.captureCommittedEditUndo
 import io.github.daddymean.agentickeyboard.util.commitTextWithCaret
 import kotlinx.coroutines.delay
@@ -119,7 +123,12 @@ fun AgenticKeyboardLayout(
     inputConnectionProvider: () -> InputConnection? = { null },
     inPlaygroundMode: Boolean = false,
     playgroundTextState: String = "",
-    onPlaygroundTextChange: (String) -> Unit = {}
+    onPlaygroundTextChange: (String) -> Unit = {},
+    // Opens the app's keyboard settings; null hides the gear (e.g. in-app playground).
+    onOpenSettings: (() -> Unit)? = null,
+    // Height of the system navigation bar the IME window extends behind; the
+    // keyboard background fills it while the keys stay above it.
+    navigationBarInset: Dp = 0.dp
 ) {
     val haptic = LocalHapticFeedback.current
     val clipboardManager = LocalClipboardManager.current
@@ -261,6 +270,13 @@ fun AgenticKeyboardLayout(
      * when refused, so the caller keeps the result on screen to copy or dismiss.
      */
     fun applyAiResult(result: String): Boolean {
+        // A result is bound to the draft it was generated from; never write it over
+        // text the user typed or selected afterwards.
+        if (AiApplyGuard.isStale(viewModel.aiResultSource, aiSourceText())) {
+            buzz(HapticFeedbackType.LongPress)
+            gestureAlert = AiApplyGuard.STALE_MESSAGE
+            return false
+        }
         val introduced = RedactionApplyGuard.introducedMarkers(aiSourceText(), result)
         if (introduced.isNotEmpty()) {
             buzz(HapticFeedbackType.LongPress)
@@ -398,7 +414,7 @@ fun AgenticKeyboardLayout(
     }
 
     // Active AI actions visibility
-    var showAiActions by remember { mutableStateOf(true) }
+    val showAiActions by viewModel.aiToolsExpanded.collectAsState()
 
     // Keyboard palette follows the user's theme override ("System" defers to the
     // OS light/dark setting). Providing it here (once, at the root) themes both
@@ -417,7 +433,7 @@ fun AgenticKeyboardLayout(
         modifier = modifier
             .fillMaxWidth()
             .background(keyboardColors.background)
-            .padding(bottom = metrics.bottomPadding)
+            .padding(bottom = metrics.bottomPadding + navigationBarInset)
             .pointerInput(Unit) {
                 detectDragGestures(
                     onDragEnd = {
@@ -469,10 +485,10 @@ fun AgenticKeyboardLayout(
                         } else if (abs(deltaY) > abs(deltaX) && abs(deltaY) > 120) {
                             if (deltaY < 0) {
                                 gestureAlert = "Gesture: Show AI Actions"
-                                showAiActions = true
+                                viewModel.setAiToolsExpanded(true)
                             } else {
                                 gestureAlert = "Gesture: Hide AI Actions"
-                                showAiActions = false
+                                viewModel.setAiToolsExpanded(false)
                             }
                         }
                     },
@@ -556,7 +572,8 @@ fun AgenticKeyboardLayout(
                 .fillMaxWidth()
                 .then(
                     if (resultExpanded || voiceMatch != null) Modifier.heightIn(min = metrics.shelfHeight)
-                    else Modifier.height(metrics.shelfHeight)
+                    else if (hasAiResult || isLoading) Modifier.height(metrics.shelfHeight)
+                    else Modifier.height(metrics.toolbarHeight)
                 )
                 .animateContentSize()
                 .background(keyboardColors.shelf)
@@ -900,20 +917,55 @@ fun AgenticKeyboardLayout(
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.SpaceBetween
                         ) {
-                            // A compact (landscape) shelf is 40dp: stacking the status label over
-                            // the active line clips the second line, so place them side by side.
-                            val statusLabel: @Composable () -> Unit = {
-                                Text(
-                                    text = when {
-                                        isSensitiveField -> "🔒 Secure field — AI & learning disabled"
-                                        isLearningPaused -> "🕶 Learning paused"
-                                        isOfflineMode -> "🔒 Offline Privacy Active"
-                                        else -> "🚀 Agentic Online Mode"
+                            // Slim toolbar (Gboard-style): settings, AI tools toggle, privacy
+                            // status icon, then suggestions in the remaining space.
+                            if (onOpenSettings != null) {
+                                IconButton(
+                                    onClick = {
+                                        buzz(HapticFeedbackType.TextHandleMove)
+                                        onOpenSettings()
                                     },
-                                    color = if (isSensitiveField || isOfflineMode) keyboardColors.success else keyboardColors.accent,
-                                    fontSize = 11.sp,
-                                    fontWeight = FontWeight.Bold
-                                )
+                                    modifier = Modifier.size(36.dp).testTag("open_settings")
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Settings,
+                                        contentDescription = "Keyboard settings",
+                                        tint = keyboardColors.textMuted,
+                                        modifier = Modifier.size(20.dp)
+                                    )
+                                }
+                            }
+                            if (!isSensitiveField) {
+                                IconButton(
+                                    onClick = {
+                                        buzz(HapticFeedbackType.TextHandleMove)
+                                        viewModel.setAiToolsExpanded(!showAiActions)
+                                    },
+                                    modifier = Modifier
+                                        .size(36.dp)
+                                        .clip(RoundedCornerShape(18.dp))
+                                        .background(if (showAiActions) keyboardColors.keyActive else Color.Transparent)
+                                        .testTag("toggle_ai_tools")
+                                ) {
+                                    Text("✨", fontSize = 16.sp)
+                                }
+                            }
+                            val prism = TrustPrism.resolve(
+                                isOfflineMode = isOfflineMode,
+                                isSensitiveField = isSensitiveField,
+                                cloudRedactionEnabled = CloudPrivacyPolicy.redactionEnabled
+                            )
+                            IconButton(
+                                onClick = {
+                                    gestureAlert = if (isLearningPaused && !isSensitiveField) {
+                                        "${prism.label} · learning paused"
+                                    } else {
+                                        prism.label
+                                    }
+                                },
+                                modifier = Modifier.size(32.dp).testTag("privacy_status")
+                            ) {
+                                Text(prism.icon, fontSize = 14.sp)
                             }
                             val activeLine: @Composable () -> Unit = {
                                 if (liveSwipePreviewWord != null) {
@@ -972,60 +1024,27 @@ fun AgenticKeyboardLayout(
                                         }
                                     }
                                 } else {
-                                    Text(
-                                        text = if (activeText.isEmpty()) "Start typing, swipe, or use AI tools below..." else activeText,
-                                        color = if (activeText.isEmpty()) keyboardColors.textMuted else keyboardColors.text,
-                                        fontSize = 13.sp,
-                                        maxLines = 1
-                                    )
+                                    // Idle: leave the strip empty rather than echo the field.
                                 }
                             }
-                            if (metrics.isCompact) {
-                                Row(
-                                    modifier = Modifier.weight(1f),
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    statusLabel()
-                                    Spacer(modifier = Modifier.width(8.dp))
-                                    Box(modifier = Modifier.weight(1f)) { activeLine() }
-                                }
-                            } else {
-                                Column(modifier = Modifier.weight(1f)) {
-                                    statusLabel()
-                                    activeLine()
-                                }
-                            }
-                            Row(verticalAlignment = Alignment.CenterVertically) {
+                            Box(
+                                modifier = Modifier.weight(1f).padding(start = 4.dp),
+                                contentAlignment = Alignment.CenterStart
+                            ) { activeLine() }
+                            if (!isSensitiveField) {
                                 IconButton(
                                     onClick = {
-                                        viewModel.setSwipeEnabled(!isSwipeToTypeEnabled)
-                                        gestureAlert = if (!isSwipeToTypeEnabled) "Swipe-to-Type Enabled ✍️" else "Standard Typing Enabled ⌨️"
+                                        val clip = clipboardManager.getText()?.text
+                                        if (clip.isNullOrBlank()) {
+                                            gestureAlert = "Clipboard is empty 📋"
+                                        } else {
+                                            clipboardText = clip
+                                            showClipboardActions = !showClipboardActions
+                                        }
                                     },
-                                    modifier = Modifier.size(36.dp).testTag("toggle_swipe")
+                                    modifier = Modifier.size(36.dp).testTag("clipboard_actions")
                                 ) {
-                                    Text(if (isSwipeToTypeEnabled) "✍️" else "⌨️", fontSize = 16.sp)
-                                }
-                                if (!isSensitiveField) {
-                                    IconButton(
-                                        onClick = {
-                                            val clip = clipboardManager.getText()?.text
-                                            if (clip.isNullOrBlank()) {
-                                                gestureAlert = "Clipboard is empty 📋"
-                                            } else {
-                                                clipboardText = clip
-                                                showClipboardActions = !showClipboardActions
-                                            }
-                                        },
-                                        modifier = Modifier.size(36.dp).testTag("clipboard_actions")
-                                    ) {
-                                        Text("📋", fontSize = 14.sp)
-                                    }
-                                }
-                                IconButton(
-                                    onClick = { showGestureGuide = !showGestureGuide },
-                                    modifier = Modifier.size(36.dp)
-                                ) {
-                                    Text("❓", fontSize = 14.sp)
+                                    Text("📋", fontSize = 14.sp)
                                 }
                             }
                         }
@@ -1410,7 +1429,22 @@ fun AgenticKeyboardLayout(
                 }
 
                 IconButton(
-                    onClick = { showAiActions = false },
+                    onClick = {
+                        viewModel.setSwipeEnabled(!isSwipeToTypeEnabled)
+                        gestureAlert = if (!isSwipeToTypeEnabled) "Swipe-to-Type Enabled ✍️" else "Standard Typing Enabled ⌨️"
+                    },
+                    modifier = Modifier.size(32.dp).testTag("toggle_swipe")
+                ) {
+                    Text(if (isSwipeToTypeEnabled) "✍️" else "⌨️", fontSize = 15.sp)
+                }
+                IconButton(
+                    onClick = { showGestureGuide = !showGestureGuide },
+                    modifier = Modifier.size(32.dp)
+                ) {
+                    Text("❓", fontSize = 14.sp)
+                }
+                IconButton(
+                    onClick = { viewModel.setAiToolsExpanded(false) },
                     modifier = Modifier.size(32.dp)
                 ) {
                     Icon(
@@ -1419,21 +1453,6 @@ fun AgenticKeyboardLayout(
                         tint = keyboardColors.textMuted
                     )
                 }
-            }
-        }
-
-        if (!showAiActions && !isSensitiveField) {
-            IconButton(
-                onClick = { showAiActions = true },
-                modifier = Modifier
-                    .align(Alignment.CenterHorizontally)
-                    .height(20.dp)
-            ) {
-                Icon(
-                    imageVector = Icons.Default.KeyboardArrowUp,
-                    contentDescription = "Expand AI actions",
-                    tint = keyboardColors.keyActive
-                )
             }
         }
 
@@ -1965,7 +1984,18 @@ fun KeyButton(
         Text(
             text = text,
             color = contentColor,
-            fontSize = 14.sp,
+            // Letters and digits grow with the key (about 20dp on a 44dp key) but stay
+            // inside its width, and are sized in dp so the system font scale cannot
+            // push a wide glyph like "W" past a fixed-size key. Word labels (?123,
+            // Space, Enter) stay compact so they never wrap.
+            fontSize = if (text.length == 1) {
+                with(density) {
+                    minOf(keyMetrics.keyHeight.value * 0.45f, keyMetrics.keyWidth.value * 0.6f)
+                        .coerceIn(14f, 28f).dp.toSp()
+                }
+            } else {
+                14.sp
+            },
             fontWeight = FontWeight.Medium
         )
 
