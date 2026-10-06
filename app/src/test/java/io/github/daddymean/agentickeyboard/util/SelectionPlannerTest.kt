@@ -204,6 +204,55 @@ class SelectionPlannerTest {
         }
     }
 
+    // --- supplementary characters and grapheme clusters -----------------------
+
+    @Test
+    fun `move right past an emoji clears the whole surrogate pair`() {
+        // "\uD83D\uDE00x": the emoji occupies two UTF-16 code units, so a naive
+        // +1 would leave the caret between the surrogates and corrupt it.
+        val s = "\uD83D\uDE00x"
+        assertEquals(3, s.length)
+        assertEquals(caret(2), plan(s, caret(0), SelectionCommand.MoveRight))
+    }
+
+    @Test
+    fun `move left past an emoji clears the whole surrogate pair`() {
+        val s = "\uD83D\uDE00x"
+        assertEquals(caret(0), plan(s, caret(2), SelectionCommand.MoveLeft))
+    }
+
+    @Test
+    fun `extending over an emoji covers it entirely`() {
+        val s = "a\uD83D\uDE00b"
+        // From just after "a", one extend-right must swallow both code units.
+        assertEquals(SelectionRange(1, 3), plan(s, caret(1), SelectionCommand.ExtendRight))
+        // And extending back from just after the emoji must release both.
+        assertEquals(SelectionRange(3, 1), plan(s, caret(3), SelectionCommand.ExtendLeft))
+    }
+
+    @Test
+    fun `a combining mark travels with its base character`() {
+        // "e" + U+0301 combining acute renders as one character.
+        val s = "e\u0301x"
+        assertEquals(3, s.length)
+        assertEquals(caret(2), plan(s, caret(0), SelectionCommand.MoveRight))
+        assertEquals(caret(0), plan(s, caret(2), SelectionCommand.MoveLeft))
+    }
+
+    @Test
+    fun `movement over plain ascii is still one character at a time`() {
+        assertEquals(caret(1), plan("abc", caret(0), SelectionCommand.MoveRight))
+        assertEquals(caret(1), plan("abc", caret(2), SelectionCommand.MoveLeft))
+    }
+
+    @Test
+    fun `grapheme helpers clamp rather than throw at the edges`() {
+        assertEquals(0, SelectionPlanner.graphemeBefore("abc", 0))
+        assertEquals(3, SelectionPlanner.graphemeAfter("abc", 3))
+        assertEquals(0, SelectionPlanner.graphemeBefore("", 0))
+        assertEquals(0, SelectionPlanner.graphemeAfter("", 0))
+    }
+
     @Test
     fun `a collapsed range reports no length`() {
         assertTrue(caret(4).isCollapsed)

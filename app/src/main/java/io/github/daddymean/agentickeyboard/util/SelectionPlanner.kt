@@ -1,5 +1,7 @@
 package io.github.daddymean.agentickeyboard.util
 
+import java.text.BreakIterator
+
 /**
  * A caret or selection range over the editor's whole text.
  *
@@ -63,11 +65,11 @@ object SelectionPlanner {
         return when (command) {
             SelectionCommand.MoveLeft ->
                 if (!current.isCollapsed) SelectionRange.caret(current.min)
-                else SelectionRange.caret((active - 1).coerceAtLeast(0))
+                else SelectionRange.caret(graphemeBefore(text, active))
 
             SelectionCommand.MoveRight ->
                 if (!current.isCollapsed) SelectionRange.caret(current.max)
-                else SelectionRange.caret((active + 1).coerceAtMost(len))
+                else SelectionRange.caret(graphemeAfter(text, active))
 
             SelectionCommand.MoveWordLeft ->
                 SelectionRange.caret(previousWordBoundary(text, current.min))
@@ -76,10 +78,10 @@ object SelectionPlanner {
                 SelectionRange.caret(nextWordBoundary(text, current.max))
 
             SelectionCommand.ExtendLeft ->
-                SelectionRange(anchor, (active - 1).coerceAtLeast(0))
+                SelectionRange(anchor, graphemeBefore(text, active))
 
             SelectionCommand.ExtendRight ->
-                SelectionRange(anchor, (active + 1).coerceAtMost(len))
+                SelectionRange(anchor, graphemeAfter(text, active))
 
             SelectionCommand.ExtendWordLeft ->
                 SelectionRange(anchor, previousWordBoundary(text, active))
@@ -87,6 +89,11 @@ object SelectionPlanner {
             SelectionCommand.ExtendWordRight ->
                 SelectionRange(anchor, nextWordBoundary(text, active))
 
+            // Correct for the text handed in, but the IME service does not route
+            // SelectAll here: it asks the editor instead, because [text] may be a
+            // partial extraction and selecting all of it would miss the rest of
+            // the document. Kept so the planner answers every command on its own
+            // terms and stays independently testable.
             SelectionCommand.SelectAll -> SelectionRange(0, len)
 
             SelectionCommand.SelectWord -> selectWordAt(text, active)
@@ -95,6 +102,36 @@ object SelectionPlanner {
 
             SelectionCommand.Collapse -> SelectionRange.caret(active)
         }
+    }
+
+    /**
+     * The offset one user-visible character before [from].
+     *
+     * Stepping by one `Char` would step by one UTF-16 code unit, which lands
+     * inside a surrogate pair for any emoji or other supplementary character
+     * and corrupts it on the next edit. A grapheme iterator also keeps combining
+     * marks, skin-tone modifiers and ZWJ sequences (a family emoji is a single
+     * cluster of many code units) intact, which code-point stepping alone does
+     * not. An offset that arrives mid-cluster resolves to that cluster's start.
+     */
+    fun graphemeBefore(text: String, offset: Int): Int {
+        if (offset <= 0) return 0
+        if (offset > text.length) return text.length
+        val iterator = BreakIterator.getCharacterInstance()
+        iterator.setText(text)
+        val previous = iterator.preceding(offset)
+        return if (previous == BreakIterator.DONE) 0 else previous
+    }
+
+    /** The offset one user-visible character after [from], mirroring [graphemeBefore]. */
+    fun graphemeAfter(text: String, offset: Int): Int {
+        val len = text.length
+        if (offset >= len) return len
+        if (offset < 0) return 0
+        val iterator = BreakIterator.getCharacterInstance()
+        iterator.setText(text)
+        val next = iterator.following(offset)
+        return if (next == BreakIterator.DONE) len else next
     }
 
     /**

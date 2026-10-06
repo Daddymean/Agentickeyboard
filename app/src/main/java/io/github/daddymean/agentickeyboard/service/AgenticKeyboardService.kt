@@ -336,6 +336,16 @@ class AgenticKeyboardService : InputMethodService(), LifecycleOwner, ViewModelSt
      */
     private fun applySelectionCommand(command: SelectionCommand) {
         val ic = currentInputConnection ?: return
+
+        // Select-all goes to the editor rather than the planner. An extracted
+        // snapshot can cover only part of the document, so planning it here
+        // would select the snapshot and quietly leave the rest unselected.
+        if (command == SelectionCommand.SelectAll) {
+            ic.performContextMenuAction(android.R.id.selectAll)
+            syncEditorText()
+            return
+        }
+
         val extracted = ic.getExtractedText(ExtractedTextRequest(), 0) ?: return
         val text = extracted.text?.toString() ?: return
         val start = extracted.selectionStart
@@ -343,10 +353,18 @@ class AgenticKeyboardService : InputMethodService(), LifecycleOwner, ViewModelSt
         if (start < 0 || end < 0) return
 
         val next = SelectionPlanner.plan(text, SelectionRange(start, end), command)
+
+        // ExtractedText offsets are relative to the snapshot, while setSelection
+        // takes absolute document offsets. They coincide only when the editor
+        // returned the document from its start; for a partial extraction,
+        // passing the planned range straight through would move the caret near
+        // the top of the document instead of around where it actually sits.
+        val base = extracted.startOffset.coerceAtLeast(0)
+
         // No explicit state push here: setSelection makes the host call
         // onUpdateSelection, which runs syncEditorText and keeps one definition
         // of "has a selection" for the whole keyboard.
-        ic.setSelection(next.start, next.end)
+        ic.setSelection(next.start + base, next.end + base)
     }
 
     /**
@@ -384,7 +402,11 @@ class AgenticKeyboardService : InputMethodService(), LifecycleOwner, ViewModelSt
         val textBefore = currentInputConnection?.getTextBeforeCursor(CONTEXT_CHARS, 0)?.toString() ?: ""
         viewModel.setInputText(textBefore)
         val selected = currentInputConnection?.getSelectedText(0)?.toString()
+        // Two different questions: whether an AI action has a meaningful target
+        // (non-blank), and whether the editor holds any selection at all, which
+        // a run of spaces or newlines satisfies and the edit bar acts on.
         viewModel.setSelectionActive(!selected.isNullOrBlank())
+        viewModel.setSelectionRangeActive(!selected.isNullOrEmpty())
     }
 
     @Suppress("DEPRECATION")

@@ -169,6 +169,18 @@ class KeyboardViewModel(
         _hasSelection.value = active
     }
 
+    // True whenever the editor's selection covers any text at all, including a
+    // run of only spaces or newlines. The edit bar needs this rather than
+    // [hasSelection]: selecting whitespace is a real selection that can be cut
+    // or copied, but it is not something an AI action should be aimed at, so
+    // the two questions stay separate instead of one being widened.
+    private val _hasSelectionRange = MutableStateFlow(false)
+    val hasSelectionRange = _hasSelectionRange.asStateFlow()
+
+    fun setSelectionRangeActive(active: Boolean) {
+        _hasSelectionRange.value = active
+    }
+
     // Exactly one AI panel can be active at a time; the controller owns
     // foreground request lifecycle and the backing result state.
     private val aiSession = AiSessionController(viewModelScope)

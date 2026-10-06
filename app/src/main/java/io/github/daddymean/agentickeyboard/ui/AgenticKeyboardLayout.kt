@@ -172,6 +172,8 @@ fun AgenticKeyboardLayout(
     // Mirrors the editor's selection state (playground mode never selects, and
     // the service only updates this flow for real editors, so it stays false).
     val hasEditorSelection by viewModel.hasSelection.collectAsState()
+    // Any selection at all, whitespace included — see KeyboardViewModel.
+    val hasEditorSelectionRange by viewModel.hasSelectionRange.collectAsState()
     val isSensitiveField by viewModel.isSensitiveField.collectAsState()
     val isSwipeToTypeEnabled by viewModel.isSwipeEnabled.collectAsState()
     val isAutoCapitalizeEnabled by viewModel.isAutoCapitalizeEnabled.collectAsState()
@@ -1480,7 +1482,7 @@ fun AgenticKeyboardLayout(
 
         TextEditBar(
             visible = showEditBar && !inPlaygroundMode && !isSensitiveField,
-            hasSelection = hasEditorSelection,
+            hasSelection = hasEditorSelectionRange,
             onCommand = { command ->
                 buzz(HapticFeedbackType.TextHandleMove)
                 onSelectionCommand(command)
