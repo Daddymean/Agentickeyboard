@@ -249,18 +249,15 @@ class AgenticKeyboardService : InputMethodService(), LifecycleOwner, ViewModelSt
         if (!settings.isClipboardHistoryEnabled || settings.isClipboardHistoryPaused) return
         if (viewModel.isSensitiveField.value) return
 
-        var flaggedSensitive = false
-        val text = runCatching {
+        // One read: text and sensitivity flag come from the same ClipData.
+        val snapshot = runCatching {
             val manager = getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-            flaggedSensitive = ClipboardSensitivity.isPrimaryClipFlaggedSensitive(manager)
-            manager.primaryClip
-                ?.takeIf { it.itemCount > 0 }
-                ?.getItemAt(0)
-                ?.text
-                ?.toString()
+            ClipboardSensitivity.readPrimaryClip(manager)
         }.onFailure {
             Log.w(TAG, "Clipboard access unavailable; continuing without capture", it)
         }.getOrNull()
+        val text = snapshot?.text
+        val flaggedSensitive = snapshot?.flaggedSensitive ?: false
 
         if (text == null) {
             if (!silent) clipboardStatus.value = "Clipboard is unavailable or has no plain text."

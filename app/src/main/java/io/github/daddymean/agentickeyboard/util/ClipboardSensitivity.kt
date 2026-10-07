@@ -1,6 +1,10 @@
 package io.github.daddymean.agentickeyboard.util
 
+import android.content.ClipData
 import android.content.ClipboardManager
+
+/** The primary clip's text and sensitivity flag, read from one [ClipData]. */
+data class ClipSnapshot(val text: String?, val flaggedSensitive: Boolean)
 
 /**
  * Honors the "sensitive clip" flag a source app sets on its ClipDescription
@@ -24,9 +28,18 @@ object ClipboardSensitivity {
     fun isFlaggedSensitive(readBooleanExtra: (String) -> Boolean): Boolean =
         runCatching { readBooleanExtra(EXTRA_IS_SENSITIVE) }.getOrDefault(true)
 
-    /** Reads the flag from the current primary clip's description. */
-    fun isPrimaryClipFlaggedSensitive(manager: ClipboardManager): Boolean =
-        isFlaggedSensitive { key ->
-            manager.primaryClipDescription?.extras?.getBoolean(key, false) == true
+    /**
+     * Text and flag from the same [clip], so a clipboard change between two
+     * separate reads can never pair one clip's text with another clip's flag.
+     */
+    fun snapshotOf(clip: ClipData): ClipSnapshot = ClipSnapshot(
+        text = clip.takeIf { it.itemCount > 0 }?.getItemAt(0)?.text?.toString(),
+        flaggedSensitive = isFlaggedSensitive { key ->
+            clip.description?.extras?.getBoolean(key, false) == true
         }
+    )
+
+    /** Reads the primary clip exactly once; null when there is no clip. */
+    fun readPrimaryClip(manager: ClipboardManager): ClipSnapshot? =
+        manager.primaryClip?.let(::snapshotOf)
 }

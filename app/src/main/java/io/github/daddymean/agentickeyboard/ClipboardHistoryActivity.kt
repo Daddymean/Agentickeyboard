@@ -98,12 +98,10 @@ private fun ClipboardHistoryManagerScreen(
             return
         }
         val manager = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-        val flaggedSensitive = ClipboardSensitivity.isPrimaryClipFlaggedSensitive(manager)
-        val text = manager.primaryClip
-            ?.takeIf { it.itemCount > 0 }
-            ?.getItemAt(0)
-            ?.text
-            ?.toString()
+        // One read: text and sensitivity flag come from the same ClipData.
+        val snapshot = ClipboardSensitivity.readPrimaryClip(manager)
+        val text = snapshot?.text
+        val flaggedSensitive = snapshot?.flaggedSensitive ?: false
         if (text == null) {
             feedback = "Clipboard has no plain text to retain."
             return

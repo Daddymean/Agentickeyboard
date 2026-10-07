@@ -1037,11 +1037,15 @@ fun AgenticKeyboardLayout(
                             if (!isSensitiveField) {
                                 IconButton(
                                     onClick = {
-                                        val clip = clipboardManager.getText()?.text
+                                        // One read: text and sensitivity flag come from the same ClipData.
                                         val systemClipboard = context.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as? android.content.ClipboardManager
+                                        val snapshot = systemClipboard?.let { manager ->
+                                            runCatching { ClipboardSensitivity.readPrimaryClip(manager) }.getOrNull()
+                                        }
+                                        val clip = snapshot?.text
                                         if (clip.isNullOrBlank()) {
                                             gestureAlert = "Clipboard is empty 📋"
-                                        } else if (systemClipboard == null || ClipboardSensitivity.isPrimaryClipFlaggedSensitive(systemClipboard)) {
+                                        } else if (snapshot?.flaggedSensitive != false) {
                                             // A clip the source app marked sensitive never reaches AI actions.
                                             clipboardText = null
                                             showClipboardActions = false
