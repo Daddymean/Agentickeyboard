@@ -1,7 +1,6 @@
 package io.github.daddymean.agentickeyboard.ui
 
 import android.content.SharedPreferences
-import android.text.InputType
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
@@ -15,6 +14,7 @@ import io.github.daddymean.agentickeyboard.db.WritingLog
 import io.github.daddymean.agentickeyboard.network.GeminiManager
 import io.github.daddymean.agentickeyboard.network.GrammarCorrectionResponse
 import io.github.daddymean.agentickeyboard.network.ToneAnalysisResponse
+import io.github.daddymean.agentickeyboard.util.EditorPrivacy
 import io.github.daddymean.agentickeyboard.util.CommandPalette
 import io.github.daddymean.agentickeyboard.util.CommittedEditUndo
 import io.github.daddymean.agentickeyboard.util.KeyboardSettings
@@ -472,10 +472,11 @@ class KeyboardViewModel(
 
     /**
      * Called by the IME service whenever a new editor gains focus: detects
-     * password/secure fields and restores the persona last used in this app.
+     * password/secure fields and incognito editors (IME_FLAG_NO_PERSONALIZED_LEARNING)
+     * and restores the persona last used in this app.
      */
-    fun onEditorStarted(packageName: String?, appLabel: String = "", inputType: Int) {
-        _isSensitiveField.value = isPasswordInputType(inputType)
+    fun onEditorStarted(packageName: String?, appLabel: String = "", inputType: Int, imeOptions: Int = 0) {
+        _isSensitiveField.value = EditorPrivacy.isSensitiveEditor(inputType, imeOptions)
         activeAppPackage = packageName
         activeAppLabel = appLabel
         previousCommittedWord = null
@@ -489,19 +490,6 @@ class KeyboardViewModel(
                     _userPersonaPreference.value = stored
                 }
             }
-        }
-    }
-
-    private fun isPasswordInputType(inputType: Int): Boolean {
-        val variation = inputType and InputType.TYPE_MASK_VARIATION
-        return when (inputType and InputType.TYPE_MASK_CLASS) {
-            InputType.TYPE_CLASS_TEXT ->
-                variation == InputType.TYPE_TEXT_VARIATION_PASSWORD ||
-                    variation == InputType.TYPE_TEXT_VARIATION_WEB_PASSWORD ||
-                    variation == InputType.TYPE_TEXT_VARIATION_VISIBLE_PASSWORD
-            InputType.TYPE_CLASS_NUMBER ->
-                variation == InputType.TYPE_NUMBER_VARIATION_PASSWORD
-            else -> false
         }
     }
 

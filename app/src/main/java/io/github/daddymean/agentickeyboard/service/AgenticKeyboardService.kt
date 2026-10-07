@@ -46,6 +46,7 @@ import io.github.daddymean.agentickeyboard.ui.TrustPrismBanner
 import io.github.daddymean.agentickeyboard.util.ClipboardCaptureDecision
 import io.github.daddymean.agentickeyboard.util.commitTextWithCaret
 import io.github.daddymean.agentickeyboard.util.ClipboardHistoryPolicy
+import io.github.daddymean.agentickeyboard.util.ClipboardSensitivity
 import io.github.daddymean.agentickeyboard.util.KeyboardSettings
 import io.github.daddymean.agentickeyboard.util.EditClipboardAction
 import io.github.daddymean.agentickeyboard.util.ReplyCompletenessSession
@@ -255,23 +256,22 @@ class AgenticKeyboardService : InputMethodService(), LifecycleOwner, ViewModelSt
         if (!settings.isClipboardHistoryEnabled || settings.isClipboardHistoryPaused) return
         if (viewModel.isSensitiveField.value) return
 
-        val text = runCatching {
+        // One read: text and sensitivity flag come from the same ClipData.
+        val snapshot = runCatching {
             val manager = getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-            manager.primaryClip
-                ?.takeIf { it.itemCount > 0 }
-                ?.getItemAt(0)
-                ?.text
-                ?.toString()
+            ClipboardSensitivity.readPrimaryClip(manager)
         }.onFailure {
             Log.w(TAG, "Clipboard access unavailable; continuing without capture", it)
         }.getOrNull()
+        val text = snapshot?.text
+        val flaggedSensitive = snapshot?.flaggedSensitive ?: false
 
         if (text == null) {
             if (!silent) clipboardStatus.value = "Clipboard is unavailable or has no plain text."
             return
         }
 
-        when (val decision = ClipboardHistoryPolicy.evaluate(text)) {
+        when (val decision = ClipboardHistoryPolicy.evaluate(text, flaggedSensitive)) {
             is ClipboardCaptureDecision.Accept -> {
                 serviceScope.launch {
                     runCatching {
@@ -425,7 +425,12 @@ class AgenticKeyboardService : InputMethodService(), LifecycleOwner, ViewModelSt
         replyCompletenessSession.clear()
         clipboardStatus.value = null
 
-        viewModel.onEditorStarted(info?.packageName, resolveAppLabel(info?.packageName), info?.inputType ?: 0)
+        viewModel.onEditorStarted(
+            info?.packageName,
+            resolveAppLabel(info?.packageName),
+            info?.inputType ?: 0,
+            info?.imeOptions ?: 0
+        )
         refreshClipboardSettings()
 
         if (!restarting) {

@@ -63,6 +63,7 @@ import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.testTag
@@ -79,6 +80,7 @@ import io.github.daddymean.agentickeyboard.network.CloudPrivacyPolicy
 import io.github.daddymean.agentickeyboard.ui.theme.KeyboardTheme
 import io.github.daddymean.agentickeyboard.ui.theme.LocalKeyboardColors
 import io.github.daddymean.agentickeyboard.util.AiApplyGuard
+import io.github.daddymean.agentickeyboard.util.ClipboardSensitivity
 import io.github.daddymean.agentickeyboard.util.CommandPalette
 import io.github.daddymean.agentickeyboard.util.CommittedEditUndo
 import io.github.daddymean.agentickeyboard.util.EditClipboardAction
@@ -136,6 +138,7 @@ fun AgenticKeyboardLayout(
 ) {
     val haptic = LocalHapticFeedback.current
     val clipboardManager = LocalClipboardManager.current
+    val context = LocalContext.current
     // Lend the view model a clipboard reader only while the keyboard is on screen.
     // It calls this back solely for a template that names {clipboard}, so an ordinary
     // keystroke never touches the clipboard.
@@ -1044,9 +1047,19 @@ fun AgenticKeyboardLayout(
                             if (!isSensitiveField) {
                                 IconButton(
                                     onClick = {
-                                        val clip = clipboardManager.getText()?.text
+                                        // One read: text and sensitivity flag come from the same ClipData.
+                                        val systemClipboard = context.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as? android.content.ClipboardManager
+                                        val snapshot = systemClipboard?.let { manager ->
+                                            runCatching { ClipboardSensitivity.readPrimaryClip(manager) }.getOrNull()
+                                        }
+                                        val clip = snapshot?.text
                                         if (clip.isNullOrBlank()) {
                                             gestureAlert = "Clipboard is empty 📋"
+                                        } else if (snapshot?.flaggedSensitive != false) {
+                                            // A clip the source app marked sensitive never reaches AI actions.
+                                            clipboardText = null
+                                            showClipboardActions = false
+                                            gestureAlert = "Clip marked sensitive 🔒"
                                         } else {
                                             clipboardText = clip
                                             showClipboardActions = !showClipboardActions
