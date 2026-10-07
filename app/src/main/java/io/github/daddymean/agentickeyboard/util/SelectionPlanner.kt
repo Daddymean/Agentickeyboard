@@ -53,8 +53,22 @@ enum class EditClipboardAction { Cut, Copy, Paste }
  */
 object SelectionPlanner {
 
-    /** Characters that count as part of a word for the word-wise commands. */
-    private fun isWordChar(c: Char): Boolean = c.isLetterOrDigit() || c == '\'' || c == '_'
+    /**
+     * Characters that count as part of a word for the word-wise commands.
+     *
+     * Combining marks (Devanagari vowel signs and virama, an NFD accent) and the
+     * ZWJ/ZWNJ joiners are not letters, but they belong to the cluster before them.
+     * Treating them as breaks stopped word moves inside a grapheme: `नमस्ते` broke
+     * after `नम`, and NFD `cafe\u0301` left the accent behind, so the next edit at
+     * that offset split a character.
+     */
+    private fun isWordChar(c: Char): Boolean =
+        c.isLetterOrDigit() || c == '\'' || c == '_' || isClusterContinuation(c)
+
+    private fun isClusterContinuation(c: Char): Boolean = when (c.category) {
+        CharCategory.NON_SPACING_MARK, CharCategory.COMBINING_SPACING_MARK, CharCategory.ENCLOSING_MARK -> true
+        else -> c == '\u200C' || c == '\u200D'
+    }
 
     fun plan(text: String, selection: SelectionRange, command: SelectionCommand): SelectionRange {
         val len = text.length

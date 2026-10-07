@@ -259,4 +259,28 @@ class SelectionPlannerTest {
         assertEquals(0, caret(4).length)
         assertFalse(SelectionRange(4, 5).isCollapsed)
     }
+
+    // Hax review of #127 (AGENT-MERGES-001): marks and joiners are not word breaks.
+    @Test
+    fun `word moves keep devanagari vowel signs and virama inside the word`() {
+        val text = "नमस्ते दोस्त"
+        assertEquals(caret(6), plan(text, caret(0), SelectionCommand.MoveWordRight))
+        assertEquals(caret(7), plan(text, caret(text.length), SelectionCommand.MoveWordLeft))
+        assertEquals(SelectionRange(0, 6), plan(text, caret(2), SelectionCommand.SelectWord))
+    }
+
+    @Test
+    fun `word moves keep an nfd combining accent with its letter`() {
+        val text = "cafe\u0301 au lait"
+        assertEquals(caret(5), plan(text, caret(0), SelectionCommand.MoveWordRight))
+        assertEquals(SelectionRange(0, 5), plan(text, caret(4), SelectionCommand.SelectWord))
+    }
+
+    @Test
+    fun `zero width joiner and non joiner stay inside the word`() {
+        val text = "क्\u200Dष x"
+        assertEquals(caret(4), plan(text, caret(0), SelectionCommand.MoveWordRight))
+        val persian = "می\u200Cخواهم x"
+        assertEquals(caret(8), plan(text = persian, selection = caret(0), command = SelectionCommand.MoveWordRight))
+    }
 }
