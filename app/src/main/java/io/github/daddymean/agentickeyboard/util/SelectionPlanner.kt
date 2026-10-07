@@ -54,38 +54,62 @@ enum class EditClipboardAction { Cut, Copy, Paste }
 object SelectionPlanner {
 
     /** Zero-width joiner and non-joiner: they bind letters inside one word. */
-    private const val ZWJ = '\u200D'
-    private const val ZWNJ = '\u200C'
+    private const val ZWJ = 0x200D
+    private const val ZWNJ = 0x200C
 
     /**
-     * Characters that count as part of a word for the word-wise commands.
+     * Whether a Unicode code point counts as part of a word.
      *
-     * Combining marks have to be included. A mark is a single BMP character that
-     * is not a letter, so treating it as a word break makes the word scan stop
-     * *at* the mark — inside a user-visible character — rather than skipping past
-     * it. In Devanagari "नमस्ते" the virama is such a mark, so the word commands
-     * stopped after three characters, and a cut or an AI rewrite of that
-     * "word" would take a fragment and orphan the mark. NFD Latin ("cafe" plus a
-     * combining acute) fails the same way.
+     * Two things make this more than `isLetterOrDigit`.
      *
-     * This is a different mechanism from the surrogate-pair problem the character
-     * commands solve with a grapheme iterator, which is why fixing those did not
-     * fix these.
+     * Combining marks have to be included. A mark is not a letter, so treating
+     * it as a word break makes the word scan stop *at* the mark — inside a
+     * user-visible character — rather than skipping past it. In Devanagari
+     * "नमस्ते" the virama is such a mark, so the word commands stopped after
+     * three characters, and a cut or an AI rewrite of that "word" would take a
+     * fragment and orphan the mark. NFD Latin ("cafe" plus a combining acute)
+     * fails the same way. That is a different mechanism from the surrogate-pair
+     * problem the character commands solve with a grapheme iterator, which is
+     * why fixing those did not fix these.
+     *
+     * And it takes a code point, not a `Char`. Above the BMP a `Char` is only
+     * half a surrogate pair, whose category is `Cs` — never a letter and never a
+     * mark. Classifying per `Char` therefore finds no word at all in Adlam,
+     * Osage, Gothic or the mathematical alphanumerics common in styled social
+     * text, and in mixed text the scan halts at the pair mid-word.
      */
-    private fun isWordChar(c: Char): Boolean {
-        if (c.isLetterOrDigit() || c == '\'' || c == '_') return true
-        return when (c.category) {
-            CharCategory.NON_SPACING_MARK,
-            CharCategory.COMBINING_SPACING_MARK,
-            CharCategory.ENCLOSING_MARK -> true
-            else -> c == ZWJ || c == ZWNJ
+    private fun isWordCodePoint(codePoint: Int): Boolean {
+        if (Character.isLetterOrDigit(codePoint)) return true
+        if (codePoint == ZWJ || codePoint == ZWNJ) return true
+        if (codePoint == '\''.code || codePoint == '_'.code) return true
+        return when (Character.getType(codePoint)) {
+            Character.NON_SPACING_MARK.toInt(),
+            Character.COMBINING_SPACING_MARK.toInt(),
+            Character.ENCLOSING_MARK.toInt() -> true
+            else -> false
         }
     }
+
+    /** The word code point ending at [index], or null when there is none. */
+    private fun wordBefore(text: String, index: Int): Int? =
+        if (index <= 0) null else text.codePointBefore(index).takeIf { isWordCodePoint(it) }
+
+    /** The word code point starting at [index], or null when there is none. */
+    private fun wordAt(text: String, index: Int): Int? =
+        if (index >= text.length) null else text.codePointAt(index).takeIf { isWordCodePoint(it) }
+
+    /** Steps [index] one code point left, regardless of what it holds. */
+    private fun stepLeft(text: String, index: Int): Int =
+        index - Character.charCount(text.codePointBefore(index))
+
+    /** Steps [index] one code point right, regardless of what it holds. */
+    private fun stepRight(text: String, index: Int): Int =
+        index + Character.charCount(text.codePointAt(index))
 
     /**
      * Snaps [offset] back onto a grapheme boundary, and [snapForward] snaps on.
      *
-     * Defense in depth behind [isWordChar]: whatever the word scan decides, a
+     * Defense in depth behind [isWordCodePoint]: whatever the word scan decides, a
      * command can then never hand the editor an offset that sits inside a
      * cluster. Every offset in plain ASCII is already a boundary, so these are
      * identity there.
@@ -206,8 +230,8 @@ object SelectionPlanner {
      */
     fun previousWordBoundary(text: String, from: Int): Int {
         var i = from.coerceIn(0, text.length)
-        while (i > 0 && !isWordChar(text[i - 1])) i--
-        while (i > 0 && isWordChar(text[i - 1])) i--
+        while (i > 0 && wordBefore(text, i) == null) i = stepLeft(text, i)
+        while (i > 0 && wordBefore(text, i) != null) i = stepLeft(text, i)
         return snapBack(text, i)
     }
 
@@ -215,8 +239,8 @@ object SelectionPlanner {
     fun nextWordBoundary(text: String, from: Int): Int {
         val len = text.length
         var i = from.coerceIn(0, len)
-        while (i < len && !isWordChar(text[i])) i++
-        while (i < len && isWordChar(text[i])) i++
+        while (i < len && wordAt(text, i) == null) i = stepRight(text, i)
+        while (i < len && wordAt(text, i) != null) i = stepRight(text, i)
         return snapForward(text, i)
     }
 
@@ -229,28 +253,38 @@ object SelectionPlanner {
         val len = text.length
         val caret = at.coerceIn(0, len)
 
-        val onWord = caret < len && isWordChar(text[caret])
-        val afterWord = caret > 0 && isWordChar(text[caret - 1])
+        val onWord = wordAt(text, caret) != null
+        val afterWord = wordBefore(text, caret) != null
 
         if (onWord || afterWord) {
             var start = caret
-            while (start > 0 && isWordChar(text[start - 1])) start--
+            while (start > 0 && wordBefore(text, start) != null) start = stepLeft(text, start)
             var end = caret
-            while (end < len && isWordChar(text[end])) end++
+            while (end < len && wordAt(text, end) != null) end = stepRight(text, end)
             return SelectionRange(snapBack(text, start), snapForward(text, end))
         }
 
         // Caret is in whitespace or punctuation: fall back to the nearest word.
-        val prevEnd = (caret downTo 1).firstOrNull { isWordChar(text[it - 1]) }
+        var prevEnd: Int? = null
+        var scan = caret
+        while (scan > 0) {
+            if (wordBefore(text, scan) != null) { prevEnd = scan; break }
+            scan = stepLeft(text, scan)
+        }
         if (prevEnd != null) {
             var start = prevEnd
-            while (start > 0 && isWordChar(text[start - 1])) start--
+            while (start > 0 && wordBefore(text, start) != null) start = stepLeft(text, start)
             return SelectionRange(snapBack(text, start), snapForward(text, prevEnd))
         }
-        val nextStart = (caret until len).firstOrNull { isWordChar(text[it]) }
+        var nextStart: Int? = null
+        scan = caret
+        while (scan < len) {
+            if (wordAt(text, scan) != null) { nextStart = scan; break }
+            scan = stepRight(text, scan)
+        }
         if (nextStart != null) {
             var end = nextStart
-            while (end < len && isWordChar(text[end])) end++
+            while (end < len && wordAt(text, end) != null) end = stepRight(text, end)
             return SelectionRange(snapBack(text, nextStart), snapForward(text, end))
         }
         return SelectionRange.caret(caret)

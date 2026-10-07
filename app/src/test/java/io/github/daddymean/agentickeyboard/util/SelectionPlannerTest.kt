@@ -342,6 +342,68 @@ class SelectionPlannerTest {
         }
     }
 
+    // --- supplementary-plane scripts -----------------------------------------
+    //
+    // Codex's follow-up on #130: classifying per Char cannot see above the BMP,
+    // because each half of a surrogate pair has category Cs — never a letter and
+    // never a mark. Word scanning is therefore by code point.
+
+    /** Two Adlam letters followed by Adlam Alif Lengthener, a supplementary Mn mark. */
+    private val adlam = "\uD83A\uDD00\uD83A\uDD21\uD83A\uDD44"
+
+    /** "ab" + MATHEMATICAL BOLD SMALL B + "cd" — styled text seen on social media. */
+    private val mathBold = "ab\uD835\uDC1Bcd"
+
+    @Test
+    fun `a supplementary script word is found at all`() {
+        assertEquals(6, adlam.length)
+        // Per-Char classification found no word here, so SelectWord collapsed.
+        assertEquals(SelectionRange(0, 6), plan(adlam, caret(0), SelectionCommand.SelectWord))
+        assertEquals(caret(6), plan(adlam, caret(0), SelectionCommand.MoveWordRight))
+    }
+
+    @Test
+    fun `a supplementary combining mark stays inside its word`() {
+        // The Adlam mark is the last two units; the word must not stop before it.
+        assertEquals(SelectionRange(0, 6), plan(adlam, caret(2), SelectionCommand.SelectWord))
+    }
+
+    @Test
+    fun `a surrogate pair mid word does not stop the scan`() {
+        assertEquals(6, mathBold.length)
+        // Previously 2: the scan halted at the surrogate pair, mid-word.
+        assertEquals(caret(6), plan(mathBold, caret(0), SelectionCommand.MoveWordRight))
+        assertEquals(SelectionRange(0, 6), plan(mathBold, caret(0), SelectionCommand.SelectWord))
+        assertEquals(caret(0), plan(mathBold, caret(6), SelectionCommand.MoveWordLeft))
+    }
+
+    @Test
+    fun `word scanning never returns an offset inside a surrogate pair`() {
+        val probes = listOf(adlam, mathBold, "x\uD835\uDC1B y", hindi)
+        for (probe in probes) {
+            for (caretAt in 0..probe.length) {
+                for (command in listOf(
+                    SelectionCommand.MoveWordLeft,
+                    SelectionCommand.MoveWordRight,
+                    SelectionCommand.SelectWord,
+                    SelectionCommand.ExtendWordLeft,
+                    SelectionCommand.ExtendWordRight
+                )) {
+                    val result = plan(probe, caret(caretAt), command)
+                    for (offset in listOf(result.start, result.end)) {
+                        if (offset in 1 until probe.length) {
+                            assertFalse(
+                                "$command from $caretAt in a supplementary probe returned" +
+                                    " $offset, splitting a surrogate pair",
+                                probe[offset - 1].isHighSurrogate() && probe[offset].isLowSurrogate()
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+
     // --- snapshot-relative to absolute offsets --------------------------------
 
     @Test
