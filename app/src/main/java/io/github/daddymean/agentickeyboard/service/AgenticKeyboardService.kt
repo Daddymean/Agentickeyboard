@@ -435,6 +435,7 @@ class AgenticKeyboardService : InputMethodService(), LifecycleOwner, ViewModelSt
 
         if (!restarting) {
             viewModel.dismissResults()
+            viewModel.onNewInputSession()
         }
         syncEditorText()
         // Do not read the clipboard here. On Android 13+ and some OEM builds,
