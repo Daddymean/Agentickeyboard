@@ -33,6 +33,14 @@ object CloudTextSanitizer {
             ),
             replacement = "\$1=[REDACTED_SECRET]"
         ),
+        // Bare credentials that carry no `password=` label: a pasted PEM private key,
+        // `Bearer <token>`, JWTs and provider keys (Google `AIza…`, GitHub `ghp_…`,
+        // OpenAI `sk-…`, AWS `AKIA…`). Shared with the clipboard-history filter. They
+        // run before the numeric rules so digits inside a token are not half-matched
+        // as a phone number, leaving the rest of the token behind.
+        Rule(SecretTokenPatterns.privateKeyBlock, "[REDACTED_SECRET]"),
+        Rule(SecretTokenPatterns.bearer, "\$1 [REDACTED_SECRET]"),
+        *SecretTokenPatterns.bareTokens.map { Rule(it, "[REDACTED_SECRET]") }.toTypedArray(),
         Rule(
             Regex("""[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}"""),
             "[REDACTED_EMAIL]"

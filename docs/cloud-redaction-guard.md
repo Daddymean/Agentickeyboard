@@ -17,6 +17,7 @@ Redaction at the request boundary covers every current AI action and any future 
 ## Values currently redacted
 
 - Credential-shaped assignments such as `password=`, `api_key=`, and `access_token=`
+- Bare credentials with no label: PEM private-key blocks, `Bearer <token>`, JWTs, Google `AIza…`, GitHub `ghp_…`, OpenAI `sk-…` and AWS `AKIA…` keys (patterns shared with the clipboard-history filter in `SecretTokenPatterns`)
 - Email addresses
 - Card-like financial numbers
 - Social Security numbers
@@ -43,5 +44,6 @@ Round-trip actions (fix grammar, summarize, translate, rewrite, compose, continu
 - Release/R8 build succeeds.
 - A request containing an email or credential-shaped value reaches the network layer with a redaction marker instead of the original value.
 - Ordinary writing without sensitive patterns is unchanged.
+- A bare token (`AIza…`, `ghp_…`, JWT, `Bearer …`) reaches the network layer as `[REDACTED_SECRET]` (GEMINI-KEY-REVIEW-001 F1).
 - `RedactionApplyGuardTest` passes: a draft containing a phone/email/long number never acquires a marker through Apply.
 - On device: Fix Grammar on `call me at 555-123-4567` → Apply is refused with a message and the draft keeps the number.
