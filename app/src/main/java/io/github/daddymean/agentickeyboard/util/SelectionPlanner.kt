@@ -265,27 +265,23 @@ object SelectionPlanner {
         }
 
         // Caret is in whitespace or punctuation: fall back to the nearest word.
-        var prevEnd: Int? = null
-        var scan = caret
-        while (scan > 0) {
-            if (wordBefore(text, scan) != null) { prevEnd = scan; break }
-            scan = stepLeft(text, scan)
-        }
-        if (prevEnd != null) {
-            var start = prevEnd
+        // These walk with plain Int offsets rather than a nullable "found index",
+        // so reaching the edge is the "nothing found" case and there is nothing
+        // to smart-cast.
+        var back = caret
+        while (back > 0 && wordBefore(text, back) == null) back = stepLeft(text, back)
+        if (back > 0) {
+            var start = back
             while (start > 0 && wordBefore(text, start) != null) start = stepLeft(text, start)
-            return SelectionRange(snapBack(text, start), snapForward(text, prevEnd))
+            return SelectionRange(snapBack(text, start), snapForward(text, back))
         }
-        var nextStart: Int? = null
-        scan = caret
-        while (scan < len) {
-            if (wordAt(text, scan) != null) { nextStart = scan; break }
-            scan = stepRight(text, scan)
-        }
-        if (nextStart != null) {
-            var end = nextStart
+
+        var forward = caret
+        while (forward < len && wordAt(text, forward) == null) forward = stepRight(text, forward)
+        if (forward < len) {
+            var end = forward
             while (end < len && wordAt(text, end) != null) end = stepRight(text, end)
-            return SelectionRange(snapBack(text, nextStart), snapForward(text, end))
+            return SelectionRange(snapBack(text, forward), snapForward(text, end))
         }
         return SelectionRange.caret(caret)
     }
