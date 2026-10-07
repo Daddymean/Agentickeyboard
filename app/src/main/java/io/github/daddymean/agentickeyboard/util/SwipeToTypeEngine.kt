@@ -121,6 +121,14 @@ object SwipeToTypeEngine {
         }
         val ranks = wordRanks
 
+        // Hoisted out of scoreWord. The set of keys the gesture passed over
+        // depends only on the path, which is identical for every candidate in
+        // this call, but scoreWord used to rebuild it per candidate: for a
+        // several-hundred-point interpolated path that was a closest-key scan
+        // of the whole path for each surviving word. Computing it once here is
+        // the same number for every candidate, so the ranking is unchanged.
+        val visitedKeyCount = path.mapTo(HashSet()) { getClosestChar(it) }.size
+
         val candidates = mutableListOf<Pair<String, Float>>()
 
         for (word in fullDictionary) {
@@ -140,7 +148,7 @@ object SwipeToTypeEngine {
                 continue
             }
 
-            var score = scoreWord(word, path)
+            var score = scoreWord(word, path, visitedKeyCount)
 
             // Nudge similar-scoring candidates toward more frequent words. The
             // penalty spans ~0.8 units across the full 10k dictionary; user
@@ -154,7 +162,7 @@ object SwipeToTypeEngine {
         return candidates.sortedBy { it.second }.map { it.first }
     }
 
-    private fun scoreWord(word: String, path: List<SwipePoint>): Float {
+    private fun scoreWord(word: String, path: List<SwipePoint>, visitedKeyCount: Int): Float {
         var score = 0f
         var pathIdx = 0
 
@@ -179,8 +187,7 @@ object SwipeToTypeEngine {
             }
         }
 
-        val visitedKeys = path.map { getClosestChar(it) }.distinct()
-        val lengthDiff = abs(visitedKeys.size - word.length)
+        val lengthDiff = abs(visitedKeyCount - word.length)
         score += lengthDiff * 0.25f
 
         return score
