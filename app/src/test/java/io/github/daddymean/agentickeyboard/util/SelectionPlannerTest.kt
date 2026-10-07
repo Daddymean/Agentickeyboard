@@ -253,6 +253,130 @@ class SelectionPlannerTest {
         assertEquals(0, SelectionPlanner.graphemeAfter("", 0))
     }
 
+    // --- combining marks in word-wise commands ------------------------------
+    //
+    // Regression tests for the defect Hax reported on PR #127: isWordChar
+    // accepted only letters, digits, apostrophe and underscore, so a combining
+    // mark broke the word scan and the commands stopped inside a cluster. Every
+    // expectation below was reproduced against the old implementation first.
+
+    /** "नमस्ते दुनिया" — the virama at 3 and the vowel sign at 5 are Mn marks. */
+    private val hindi = "\u0928\u092E\u0938\u094D\u0924\u0947 \u0926\u0941\u0928\u093F\u092F\u093E"
+
+    /** "cafe" + combining acute, i.e. NFD "café". */
+    private val nfd = "cafe\u0301 au"
+
+    @Test
+    fun `move word right crosses a devanagari word instead of stopping at the virama`() {
+        // Previously 3, between स and the virama.
+        assertEquals(caret(6), plan(hindi, caret(0), SelectionCommand.MoveWordRight))
+    }
+
+    @Test
+    fun `move word left crosses a devanagari word instead of stopping at a vowel sign`() {
+        // Previously 4, between त and े.
+        assertEquals(caret(0), plan(hindi, caret(6), SelectionCommand.MoveWordLeft))
+    }
+
+    @Test
+    fun `select word takes a whole devanagari word`() {
+        // Previously (0,3) — a fragment, which an AI rewrite would then mangle.
+        assertEquals(SelectionRange(0, 6), plan(hindi, caret(1), SelectionCommand.SelectWord))
+    }
+
+    @Test
+    fun `the second devanagari word is also whole`() {
+        assertEquals(SelectionRange(7, 13), plan(hindi, caret(8), SelectionCommand.SelectWord))
+    }
+
+    @Test
+    fun `a combining acute stays with its base in word commands`() {
+        // Previously 4 and (0,4), splitting "cafe" from its accent.
+        assertEquals(caret(5), plan(nfd, caret(0), SelectionCommand.MoveWordRight))
+        assertEquals(SelectionRange(0, 5), plan(nfd, caret(1), SelectionCommand.SelectWord))
+    }
+
+    @Test
+    fun `extend word right covers the combining mark too`() {
+        assertEquals(SelectionRange(0, 5), plan(nfd, caret(0), SelectionCommand.ExtendWordRight))
+    }
+
+    @Test
+    fun `a zero width joiner does not break a word`() {
+        // A ZWJ between letters joins them into one word for selection purposes.
+        val joined = "a\u200Db c"
+        assertEquals(SelectionRange(0, 3), plan(joined, caret(0), SelectionCommand.SelectWord))
+    }
+
+    @Test
+    fun `plain ascii word movement is unchanged by the mark handling`() {
+        assertEquals(caret(5), plan(text, caret(0), SelectionCommand.MoveWordRight))
+        assertEquals(caret(6), plan(text, caret(8), SelectionCommand.MoveWordLeft))
+        assertEquals(SelectionRange(6, 11), plan(text, caret(8), SelectionCommand.SelectWord))
+    }
+
+    @Test
+    fun `word commands never return an offset inside a grapheme cluster`() {
+        // Belt and braces over the whole string: walk every caret position and
+        // assert each result lands on a character boundary.
+        val probes = listOf(hindi, nfd, "a\u200Db c", text)
+        for (probe in probes) {
+            for (caretAt in 0..probe.length) {
+                for (command in listOf(
+                    SelectionCommand.MoveWordLeft,
+                    SelectionCommand.MoveWordRight,
+                    SelectionCommand.SelectWord
+                )) {
+                    val result = plan(probe, caret(caretAt), command)
+                    for (offset in listOf(result.start, result.end)) {
+                        if (offset in 1 until probe.length) {
+                            assertFalse(
+                                "$command from $caretAt in \"$probe\" returned $offset," +
+                                    " which splits a surrogate pair",
+                                probe[offset - 1].isHighSurrogate() && probe[offset].isLowSurrogate()
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // --- snapshot-relative to absolute offsets --------------------------------
+
+    @Test
+    fun `a document range adds the extraction start offset`() {
+        assertEquals(
+            SelectionRange(104, 110),
+            SelectionPlanner.toDocumentRange(SelectionRange(4, 10), 100)
+        )
+    }
+
+    @Test
+    fun `a zero start offset leaves the range untouched`() {
+        assertEquals(
+            SelectionRange(4, 10),
+            SelectionPlanner.toDocumentRange(SelectionRange(4, 10), 0)
+        )
+    }
+
+    @Test
+    fun `a negative start offset is treated as zero`() {
+        // Editors may report -1 instead of a real offset.
+        assertEquals(
+            SelectionRange(4, 10),
+            SelectionPlanner.toDocumentRange(SelectionRange(4, 10), -1)
+        )
+    }
+
+    @Test
+    fun `a backwards range keeps its direction when mapped`() {
+        val mapped = SelectionPlanner.toDocumentRange(SelectionRange(10, 4), 100)
+        assertEquals(SelectionRange(110, 104), mapped)
+        assertEquals(104, mapped.min)
+        assertEquals(110, mapped.max)
+    }
+
     @Test
     fun `a collapsed range reports no length`() {
         assertTrue(caret(4).isCollapsed)

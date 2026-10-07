@@ -53,8 +53,74 @@ enum class EditClipboardAction { Cut, Copy, Paste }
  */
 object SelectionPlanner {
 
-    /** Characters that count as part of a word for the word-wise commands. */
-    private fun isWordChar(c: Char): Boolean = c.isLetterOrDigit() || c == '\'' || c == '_'
+    /** Zero-width joiner and non-joiner: they bind letters inside one word. */
+    private const val ZWJ = '\u200D'
+    private const val ZWNJ = '\u200C'
+
+    /**
+     * Characters that count as part of a word for the word-wise commands.
+     *
+     * Combining marks have to be included. A mark is a single BMP character that
+     * is not a letter, so treating it as a word break makes the word scan stop
+     * *at* the mark — inside a user-visible character — rather than skipping past
+     * it. In Devanagari "नमस्ते" the virama is such a mark, so the word commands
+     * stopped after three characters, and a cut or an AI rewrite of that
+     * "word" would take a fragment and orphan the mark. NFD Latin ("cafe" plus a
+     * combining acute) fails the same way.
+     *
+     * This is a different mechanism from the surrogate-pair problem the character
+     * commands solve with a grapheme iterator, which is why fixing those did not
+     * fix these.
+     */
+    private fun isWordChar(c: Char): Boolean {
+        if (c.isLetterOrDigit() || c == '\'' || c == '_') return true
+        return when (c.category) {
+            CharCategory.NON_SPACING_MARK,
+            CharCategory.COMBINING_SPACING_MARK,
+            CharCategory.ENCLOSING_MARK -> true
+            else -> c == ZWJ || c == ZWNJ
+        }
+    }
+
+    /**
+     * Snaps [offset] back onto a grapheme boundary, and [snapForward] snaps on.
+     *
+     * Defense in depth behind [isWordChar]: whatever the word scan decides, a
+     * command can then never hand the editor an offset that sits inside a
+     * cluster. Every offset in plain ASCII is already a boundary, so these are
+     * identity there.
+     */
+    private fun snapBack(text: String, offset: Int): Int {
+        if (offset <= 0 || offset >= text.length) return offset.coerceIn(0, text.length)
+        val iterator = BreakIterator.getCharacterInstance()
+        iterator.setText(text)
+        if (iterator.isBoundary(offset)) return offset
+        val previous = iterator.preceding(offset)
+        return if (previous == BreakIterator.DONE) 0 else previous
+    }
+
+    private fun snapForward(text: String, offset: Int): Int {
+        if (offset <= 0 || offset >= text.length) return offset.coerceIn(0, text.length)
+        val iterator = BreakIterator.getCharacterInstance()
+        iterator.setText(text)
+        if (iterator.isBoundary(offset)) return offset
+        val next = iterator.following(offset)
+        return if (next == BreakIterator.DONE) text.length else next
+    }
+
+    /**
+     * Maps a snapshot-relative range onto absolute document offsets.
+     *
+     * `ExtractedText` reports its selection relative to the snapshot it returned,
+     * while `InputConnection.setSelection` takes absolute offsets; they coincide
+     * only when the editor extracted from the document start. Kept here, as a
+     * pure function, so the mapping has a test instead of living inline in the
+     * service where it cannot have one.
+     */
+    fun toDocumentRange(planned: SelectionRange, startOffset: Int): SelectionRange {
+        val base = startOffset.coerceAtLeast(0)
+        return SelectionRange(planned.start + base, planned.end + base)
+    }
 
     fun plan(text: String, selection: SelectionRange, command: SelectionCommand): SelectionRange {
         val len = text.length
@@ -142,7 +208,7 @@ object SelectionPlanner {
         var i = from.coerceIn(0, text.length)
         while (i > 0 && !isWordChar(text[i - 1])) i--
         while (i > 0 && isWordChar(text[i - 1])) i--
-        return i
+        return snapBack(text, i)
     }
 
     /** End of the word at or after [from], mirroring [previousWordBoundary]. */
@@ -151,7 +217,7 @@ object SelectionPlanner {
         var i = from.coerceIn(0, len)
         while (i < len && !isWordChar(text[i])) i++
         while (i < len && isWordChar(text[i])) i++
-        return i
+        return snapForward(text, i)
     }
 
     /**
@@ -171,7 +237,7 @@ object SelectionPlanner {
             while (start > 0 && isWordChar(text[start - 1])) start--
             var end = caret
             while (end < len && isWordChar(text[end])) end++
-            return SelectionRange(start, end)
+            return SelectionRange(snapBack(text, start), snapForward(text, end))
         }
 
         // Caret is in whitespace or punctuation: fall back to the nearest word.
@@ -179,13 +245,13 @@ object SelectionPlanner {
         if (prevEnd != null) {
             var start = prevEnd
             while (start > 0 && isWordChar(text[start - 1])) start--
-            return SelectionRange(start, prevEnd)
+            return SelectionRange(snapBack(text, start), snapForward(text, prevEnd))
         }
         val nextStart = (caret until len).firstOrNull { isWordChar(text[it]) }
         if (nextStart != null) {
             var end = nextStart
             while (end < len && isWordChar(text[end])) end++
-            return SelectionRange(nextStart, end)
+            return SelectionRange(snapBack(text, nextStart), snapForward(text, end))
         }
         return SelectionRange.caret(caret)
     }
