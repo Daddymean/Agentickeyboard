@@ -22,7 +22,7 @@ object GeminiKeyStore {
     private const val PREF_CIPHERTEXT = "ciphertext"
     private const val PREF_IV = "iv"
     private const val KEYSTORE = "AndroidKeyStore"
-    private const val KEY_ALIAS = "agentic_keyboard_gemini_api_key"
+    internal const val KEY_ALIAS = "agentic_keyboard_gemini_api_key"
     private const val TRANSFORMATION = "AES/GCM/NoPadding"
     private const val TAG_BITS = 128
 
@@ -65,8 +65,21 @@ object GeminiKeyStore {
         true
     }.onFailure { Log.w(TAG, "Unable to save Gemini key", it) }.getOrDefault(false)
 
+    /**
+     * Removes the saved key: the encrypted preferences and the Keystore entry that
+     * wrapped them, so nothing key-related is left on the device (KEYBOARD-004).
+     * A later save generates a fresh Keystore key.
+     */
     fun clear(context: Context) {
         context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().clear().apply()
+        runCatching { deleteKeystoreEntry(KeyStore.getInstance(KEYSTORE).apply { load(null) }) }
+            .onFailure { Log.w(TAG, "Unable to delete the Gemini key's Keystore entry") }
+    }
+
+    /** Deletes [KEY_ALIAS] from [keyStore] if present; true when no entry remains. */
+    internal fun deleteKeystoreEntry(keyStore: KeyStore): Boolean {
+        if (keyStore.containsAlias(KEY_ALIAS)) keyStore.deleteEntry(KEY_ALIAS)
+        return !keyStore.containsAlias(KEY_ALIAS)
     }
 
     private fun secretKey(): SecretKey {

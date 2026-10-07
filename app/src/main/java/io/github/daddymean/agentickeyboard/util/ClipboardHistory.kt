@@ -8,7 +8,13 @@ object ClipboardHistoryLimits {
     const val MAX_CONTENT_CHARS = 4_000
     const val MAX_UNPINNED_ITEMS = 20
     const val MAX_PINNED_ITEMS = 10
-    const val DEFAULT_RETENTION_DAYS = 7
+    /**
+     * New installs keep unpinned clips for one day (KEYBOARD-004). One day is the
+     * shortest existing retention option; Gboard keeps unpinned clips about one
+     * hour, but hour-level retention would need a settings-unit migration.
+     * An explicit user choice (1/7/30 days) is stored and still honored.
+     */
+    const val DEFAULT_RETENTION_DAYS = 1
     const val MIN_RETENTION_DAYS = 1
     const val MAX_RETENTION_DAYS = 30
     const val DAY_MS = 86_400_000L
@@ -16,6 +22,7 @@ object ClipboardHistoryLimits {
 
 enum class ClipboardRejectReason {
     BLANK,
+    FLAGGED_SENSITIVE,
     TOO_LONG,
     PRIVATE_KEY,
     AUTH_SECRET,
@@ -70,9 +77,16 @@ object ClipboardHistoryPolicy {
     private val awsAccessKey = Regex("\\b(?:AKIA|ASIA)[A-Z0-9]{16}\\b")
     private val cardCandidate = Regex("(?<!\\d)(?:\\d[ -]?){12,18}\\d(?!\\d)")
 
-    fun evaluate(raw: String): ClipboardCaptureDecision {
+    /**
+     * [flaggedSensitive] is the source app's ClipDescription sensitivity flag
+     * (see [ClipboardSensitivity]); a flagged clip is never retained.
+     */
+    fun evaluate(raw: String, flaggedSensitive: Boolean = false): ClipboardCaptureDecision {
         val content = normalize(raw)
         if (content.isBlank()) return ClipboardCaptureDecision.Reject(ClipboardRejectReason.BLANK)
+        if (flaggedSensitive) {
+            return ClipboardCaptureDecision.Reject(ClipboardRejectReason.FLAGGED_SENSITIVE)
+        }
         if (content.length > ClipboardHistoryLimits.MAX_CONTENT_CHARS) {
             return ClipboardCaptureDecision.Reject(ClipboardRejectReason.TOO_LONG)
         }
@@ -109,6 +123,7 @@ object ClipboardHistoryPolicy {
 
     fun rejectionMessage(reason: ClipboardRejectReason): String = when (reason) {
         ClipboardRejectReason.BLANK -> "Clipboard is empty."
+        ClipboardRejectReason.FLAGGED_SENSITIVE -> "The source app marked this clip sensitive; it was not saved."
         ClipboardRejectReason.TOO_LONG -> "Clip is too large to retain safely."
         ClipboardRejectReason.PRIVATE_KEY -> "Private-key material was not saved."
         ClipboardRejectReason.AUTH_SECRET -> "Credential-shaped content was not saved."

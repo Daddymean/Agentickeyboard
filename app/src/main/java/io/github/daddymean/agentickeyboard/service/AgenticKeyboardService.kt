@@ -45,6 +45,7 @@ import io.github.daddymean.agentickeyboard.ui.TrustPrismBanner
 import io.github.daddymean.agentickeyboard.util.ClipboardCaptureDecision
 import io.github.daddymean.agentickeyboard.util.commitTextWithCaret
 import io.github.daddymean.agentickeyboard.util.ClipboardHistoryPolicy
+import io.github.daddymean.agentickeyboard.util.ClipboardSensitivity
 import io.github.daddymean.agentickeyboard.util.KeyboardSettings
 import io.github.daddymean.agentickeyboard.util.ReplyCompletenessSession
 import kotlinx.coroutines.CoroutineScope
@@ -248,8 +249,10 @@ class AgenticKeyboardService : InputMethodService(), LifecycleOwner, ViewModelSt
         if (!settings.isClipboardHistoryEnabled || settings.isClipboardHistoryPaused) return
         if (viewModel.isSensitiveField.value) return
 
+        var flaggedSensitive = false
         val text = runCatching {
             val manager = getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+            flaggedSensitive = ClipboardSensitivity.isPrimaryClipFlaggedSensitive(manager)
             manager.primaryClip
                 ?.takeIf { it.itemCount > 0 }
                 ?.getItemAt(0)
@@ -264,7 +267,7 @@ class AgenticKeyboardService : InputMethodService(), LifecycleOwner, ViewModelSt
             return
         }
 
-        when (val decision = ClipboardHistoryPolicy.evaluate(text)) {
+        when (val decision = ClipboardHistoryPolicy.evaluate(text, flaggedSensitive)) {
             is ClipboardCaptureDecision.Accept -> {
                 serviceScope.launch {
                     runCatching {
@@ -356,7 +359,12 @@ class AgenticKeyboardService : InputMethodService(), LifecycleOwner, ViewModelSt
         replyCompletenessSession.clear()
         clipboardStatus.value = null
 
-        viewModel.onEditorStarted(info?.packageName, resolveAppLabel(info?.packageName), info?.inputType ?: 0)
+        viewModel.onEditorStarted(
+            info?.packageName,
+            resolveAppLabel(info?.packageName),
+            info?.inputType ?: 0,
+            info?.imeOptions ?: 0
+        )
         refreshClipboardSettings()
 
         if (!restarting) {

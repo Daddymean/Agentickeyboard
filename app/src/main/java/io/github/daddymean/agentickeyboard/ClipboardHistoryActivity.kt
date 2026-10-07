@@ -54,6 +54,7 @@ import io.github.daddymean.agentickeyboard.ui.theme.MyApplicationTheme
 import io.github.daddymean.agentickeyboard.util.ClipboardCaptureDecision
 import io.github.daddymean.agentickeyboard.util.ClipboardHistoryLimits
 import io.github.daddymean.agentickeyboard.util.ClipboardHistoryPolicy
+import io.github.daddymean.agentickeyboard.util.ClipboardSensitivity
 import io.github.daddymean.agentickeyboard.util.KeyboardSettings
 import kotlinx.coroutines.launch
 
@@ -97,6 +98,7 @@ private fun ClipboardHistoryManagerScreen(
             return
         }
         val manager = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+        val flaggedSensitive = ClipboardSensitivity.isPrimaryClipFlaggedSensitive(manager)
         val text = manager.primaryClip
             ?.takeIf { it.itemCount > 0 }
             ?.getItemAt(0)
@@ -106,7 +108,7 @@ private fun ClipboardHistoryManagerScreen(
             feedback = "Clipboard has no plain text to retain."
             return
         }
-        when (val decision = ClipboardHistoryPolicy.evaluate(text)) {
+        when (val decision = ClipboardHistoryPolicy.evaluate(text, flaggedSensitive)) {
             is ClipboardCaptureDecision.Accept -> scope.launch {
                 repository.captureClipboard(
                     content = decision.content,
