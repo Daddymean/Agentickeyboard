@@ -193,6 +193,23 @@ class CloudTextSanitizerTest {
         )
     }
 
+    // Hax review 5451548067: families that leaked whole or were only partly masked.
+    @Test
+    fun redactsFurtherProviderTokenFamilies() {
+        assertRedacts(
+            "pat github_pat_FAKE0000000000000000000_notarealtokenatall end" to
+                "pat [REDACTED_SECRET] end",
+            "slack xoxb-FAKE000000-FAKE000000000-NotARealSlackToken end" to
+                "slack [REDACTED_SECRET] end",
+            "gl glpat-FAKEFAKEFAKEFAKEFAKE end" to "gl [REDACTED_SECRET] end",
+            "stripe sk_live_FAKE0000FAKE0000FAKE and rk_test_FAKE1111FAKE1111FAKE end" to
+                "stripe [REDACTED_SECRET] and [REDACTED_SECRET] end",
+            "oauth ya29.FAKE_not_a_real_oauth_token end" to "oauth [REDACTED_SECRET] end",
+            "-----BEGIN DSA PRIVATE KEY-----\nMIIBuwIBAAKBgQ\n-----END DSA PRIVATE KEY----- after" to
+                "[REDACTED_SECRET] after"
+        )
+    }
+
     @Test
     fun bareTokenDigitsAreNotHalfMatchedAsAPhoneNumber() {
         val result = CloudTextSanitizer.sanitize("AIzaSy5551234567abcdefghijklmnopqrstu")
@@ -212,7 +229,7 @@ class CloudTextSanitizerTest {
 
     @Test
     fun leavesTokenLikeOrdinaryWordsAlone() {
-        val input = "Ask the skeptic about sk-8 skates, the ghp team and an AIza sign."
+        val input = "Ask the skeptic about sk-8 skates, task_live_demo, the ghp team, the xox game and an AIza sign."
 
         val result = CloudTextSanitizer.sanitize(input)
 
