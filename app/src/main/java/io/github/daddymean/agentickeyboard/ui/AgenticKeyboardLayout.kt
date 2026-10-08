@@ -188,6 +188,8 @@ fun AgenticKeyboardLayout(
     val showNumberRow = isNumberRowEnabled && !metrics.isCompact
     val isHapticsEnabled by viewModel.isHapticsEnabled.collectAsState()
     val isLearningPaused by viewModel.isLearningPaused.collectAsState()
+    val correctionsPaused by viewModel.correctionsPaused.collectAsState()
+    val learnedCorrectionRules by viewModel.learnedCorrections.collectAsState()
     val sendGuardWarning by viewModel.sendGuardWarning.collectAsState()
     val customCommands by viewModel.customCommands.collectAsState()
 
@@ -980,6 +982,41 @@ fun AgenticKeyboardLayout(
                                 modifier = Modifier.size(32.dp).testTag("privacy_status")
                             ) {
                                 Text(prism.icon, fontSize = 14.sp)
+                            }
+                            // KEYBOARD-002: pause learned typo fixes for this field only.
+                            // Shown when there is something to pause (or it is paused),
+                            // so it does not take suggestion space from new users. Hidden in the
+                            // companion playground, like the edit bar: only the IME service marks
+                            // new input sessions, so a pause there would never be cleared.
+                            if (!inPlaygroundMode && !isSensitiveField &&
+                                (correctionsPaused || learnedCorrectionRules.isNotEmpty())
+                            ) {
+                                Box(
+                                    modifier = Modifier
+                                        .padding(horizontal = 2.dp)
+                                        .clip(RoundedCornerShape(12.dp))
+                                        .background(if (correctionsPaused) keyboardColors.keyActive else Color.Transparent)
+                                        .clickable {
+                                            buzz(HapticFeedbackType.TextHandleMove)
+                                            val pause = !correctionsPaused
+                                            viewModel.setCorrectionsPaused(pause)
+                                            gestureAlert = if (pause) {
+                                                "Learned fixes off for this field · shortcuts still expand"
+                                            } else {
+                                                "Learned fixes back on"
+                                            }
+                                        }
+                                        .padding(horizontal = 8.dp, vertical = 4.dp)
+                                        .testTag("toggle_learned_fixes")
+                                ) {
+                                    Text(
+                                        if (correctionsPaused) "Fixes off" else "Fixes",
+                                        color = if (correctionsPaused) keyboardColors.accent else keyboardColors.textMuted,
+                                        fontSize = 11.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        maxLines = 1
+                                    )
+                                }
                             }
                             val activeLine: @Composable () -> Unit = {
                                 if (liveSwipePreviewWord != null) {

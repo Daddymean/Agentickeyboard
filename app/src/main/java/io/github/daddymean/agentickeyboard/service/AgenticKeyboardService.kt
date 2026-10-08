@@ -432,6 +432,7 @@ class AgenticKeyboardService : InputMethodService(), LifecycleOwner, ViewModelSt
 
         if (!restarting) {
             viewModel.dismissResults()
+            viewModel.onNewInputSession()
             // The edit bar is opt-in per input session, so a genuinely new field
             // starts with it closed. This is the same boundary dismissResults
             // uses: a restart of the same editor (an input-view rebuild) keeps
