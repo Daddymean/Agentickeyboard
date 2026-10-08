@@ -984,8 +984,12 @@ fun AgenticKeyboardLayout(
                             }
                             // KEYBOARD-002: pause learned typo fixes for this field only.
                             // Shown when there is something to pause (or it is paused),
-                            // so it does not take suggestion space from new users.
-                            if (!isSensitiveField && (correctionsPaused || learnedCorrectionRules.isNotEmpty())) {
+                            // so it does not take suggestion space from new users. Hidden in the
+                            // companion playground, like the edit bar: only the IME service marks
+                            // new input sessions, so a pause there would never be cleared.
+                            if (!inPlaygroundMode && !isSensitiveField &&
+                                (correctionsPaused || learnedCorrectionRules.isNotEmpty())
+                            ) {
                                 Box(
                                     modifier = Modifier
                                         .padding(horizontal = 2.dp)
