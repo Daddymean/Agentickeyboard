@@ -214,6 +214,23 @@ class CloudTextSanitizerTest {
         )
     }
 
+    // Codex review 5452873537: a labelled PEM block or Bearer token must not be cut
+    // after its first word by the assignment rule.
+    @Test
+    fun labelledPemBlocksAndBearerTokensAreRedactedWhole() {
+        assertRedacts(
+            "secret=-----BEGIN RSA PRIVATE KEY-----\nFAKEKEYMATERIAL\n-----END RSA PRIVATE KEY----- thanks" to
+                "secret=[REDACTED_SECRET] thanks",
+            "api_key: -----BEGIN PRIVATE KEY-----\nFAKEKEYMATERIAL\n-----END PRIVATE KEY----- thanks" to
+                "api_key=[REDACTED_SECRET] thanks",
+            "secret=-----BEGIN RSA PRIVATE KEY-----\nFAKEKEYMATERIAL truncated" to "secret=[REDACTED_SECRET]",
+            "api_key: -----BEGIN PRIVATE KEY-----\nFAKEKEYMATERIAL truncated" to "api_key=[REDACTED_SECRET]",
+            "access_token: Bearer FAKEbearerTOKEN0123 next" to
+                "access_token=[REDACTED_SECRET] [REDACTED_SECRET] next"
+        )
+        assertFalse(CloudTextSanitizer.sanitize("secret=-----BEGIN RSA PRIVATE KEY-----\nFAKEKEYMATERIAL").text.contains("FAKEKEYMATERIAL"))
+    }
+
     @Test
     fun bareTokenDigitsAreNotHalfMatchedAsAPhoneNumber() {
         val result = CloudTextSanitizer.sanitize("AIzaSy5551234567abcdefghijklmnopqrstu")
