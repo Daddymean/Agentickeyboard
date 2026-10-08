@@ -134,7 +134,9 @@ fun AgenticKeyboardLayout(
     onOpenSettings: (() -> Unit)? = null,
     // Height of the system navigation bar the IME window extends behind; the
     // keyboard background fills it while the keys stay above it.
-    navigationBarInset: Dp = 0.dp
+    navigationBarInset: Dp = 0.dp,
+    // Context results are displayed over the keys by the IME without resizing the host.
+    suppressAiPanels: Boolean = false
 ) {
     val haptic = LocalHapticFeedback.current
     val clipboardManager = LocalClipboardManager.current
@@ -152,7 +154,8 @@ fun AgenticKeyboardLayout(
     var isNumberMode by remember { mutableStateOf(false) }
 
     // Collect states from ViewModel
-    val aiPanelState by viewModel.aiPanelState.collectAsState()
+    val collectedAiPanelState by viewModel.aiPanelState.collectAsState()
+    val aiPanelState = if (suppressAiPanels) AiPanelState.Idle else collectedAiPanelState
     val voiceMatch by viewModel.voiceMatch.collectAsState()
     val isLoading = aiPanelState == AiPanelState.Loading
     val suggestions = (aiPanelState as? AiPanelState.Replies)?.suggestions.orEmpty()

@@ -37,4 +37,21 @@ class ConversationContextPreviewTest {
         compose.onNodeWithText("Attach selected text").performClick()
         assertEquals(listOf(1), confirmed)
     }
+
+    @Test fun replyResultRequiresExplicitInsertAndCanReturnToTyping() {
+        var inserted: String? = null
+        var dismissed = false
+        compose.setContent {
+            Box(Modifier.height(260.dp)) {
+                ConversationContextResult(
+                    AiPanelState.Replies(listOf("I'll bring the invoices.")), "Light",
+                    onIntent = {}, onInsert = { inserted = it }, onDismiss = { dismissed = true })
+            }
+        }
+        assertEquals(null, inserted)
+        compose.onNodeWithText("I'll bring the invoices.").performClick()
+        assertEquals("I'll bring the invoices.", inserted)
+        compose.onNodeWithText("Back to typing").performClick()
+        assertEquals(true, dismissed)
+    }
 }

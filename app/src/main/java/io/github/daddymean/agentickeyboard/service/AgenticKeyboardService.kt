@@ -42,6 +42,8 @@ import io.github.daddymean.agentickeyboard.db.ClipboardHistoryItem
 import io.github.daddymean.agentickeyboard.db.KeyboardRepository
 import io.github.daddymean.agentickeyboard.ui.AgenticKeyboardLayout
 import io.github.daddymean.agentickeyboard.ui.ConversationContextPreview
+import io.github.daddymean.agentickeyboard.ui.ConversationContextResult
+import io.github.daddymean.agentickeyboard.ui.AiPanelState
 import io.github.daddymean.agentickeyboard.ui.ConversationContextBar
 import io.github.daddymean.agentickeyboard.ui.ConversationContextUiState
 import io.github.daddymean.agentickeyboard.ui.ConversationContextAction
@@ -89,6 +91,7 @@ class AgenticKeyboardService : InputMethodService(), LifecycleOwner, ViewModelSt
     private val replyCompletenessSession = ReplyCompletenessSession()
     private val conversationContext = MutableStateFlow(ConversationContextUiState())
     private val contextLease = VisibleContextLease()
+    private val contextToolActive = MutableStateFlow(false)
     private var contextExpiryJob: Job? = null
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val clipboardHistoryEnabled = MutableStateFlow(false)
@@ -163,6 +166,8 @@ class AgenticKeyboardService : InputMethodService(), LifecycleOwner, ViewModelSt
             val capturedContext by conversationContext.collectAsState()
             val themeOverride by viewModel.themeOverride.collectAsState()
             val offline by viewModel.isOfflineMode.collectAsState()
+            val contextResultActive by contextToolActive.collectAsState()
+            val contextPanel by viewModel.aiPanelState.collectAsState()
             val navigationBarInset = with(LocalDensity.current) { navInsetPx.toDp() }
 
             // Every surface below sizes itself from the window the IME was given,
@@ -207,11 +212,12 @@ class AgenticKeyboardService : InputMethodService(), LifecycleOwner, ViewModelSt
                         onOpenManager = { openClipboardHistoryManager() }
                     )
                     Box {
-                        Box(modifier = if (capturedContext.pending != null) {
+                        Box(modifier = if (capturedContext.pending != null || contextResultActive) {
                             Modifier.clearAndSetSemantics { }
                         } else Modifier) {
                             AgenticKeyboardLayout(
                                 viewModel = viewModel,
+                                suppressAiPanels = contextResultActive,
                                 onKeyPress = { text ->
                                     currentInputConnection?.commitText(text, 1)
                                 },
@@ -235,6 +241,26 @@ class AgenticKeyboardService : InputMethodService(), LifecycleOwner, ViewModelSt
                                     themeOverride = themeOverride,
                                     onConfirm = { confirmConversationContext(it) },
                                     onClear = { clearConversationContext() }
+                                )
+                            }
+                        }
+                        if (contextResultActive && !sensitiveField) {
+                            Box(Modifier.matchParentSize()) {
+                                ConversationContextResult(
+                                    panel = contextPanel,
+                                    themeOverride = themeOverride,
+                                    onIntent = { viewModel.chooseReplyIntent(it) },
+                                    onInsert = { text ->
+                                        if (validateConversationContext()) {
+                                            currentInputConnection?.commitText(text, 1)
+                                            clearConversationContext()
+                                            syncEditorText()
+                                        }
+                                    },
+                                    onDismiss = {
+                                        viewModel.dismissResults()
+                                        contextToolActive.value = false
+                                    }
                                 )
                             }
                         }
@@ -289,6 +315,7 @@ class AgenticKeyboardService : InputMethodService(), LifecycleOwner, ViewModelSt
         contextExpiryJob?.cancel()
         contextExpiryJob = null
         contextLease.clear()
+        contextToolActive.value = false
         conversationContext.value = ConversationContextUiState(status = status)
         replyCompletenessSession.clear()
         if (hadContext) viewModel.dismissResults()
@@ -297,6 +324,11 @@ class AgenticKeyboardService : InputMethodService(), LifecycleOwner, ViewModelSt
     private fun captureConversation() {
         clearConversationContext()
         if (viewModel.isSensitiveField.value) return
+        if (viewModel.aiPanelState.value != AiPanelState.Idle) {
+            conversationContext.value = ConversationContextUiState(
+                status = "Dismiss the current AI panel before capturing.")
+            return
+        }
         val target = currentInputEditorInfo?.packageName ?: return
         if (!ConversationCapturePreferences(this).isAllowed(target) ||
             !ConversationCaptureService.isConnected()) {
@@ -340,6 +372,7 @@ class AgenticKeyboardService : InputMethodService(), LifecycleOwner, ViewModelSt
     private fun runConversationAction(action: ConversationContextAction) {
         if (!conversationContext.value.active || !validateConversationContext()) return
         val text = replyCompletenessSession.incomingContext() ?: return
+        contextToolActive.value = true
         when (action) {
             ConversationContextAction.REPLY -> viewModel.requestReplyIdeas(text, ephemeralContext = true)
             ConversationContextAction.SUMMARY -> viewModel.summarizeMessage(text, ephemeralContext = true)

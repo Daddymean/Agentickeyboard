@@ -16,6 +16,7 @@ import androidx.compose.ui.unit.sp
 import io.github.daddymean.agentickeyboard.ui.theme.KeyboardTheme
 import io.github.daddymean.agentickeyboard.ui.theme.LocalKeyboardColors
 import io.github.daddymean.agentickeyboard.util.VisibleContext
+import io.github.daddymean.agentickeyboard.util.ReplyIntents
 
 data class ConversationContextUiState(
     val pending: VisibleContext? = null,
@@ -63,6 +64,61 @@ fun ConversationContextBar(
                 } else "Capture visible text, then select the message you are answering.",
                     color = colors.textMuted, fontSize = 10.sp, maxLines = 2,
                     modifier = Modifier.height(28.dp))
+            }
+        }
+    }
+}
+
+/** Context intent/loading/results use the same key-area bounds as the preview. */
+@Composable
+fun ConversationContextResult(
+    panel: AiPanelState,
+    themeOverride: String,
+    onIntent: (String?) -> Unit,
+    onInsert: (String) -> Unit,
+    onDismiss: () -> Unit
+) {
+    KeyboardTheme(darkTheme = when (themeOverride) {
+        "Light" -> false
+        "Dark" -> true
+        else -> androidx.compose.foundation.isSystemInDarkTheme()
+    }) {
+        val colors = LocalKeyboardColors.current
+        Surface(onClick = {}, color = colors.panel, modifier = Modifier.fillMaxSize()
+            .testTag("conversation_context_result")) {
+            Column(Modifier.padding(8.dp)) {
+                Row {
+                    Text("Conversation tools", color = colors.text, fontSize = 12.sp,
+                        modifier = Modifier.weight(1f))
+                    TextButton(onClick = onDismiss) { Text("Back to typing") }
+                }
+                Column(Modifier.weight(1f).verticalScroll(rememberScrollState())) {
+                    when (panel) {
+                        is AiPanelState.ReplyIntent -> {
+                            Text("Reply with which intent?", color = colors.text)
+                            TextButton(onClick = { onIntent(null) }) { Text("Auto") }
+                            ReplyIntents.ALL.forEach { intent ->
+                                TextButton(onClick = { onIntent(intent) }) { Text(intent) }
+                            }
+                        }
+                        is AiPanelState.Replies -> panel.suggestions.forEach { reply ->
+                            TextButton(onClick = { onInsert(reply) }) { Text(reply) }
+                        }
+                        AiPanelState.Loading -> Text("Working…", color = colors.text)
+                        else -> {
+                            val text = when (panel) {
+                                is AiPanelState.Summary -> panel.text
+                                is AiPanelState.Translation -> panel.text
+                                is AiPanelState.Explanation -> panel.text
+                                else -> null
+                            }
+                            text?.let {
+                                Text(it, color = colors.text, fontSize = 12.sp)
+                                TextButton(onClick = { onInsert(it) }) { Text("Insert into draft") }
+                            }
+                        }
+                    }
+                }
             }
         }
     }

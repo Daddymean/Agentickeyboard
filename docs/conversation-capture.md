@@ -9,6 +9,8 @@ Baseline: de3627ad4f47f96269f57e3367db540120cc40ec.
 Open the keyboard's AI tools, tap **Use conversation**. First use opens an
 in-app disclosure and per-app consent before Android's accessibility settings.
 Enable **Lumina conversation capture**, return to the conversation and tap again.
+The preview and context AI results cover the existing key area to preserve the chat viewport.
+Dismiss any existing AI panel before a fresh capture.
 Select the visible text blocks containing the message being answered, then tap
 **Attach selected text**. Reply Coach now checks that context locally. Reply
 Ideas, Summarize, Translate and Explain reuse the same selection. Clipboard
