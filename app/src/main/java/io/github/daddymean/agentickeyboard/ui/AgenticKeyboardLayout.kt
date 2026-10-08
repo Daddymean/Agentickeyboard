@@ -426,9 +426,10 @@ fun AgenticKeyboardLayout(
 
     // Active AI actions visibility
     val showAiActions by viewModel.aiToolsExpanded.collectAsState()
-    // The edit bar is opt-in per session: it costs a row of vertical space, and
-    // most typing never needs it. The playground has no real editor to select in.
-    // State lives in the view model so an input-view rebuild does not close it.
+    // The edit bar is opt-in per input session: it costs a row of vertical space,
+    // and most typing never needs it. The playground has no real editor to select
+    // in. State lives in the view model so an input-view rebuild does not close
+    // it, and the service clears it when a genuinely new field starts.
     val showEditBar by viewModel.editBarExpanded.collectAsState()
 
     // Keyboard palette follows the user's theme override ("System" defers to the

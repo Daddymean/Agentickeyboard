@@ -354,17 +354,14 @@ class AgenticKeyboardService : InputMethodService(), LifecycleOwner, ViewModelSt
 
         val next = SelectionPlanner.plan(text, SelectionRange(start, end), command)
 
-        // ExtractedText offsets are relative to the snapshot, while setSelection
-        // takes absolute document offsets. They coincide only when the editor
-        // returned the document from its start; for a partial extraction,
-        // passing the planned range straight through would move the caret near
-        // the top of the document instead of around where it actually sits.
-        val base = extracted.startOffset.coerceAtLeast(0)
+        // Snapshot-relative -> absolute, via the pure helper so the mapping is
+        // covered by a test rather than only by this comment.
+        val absolute = SelectionPlanner.toDocumentRange(next, extracted.startOffset)
 
         // No explicit state push here: setSelection makes the host call
         // onUpdateSelection, which runs syncEditorText and keeps one definition
         // of "has a selection" for the whole keyboard.
-        ic.setSelection(next.start + base, next.end + base)
+        ic.setSelection(absolute.start, absolute.end)
     }
 
     /**
@@ -436,6 +433,11 @@ class AgenticKeyboardService : InputMethodService(), LifecycleOwner, ViewModelSt
         if (!restarting) {
             viewModel.dismissResults()
             viewModel.onNewInputSession()
+            // The edit bar is opt-in per input session, so a genuinely new field
+            // starts with it closed. This is the same boundary dismissResults
+            // uses: a restart of the same editor (an input-view rebuild) keeps
+            // the bar open, a different field does not inherit it.
+            viewModel.setEditBarExpanded(false)
         }
         syncEditorText()
         // Do not read the clipboard here. On Android 13+ and some OEM builds,
