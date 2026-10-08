@@ -15,6 +15,22 @@
         android:supportsRtl="true"
         android:theme="@style/Theme.MyApplication">
         <activity
+            android:name=".ConversationCaptureActivity"
+            android:exported="false"
+            android:label="Conversation capture"
+            android:theme="@style/Theme.MyApplication" />
+        <service
+            android:name=".service.ConversationCaptureService"
+            android:label="@string/conversation_capture_label"
+            android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.accessibilityservice.AccessibilityService" />
+            </intent-filter>
+            <meta-data android:name="android.accessibilityservice"
+                android:resource="@xml/conversation_capture_service" />
+        </service>
+        <activity
             android:name=".ClipboardHistoryActivity"
             android:exported="false"
             android:label="Clipboard History"

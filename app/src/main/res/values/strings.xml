@@ -1,3 +1,5 @@
 <resources>
     <string name="app_name">Agentic Keyboard</string>
+    <string name="conversation_capture_label">Lumina conversation capture</string>
+    <string name="conversation_capture_description">Read visible text in allowed apps only when you tap Use conversation. Select message text before using it. Context expires after one minute and is not saved. AI actions in cloud mode send selected text to Gemini with redaction. No automatic sending or scrolling. Disable access here at any time.</string>
 </resources>

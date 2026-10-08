@@ -114,7 +114,7 @@ object GeminiManager {
     /**
      * Suggests smart response replies based on input message context.
      */
-    suspend fun suggestReplies(contextMessage: String, personalizationContext: String = "", intent: String = "", bypassCache: Boolean = false): SuggestionsResponse = withContext(Dispatchers.IO) {
+    suspend fun suggestReplies(contextMessage: String, personalizationContext: String = "", intent: String = "", bypassCache: Boolean = false, cacheResponse: Boolean = true): SuggestionsResponse = withContext(Dispatchers.IO) {
         if (!isApiKeyAvailable()) {
             return@withContext offlineReplies(contextMessage, personalizationContext, intent)
         }
@@ -126,7 +126,7 @@ object GeminiManager {
             personalizationContext,
             contextMessage
         )
-        if (!bypassCache) suggestionsCache.get(cacheKey)?.let { return@withContext it }
+        if (cacheResponse && !bypassCache) suggestionsCache.get(cacheKey)?.let { return@withContext it }
 
         try {
             val request = GenerateContentRequest(
@@ -137,7 +137,7 @@ object GeminiManager {
             val jsonText = response.candidates?.firstOrNull()?.content?.parts?.firstOrNull()?.text
             val parsed = jsonText?.let { moshi.adapter(SuggestionsResponse::class.java).fromJson(extractJson(it)) }
             if (parsed != null) {
-                suggestionsCache.put(cacheKey, parsed)
+                if (cacheResponse) suggestionsCache.put(cacheKey, parsed)
                 parsed
             } else {
                 offlineReplies(contextMessage, personalizationContext, intent)
@@ -151,7 +151,7 @@ object GeminiManager {
     /**
      * Summarizes long input message text.
      */
-    suspend fun summarizeMessage(text: String, personalizationContext: String = "", bypassCache: Boolean = false): String = withContext(Dispatchers.IO) {
+    suspend fun summarizeMessage(text: String, personalizationContext: String = "", bypassCache: Boolean = false, cacheResponse: Boolean = true): String = withContext(Dispatchers.IO) {
         if (text.trim().split(WHITESPACE_REGEX).size < 10) {
             return@withContext "Message is too short to summarize."
         }
@@ -162,11 +162,11 @@ object GeminiManager {
 
         val prompt = Prompts.summarizeMessage(personalizationContext, text)
         val cacheKey = AiCacheKeys.summary(BuildConfig.GEMINI_MODEL, personalizationContext, text)
-        if (!bypassCache) textCache.get(cacheKey)?.let { return@withContext it }
+        if (cacheResponse && !bypassCache) textCache.get(cacheKey)?.let { return@withContext it }
 
         try {
             val result = generateText(prompt)
-            if (result != null) textCache.put(cacheKey, result)
+            if (cacheResponse && result != null) textCache.put(cacheKey, result)
             result ?: offlineSummary(text)
         } catch (e: Exception) {
             Log.e(TAG, "Error in summarizeMessage", e)
@@ -177,7 +177,7 @@ object GeminiManager {
     /**
      * Translates text into target language.
      */
-    suspend fun translateText(text: String, sourceLang: String, targetLang: String, personalizationContext: String = "", bypassCache: Boolean = false): String = withContext(Dispatchers.IO) {
+    suspend fun translateText(text: String, sourceLang: String, targetLang: String, personalizationContext: String = "", bypassCache: Boolean = false, cacheResponse: Boolean = true): String = withContext(Dispatchers.IO) {
         if (text.isBlank()) return@withContext ""
 
         if (!isApiKeyAvailable()) {
@@ -192,11 +192,11 @@ object GeminiManager {
             personalizationContext,
             text
         )
-        if (!bypassCache) textCache.get(cacheKey)?.let { return@withContext it }
+        if (cacheResponse && !bypassCache) textCache.get(cacheKey)?.let { return@withContext it }
 
         try {
             val result = generateText(prompt)
-            if (result != null) textCache.put(cacheKey, result)
+            if (cacheResponse && result != null) textCache.put(cacheKey, result)
             result ?: "[Translation Failed] $text"
         } catch (e: Exception) {
             Log.e(TAG, "Error in translateText", e)
@@ -268,7 +268,7 @@ object GeminiManager {
     /**
      * Explains dense or jargon-heavy text (e.g. from the clipboard) in plain language.
      */
-    suspend fun explainText(text: String, bypassCache: Boolean = false): String = withContext(Dispatchers.IO) {
+    suspend fun explainText(text: String, bypassCache: Boolean = false, cacheResponse: Boolean = true): String = withContext(Dispatchers.IO) {
         if (text.isBlank()) return@withContext ""
 
         if (!isApiKeyAvailable()) {
@@ -277,11 +277,11 @@ object GeminiManager {
 
         val prompt = Prompts.explainText(text)
         val cacheKey = AiCacheKeys.explanation(BuildConfig.GEMINI_MODEL, text)
-        if (!bypassCache) textCache.get(cacheKey)?.let { return@withContext it }
+        if (cacheResponse && !bypassCache) textCache.get(cacheKey)?.let { return@withContext it }
 
         try {
             val result = generateText(prompt)
-            if (result != null) textCache.put(cacheKey, result)
+            if (cacheResponse && result != null) textCache.put(cacheKey, result)
             result ?: "[Explanation failed]"
         } catch (e: Exception) {
             Log.e(TAG, "Error in explainText", e)

@@ -13,7 +13,7 @@ sealed interface AiPanelState {
     object Idle : AiPanelState
     object Loading : AiPanelState
 
-    data class ReplyIntent(val contextMessage: String) : AiPanelState
+    data class ReplyIntent(val contextMessage: String, val ephemeralContext: Boolean = false) : AiPanelState
     data class Replies(val suggestions: List<String>) : AiPanelState
     data class Grammar(val result: GrammarCorrectionResponse) : AiPanelState
     data class Tone(val result: ToneAnalysisResponse) : AiPanelState

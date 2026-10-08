@@ -4,6 +4,7 @@ import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
 import android.inputmethodservice.InputMethodService
+import android.os.SystemClock
 import android.util.Log
 import android.view.KeyEvent
 import android.view.View
@@ -31,11 +32,15 @@ import androidx.savedstate.SavedStateRegistryOwner
 import androidx.savedstate.setViewTreeSavedStateRegistryOwner
 import io.github.daddymean.agentickeyboard.AgenticKeyboardApplication
 import io.github.daddymean.agentickeyboard.ClipboardHistoryActivity
+import io.github.daddymean.agentickeyboard.ConversationCaptureActivity
 import io.github.daddymean.agentickeyboard.MainActivity
 import io.github.daddymean.agentickeyboard.SnippetVaultActivity
 import io.github.daddymean.agentickeyboard.db.ClipboardHistoryItem
 import io.github.daddymean.agentickeyboard.db.KeyboardRepository
 import io.github.daddymean.agentickeyboard.ui.AgenticKeyboardLayout
+import io.github.daddymean.agentickeyboard.ui.ConversationContextBar
+import io.github.daddymean.agentickeyboard.ui.ConversationContextUiState
+import io.github.daddymean.agentickeyboard.ui.ConversationContextAction
 import io.github.daddymean.agentickeyboard.ui.ClipboardHistoryBar
 import io.github.daddymean.agentickeyboard.ui.KeyboardViewModel
 import io.github.daddymean.agentickeyboard.ui.KeyboardViewModelFactory
@@ -50,6 +55,9 @@ import io.github.daddymean.agentickeyboard.util.ClipboardSensitivity
 import io.github.daddymean.agentickeyboard.util.KeyboardSettings
 import io.github.daddymean.agentickeyboard.util.EditClipboardAction
 import io.github.daddymean.agentickeyboard.util.ReplyCompletenessSession
+import io.github.daddymean.agentickeyboard.util.ConversationCapturePreferences
+import io.github.daddymean.agentickeyboard.util.VisibleContextLease
+import io.github.daddymean.agentickeyboard.util.VisibleContextPolicy
 import io.github.daddymean.agentickeyboard.util.SelectionCommand
 import io.github.daddymean.agentickeyboard.util.SelectionPlanner
 import io.github.daddymean.agentickeyboard.util.SelectionRange
@@ -59,6 +67,8 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 
 class AgenticKeyboardService : InputMethodService(), LifecycleOwner, ViewModelStoreOwner, SavedStateRegistryOwner {
 
@@ -72,6 +82,9 @@ class AgenticKeyboardService : InputMethodService(), LifecycleOwner, ViewModelSt
     private val store = ViewModelStore()
     private val savedStateController = SavedStateRegistryController.create(this)
     private val replyCompletenessSession = ReplyCompletenessSession()
+    private val conversationContext = MutableStateFlow(ConversationContextUiState())
+    private val contextLease = VisibleContextLease()
+    private var contextExpiryJob: Job? = null
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val clipboardHistoryEnabled = MutableStateFlow(false)
     private val clipboardHistoryPaused = MutableStateFlow(false)
@@ -99,6 +112,16 @@ class AgenticKeyboardService : InputMethodService(), LifecycleOwner, ViewModelSt
             this,
             KeyboardViewModelFactory(repository, settings)
         )[KeyboardViewModel::class.java]
+        serviceScope.launch(Dispatchers.Main) {
+            ConversationCaptureService.invalidations.collect {
+                if (conversationContext.value.active || conversationContext.value.pending != null) {
+                    clearConversationContext("Screen changed. Capture the conversation again.")
+                }
+            }
+        }
+        viewModel.setReplyContextValidator {
+            conversationContext.value.active && validateConversationContext()
+        }
     }
 
     override fun onCreateInputView(): View {
@@ -132,6 +155,9 @@ class AgenticKeyboardService : InputMethodService(), LifecycleOwner, ViewModelSt
             val aiToolsExpanded by viewModel.aiToolsExpanded.collectAsState()
             val keyHeightScale by viewModel.keyHeightScale.collectAsState()
             val navInsetPx by navigationBarInsetPx.collectAsState()
+            val capturedContext by conversationContext.collectAsState()
+            val themeOverride by viewModel.themeOverride.collectAsState()
+            val offline by viewModel.isOfflineMode.collectAsState()
             val navigationBarInset = with(LocalDensity.current) { navInsetPx.toDp() }
 
             // Every surface below sizes itself from the window the IME was given,
@@ -139,11 +165,25 @@ class AgenticKeyboardService : InputMethodService(), LifecycleOwner, ViewModelSt
             ProvideKeyboardMetrics(keyHeightScale) {
                 Column {
                     TrustPrismBanner(viewModel)
+                    if (aiToolsExpanded && !sensitiveField) {
+                        ConversationContextBar(
+                            state = capturedContext,
+                            themeOverride = themeOverride,
+                            offline = offline,
+                            onCapture = { captureConversation() },
+                            onSettings = { openConversationCaptureSettings() },
+                            onConfirm = { confirmConversationContext(it) },
+                            onClear = { clearConversationContext() },
+                            onAction = { runConversationAction(it) }
+                        )
+                    }
                     ReplyCompletenessBar(
                         viewModel = viewModel,
                         session = replyCompletenessSession,
                         onSendAnyway = { performEnterAction() },
-                        showIdle = aiToolsExpanded
+                        showIdle = aiToolsExpanded,
+                        onClipboardContext = { clearConversationContext() },
+                        onClearContext = { clearConversationContext() }
                     )
                     SnippetVaultBar(
                         viewModel = viewModel,
@@ -212,6 +252,80 @@ class AgenticKeyboardService : InputMethodService(), LifecycleOwner, ViewModelSt
         requestHideSelf(0)
         runCatching { startActivity(intent) }
             .onFailure { Log.w(TAG, "Unable to open keyboard settings", it) }
+    }
+
+    private fun openConversationCaptureSettings() {
+        val target = currentInputEditorInfo?.packageName ?: return
+        val intent = Intent(this, ConversationCaptureActivity::class.java)
+            .putExtra(ConversationCaptureActivity.EXTRA_SOURCE_PACKAGE, target)
+            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        clearConversationContext()
+        requestHideSelf(0)
+        runCatching { startActivity(intent) }
+    }
+
+    private fun clearConversationContext(status: String? = null) {
+        val hadContext = conversationContext.value.active || conversationContext.value.pending != null
+        contextExpiryJob?.cancel()
+        contextExpiryJob = null
+        contextLease.clear()
+        conversationContext.value = ConversationContextUiState(status = status)
+        replyCompletenessSession.clear()
+        if (hadContext) viewModel.dismissResults()
+    }
+
+    private fun captureConversation() {
+        clearConversationContext()
+        if (viewModel.isSensitiveField.value) return
+        val target = currentInputEditorInfo?.packageName ?: return
+        if (!ConversationCapturePreferences(this).isAllowed(target) ||
+            !ConversationCaptureService.isConnected()) {
+            openConversationCaptureSettings()
+            return
+        }
+        val snapshot = ConversationCaptureService.capture(target)
+        if (snapshot == null) {
+            conversationContext.value = ConversationContextUiState(
+                status = "Visible text is unavailable. Use the clipboard fallback.")
+            return
+        }
+        contextLease.capture(snapshot, SystemClock.elapsedRealtime())
+        conversationContext.value = ConversationContextUiState(pending = snapshot)
+        contextExpiryJob = serviceScope.launch(Dispatchers.Main) {
+            delay(VisibleContextPolicy.TTL_MS)
+            clearConversationContext("Context expired. Capture again to use it.")
+        }
+    }
+
+    private fun validateConversationContext(): Boolean {
+        val target = currentInputEditorInfo?.packageName
+        val current = if (!viewModel.isSensitiveField.value && target != null) {
+            ConversationCaptureService.capture(target)
+        } else null
+        if (!contextLease.matches(current, SystemClock.elapsedRealtime())) {
+            clearConversationContext("Context changed or expired. Capture again.")
+            return false
+        }
+        return true
+    }
+
+    private fun confirmConversationContext(indices: List<Int>) {
+        val snapshot = conversationContext.value.pending ?: return
+        if (!validateConversationContext()) return
+        val text = indices.distinct().sorted().mapNotNull { snapshot.lines.getOrNull(it) }.joinToString("\n")
+        if (!replyCompletenessSession.setIncomingContext(text)) return
+        conversationContext.value = ConversationContextUiState(active = true)
+    }
+
+    private fun runConversationAction(action: ConversationContextAction) {
+        if (!conversationContext.value.active || !validateConversationContext()) return
+        val text = replyCompletenessSession.incomingContext() ?: return
+        when (action) {
+            ConversationContextAction.REPLY -> viewModel.requestReplyIdeas(text, ephemeralContext = true)
+            ConversationContextAction.SUMMARY -> viewModel.summarizeMessage(text, ephemeralContext = true)
+            ConversationContextAction.TRANSLATE -> viewModel.translateText(text, ephemeralContext = true)
+            ConversationContextAction.EXPLAIN -> viewModel.explainText(text, ephemeralContext = true)
+        }
     }
 
     private fun openSnippetVaultManager() {
@@ -302,6 +416,7 @@ class AgenticKeyboardService : InputMethodService(), LifecycleOwner, ViewModelSt
             action != EditorInfo.IME_ACTION_UNSPECIFIED &&
             (options and EditorInfo.IME_FLAG_NO_ENTER_ACTION) == 0
         if (hasAction && action == EditorInfo.IME_ACTION_SEND) {
+            if (conversationContext.value.active) validateConversationContext()
             val draft = ic.getTextBeforeCursor(CONTEXT_CHARS, 0)?.toString() ?: ""
             if (replyCompletenessSession.interceptSend(draft, viewModel.isSensitiveField.value)) return
             if (viewModel.interceptSend(draft)) return
@@ -422,7 +537,7 @@ class AgenticKeyboardService : InputMethodService(), LifecycleOwner, ViewModelSt
     override fun onStartInput(info: EditorInfo?, restarting: Boolean) {
         super.onStartInput(info, restarting)
         lifecycleRegistry.handleLifecycleEvent(Lifecycle.Event.ON_START)
-        replyCompletenessSession.clear()
+        clearConversationContext()
         clipboardStatus.value = null
 
         viewModel.onEditorStarted(
@@ -461,6 +576,7 @@ class AgenticKeyboardService : InputMethodService(), LifecycleOwner, ViewModelSt
     }
 
     override fun onWindowHidden() {
+        clearConversationContext()
         lifecycleRegistry.handleLifecycleEvent(Lifecycle.Event.ON_PAUSE)
         super.onWindowHidden()
     }
@@ -469,13 +585,15 @@ class AgenticKeyboardService : InputMethodService(), LifecycleOwner, ViewModelSt
         // The field is gone: cancel any in-flight AI action so its result cannot
         // appear later in a different editor.
         viewModel.dismissResults()
-        replyCompletenessSession.clear()
+        clearConversationContext()
         clipboardStatus.value = null
         lifecycleRegistry.handleLifecycleEvent(Lifecycle.Event.ON_STOP)
         super.onFinishInput()
     }
 
     override fun onDestroy() {
+        clearConversationContext()
+        viewModel.setReplyContextValidator(null)
         lifecycleRegistry.handleLifecycleEvent(Lifecycle.Event.ON_DESTROY)
         serviceScope.cancel()
         store.clear()
