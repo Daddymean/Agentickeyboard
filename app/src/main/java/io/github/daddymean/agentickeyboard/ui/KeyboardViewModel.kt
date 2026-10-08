@@ -734,30 +734,14 @@ class KeyboardViewModel(
      * spelling auto-correction (skipped while [correctionsPaused]). Returns null when
      * the word should stand as typed.
      */
-    fun resolveWordCommit(word: String): WordReplacement? {
-        val normalized = word.lowercase().trim()
-        if (normalized.isEmpty()) return null
-        shortcuts.value.find { it.shortcut == normalized }?.let {
-            val expanded = expandTemplate(it.template)
-            return WordReplacement(
-                expanded.text,
-                fromLearnedRule = false,
-                cursorOffset = expanded.cursorOffset
-            )
-        }
-        // Shortcuts above still expand while learned corrections are paused.
-        if (_correctionsPaused.value) return null
-        learnedCorrections.value.find { it.typo == normalized }?.let { correction ->
-            // Preserve leading capitalization of the typed word
-            val replacement = if (word.firstOrNull()?.isUpperCase() == true) {
-                correction.correction.replaceFirstChar { it.uppercase() }
-            } else {
-                correction.correction
-            }
-            return WordReplacement(replacement, fromLearnedRule = true)
-        }
-        return null
-    }
+    fun resolveWordCommit(word: String): WordReplacement? =
+        WordCommitResolver.resolve(
+            word,
+            shortcuts.value,
+            learnedCorrections.value,
+            _correctionsPaused.value,
+            ::expandTemplate
+        )
 
     // --- Auto-correction undo -------------------------------------------------
 

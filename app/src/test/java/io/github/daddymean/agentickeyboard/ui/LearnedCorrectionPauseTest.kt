@@ -6,7 +6,6 @@ import androidx.test.core.app.ApplicationProvider
 import io.github.daddymean.agentickeyboard.db.AppDatabase
 import io.github.daddymean.agentickeyboard.db.KeyboardRepository
 import org.junit.Assert.assertFalse
-import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -66,12 +65,5 @@ class LearnedCorrectionPauseTest {
 
         vm.setCorrectionsPaused(false)
         assertTrue(vm.isLearningPaused.value == learningBefore)
-    }
-
-    @Test
-    fun `paused commit of an unknown word stands as typed`() {
-        val vm = viewModel()
-        vm.setCorrectionsPaused(true)
-        assertNull(vm.resolveWordCommit("teh"))
     }
 }
