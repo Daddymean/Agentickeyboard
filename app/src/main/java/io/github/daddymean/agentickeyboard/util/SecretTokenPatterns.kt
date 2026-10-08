@@ -7,12 +7,13 @@ package io.github.daddymean.agentickeyboard.util
  * two paths cannot drift apart.
  */
 object SecretTokenPatterns {
-    // Any single-word label (RSA, EC, DSA, OPENSSH, PGP, ENCRYPTED, future ones).
+    // Any single-word label (RSA, EC, DSA, OPENSSH, PGP, ENCRYPTED, future ones); OpenPGP
+    // armor adds a trailing BLOCK (RFC 4880: BEGIN PGP PRIVATE KEY BLOCK).
     private const val PEM_LABEL = "(?:[A-Z0-9]+ )?"
 
     /** PEM private-key header; on its own enough to treat text as a secret. */
     val privateKeyHeader = Regex(
-        "-----BEGIN ${PEM_LABEL}PRIVATE KEY-----",
+        "-----BEGIN ${PEM_LABEL}PRIVATE KEY(?: BLOCK)?-----",
         RegexOption.IGNORE_CASE
     )
 
@@ -21,8 +22,8 @@ object SecretTokenPatterns {
      * to the end of the text, so a truncated paste is still redacted in full.
      */
     val privateKeyBlock = Regex(
-        "-----BEGIN ${PEM_LABEL}PRIVATE KEY-----[\\s\\S]*?" +
-            "(?:-----END ${PEM_LABEL}PRIVATE KEY-----|\\z)",
+        "-----BEGIN ${PEM_LABEL}PRIVATE KEY(?: BLOCK)?-----[\\s\\S]*?" +
+            "(?:-----END ${PEM_LABEL}PRIVATE KEY(?: BLOCK)?-----|\\z)",
         RegexOption.IGNORE_CASE
     )
 
@@ -34,7 +35,7 @@ object SecretTokenPatterns {
     /** GitHub fine-grained PAT, GitHub's default token kind. */
     val githubFineGrainedToken = Regex("\\bgithub_pat_[A-Za-z0-9_]{22,}\\b")
     val gitlabToken = Regex("\\bglpat-[A-Za-z0-9_-]{20,}")
-    val slackToken = Regex("\\bxox[abposr]-[A-Za-z0-9-]{10,}")
+    val slackToken = Regex("\\bxox[abeposr]-[A-Za-z0-9-]{10,}")
     val stripeKey = Regex("\\b[rs]k_(?:live|test)_[A-Za-z0-9]{16,}\\b")
     val googleOAuthToken = Regex("\\bya29\\.[A-Za-z0-9_-]{20,}")
     val googleApiKey = Regex("\\bAIza[A-Za-z0-9_-]{20,}\\b")

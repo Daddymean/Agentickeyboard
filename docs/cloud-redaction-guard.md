@@ -17,7 +17,7 @@ Redaction at the request boundary covers every current AI action and any future 
 ## Values currently redacted
 
 - Credential-shaped assignments such as `password=`, `api_key=`, and `access_token=`
-- Bare credentials with no label: PEM private-key blocks, `Bearer <token>`, JWTs, Google `AIza…` and OAuth `ya29.…`, GitHub `ghp_…`/`github_pat_…`, GitLab `glpat-…`, Slack `xox?-…`, Stripe `sk_/rk_live|test_…`, OpenAI `sk-…` and AWS `AKIA…` keys; PEM blocks with any one-word label (patterns shared with the clipboard-history filter in `SecretTokenPatterns`)
+- Bare credentials with no label: PEM private-key blocks, `Bearer <token>`, JWTs, Google `AIza…` and OAuth `ya29.…`, GitHub `ghp_…`/`github_pat_…`, GitLab `glpat-…`, Slack `xox?-…`, Stripe `sk_/rk_live|test_…`, OpenAI `sk-…` and AWS `AKIA…` keys; PEM blocks with any one-word label, including OpenPGP `PRIVATE KEY BLOCK` armor (patterns shared with the clipboard-history filter in `SecretTokenPatterns`)
 - Email addresses
 - Card-like financial numbers
 - Social Security numbers

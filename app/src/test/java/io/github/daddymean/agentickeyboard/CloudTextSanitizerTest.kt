@@ -206,7 +206,11 @@ class CloudTextSanitizerTest {
                 "stripe [REDACTED_SECRET] and [REDACTED_SECRET] end",
             "oauth ya29.FAKE_not_a_real_oauth_token end" to "oauth [REDACTED_SECRET] end",
             "-----BEGIN DSA PRIVATE KEY-----\nMIIBuwIBAAKBgQ\n-----END DSA PRIVATE KEY----- after" to
-                "[REDACTED_SECRET] after"
+                "[REDACTED_SECRET] after",
+            // Codex review 5451625082: OpenPGP armor and Slack rotating refresh tokens.
+            "-----BEGIN PGP PRIVATE KEY BLOCK-----\n\nlQOYBFAKE\n-----END PGP PRIVATE KEY BLOCK----- after" to
+                "[REDACTED_SECRET] after",
+            "refresh xoxe-1-FAKE000000-NotARealRefreshToken end" to "refresh [REDACTED_SECRET] end"
         )
     }
 
