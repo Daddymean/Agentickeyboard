@@ -301,13 +301,17 @@ fun AgenticKeyboardLayout(
     /**
      * Smart space: double-tap inserts ". ", a committed word is expanded from
      * shortcut templates or auto-corrected from learned typo rules (revertible
-     * with backspace), and every committed word feeds on-device learning.
+     * with backspace), and every committed word feeds on-device learning. In a
+     * sensitive field none of these rewrites apply and space types a space
+     * (KEYBOARD-006).
      */
     fun handleSpace() {
         val text = currentText()
         val now = System.currentTimeMillis()
 
-        if (now - lastSpaceTime < 400 && text.endsWith(" ") && text.trimEnd().lastOrNull()?.isLetterOrDigit() == true) {
+        if (viewModel.allowsSmartSpaceRewrites() && now - lastSpaceTime < 400 &&
+            text.endsWith(" ") && text.trimEnd().lastOrNull()?.isLetterOrDigit() == true
+        ) {
             lastSpaceTime = 0L
             if (inPlaygroundMode) {
                 onPlaygroundTextChange(text.dropLast(1) + ". ")
