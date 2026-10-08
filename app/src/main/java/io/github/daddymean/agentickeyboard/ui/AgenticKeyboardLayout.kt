@@ -309,7 +309,8 @@ fun AgenticKeyboardLayout(
         val text = currentText()
         val now = System.currentTimeMillis()
 
-        if (viewModel.allowsSmartSpaceRewrites() && now - lastSpaceTime < 400 &&
+        val rewritesAllowed = viewModel.allowsSmartSpaceRewrites()
+        if (rewritesAllowed && now - lastSpaceTime < 400 &&
             text.endsWith(" ") && text.trimEnd().lastOrNull()?.isLetterOrDigit() == true
         ) {
             lastSpaceTime = 0L
@@ -324,7 +325,9 @@ fun AgenticKeyboardLayout(
             gestureAlert = "Period inserted ✏️"
             return
         }
-        lastSpaceTime = now
+        // A space typed in a sensitive field must not arm the double-space period
+        // for the next editor (the input view is reused across onStartInput).
+        lastSpaceTime = if (rewritesAllowed) now else 0L
 
         val lastWord = text.takeLastWhile { !it.isWhitespace() }
         if (lastWord.isNotEmpty()) {
