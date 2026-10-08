@@ -216,6 +216,23 @@ class KeyboardViewModel(
         _editBarExpanded.value = expanded
     }
 
+    // KEYBOARD-002: learned typo->fix replacements paused for the current input
+    // session only. In memory, never persisted, and independent of "pause learning"
+    // (which stops new rules being learned). Lives here, not in a Compose remember{},
+    // so it survives input-view rebuilds; the service clears it on a genuinely new
+    // editor session via [onNewInputSession], not on every onStartInput restart.
+    private val _correctionsPaused = MutableStateFlow(false)
+    val correctionsPaused = _correctionsPaused.asStateFlow()
+
+    fun setCorrectionsPaused(paused: Boolean) {
+        _correctionsPaused.value = paused
+    }
+
+    /** A different editor or app took focus (onStartInput with restarting == false). */
+    fun onNewInputSession() {
+        _correctionsPaused.value = false
+    }
+
     fun setAiToolsExpanded(expanded: Boolean) {
         _aiToolsExpanded.value = expanded
     }
@@ -714,30 +731,17 @@ class KeyboardViewModel(
     /**
      * Resolves what a just-typed word should be replaced with when the user commits
      * it (presses space): a shortcut template expansion first, then a learned
-     * spelling auto-correction. Returns null when the word should stand as typed.
+     * spelling auto-correction (skipped while [correctionsPaused]). Returns null when
+     * the word should stand as typed.
      */
-    fun resolveWordCommit(word: String): WordReplacement? {
-        val normalized = word.lowercase().trim()
-        if (normalized.isEmpty()) return null
-        shortcuts.value.find { it.shortcut == normalized }?.let {
-            val expanded = expandTemplate(it.template)
-            return WordReplacement(
-                expanded.text,
-                fromLearnedRule = false,
-                cursorOffset = expanded.cursorOffset
-            )
-        }
-        learnedCorrections.value.find { it.typo == normalized }?.let { correction ->
-            // Preserve leading capitalization of the typed word
-            val replacement = if (word.firstOrNull()?.isUpperCase() == true) {
-                correction.correction.replaceFirstChar { it.uppercase() }
-            } else {
-                correction.correction
-            }
-            return WordReplacement(replacement, fromLearnedRule = true)
-        }
-        return null
-    }
+    fun resolveWordCommit(word: String): WordReplacement? =
+        WordCommitResolver.resolve(
+            word,
+            shortcuts.value,
+            learnedCorrections.value,
+            _correctionsPaused.value,
+            ::expandTemplate
+        )
 
     // --- Auto-correction undo -------------------------------------------------
 

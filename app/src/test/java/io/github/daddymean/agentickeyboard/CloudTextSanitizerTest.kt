@@ -177,6 +177,87 @@ class CloudTextSanitizerTest {
         )
     }
 
+    // Fake, non-functional tokens shaped like the real ones (GEMINI-KEY-REVIEW-001 F1).
+    @Test
+    fun redactsBareCredentialTokens() {
+        assertRedacts(
+            "fix this AIzaSyA1b2C3d4E5f6G7h8I9j0KlMnOpQrStUvW please" to
+                "fix this [REDACTED_SECRET] please",
+            "token ghp_abcdefghijklmnopqrstuvwxyz0123456789 here" to
+                "token [REDACTED_SECRET] here",
+            "key sk-proj-abcdefghijklmnop1234 ok" to "key [REDACTED_SECRET] ok",
+            "aws AKIAABCDEFGHIJKLMNOP done" to "aws [REDACTED_SECRET] done",
+            "jwt eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.dozjgNryP4J3jVmNHl0w5N_XgL0n3I9PlFUP0THsR8U end" to
+                "jwt [REDACTED_SECRET] end",
+            "Authorization: Bearer abc123DEF456ghi789" to "Authorization: Bearer [REDACTED_SECRET]"
+        )
+    }
+
+    // Hax review 5451548067: families that leaked whole or were only partly masked.
+    @Test
+    fun redactsFurtherProviderTokenFamilies() {
+        assertRedacts(
+            "pat github_pat_FAKE0000000000000000000_notarealtokenatall end" to
+                "pat [REDACTED_SECRET] end",
+            "slack xoxb-FAKE000000-FAKE000000000-NotARealSlackToken end" to
+                "slack [REDACTED_SECRET] end",
+            "gl glpat-FAKEFAKEFAKEFAKEFAKE end" to "gl [REDACTED_SECRET] end",
+            "stripe sk_live_FAKE0000FAKE0000FAKE and rk_test_FAKE1111FAKE1111FAKE end" to
+                "stripe [REDACTED_SECRET] and [REDACTED_SECRET] end",
+            "oauth ya29.FAKE_not_a_real_oauth_token end" to "oauth [REDACTED_SECRET] end",
+            "-----BEGIN DSA PRIVATE KEY-----\nMIIBuwIBAAKBgQ\n-----END DSA PRIVATE KEY----- after" to
+                "[REDACTED_SECRET] after",
+            // Codex review 5451625082: OpenPGP armor and Slack rotating refresh tokens.
+            "-----BEGIN PGP PRIVATE KEY BLOCK-----\n\nlQOYBFAKE\n-----END PGP PRIVATE KEY BLOCK----- after" to
+                "[REDACTED_SECRET] after",
+            "refresh xoxe-1-FAKE000000-NotARealRefreshToken end" to "refresh [REDACTED_SECRET] end"
+        )
+    }
+
+    // Codex review 5452873537: a labelled PEM block or Bearer token must not be cut
+    // after its first word by the assignment rule.
+    @Test
+    fun labelledPemBlocksAndBearerTokensAreRedactedWhole() {
+        assertRedacts(
+            "secret=-----BEGIN RSA PRIVATE KEY-----\nFAKEKEYMATERIAL\n-----END RSA PRIVATE KEY----- thanks" to
+                "secret=[REDACTED_SECRET] thanks",
+            "api_key: -----BEGIN PRIVATE KEY-----\nFAKEKEYMATERIAL\n-----END PRIVATE KEY----- thanks" to
+                "api_key=[REDACTED_SECRET] thanks",
+            "secret=-----BEGIN RSA PRIVATE KEY-----\nFAKEKEYMATERIAL truncated" to "secret=[REDACTED_SECRET]",
+            "api_key: -----BEGIN PRIVATE KEY-----\nFAKEKEYMATERIAL truncated" to "api_key=[REDACTED_SECRET]",
+            "access_token: Bearer FAKEbearerTOKEN0123 next" to
+                "access_token=[REDACTED_SECRET] [REDACTED_SECRET] next"
+        )
+        assertFalse(CloudTextSanitizer.sanitize("secret=-----BEGIN RSA PRIVATE KEY-----\nFAKEKEYMATERIAL").text.contains("FAKEKEYMATERIAL"))
+    }
+
+    @Test
+    fun bareTokenDigitsAreNotHalfMatchedAsAPhoneNumber() {
+        val result = CloudTextSanitizer.sanitize("AIzaSy5551234567abcdefghijklmnopqrstu")
+
+        assertEquals("[REDACTED_SECRET]", result.text)
+        assertEquals(1, result.replacements)
+    }
+
+    @Test
+    fun redactsWholePemPrivateKeyIncludingAnUnterminatedOne() {
+        val pem = "-----BEGIN PRIVATE KEY-----\nMIIEvQIBADANBgkqhkiG9w0BAQEFAASC\n-----END PRIVATE KEY-----"
+        assertRedacts(
+            "here: $pem thanks" to "here: [REDACTED_SECRET] thanks",
+            "-----BEGIN RSA PRIVATE KEY-----\nMIIEpAIBAAKCAQEA truncated" to "[REDACTED_SECRET]"
+        )
+    }
+
+    @Test
+    fun leavesTokenLikeOrdinaryWordsAlone() {
+        val input = "Ask the skeptic about sk-8 skates, task_live_demo, the ghp team, the xox game and an AIza sign."
+
+        val result = CloudTextSanitizer.sanitize(input)
+
+        assertFalse(result.changed)
+        assertEquals(input, result.text)
+    }
+
     private fun assertRedacts(vararg cases: Pair<String, String>) {
         cases.forEach { (input, expected) ->
             assertEquals(input, expected, CloudTextSanitizer.sanitize(input).text)

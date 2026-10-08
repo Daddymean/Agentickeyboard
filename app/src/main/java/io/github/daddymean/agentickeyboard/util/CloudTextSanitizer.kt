@@ -21,6 +21,12 @@ object CloudTextSanitizer {
     private data class Rule(val regex: Regex, val replacement: String)
 
     private val rules = listOf(
+        // Multi-part secrets first: a PEM block and `Bearer <token>`. The assignment rule
+        // below takes only the first word of an unquoted value, so `secret=-----BEGIN …`
+        // or `access_token: Bearer …` would otherwise consume just the header or the
+        // scheme word and leave the key body or token in the request.
+        Rule(SecretTokenPatterns.privateKeyBlock, "[REDACTED_SECRET]"),
+        Rule(SecretTokenPatterns.bearer, "\$1 [REDACTED_SECRET]"),
         // Explicit credential-like assignments: password=..., api_key: ..., token "...".
         // A value wrapped in matching quotes is consumed together with both quotes, so
         // `password: "hunter2"` becomes `password=[REDACTED_SECRET]` with no stray `"`.
@@ -33,6 +39,12 @@ object CloudTextSanitizer {
             ),
             replacement = "\$1=[REDACTED_SECRET]"
         ),
+        // Bare credentials that carry no `password=` label: JWTs and provider keys
+        // (Google, GitHub, GitLab, Slack, Stripe, OpenAI, AWS). Shared with the
+        // clipboard-history filter. They
+        // run before the numeric rules so digits inside a token are not half-matched
+        // as a phone number, leaving the rest of the token behind.
+        *SecretTokenPatterns.bareTokens.map { Rule(it, "[REDACTED_SECRET]") }.toTypedArray(),
         Rule(
             Regex("""[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}"""),
             "[REDACTED_EMAIL]"

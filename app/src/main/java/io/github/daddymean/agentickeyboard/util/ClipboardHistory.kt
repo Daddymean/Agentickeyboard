@@ -48,10 +48,6 @@ sealed interface ClipboardCaptureDecision {
  * It intentionally prefers a false rejection over retaining credential-shaped data.
  */
 object ClipboardHistoryPolicy {
-    private val privateKey = Regex(
-        "-----BEGIN (?:RSA |EC |OPENSSH |PGP )?PRIVATE KEY-----",
-        RegexOption.IGNORE_CASE
-    )
     private val passwordAssignment = Regex(
         "\\b(?:password|passwd|passcode|pin|secret|api[ _-]?key|access[ _-]?token|refresh[ _-]?token)\\b\\s*[:=]\\s*\\S{3,}",
         RegexOption.IGNORE_CASE
@@ -69,12 +65,6 @@ object ClipboardHistoryPolicy {
         "\\b(?:seed|recovery|mnemonic)\\s+(?:phrase|words?)\\b[\\s:=-]+(?:[a-z]{2,}\\s+){11,23}[a-z]{2,}",
         RegexOption.IGNORE_CASE
     )
-    private val bearer = Regex("\\bbearer\\s+[A-Za-z0-9._~+/=-]{12,}", RegexOption.IGNORE_CASE)
-    private val jwt = Regex("\\beyJ[A-Za-z0-9_-]{8,}\\.[A-Za-z0-9_-]{8,}\\.[A-Za-z0-9_-]{8,}\\b")
-    private val openAiKey = Regex("\\bsk-[A-Za-z0-9_-]{16,}\\b")
-    private val githubToken = Regex("\\bgh[pousr]_[A-Za-z0-9]{20,}\\b")
-    private val googleApiKey = Regex("\\bAIza[A-Za-z0-9_-]{20,}\\b")
-    private val awsAccessKey = Regex("\\b(?:AKIA|ASIA)[A-Z0-9]{16}\\b")
     private val cardCandidate = Regex("(?<!\\d)(?:\\d[ -]?){12,18}\\d(?!\\d)")
 
     /**
@@ -90,14 +80,10 @@ object ClipboardHistoryPolicy {
         if (content.length > ClipboardHistoryLimits.MAX_CONTENT_CHARS) {
             return ClipboardCaptureDecision.Reject(ClipboardRejectReason.TOO_LONG)
         }
-        if (privateKey.containsMatchIn(content)) {
+        if (SecretTokenPatterns.privateKeyHeader.containsMatchIn(content)) {
             return ClipboardCaptureDecision.Reject(ClipboardRejectReason.PRIVATE_KEY)
         }
-        if (
-            bearer.containsMatchIn(content) || jwt.containsMatchIn(content) ||
-            openAiKey.containsMatchIn(content) || githubToken.containsMatchIn(content) ||
-            googleApiKey.containsMatchIn(content) || awsAccessKey.containsMatchIn(content)
-        ) {
+        if (SecretTokenPatterns.containsToken(content)) {
             return ClipboardCaptureDecision.Reject(ClipboardRejectReason.AUTH_SECRET)
         }
         if (passwordAssignment.containsMatchIn(content)) {
