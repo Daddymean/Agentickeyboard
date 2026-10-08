@@ -1,6 +1,7 @@
 package io.github.daddymean.agentickeyboard.util
 
 import io.github.daddymean.agentickeyboard.util.SelectionPlanner.plan
+import java.text.BreakIterator
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -411,6 +412,115 @@ class SelectionPlannerTest {
                             "$command from $caretAt computed a start of ${result.start}," +
                                 " splitting a surrogate pair",
                             splitsAPair(result.start)
+                        )
+                    }
+                }
+            }
+        }
+    }
+
+    // --- emoji and apostrophes ------------------------------------------------
+    //
+    // Hax's non-blocking notes on #130. Classifying a mark or joiner on its own
+    // made emoji behave like words, because a ZWJ sequence is joiners between
+    // pictographs and U+FE0F (the selector that renders "❤️" as an emoji) is
+    // category Mn. An extender now counts only with a word base behind it. The
+    // second note is older than the mark handling: U+2019 was no kind of word
+    // character, so the apostrophe that iOS and macOS actually insert broke a
+    // contraction in two.
+
+    /** "❤️hello" — heart, variation selector, then a word with no space. */
+    private val heartWord = "❤️hello"
+
+    /** "hi 👨‍👩‍👧 there" — a three-person ZWJ family emoji between two words. */
+    private val family = "hi 👨‍👩‍👧 there"
+
+    /** "don’t stop" with U+2019, as iOS, macOS and word processors type it. */
+    private val curly = "don’t stop"
+
+    @Test
+    fun `a variation selector does not pull an emoji into the next word`() {
+        assertEquals(7, heartWord.length)
+        // Previously (0, 7): the heart and its selector read as word characters.
+        assertEquals(SelectionRange(2, 7), plan(heartWord, caret(0), SelectionCommand.SelectWord))
+    }
+
+    @Test
+    fun `a zwj emoji sequence is skipped instead of walked as a word`() {
+        assertEquals(17, family.length)
+        assertEquals(caret(2), plan(family, caret(0), SelectionCommand.MoveWordRight))
+        // Previously this returned 6: the scan skipped the first pictograph,
+        // found the joiner at 5 word-worthy and consumed it alone. Under
+        // Android's ICU iterator the same rule instead ran to 11, the end of the
+        // whole cluster — Hax measured both. Either way the walk treated part of
+        // an emoji as a word; now it carries on to "there".
+        assertEquals(caret(17), plan(family, caret(2), SelectionCommand.MoveWordRight))
+        assertEquals(caret(12), plan(family, caret(17), SelectionCommand.MoveWordLeft))
+    }
+
+    @Test
+    fun `a caret stranded inside an emoji takes the word it left`() {
+        // Offset 5 is the first joiner. There is no word there to select, so the
+        // same whitespace fallback applies and "hi" wins over "there".
+        assertEquals(SelectionRange(0, 2), plan(family, caret(5), SelectionCommand.SelectWord))
+    }
+
+    @Test
+    fun `a curly apostrophe keeps a contraction in one piece`() {
+        // Previously 3 and (0, 3) — "don", with the quote and "t" left behind.
+        assertEquals(caret(5), plan(curly, caret(0), SelectionCommand.MoveWordRight))
+        assertEquals(SelectionRange(0, 5), plan(curly, caret(2), SelectionCommand.SelectWord))
+        assertEquals(caret(0), plan(curly, caret(5), SelectionCommand.MoveWordLeft))
+    }
+
+    @Test
+    fun `a modifier letter apostrophe needs no special case`() {
+        // U+02BC is category Lm, so isLetterOrDigit already accepts it. Asserted
+        // so that nobody "fixes" it by adding a second constant.
+        val modifier = "donʼt stop"
+        assertEquals(SelectionRange(0, 5), plan(modifier, caret(2), SelectionCommand.SelectWord))
+    }
+
+    @Test
+    fun `a mark with nothing in front of it is not a word`() {
+        // A string opening with a combining acute — malformed, but editors do
+        // hand it over. The mark has no base, so the word is "abc" alone.
+        val orphan = "́abc"
+        assertEquals(SelectionRange(1, 4), plan(orphan, caret(0), SelectionCommand.SelectWord))
+        assertEquals(caret(1), plan(orphan, caret(3), SelectionCommand.MoveWordLeft))
+    }
+
+    @Test
+    fun `an ascii apostrophe and underscore behave as they always did`() {
+        // The base rule must not disturb the unconditional word characters.
+        val mixed = "it's don't_x o'clock"
+        assertEquals(caret(4), plan(mixed, caret(0), SelectionCommand.MoveWordRight))
+        assertEquals(caret(12), plan(mixed, caret(4), SelectionCommand.MoveWordRight))
+        assertEquals(caret(20), plan(mixed, caret(12), SelectionCommand.MoveWordRight))
+        assertEquals(SelectionRange(5, 12), plan(mixed, caret(7), SelectionCommand.SelectWord))
+    }
+
+    @Test
+    fun `word commands land on a character boundary in emoji and quoted text`() {
+        // The earlier sweeps assert no split surrogate pair. This one asks the
+        // iterator itself, so it also catches an offset wedged between a base
+        // and its mark — the failure mode the variation selector introduced.
+        val probes = listOf(heartWord, family, curly, "I ❤️ you", "́abc")
+        for (probe in probes) {
+            val iterator = BreakIterator.getCharacterInstance()
+            iterator.setText(probe)
+            for (caretAt in 0..probe.length) {
+                for (command in listOf(
+                    SelectionCommand.MoveWordLeft,
+                    SelectionCommand.MoveWordRight,
+                    SelectionCommand.SelectWord
+                )) {
+                    val result = plan(probe, caret(caretAt), command)
+                    for (offset in listOf(result.start, result.end)) {
+                        assertTrue(
+                            "$command from $caretAt in \"$probe\" returned $offset," +
+                                " which is not a character boundary",
+                            iterator.isBoundary(offset)
                         )
                     }
                 }
