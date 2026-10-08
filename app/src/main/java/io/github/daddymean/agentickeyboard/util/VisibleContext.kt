@@ -56,20 +56,20 @@ object VisibleContextPolicy {
 
 /** One capture per editor session. Both confirmation and use revalidate the screen. */
 class VisibleContextLease {
-    private var snapshot: VisibleContext? = null
+    private var fingerprint: String? = null
     private var deadline = 0L
 
     fun capture(value: VisibleContext, now: Long) {
-        snapshot = value
+        fingerprint = value.fingerprint
         deadline = now + VisibleContextPolicy.TTL_MS
     }
 
     fun matches(current: VisibleContext?, now: Long): Boolean =
-        snapshot != null && current != null && now < deadline &&
-            snapshot!!.fingerprint == current.fingerprint
+        fingerprint != null && current != null && now < deadline &&
+            fingerprint == current.fingerprint
 
     fun clear() {
-        snapshot = null
+        fingerprint = null
         deadline = 0
     }
 }

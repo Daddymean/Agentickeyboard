@@ -11,9 +11,12 @@ import android.view.View
 import android.view.inputmethod.EditorInfo
 import android.view.inputmethod.ExtractedTextRequest
 import android.view.inputmethod.InputMethodManager
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.platform.ComposeView
 import androidx.compose.ui.platform.LocalDensity
 import androidx.core.view.ViewCompat
@@ -38,6 +41,7 @@ import io.github.daddymean.agentickeyboard.SnippetVaultActivity
 import io.github.daddymean.agentickeyboard.db.ClipboardHistoryItem
 import io.github.daddymean.agentickeyboard.db.KeyboardRepository
 import io.github.daddymean.agentickeyboard.ui.AgenticKeyboardLayout
+import io.github.daddymean.agentickeyboard.ui.ConversationContextPreview
 import io.github.daddymean.agentickeyboard.ui.ConversationContextBar
 import io.github.daddymean.agentickeyboard.ui.ConversationContextUiState
 import io.github.daddymean.agentickeyboard.ui.ConversationContextAction
@@ -65,6 +69,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.Job
@@ -172,7 +177,6 @@ class AgenticKeyboardService : InputMethodService(), LifecycleOwner, ViewModelSt
                             offline = offline,
                             onCapture = { captureConversation() },
                             onSettings = { openConversationCaptureSettings() },
-                            onConfirm = { confirmConversationContext(it) },
                             onClear = { clearConversationContext() },
                             onAction = { runConversationAction(it) }
                         )
@@ -202,23 +206,39 @@ class AgenticKeyboardService : InputMethodService(), LifecycleOwner, ViewModelSt
                         onInsert = { insertClipboardItem(it) },
                         onOpenManager = { openClipboardHistoryManager() }
                     )
-                    AgenticKeyboardLayout(
-                        viewModel = viewModel,
-                        onKeyPress = { text ->
-                            currentInputConnection?.commitText(text, 1)
-                        },
-                        onDelete = {
-                            currentInputConnection?.deleteSurroundingText(1, 0)
-                        },
-                        onAction = { performEnterAction() },
-                        onMicPress = { switchToVoiceInput() },
-                        onCursorMove = { steps -> moveCursor(steps) },
-                        onSelectionCommand = { command -> applySelectionCommand(command) },
-                        onClipboardAction = { action -> performClipboardAction(action) },
-                        inputConnectionProvider = { currentInputConnection },
-                        navigationBarInset = navigationBarInset,
-                        onOpenSettings = { openKeyboardSettings() }
-                    )
+                    Box {
+                        Box(modifier = if (capturedContext.pending != null) {
+                            Modifier.clearAndSetSemantics { }
+                        } else Modifier) {
+                            AgenticKeyboardLayout(
+                                viewModel = viewModel,
+                                onKeyPress = { text ->
+                                    currentInputConnection?.commitText(text, 1)
+                                },
+                                onDelete = {
+                                    currentInputConnection?.deleteSurroundingText(1, 0)
+                                },
+                                onAction = { performEnterAction() },
+                                onMicPress = { switchToVoiceInput() },
+                                onCursorMove = { steps -> moveCursor(steps) },
+                                onSelectionCommand = { command -> applySelectionCommand(command) },
+                                onClipboardAction = { action -> performClipboardAction(action) },
+                                inputConnectionProvider = { currentInputConnection },
+                                navigationBarInset = navigationBarInset,
+                                onOpenSettings = { openKeyboardSettings() }
+                            )
+                        }
+                        capturedContext.pending?.takeIf { !sensitiveField }?.let { pending ->
+                            Box(Modifier.matchParentSize()) {
+                                ConversationContextPreview(
+                                    pending = pending,
+                                    themeOverride = themeOverride,
+                                    onConfirm = { confirmConversationContext(it) },
+                                    onClear = { clearConversationContext() }
+                                )
+                            }
+                        }
+                    }
                 }
             }
         }
