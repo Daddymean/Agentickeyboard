@@ -27,15 +27,25 @@ object SecretTokenPatterns {
         RegexOption.IGNORE_CASE
     )
 
-    /** `Bearer <token>`; group 1 is the scheme word so it can be kept. */
-    val bearer = Regex("\\b(bearer)\\s+[A-Za-z0-9._~+/=-]{12,}", RegexOption.IGNORE_CASE)
+    /**
+     * `Bearer <token>`; group 1 is the scheme word so it can be kept. Right after a `:` or
+     * `=` (a header such as `Authorization:` or a label such as `access_token=`, quoted or
+     * not) any token counts. A free-standing "bearer" needs a digit in the token, so prose
+     * like "ring bearer responsibilities" is left alone.
+     */
+    val bearer = Regex(
+        "\\b((?<=[:=][\\s\"']{0,16})bearer|bearer(?=\\s+[A-Za-z._~+/=-]*[0-9]))" +
+            "\\s+[A-Za-z0-9._~+/=-]{12,}",
+        RegexOption.IGNORE_CASE
+    )
     val jwt = Regex("\\beyJ[A-Za-z0-9_-]{8,}\\.[A-Za-z0-9_-]{8,}\\.[A-Za-z0-9_-]{8,}\\b")
     val openAiKey = Regex("\\bsk-[A-Za-z0-9_-]{16,}\\b")
     val githubToken = Regex("\\bgh[pousr]_[A-Za-z0-9]{20,}\\b")
     /** GitHub fine-grained PAT, GitHub's default token kind. */
     val githubFineGrainedToken = Regex("\\bgithub_pat_[A-Za-z0-9_]{22,}\\b")
     val gitlabToken = Regex("\\bglpat-[A-Za-z0-9_-]{20,}")
-    val slackToken = Regex("\\bxox[abeposr]-[A-Za-z0-9-]{10,}")
+    /** Real Slack tokens carry numeric IDs; the digit keeps "xoxo-hugs-and-kisses" out. */
+    val slackToken = Regex("\\bxox[abeposr]-(?=[A-Za-z-]*[0-9])[A-Za-z0-9-]{10,}")
     val stripeKey = Regex("\\b[rs]k_(?:live|test)_[A-Za-z0-9]{16,}\\b")
     val googleOAuthToken = Regex("\\bya29\\.[A-Za-z0-9_-]{20,}")
     val googleApiKey = Regex("\\bAIza[A-Za-z0-9_-]{20,}\\b")

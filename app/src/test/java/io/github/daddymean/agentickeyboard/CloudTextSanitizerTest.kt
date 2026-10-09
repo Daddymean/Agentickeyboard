@@ -258,6 +258,27 @@ class CloudTextSanitizerTest {
         assertEquals(input, result.text)
     }
 
+    @Test
+    fun bearerAndXoxoProseIsNotRedactedButHeadersStillAre() {
+        val prose = "The ring bearer responsibilities are light. Signed xoxo-hugs-and-kisses"
+        val proseResult = CloudTextSanitizer.sanitize(prose)
+        assertFalse(proseResult.changed)
+        assertEquals(prose, proseResult.text)
+
+        // After a header or credential label even a letters-only token is a credential.
+        val letters = "abcdefghijklmnopqrstuvwxyz"
+        listOf(
+            "Authorization: Bearer $letters" to "Authorization: Bearer [REDACTED_SECRET]",
+            "{\"Authorization\": \"Bearer $letters\"}" to "{\"Authorization\": \"Bearer [REDACTED_SECRET]\"}",
+            "access_token: Bearer $letters next" to "access_token=[REDACTED_SECRET] [REDACTED_SECRET] next",
+            "auth_token=Bearer $letters" to "auth_token=[REDACTED_SECRET] [REDACTED_SECRET]"
+        ).forEach { (input, expected) ->
+            val result = CloudTextSanitizer.sanitize(input)
+            assertEquals(expected, result.text)
+            assertFalse(result.text.contains(letters))
+        }
+    }
+
     private fun assertRedacts(vararg cases: Pair<String, String>) {
         cases.forEach { (input, expected) ->
             assertEquals(input, expected, CloudTextSanitizer.sanitize(input).text)
