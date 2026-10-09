@@ -30,27 +30,47 @@ internal const val SPACE_CURSOR_STEP_PX = 48f
  * release types nothing.
  */
 internal suspend fun PointerInputScope.detectTapOrHorizontalSlide(
+    order: KeyPressOrder? = null,
     onTap: () -> Unit,
     onSlide: (Int) -> Unit
 ) = awaitEachGesture {
     val down = awaitFirstDown()
     down.consume()
+    // KEYBOARD-018: space joins the press order; if a key goes down while space is
+    // held, the space is typed first and the rest of this press is ignored.
+    val press = order?.press { onTap() }
+    fun stillOurs(): Boolean = press == null || order.finish(press)
     val thresholdPx = SpaceCursorSlideThreshold.toPx()
     var sliding = false
+    var typedEarly = false
     var accumulated = 0f
     while (true) {
         val event = awaitPointerEvent()
-        val change = event.changes.firstOrNull { it.id == down.id } ?: return@awaitEachGesture
+        val change = event.changes.firstOrNull { it.id == down.id }
+        if (change == null) {
+            if (!sliding) stillOurs()
+            return@awaitEachGesture
+        }
         if (!change.pressed) {
             change.consume()
-            if (!sliding) onTap()
+            if (!sliding && !typedEarly && stillOurs()) onTap()
             return@awaitEachGesture
+        }
+        if (typedEarly || (press?.committedEarly == true && !sliding)) {
+            typedEarly = true
+            change.consume()
+            continue
         }
         if (sliding) {
             accumulated += change.positionChange().x
         } else {
             val travel = change.position.x - down.position.x
             if (abs(travel) >= thresholdPx) {
+                if (!stillOurs()) {
+                    typedEarly = true
+                    change.consume()
+                    continue
+                }
                 sliding = true
                 accumulated = travel - sign(travel) * thresholdPx
             }
