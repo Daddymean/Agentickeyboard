@@ -956,14 +956,13 @@ class KeyboardViewModel(
                     }
                 }
                 else -> {
-                    val lastWord = activeText.split(WHITESPACE_REGEX).lastOrNull()?.lowercase() ?: ""
+                    val sourceWord = activeText.split(WHITESPACE_REGEX).lastOrNull().orEmpty()
+                    val lastWord = sourceWord.lowercase()
                     _predictiveSuggestions.value = if (lastWord.isNotEmpty()) {
                         val personal = topVocabulary.value.map { it.word }
                         val learned = learnedCorrections.value.firstOrNull { it.typo == lastWord }?.correction
                         withContext(Dispatchers.Default) {
-                            (listOfNotNull(learned) + LocalSpelling.shared.suggestions(lastWord) +
-                                personal.filter { it.startsWith(lastWord) && it != lastWord })
-                                .distinct().take(3)
+                            LocalSpelling.shared.predictiveSuggestions(sourceWord, personal, learned)
                         }
                     } else {
                         emptyList()
@@ -1060,6 +1059,7 @@ class KeyboardViewModel(
             dismissResults()
             // The background check ran on this draft; typing since then makes it stale.
             aiSession.bindResultSource(it.original)
+            aiSession.setRegenerateAction { fixGrammar(it.original, bypassCache = true) }
             publishAiPanel(AiPanelState.Grammar(it))
             _proofreadHint.value = null
         }

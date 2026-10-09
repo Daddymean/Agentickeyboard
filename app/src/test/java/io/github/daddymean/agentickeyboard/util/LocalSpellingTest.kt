@@ -15,7 +15,24 @@ class LocalSpellingTest {
 
     @Test fun `known words are not corrected and prefixes still complete`() {
         assertFalse("the" in spelling.suggestions("the"))
-        assertEquals(listOf("help", "held", "hello"), spelling.suggestions("hel"))
+        assertEquals(listOf("hello", "help", "held"), spelling.suggestions("hel"))
+    }
+
+    @Test fun `personal completions precede spelling and dictionary guesses`() {
+        assertEquals(listOf("helicopter", "helmet", "helpful"),
+            spelling.predictiveSuggestions("hel", listOf("helicopter", "helmet", "helpful"), null))
+        assertEquals(listOf("hello", "help", "held"), spelling.suggestions("hel"))
+        assertEquals(listOf("the"), spelling.predictiveSuggestions("teh", emptyList(), null))
+    }
+
+    @Test fun `accepting corrections preserves sentence and caps case`() {
+        assertEquals(listOf("The"), spelling.suggestions("Teh"))
+        assertEquals(listOf("THE"), spelling.suggestions("TEH"))
+        assertEquals(listOf("Hello", "Help", "Held"), spelling.predictiveSuggestions("Hel", emptyList(), null))
+    }
+
+    @Test fun `known words are never offered an edit guess`() {
+        assertTrue(LocalSpelling(listOf("ill", "will")).suggestions("ill").isEmpty())
     }
 
     @Test fun `punctuation and very long inputs do not trigger corrections`() {

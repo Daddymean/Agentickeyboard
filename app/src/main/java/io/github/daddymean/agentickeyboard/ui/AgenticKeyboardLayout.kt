@@ -90,6 +90,7 @@ import io.github.daddymean.agentickeyboard.network.CloudPrivacyPolicy
 import io.github.daddymean.agentickeyboard.ui.theme.KeyboardTheme
 import io.github.daddymean.agentickeyboard.ui.theme.LocalKeyboardColors
 import io.github.daddymean.agentickeyboard.util.AiApplyGuard
+import io.github.daddymean.agentickeyboard.util.AutoCapitalization
 import io.github.daddymean.agentickeyboard.util.ClipboardSensitivity
 import io.github.daddymean.agentickeyboard.util.CommandPalette
 import io.github.daddymean.agentickeyboard.util.CommittedEditUndo
@@ -123,8 +124,6 @@ private val keyVariants = mapOf(
     "y" to listOf("ý", "ÿ"),
     "." to listOf(",", "!", "?", ";", ":", "…")
 )
-
-private val SENTENCE_ENDINGS = setOf('.', '!', '?')
 
 @Composable
 fun AgenticKeyboardLayout(
@@ -255,17 +254,10 @@ fun AgenticKeyboardLayout(
     // Source text for AI actions: the selection when one exists, else the draft.
     fun aiSourceText(): String = selectedText() ?: currentText()
 
-    /** True when the caret sits at a position that should auto-capitalize. */
-    fun isSentenceStart(text: String): Boolean {
-        if (text.isEmpty() || text.endsWith("\n")) return true
-        if (!text.last().isWhitespace()) return false
-        val lastVisible = text.trimEnd().lastOrNull() ?: return true
-        return lastVisible in SENTENCE_ENDINGS
-    }
-
-    // Uppercase rendering combines explicit shift with auto-capitalization.
-    val autoCapActive = isAutoCapitalizeEnabled && !isNumberMode &&
-        shiftState == ShiftState.OFF && isSentenceStart(activeText)
+    // Uppercase rendering combines explicit shift with auto-capitalization, which
+    // never applies in a password, sensitive or incognito field (KEYBOARD-007).
+    val autoCapActive = !isNumberMode && shiftState == ShiftState.OFF &&
+        AutoCapitalization.applies(isAutoCapitalizeEnabled, isSensitiveField, activeText)
     val shiftActive = shiftState != ShiftState.OFF || autoCapActive
 
     /**
@@ -1620,7 +1612,7 @@ fun AgenticKeyboardLayout(
         // --- KEYBOARD KEYS MATRIX ---
         val digitRow = listOf("1", "2", "3", "4", "5", "6", "7", "8", "9", "0")
         // Training uses intentional targets rather than treating mistypes as truth.
-        if (!isSensitiveField && !isLearningPaused) {
+        if (!isSensitiveField && !isLearningPaused && (showEditBar || trainingStep != null)) {
             Row(
                 modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 6.dp),
                 horizontalArrangement = Arrangement.spacedBy(6.dp),
@@ -1703,7 +1695,9 @@ fun AgenticKeyboardLayout(
                                     if (finalWord != null) {
                                         buzz(HapticFeedbackType.LongPress)
                                         val capitalize = shiftState != ShiftState.OFF ||
-                                            (isAutoCapitalizeEnabled && isSentenceStart(currentText()))
+                                            AutoCapitalization.applies(
+                                                isAutoCapitalizeEnabled, isSensitiveField, currentText()
+                                            )
                                         val typedText = when {
                                             shiftState == ShiftState.CAPS_LOCK -> finalWord.uppercase()
                                             capitalize -> finalWord.replaceFirstChar { it.uppercase() }

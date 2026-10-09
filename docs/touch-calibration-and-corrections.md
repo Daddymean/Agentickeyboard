@@ -2,17 +2,23 @@
 
 The main keyboard now includes a comma beside the period. The suggestion shelf
 uses an indexed on-device dictionary for single-letter substitutions, omissions,
-extra letters and adjacent transpositions, with learned typo rules first. Generic
+extra letters and adjacent transpositions. Personal prefix completions retain
+priority, followed by learned rules, at most one edit guess for unknown tokens
+that are not prefixes, and dictionary completions. Sentence/title and all-caps
+case are retained. Generic
 dictionary guesses are offered for explicit acceptance; existing learned rules
 still apply on space and keep their backspace undo behavior.
 
 Background proofreading remains opt-in and starts after 700 ms without a text
 change (previously 2500 ms). An already available hint is reused by Fix Grammar.
 Typing invalidates old hints, switching editors cancels work, and cancelled cloud
-proofreads do not start offline inference. Network/model inference time still
+proofreads do not start offline inference. This is a cloud-request frequency change for users who already opted into
+proofreading: shorter pauses can dispatch more drafts than the previous delay.
+The setting remains off by default and sensitive/offline guards remain.
+Network/model inference time still
 varies; this change reduces the scheduling delay, not a measured end-to-end SLA.
 
-Choose **Train touch** above the letters, then tap the displayed target through
+Open **Edit**, choose **Train touch** above the letters, then tap the displayed target through
 three rounds of all 26 letters (78 taps). Letter taps are consumed by the trainer
 instead of entering text. Swipe typing and accent popups are disabled during the
 trainer. Complete all rounds to save; cancelling discards the session. **Reset
