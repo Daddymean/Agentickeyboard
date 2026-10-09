@@ -187,7 +187,13 @@ object Distillation {
        * the episode id (from the earliest-created version) survives edits.
        */
       private fun dedupeCalendar(rows: List<Pair<Event, JsonObject>>): List<Calendar> =
-        rows.groupBy { (e, p) -> p.long("instanceId")?.let { "i:$it" } ?: "e:${e.id}" }
+        rows.groupBy { (e, p) ->
+          // "occurrence" is the stable key; "instanceId" only exists on events
+          // logged before it and still groups those among themselves.
+          p.string("occurrence")?.let { "o:$it" }
+            ?: p.long("instanceId")?.let { "i:$it" }
+            ?: "e:${e.id}"
+        }
           .values
           .map { versions ->
             val byAge = versions.sortedWith(compareBy({ it.first.createdMs }, { it.first.id }))
