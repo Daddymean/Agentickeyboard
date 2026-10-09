@@ -5,7 +5,11 @@ import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
 import io.github.daddymean.agentickeyboard.db.AppDatabase
 import io.github.daddymean.agentickeyboard.db.KeyboardRepository
+import io.github.daddymean.agentickeyboard.db.UserVocabulary
 import io.github.daddymean.agentickeyboard.util.LocalSpelling
+import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withTimeout
+import kotlinx.coroutines.yield
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
@@ -69,10 +73,41 @@ class AutoFixViewModelTest {
         assertNull(vm.resolveWordCommit("realy"))
         assertEquals("finally", vm.resolveWordCommit("finaly")?.replacement)
         vm.onEditorStarted("com.example", inputType = text)
+        vm.onNewInputSession()
         applyAndUndo("realy")
         vm.onEditorStarted("com.example", inputType = text)
+        vm.onNewInputSession()
         assertNull(vm.resolveWordCommit("realy"))
         assertEquals("finally", vm.resolveWordCommit("finaly")?.replacement)
+    }
+
+    @Test
+    fun `first undo survives a restart but clears for a new input session`() {
+        val text = android.text.InputType.TYPE_CLASS_TEXT
+        vm.onEditorStarted("com.example", inputType = text)
+        applyAndUndo("realy")
+
+        vm.onEditorStarted("com.example", inputType = text)
+        assertNull(vm.resolveWordCommit("realy"))
+
+        vm.onNewInputSession()
+        assertEquals("really", vm.resolveWordCommit("realy")?.replacement)
+    }
+
+    @Test
+    fun `personal word outside top suggestions is still protected`() = runBlocking {
+        db.userVocabularyDao().insertWords(
+            (1..151).map { UserVocabulary("word$it", count = 4) } +
+                UserVocabulary("realy", count = 3)
+        )
+        withTimeout(2_000) {
+            while (vm.topVocabulary.value.size < 150) yield()
+        }
+
+        withTimeout(2_000) {
+            while (vm.resolveWordCommit("realy") != null) yield()
+        }
+        assertNull(vm.resolveWordCommit("realy"))
     }
 
     @Test
