@@ -129,29 +129,29 @@ object SelectionPlanner {
      * virama in "नमस्ते", the acute in NFD "café", the ZWNJ in Persian
      * "می‌خواهم", the Adlam lengthener after its letters.
      */
-    private fun isWordCodePointAt(text: String, index: Int): Boolean {
-        val codePoint = text.codePointAt(index)
-        if (isWordBase(codePoint)) return true
-        if (!isWordExtender(codePoint)) return false
-        var i = index
-        while (i > 0) {
-            val previous = text.codePointBefore(i)
-            if (isWordBase(previous)) return true
-            if (!isWordExtender(previous)) return false
-            i -= Character.charCount(previous)
+    private class WordClassifier(private val text: String) {
+        private val wordStarts = BooleanArray(text.length)
+
+        init {
+            // Classify each code point once. An extender inherits the preceding
+            // run's base state; a pictograph or separator resets that state.
+            var attachedToBase = false
+            var index = 0
+            while (index < text.length) {
+                val codePoint = text.codePointAt(index)
+                attachedToBase = isWordBase(codePoint) ||
+                    (isWordExtender(codePoint) && attachedToBase)
+                wordStarts[index] = attachedToBase
+                index += Character.charCount(codePoint)
+            }
         }
-        // A string that opens with a mark: the mark has no base to belong to.
-        return false
+
+        fun hasWordAt(index: Int): Boolean =
+            index < text.length && wordStarts[index]
+
+        fun hasWordBefore(index: Int): Boolean =
+            index > 0 && wordStarts[index - Character.charCount(text.codePointBefore(index))]
     }
-
-    /** Whether a word code point ends at [index]. */
-    private fun hasWordBefore(text: String, index: Int): Boolean =
-        index > 0 &&
-            isWordCodePointAt(text, index - Character.charCount(text.codePointBefore(index)))
-
-    /** Whether a word code point starts at [index]. */
-    private fun hasWordAt(text: String, index: Int): Boolean =
-        index < text.length && isWordCodePointAt(text, index)
 
     /** Steps [index] one code point left, regardless of what it holds. */
     private fun stepLeft(text: String, index: Int): Int =
@@ -164,7 +164,7 @@ object SelectionPlanner {
     /**
      * Snaps [offset] back onto a grapheme boundary, and [snapForward] snaps on.
      *
-     * Defense in depth behind [isWordCodePointAt]: whatever the word scan decides, a
+     * Defense in depth behind [WordClassifier]: whatever the word scan decides, a
      * command can then never hand the editor an offset that sits inside a
      * cluster. Every offset in plain ASCII is already a boundary, so these are
      * identity there.
@@ -284,18 +284,20 @@ object SelectionPlanner {
      * characters first, so a caret sitting after "hello, " lands on the "h".
      */
     fun previousWordBoundary(text: String, from: Int): Int {
+        val words = WordClassifier(text)
         var i = from.coerceIn(0, text.length)
-        while (i > 0 && !hasWordBefore(text, i)) i = stepLeft(text, i)
-        while (i > 0 && hasWordBefore(text, i)) i = stepLeft(text, i)
+        while (i > 0 && !words.hasWordBefore(i)) i = stepLeft(text, i)
+        while (i > 0 && words.hasWordBefore(i)) i = stepLeft(text, i)
         return snapBack(text, i)
     }
 
     /** End of the word at or after [from], mirroring [previousWordBoundary]. */
     fun nextWordBoundary(text: String, from: Int): Int {
+        val words = WordClassifier(text)
         val len = text.length
         var i = from.coerceIn(0, len)
-        while (i < len && !hasWordAt(text, i)) i = stepRight(text, i)
-        while (i < len && hasWordAt(text, i)) i = stepRight(text, i)
+        while (i < len && !words.hasWordAt(i)) i = stepRight(text, i)
+        while (i < len && words.hasWordAt(i)) i = stepRight(text, i)
         return snapForward(text, i)
     }
 
@@ -305,17 +307,18 @@ object SelectionPlanner {
      * then the one ahead, and collapses only when the text holds no word at all.
      */
     fun selectWordAt(text: String, at: Int): SelectionRange {
+        val words = WordClassifier(text)
         val len = text.length
         val caret = at.coerceIn(0, len)
 
-        val onWord = hasWordAt(text, caret)
-        val afterWord = hasWordBefore(text, caret)
+        val onWord = words.hasWordAt(caret)
+        val afterWord = words.hasWordBefore(caret)
 
         if (onWord || afterWord) {
             var start = caret
-            while (start > 0 && hasWordBefore(text, start)) start = stepLeft(text, start)
+            while (start > 0 && words.hasWordBefore(start)) start = stepLeft(text, start)
             var end = caret
-            while (end < len && hasWordAt(text, end)) end = stepRight(text, end)
+            while (end < len && words.hasWordAt(end)) end = stepRight(text, end)
             return SelectionRange(snapBack(text, start), snapForward(text, end))
         }
 
@@ -324,18 +327,18 @@ object SelectionPlanner {
         // so reaching the edge is the "nothing found" case and there is nothing
         // to smart-cast.
         var back = caret
-        while (back > 0 && !hasWordBefore(text, back)) back = stepLeft(text, back)
+        while (back > 0 && !words.hasWordBefore(back)) back = stepLeft(text, back)
         if (back > 0) {
             var start = back
-            while (start > 0 && hasWordBefore(text, start)) start = stepLeft(text, start)
+            while (start > 0 && words.hasWordBefore(start)) start = stepLeft(text, start)
             return SelectionRange(snapBack(text, start), snapForward(text, back))
         }
 
         var forward = caret
-        while (forward < len && !hasWordAt(text, forward)) forward = stepRight(text, forward)
+        while (forward < len && !words.hasWordAt(forward)) forward = stepRight(text, forward)
         if (forward < len) {
             var end = forward
-            while (end < len && hasWordAt(text, end)) end = stepRight(text, end)
+            while (end < len && words.hasWordAt(end)) end = stepRight(text, end)
             return SelectionRange(snapBack(text, forward), snapForward(text, end))
         }
         return SelectionRange.caret(caret)

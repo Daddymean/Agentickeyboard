@@ -569,4 +569,14 @@ class SelectionPlannerTest {
         assertEquals(0, caret(4).length)
         assertFalse(SelectionRange(4, 5).isCollapsed)
     }
+    @Test(timeout = 5_000)
+    fun longExtenderRunsRemainOneWordWithoutRepeatedBackwardScans() {
+        val word = "a" + "\u0301".repeat(20_000)
+        assertEquals(word.length, SelectionPlanner.nextWordBoundary(word, 0))
+        assertEquals(0, SelectionPlanner.previousWordBoundary(word, word.length))
+        assertEquals(SelectionRange(0, word.length), SelectionPlanner.selectWordAt(word, 10_000))
+        val orphanMarks = "\u0301".repeat(20_000)
+        assertEquals(SelectionRange.caret(10_000), SelectionPlanner.selectWordAt(orphanMarks, 10_000))
+    }
+
 }
