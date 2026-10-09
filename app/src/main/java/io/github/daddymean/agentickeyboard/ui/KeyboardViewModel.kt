@@ -37,6 +37,7 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import io.github.daddymean.agentickeyboard.util.LocalSpelling
+import io.github.daddymean.agentickeyboard.util.TapTrail
 import io.github.daddymean.agentickeyboard.util.TouchCalibration
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -520,6 +521,8 @@ class KeyboardViewModel(
         activeAppLabel = appLabel
         previousCommittedWord = null
         pendingUndo = null
+        // KEYBOARD-019: tap positions never carry over to another editor.
+        TapTrail.clear()
         proofreadJob?.cancel()
         predictionJob?.cancel()
         _predictiveSuggestions.value = emptyList()
@@ -961,8 +964,14 @@ class KeyboardViewModel(
                     _predictiveSuggestions.value = if (lastWord.isNotEmpty()) {
                         val personal = topVocabulary.value.map { it.word }
                         val learned = learnedCorrections.value.firstOrNull { it.typo == lastWord }?.correction
+                        // KEYBOARD-019: keyboard-aware corrections, off in sensitive fields;
+                        // tap positions only while learning is allowed.
+                        val proximity = !_isSensitiveField.value
+                        val taps = if (isLearningAllowed()) TapTrail.offsetsFor(sourceWord) else null
                         withContext(Dispatchers.Default) {
-                            LocalSpelling.shared.predictiveSuggestions(sourceWord, personal, learned)
+                            LocalSpelling.shared.predictiveSuggestions(
+                                sourceWord, personal, learned, proximity = proximity, taps = taps
+                            )
                         }
                     } else {
                         emptyList()
