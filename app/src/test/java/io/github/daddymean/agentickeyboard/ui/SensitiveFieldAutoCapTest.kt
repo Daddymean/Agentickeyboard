@@ -1,6 +1,7 @@
 package io.github.daddymean.agentickeyboard.ui
 
 import android.content.Context
+import android.os.Looper
 import android.text.InputType
 import android.view.inputmethod.EditorInfo
 import androidx.compose.ui.test.assertTextEquals
@@ -20,10 +21,10 @@ import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
+import org.robolectric.Shadows.shadowOf
 import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
 import kotlinx.coroutines.Job
-import kotlinx.coroutines.runBlocking
 
 /**
  * KEYBOARD-007: renders the real keyboard at the start of an empty field. Ordinary
@@ -49,7 +50,10 @@ class SensitiveFieldAutoCapTest {
         // Finish the ViewModel's Room work before closing its database. Otherwise
         // an asynchronous initialization transaction can fail in the next test.
         composeTestRule.runOnIdle { viewModelStore.clear() }
-        runBlocking { viewModelJob?.join() }
+        composeTestRule.waitUntil(timeoutMillis = 5_000) {
+            shadowOf(Looper.getMainLooper()).idle()
+            viewModelJob?.isCompleted != false
+        }
         db.close()
     }
 
