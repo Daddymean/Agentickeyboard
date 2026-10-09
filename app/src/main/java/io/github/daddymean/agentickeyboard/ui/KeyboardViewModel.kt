@@ -4,6 +4,8 @@ import android.content.SharedPreferences
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
+import dev.context.core.client.ContextClient
+import dev.context.core.model.Snapshot
 import io.github.daddymean.agentickeyboard.db.AppPersona
 import io.github.daddymean.agentickeyboard.db.CustomCommand
 import io.github.daddymean.agentickeyboard.db.KeyboardRepository
@@ -17,6 +19,7 @@ import io.github.daddymean.agentickeyboard.network.ToneAnalysisResponse
 import io.github.daddymean.agentickeyboard.util.EditorPrivacy
 import io.github.daddymean.agentickeyboard.util.CommandPalette
 import io.github.daddymean.agentickeyboard.util.CommittedEditUndo
+import io.github.daddymean.agentickeyboard.util.ContextNotes
 import io.github.daddymean.agentickeyboard.util.KeyboardSettings
 import io.github.daddymean.agentickeyboard.util.mastery.KeyboardMastery
 import io.github.daddymean.agentickeyboard.util.mastery.MasteryEvent
@@ -92,7 +95,9 @@ data class VoiceMatchState(
 
 class KeyboardViewModel(
     private val repository: KeyboardRepository,
-    private val settings: KeyboardSettings? = null
+    private val settings: KeyboardSettings? = null,
+    /** Personal context service client; null outside the IME (companion app, tests). */
+    private val contextClient: ContextClient? = null
 ) : ViewModel() {
 
     companion object {
@@ -266,6 +271,18 @@ class KeyboardViewModel(
     private val _isSendGuardEnabled = MutableStateFlow(settings?.isSendGuardEnabled ?: false)
     val isSendGuardEnabled = _isSendGuardEnabled.asStateFlow()
 
+    private val _isSyncNotesToCloud = MutableStateFlow(settings?.isSyncNotesToCloud ?: false)
+    val isSyncNotesToCloud = _isSyncNotesToCloud.asStateFlow()
+
+    /**
+     * Latest context snapshot (in-memory; never a binder call). Display-only:
+     * its contents must never be sent to Gemini or any other cloud service.
+     */
+    val contextSnapshot: StateFlow<Snapshot?> = contextClient?.snapshot ?: MutableStateFlow(null)
+
+    /** Whether "Save note" can do anything here (only inside the IME). */
+    val canSaveNotes: Boolean get() = contextClient != null
+
     private val _themeOverride = MutableStateFlow(settings?.themeOverride ?: "System")
     val themeOverride = _themeOverride.asStateFlow()
 
@@ -335,6 +352,7 @@ class KeyboardViewModel(
             KeyboardSettings.KEY_HAPTICS -> _isHapticsEnabled.value = s.isHapticsEnabled
             KeyboardSettings.KEY_VOICE_LOCK -> _isVoiceLockEnabled.value = s.isVoiceLockEnabled
             KeyboardSettings.KEY_SEND_GUARD -> _isSendGuardEnabled.value = s.isSendGuardEnabled
+            KeyboardSettings.KEY_SYNC_NOTES_TO_CLOUD -> _isSyncNotesToCloud.value = s.isSyncNotesToCloud
             KeyboardSettings.KEY_THEME_OVERRIDE -> _themeOverride.value = s.themeOverride
             KeyboardSettings.KEY_PERSONA -> _userPersonaPreference.value = s.persona
             KeyboardSettings.KEY_SOURCE_LANG -> _sourceLanguage.value = s.sourceLanguage
@@ -573,6 +591,26 @@ class KeyboardViewModel(
     fun setThemeOverride(mode: String) {
         _themeOverride.value = mode
         settings?.themeOverride = mode
+    }
+
+    fun setSyncNotesToCloud(enabled: Boolean) {
+        _isSyncNotesToCloud.value = enabled
+        settings?.isSyncNotesToCloud = enabled
+    }
+
+    /**
+     * Queues [text] as a `kb.note` with the context service. Returns false (and
+     * does nothing) for blank text, sensitive fields, or when there is no
+     * context client. Never blocks: the client batches and spools in the
+     * background, and keeps notes on disk if the service is not installed.
+     */
+    fun saveNote(text: String): Boolean {
+        val client = contextClient ?: return false
+        if (_isSensitiveField.value) return false
+        val note = ContextNotes.noteTextOrNull(text) ?: return false
+        return runCatching {
+            client.logNote(note, ContextNotes.noteSensitivity(_isSyncNotesToCloud.value))
+        }.isSuccess
     }
 
     fun setSendGuardEnabled(enabled: Boolean) {
@@ -1492,12 +1530,13 @@ class KeyboardViewModel(
 
 class KeyboardViewModelFactory(
     private val repository: KeyboardRepository,
-    private val settings: KeyboardSettings? = null
+    private val settings: KeyboardSettings? = null,
+    private val contextClient: ContextClient? = null
 ) : ViewModelProvider.Factory {
     override fun <T : ViewModel> create(modelClass: Class<T>): T {
         if (modelClass.isAssignableFrom(KeyboardViewModel::class.java)) {
             @Suppress("UNCHECKED_CAST")
-            return KeyboardViewModel(repository, settings) as T
+            return KeyboardViewModel(repository, settings, contextClient) as T
         }
         throw IllegalArgumentException("Unknown ViewModel class")
     }

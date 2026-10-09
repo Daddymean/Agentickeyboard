@@ -8,7 +8,8 @@ Agentic Keyboard (Lumina AI Keyboard) — an Android IME (custom keyboard) built
 with Kotlin, Jetpack Compose, Room, Retrofit/Moshi, and the Gemini API.
 
 - Android Gradle Plugin: **9.1.1** (requires **Gradle 9.1.0+** and **JDK 17+**)
-- `minSdk` 26 (floor set by the ML Kit GenAI on-device AI libraries), `compileSdk`/`targetSdk` 36
+- `minSdk` 34 (required by `:core`, which `:app` depends on; this single-user
+  platform targets Android 16), `compileSdk`/`targetSdk` 36
 
 ## Build & test environment — READ THIS FIRST
 

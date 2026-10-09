@@ -23,6 +23,7 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
@@ -83,6 +84,7 @@ import io.github.daddymean.agentickeyboard.util.AiApplyGuard
 import io.github.daddymean.agentickeyboard.util.ClipboardSensitivity
 import io.github.daddymean.agentickeyboard.util.CommandPalette
 import io.github.daddymean.agentickeyboard.util.CommittedEditUndo
+import io.github.daddymean.agentickeyboard.util.ContextNotes
 import io.github.daddymean.agentickeyboard.util.EditClipboardAction
 import io.github.daddymean.agentickeyboard.util.RedactionApplyGuard
 import io.github.daddymean.agentickeyboard.util.ReplyIntents
@@ -181,6 +183,8 @@ fun AgenticKeyboardLayout(
     // Any selection at all, whitespace included — see KeyboardViewModel.
     val hasEditorSelectionRange by viewModel.hasSelectionRange.collectAsState()
     val isSensitiveField by viewModel.isSensitiveField.collectAsState()
+    // Display-only personal context (in-memory StateFlow, never a binder call).
+    val contextSnapshot by viewModel.contextSnapshot.collectAsState()
     val isSwipeToTypeEnabled by viewModel.isSwipeEnabled.collectAsState()
     val isAutoCapitalizeEnabled by viewModel.isAutoCapitalizeEnabled.collectAsState()
     val isNumberRowEnabled by viewModel.isNumberRowEnabled.collectAsState()
@@ -1494,6 +1498,25 @@ fun AgenticKeyboardLayout(
                         },
                         modifier = Modifier.testTag("action_tone")
                     )
+
+                    // Local note to the personal context service; no model, no
+                    // cloud call here. Only exists inside the IME (the row is
+                    // already hidden in sensitive fields).
+                    if (viewModel.canSaveNotes && !inPlaygroundMode) {
+                        AiActionButton(
+                            label = "Save note",
+                            icon = "📌",
+                            onClick = {
+                                buzz(HapticFeedbackType.TextHandleMove)
+                                gestureAlert = if (viewModel.saveNote(aiSourceText())) {
+                                    "Note saved 📌"
+                                } else {
+                                    "Nothing to save yet"
+                                }
+                            },
+                            modifier = Modifier.testTag("action_save_note")
+                        )
+                    }
                 }
 
                 // Selection-scope indicator: the actions above silently operate
@@ -1511,6 +1534,29 @@ fun AgenticKeyboardLayout(
                             .background(keyboardColors.accent.copy(alpha = 0.15f))
                             .padding(horizontal = 6.dp, vertical = 3.dp)
                             .testTag("selection_badge")
+                    )
+                }
+
+                // Read-only context chip: next calendar event or current
+                // episode. Hidden with no snapshot (service absent, previews,
+                // screenshot tests) and in sensitive fields.
+                val contextChip = if (isSensitiveField) null
+                else ContextNotes.chipText(contextSnapshot, System.currentTimeMillis())
+                if (contextChip != null) {
+                    Text(
+                        text = contextChip,
+                        color = keyboardColors.accent,
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.Medium,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier
+                            .padding(start = 6.dp)
+                            .widthIn(max = 140.dp)
+                            .clip(RoundedCornerShape(8.dp))
+                            .background(keyboardColors.accent.copy(alpha = 0.15f))
+                            .padding(horizontal = 6.dp, vertical = 3.dp)
+                            .testTag("context_chip")
                     )
                 }
 
