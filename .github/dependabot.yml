@@ -1,4 +1,8 @@
 # Dependabot version updates: weekly, grouped, and capped so they stay reviewable.
+# PAUSED during beta (REPO-UPKEEP-001): the Nopush ruleset rejects every
+# dependabot/* branch (2026-10-02 and 2026-10-05 runs, 9 failures each), so
+# open-pull-requests-limit is 0. Restore 5 if the ruleset admits Dependabot
+# (Keith's decision) or after beta.
 # Security updates are governed by the repository's Dependabot security settings
 # and are not limited by these groups or caps.
 version: 2
@@ -9,7 +13,7 @@ updates:
       interval: "weekly"
       day: "monday"
       timezone: "America/Los_Angeles"
-    open-pull-requests-limit: 5
+    open-pull-requests-limit: 0
     commit-message:
       prefix: "deps"
     groups:
@@ -42,7 +46,7 @@ updates:
       interval: "weekly"
       day: "monday"
       timezone: "America/Los_Angeles"
-    open-pull-requests-limit: 5
+    open-pull-requests-limit: 0
     commit-message:
       prefix: "ci"
     groups:
