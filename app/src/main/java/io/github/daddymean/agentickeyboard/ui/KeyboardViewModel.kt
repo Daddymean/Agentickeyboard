@@ -36,6 +36,7 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import io.github.daddymean.agentickeyboard.util.AutoFix
 import io.github.daddymean.agentickeyboard.util.LearnedRuleCleanup
 import io.github.daddymean.agentickeyboard.util.LearnedRuleFilter
 import io.github.daddymean.agentickeyboard.util.LocalSpelling
@@ -58,7 +59,9 @@ import kotlinx.coroutines.launch
 data class WordReplacement(
     val replacement: String,
     val fromLearnedRule: Boolean,
-    val cursorOffset: Int? = null
+    val cursorOffset: Int? = null,
+    /** KEYBOARD-011: a high-confidence typo fix, not a stored rule. */
+    val fromAutoFix: Boolean = false
 )
 
 /**
@@ -72,7 +75,8 @@ data class AutoCorrectionUndo(
     val replacement: String,
     val fromLearnedRule: Boolean,
     val editorUndo: CommittedEditUndo? = null,
-    val cursorOffset: Int? = null
+    val cursorOffset: Int? = null,
+    val fromAutoFix: Boolean = false
 )
 
 /** A just-applied AI result that backspace can revert; see [AutoCorrectionUndo]. */
@@ -108,6 +112,7 @@ class KeyboardViewModel(
 ) : ViewModel() {
 
     companion object {
+        private const val PERSONAL_WORD_MIN_COUNT = 3
         private val NON_ALPHA_REGEX = "[^a-zA-Z]".toRegex()
         private val WHITESPACE_REGEX = "\\s+".toRegex()
         val PERSONAS = listOf("Match my history", "Professional", "Joyful", "Empathetic", "Casual")
@@ -255,6 +260,19 @@ class KeyboardViewModel(
     private val _isAutoCapitalizeEnabled = MutableStateFlow(settings?.isAutoCapitalizeEnabled ?: true)
     val isAutoCapitalizeEnabled = _isAutoCapitalizeEnabled.asStateFlow()
 
+    // KEYBOARD-011: auto-fix on space is on by default (Keith, 2026-10-08 21:24 PT).
+    private val _isAutoFixEnabled = MutableStateFlow(settings?.isAutoFixOnSpace ?: true)
+    val isAutoFixEnabled = _isAutoFixEnabled.asStateFlow()
+
+    /** Words whose auto-fix the user undid in this text field; not fixed again here. */
+    private val autoFixKeptThisSession = mutableSetOf<String>()
+
+    /** Words whose auto-fix was undone at least once since the keyboard started. */
+    private val autoFixUndoneBefore = mutableSetOf<String>()
+
+    /** Words the user undid twice: never auto-fixed again (kept in settings). */
+    private val autoFixNeverWords = MutableStateFlow(settings?.autoFixNeverWords ?: emptySet())
+
     private val _isNumberRowEnabled = MutableStateFlow(settings?.isNumberRowEnabled ?: false)
     val isNumberRowEnabled = _isNumberRowEnabled.asStateFlow()
 
@@ -352,6 +370,8 @@ class KeyboardViewModel(
             }
             KeyboardSettings.KEY_SWIPE_ENABLED -> _isSwipeEnabled.value = s.isSwipeEnabled
             KeyboardSettings.KEY_AUTO_CAPITALIZE -> _isAutoCapitalizeEnabled.value = s.isAutoCapitalizeEnabled
+            KeyboardSettings.KEY_AUTO_FIX -> _isAutoFixEnabled.value = s.isAutoFixOnSpace
+            KeyboardSettings.KEY_AUTO_FIX_NEVER -> autoFixNeverWords.value = s.autoFixNeverWords
             KeyboardSettings.KEY_NUMBER_ROW -> _isNumberRowEnabled.value = s.isNumberRowEnabled
             KeyboardSettings.KEY_KEY_HEIGHT_SCALE -> _keyHeightScale.value = s.keyHeightScale
             KeyboardSettings.KEY_PROOFREAD -> _isProofreadEnabled.value = s.isProofreadEnabled
@@ -523,6 +543,7 @@ class KeyboardViewModel(
         activeAppLabel = appLabel
         previousCommittedWord = null
         pendingUndo = null
+        autoFixKeptThisSession.clear()
         // KEYBOARD-019: tap positions never carry over to another editor.
         TapTrail.clear()
         proofreadJob?.cancel()
@@ -565,6 +586,11 @@ class KeyboardViewModel(
     fun setAutoCapitalizeEnabled(enabled: Boolean) {
         _isAutoCapitalizeEnabled.value = enabled
         settings?.isAutoCapitalizeEnabled = enabled
+    }
+
+    fun setAutoFixEnabled(enabled: Boolean) {
+        _isAutoFixEnabled.value = enabled
+        settings?.isAutoFixOnSpace = enabled
     }
 
     fun setKeyHeightScale(scale: Float) {
@@ -786,15 +812,38 @@ class KeyboardViewModel(
      * the word should stand as typed, which is always the case in a sensitive
      * (password or incognito) field (KEYBOARD-006).
      */
-    fun resolveWordCommit(word: String): WordReplacement? =
+    fun resolveWordCommit(word: String, textBefore: String = ""): WordReplacement? =
         WordCommitResolver.resolve(
             word,
             shortcuts.value,
             learnedCorrections.value,
             _correctionsPaused.value,
             ::expandTemplate,
-            sensitiveField = _isSensitiveField.value
+            sensitiveField = _isSensitiveField.value,
+            autoFix = if (_isAutoFixEnabled.value) { typed -> autoFix(typed, textBefore) } else null
         )
+
+    /** KEYBOARD-011: see [AutoFix]. Tap positions are used only where learning is allowed. */
+    private fun autoFix(typed: String, textBefore: String): String? {
+        val learning = isLearningAllowed()
+        return AutoFix.fix(
+            typed,
+            textBefore,
+            LocalSpelling.shared,
+            personalAutoFixGuard(),
+            tapsFor = { core -> if (learning) TapTrail.offsetsFor(core) else null }
+        )
+    }
+
+    /**
+     * The user's own words for the auto-fix guard: words typed at least
+     * [PERSONAL_WORD_MIN_COUNT] times, plus words whose fix was undone. The
+     * vocabulary records typed words as they were typed, so a single count may be
+     * a typo; three is a word the user means.
+     */
+    private fun personalAutoFixGuard(): Set<String> =
+        topVocabulary.value.asSequence().filter { it.count >= PERSONAL_WORD_MIN_COUNT }.map { it.word.lowercase() }.toSet() +
+            autoFixKeptThisSession + autoFixNeverWords.value
 
     /**
      * Whether smart space may rewrite text the user already typed (the double-space
@@ -810,9 +859,10 @@ class KeyboardViewModel(
         replacement: String,
         fromLearnedRule: Boolean,
         editorUndo: CommittedEditUndo? = null,
-        cursorOffset: Int? = null
+        cursorOffset: Int? = null,
+        fromAutoFix: Boolean = false
     ) {
-        pendingUndo = AutoCorrectionUndo(original, replacement, fromLearnedRule, editorUndo, cursorOffset)
+        pendingUndo = AutoCorrectionUndo(original, replacement, fromLearnedRule, editorUndo, cursorOffset, fromAutoFix)
         pendingAiUndo = null
     }
 
@@ -825,6 +875,20 @@ class KeyboardViewModel(
     fun onUndoApplied() {
         val undo = pendingUndo ?: return
         pendingUndo = null
+        if (undo.fromAutoFix) {
+            // KEYBOARD-011: undoing keeps the word for the rest of this text field;
+            // undoing the same word again (in a later field) means "never correct it".
+            val word = LearnedRuleFilter.splitTrailingPunctuation(undo.original.trim()).first
+                .trimStart { !it.isLetter() }.lowercase()
+            if (word.isEmpty()) return
+            autoFixKeptThisSession.add(word)
+            if (!autoFixUndoneBefore.add(word)) {
+                val never = autoFixNeverWords.value + word
+                autoFixNeverWords.value = never
+                settings?.autoFixNeverWords = never
+            }
+            return
+        }
         if (!undo.fromLearnedRule) return
         // "teh," was corrected by the rule for "teh" (KEYBOARD-008).
         val typo = LearnedRuleFilter.splitTrailingPunctuation(undo.original.trim()).first.lowercase()

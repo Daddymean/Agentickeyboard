@@ -1034,6 +1034,7 @@ fun ExportTab(viewModel: KeyboardViewModel) {
     val appPersonas by viewModel.appPersonas.collectAsState()
     val usageStats by viewModel.usageStats.collectAsState()
     val isAutoCapitalize by viewModel.isAutoCapitalizeEnabled.collectAsState()
+    val isAutoFix by viewModel.isAutoFixEnabled.collectAsState()
     val isNumberRow by viewModel.isNumberRowEnabled.collectAsState()
     val keyHeightScale by viewModel.keyHeightScale.collectAsState()
     val isProofread by viewModel.isProofreadEnabled.collectAsState()
@@ -1094,6 +1095,12 @@ fun ExportTab(viewModel: KeyboardViewModel) {
                         description = "Shift arms itself after . ! ? and at the start of a field.",
                         checked = isAutoCapitalize,
                         onCheckedChange = { viewModel.setAutoCapitalizeEnabled(it) }
+                    )
+                    SettingSwitchRow(
+                        title = "Auto-fix typos on space",
+                        description = "Fixes a clear typo when you press space; ⌫ right after puts it back. Never touches names, slang or your own words.",
+                        checked = isAutoFix,
+                        onCheckedChange = { viewModel.setAutoFixEnabled(it) }
                     )
                     SettingSwitchRow(
                         title = "Number row",

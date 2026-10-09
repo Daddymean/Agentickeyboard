@@ -18,7 +18,8 @@ object WordCommitResolver {
         corrections: List<LearnedCorrection>,
         correctionsPaused: Boolean,
         expand: (String) -> TextExpansion.ExpandedText,
-        sensitiveField: Boolean = false
+        sensitiveField: Boolean = false,
+        autoFix: ((String) -> String?)? = null
     ): WordReplacement? {
         // KEYBOARD-006: password, other sensitive and incognito editors keep exactly
         // what was typed. Neither shortcuts nor learned corrections may rewrite it
@@ -53,6 +54,10 @@ object WordCommitResolver {
         // KEYBOARD-010: unambiguous contractions ("dont" → "don't") and a lone "i" → "I".
         // Ambiguous ones (its, were, ill, id, well...) are only suggested in the strip.
         Contractions.autoApply(core)?.let { return WordReplacement(it + trailing, fromLearnedRule = true) }
+        // KEYBOARD-011: high-confidence typo fix (guards in AutoFix), last of all.
+        autoFix?.invoke(word.trim())?.takeIf { it != word.trim() }?.let {
+            return WordReplacement(it, fromLearnedRule = false, fromAutoFix = true)
+        }
         return null
     }
 }
