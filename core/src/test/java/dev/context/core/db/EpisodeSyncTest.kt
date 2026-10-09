@@ -26,15 +26,15 @@ class EpisodeSyncTest {
     val dao = db.episodes()
 
     assertEquals(2, dao.upsertChanged(listOf(ep("a"), ep("b")), nowMs = 1_000))
-    assertEquals(1_000, dao.byId("a")?.updatedMs)
+    assertEquals(1_000L, dao.byId("a")?.updatedMs)
 
     // Re-deriving identical content writes nothing, even with a stale updatedMs.
     assertEquals(0, dao.upsertChanged(listOf(ep("a"), ep("b")), nowMs = 2_000))
-    assertEquals(1_000, dao.byId("a")?.updatedMs)
+    assertEquals(1_000L, dao.byId("a")?.updatedMs)
 
     assertEquals(1, dao.upsertChanged(listOf(ep("a"), ep("b", title = "renamed")), nowMs = 3_000))
-    assertEquals(1_000, dao.byId("a")?.updatedMs)
-    assertEquals(3_000, dao.byId("b")?.updatedMs)
+    assertEquals(1_000L, dao.byId("a")?.updatedMs)
+    assertEquals(3_000L, dao.byId("b")?.updatedMs)
     db.close()
   }
 
