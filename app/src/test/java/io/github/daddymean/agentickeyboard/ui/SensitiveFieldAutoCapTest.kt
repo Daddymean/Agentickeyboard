@@ -1,6 +1,7 @@
 package io.github.daddymean.agentickeyboard.ui
 
 import android.content.Context
+import android.os.Looper
 import android.text.InputType
 import android.view.inputmethod.EditorInfo
 import androidx.compose.ui.test.assertTextEquals
@@ -8,6 +9,8 @@ import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performClick
 import androidx.room.Room
+import androidx.lifecycle.ViewModelStore
+import androidx.lifecycle.viewModelScope
 import androidx.test.core.app.ApplicationProvider
 import io.github.daddymean.agentickeyboard.db.AppDatabase
 import io.github.daddymean.agentickeyboard.db.KeyboardRepository
@@ -18,8 +21,10 @@ import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
+import org.robolectric.Shadows.shadowOf
 import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
+import kotlinx.coroutines.Job
 
 /**
  * KEYBOARD-007: renders the real keyboard at the start of an empty field. Ordinary
@@ -37,15 +42,26 @@ class SensitiveFieldAutoCapTest {
     private val context = ApplicationProvider.getApplicationContext<Context>()
     private val db = Room.inMemoryDatabaseBuilder(context, AppDatabase::class.java).build()
     private val typed = mutableListOf<String>()
+    private val viewModelStore = ViewModelStore()
+    private var viewModelJob: Job? = null
 
     @After
     fun tearDown() {
+        // Finish the ViewModel's Room work before closing its database. Otherwise
+        // an asynchronous initialization transaction can fail in the next test.
+        composeTestRule.runOnIdle { viewModelStore.clear() }
+        composeTestRule.waitUntil(timeoutMillis = 5_000) {
+            shadowOf(Looper.getMainLooper()).idle()
+            viewModelJob?.isCompleted != false
+        }
         db.close()
     }
 
     private fun showKeyboardFor(inputType: Int, imeOptions: Int = 0) {
         composeTestRule.mainClock.autoAdvance = false
         val viewModel = KeyboardViewModel(KeyboardRepository(db))
+        viewModelStore.put("keyboard", viewModel)
+        viewModelJob = viewModel.viewModelScope.coroutineContext[Job]
         viewModel.setAutoCapitalizeEnabled(true)
         viewModel.onEditorStarted("com.example.app", "App", inputType, imeOptions)
         composeTestRule.setContent {
