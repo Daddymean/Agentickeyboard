@@ -732,7 +732,8 @@ class KeyboardViewModel(
      * Resolves what a just-typed word should be replaced with when the user commits
      * it (presses space): a shortcut template expansion first, then a learned
      * spelling auto-correction (skipped while [correctionsPaused]). Returns null when
-     * the word should stand as typed.
+     * the word should stand as typed, which is always the case in a sensitive
+     * (password or incognito) field (KEYBOARD-006).
      */
     fun resolveWordCommit(word: String): WordReplacement? =
         WordCommitResolver.resolve(
@@ -740,8 +741,16 @@ class KeyboardViewModel(
             shortcuts.value,
             learnedCorrections.value,
             _correctionsPaused.value,
-            ::expandTemplate
+            ::expandTemplate,
+            sensitiveField = _isSensitiveField.value
         )
+
+    /**
+     * Whether smart space may rewrite text the user already typed (the double-space
+     * ". " shortcut). False in sensitive fields, where a doubled space in a
+     * passphrase must stay two spaces (KEYBOARD-006).
+     */
+    fun allowsSmartSpaceRewrites(): Boolean = !_isSensitiveField.value
 
     // --- Auto-correction undo -------------------------------------------------
 
@@ -1077,21 +1086,32 @@ class KeyboardViewModel(
     /**
      * Suggest quick replies (short, medium, and detailed variants)
      */
-    fun suggestReplies(contextMessage: String, intent: String = "", bypassCache: Boolean = false) {
-        if (contextMessage.isBlank() || _isSensitiveField.value) return
-        aiSession.setRegenerateAction { suggestReplies(contextMessage, intent, bypassCache = true) }
+    private var replyContextValidator: (() -> Boolean)? = null
+
+    fun setReplyContextValidator(validator: (() -> Boolean)?) {
+        replyContextValidator = validator
+    }
+
+    private fun contextIsValid(ephemeralContext: Boolean): Boolean =
+        !ephemeralContext || replyContextValidator?.invoke() == true
+
+    fun suggestReplies(contextMessage: String, intent: String = "", bypassCache: Boolean = false, ephemeralContext: Boolean = false) {
+        if (contextMessage.isBlank() || _isSensitiveField.value || !contextIsValid(ephemeralContext)) return
+        aiSession.setRegenerateAction { suggestReplies(contextMessage, intent, bypassCache = true, ephemeralContext = ephemeralContext) }
         launchAi {
             try {
                 val personalization = getPersonalizationContext()
                 val result = if (_isOfflineMode.value) {
                     GeminiManager.offlineReplies(contextMessage, personalization, intent)
                 } else {
-                    GeminiManager.suggestReplies(contextMessage, personalization, intent, bypassCache)
+                    GeminiManager.suggestReplies(contextMessage, personalization, intent, bypassCache, cacheResponse = !ephemeralContext)
                 }
+                if (!contextIsValid(ephemeralContext)) return@launchAi
                 _aiPanelState.value = AiPanelState.Replies(result.suggestions)
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
+                if (!contextIsValid(ephemeralContext)) return@launchAi
                 _aiPanelState.value = AiPanelState.Replies(
                     ReplyIntents.offlineReplies(intent)
                         ?: listOf("Sounds good!", "Sure thing", "Let me check.")
@@ -1104,36 +1124,39 @@ class KeyboardViewModel(
      * First step of intent-directed replies: remember the message being replied
      * to and let the UI show intent chips (Accept/Decline/...) before generating.
      */
-    fun requestReplyIdeas(contextMessage: String) {
+    fun requestReplyIdeas(contextMessage: String, ephemeralContext: Boolean = false) {
         if (contextMessage.isBlank() || _isSensitiveField.value) return
         dismissResults()
-        _aiPanelState.value = AiPanelState.ReplyIntent(contextMessage)
+        if (!contextIsValid(ephemeralContext)) return
+        _aiPanelState.value = AiPanelState.ReplyIntent(contextMessage, ephemeralContext)
     }
 
     /** Second step: generate replies steered by [intent], or unsteered when null. */
     fun chooseReplyIntent(intent: String?) {
-        val contextMessage = (_aiPanelState.value as? AiPanelState.ReplyIntent)?.contextMessage ?: return
-        suggestReplies(contextMessage, intent ?: "")
+        val panel = _aiPanelState.value as? AiPanelState.ReplyIntent ?: return
+        suggestReplies(panel.contextMessage, intent ?: "", ephemeralContext = panel.ephemeralContext)
     }
 
     /**
      * Summarize long text
      */
-    fun summarizeMessage(text: String, bypassCache: Boolean = false) {
-        if (text.isBlank() || _isSensitiveField.value) return
-        aiSession.setRegenerateAction { summarizeMessage(text, bypassCache = true) }
+    fun summarizeMessage(text: String, bypassCache: Boolean = false, ephemeralContext: Boolean = false) {
+        if (text.isBlank() || _isSensitiveField.value || !contextIsValid(ephemeralContext)) return
+        aiSession.setRegenerateAction { summarizeMessage(text, bypassCache = true, ephemeralContext = ephemeralContext) }
         launchAi(text) {
             try {
                 val personalization = getPersonalizationContext()
                 val result = if (_isOfflineMode.value) {
                     GeminiManager.offlineSummary(text)
                 } else {
-                    GeminiManager.summarizeMessage(text, personalization, bypassCache)
+                    GeminiManager.summarizeMessage(text, personalization, bypassCache, cacheResponse = !ephemeralContext)
                 }
+                if (!contextIsValid(ephemeralContext)) return@launchAi
                 _aiPanelState.value = AiPanelState.Summary(result, text)
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
+                if (!contextIsValid(ephemeralContext)) return@launchAi
                 _aiPanelState.value = AiPanelState.Summary(
                     "Failed to summarize text: ${e.localizedMessage}", text
                 )
@@ -1144,21 +1167,23 @@ class KeyboardViewModel(
     /**
      * Translate text
      */
-    fun translateText(text: String, bypassCache: Boolean = false) {
-        if (text.isBlank() || _isSensitiveField.value) return
-        aiSession.setRegenerateAction { translateText(text, bypassCache = true) }
+    fun translateText(text: String, bypassCache: Boolean = false, ephemeralContext: Boolean = false) {
+        if (text.isBlank() || _isSensitiveField.value || !contextIsValid(ephemeralContext)) return
+        aiSession.setRegenerateAction { translateText(text, bypassCache = true, ephemeralContext = ephemeralContext) }
         launchAi(text) {
             try {
                 val personalization = getPersonalizationContext()
                 val result = if (_isOfflineMode.value) {
                     "[Offline] $text"
                 } else {
-                    GeminiManager.translateText(text, _sourceLanguage.value, _targetLanguage.value, personalization, bypassCache)
+                    GeminiManager.translateText(text, _sourceLanguage.value, _targetLanguage.value, personalization, bypassCache, cacheResponse = !ephemeralContext)
                 }
+                if (!contextIsValid(ephemeralContext)) return@launchAi
                 _aiPanelState.value = AiPanelState.Translation(result, text)
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
+                if (!contextIsValid(ephemeralContext)) return@launchAi
                 _aiPanelState.value = AiPanelState.Translation(
                     "Translation error: ${e.localizedMessage}", text
                 )
@@ -1252,20 +1277,22 @@ class KeyboardViewModel(
     /**
      * Explain dense/jargon-heavy text (usually from the clipboard) in plain language.
      */
-    fun explainText(text: String, bypassCache: Boolean = false) {
-        if (text.isBlank() || _isSensitiveField.value) return
-        aiSession.setRegenerateAction { explainText(text, bypassCache = true) }
+    fun explainText(text: String, bypassCache: Boolean = false, ephemeralContext: Boolean = false) {
+        if (text.isBlank() || _isSensitiveField.value || !contextIsValid(ephemeralContext)) return
+        aiSession.setRegenerateAction { explainText(text, bypassCache = true, ephemeralContext = ephemeralContext) }
         launchAi(text) {
             try {
                 val result = if (_isOfflineMode.value) {
                     "[Offline: explanations need cloud mode]"
                 } else {
-                    GeminiManager.explainText(text, bypassCache)
+                    GeminiManager.explainText(text, bypassCache, cacheResponse = !ephemeralContext)
                 }
+                if (!contextIsValid(ephemeralContext)) return@launchAi
                 _aiPanelState.value = AiPanelState.Explanation(result)
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
+                if (!contextIsValid(ephemeralContext)) return@launchAi
                 _aiPanelState.value = AiPanelState.Explanation("Explanation error: ${e.localizedMessage}")
             }
         }

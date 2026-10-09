@@ -133,7 +133,9 @@ fun AgenticKeyboardLayout(
     onOpenSettings: (() -> Unit)? = null,
     // Height of the system navigation bar the IME window extends behind; the
     // keyboard background fills it while the keys stay above it.
-    navigationBarInset: Dp = 0.dp
+    navigationBarInset: Dp = 0.dp,
+    // Context results are displayed over the keys by the IME without resizing the host.
+    suppressAiPanels: Boolean = false
 ) {
     val haptic = LocalHapticFeedback.current
     val clipboardManager = LocalClipboardManager.current
@@ -151,7 +153,8 @@ fun AgenticKeyboardLayout(
     var isNumberMode by remember { mutableStateOf(false) }
 
     // Collect states from ViewModel
-    val aiPanelState by viewModel.aiPanelState.collectAsState()
+    val collectedAiPanelState by viewModel.aiPanelState.collectAsState()
+    val aiPanelState = if (suppressAiPanels) AiPanelState.Idle else collectedAiPanelState
     val voiceMatch by viewModel.voiceMatch.collectAsState()
     val isLoading = aiPanelState == AiPanelState.Loading
     val suggestions = (aiPanelState as? AiPanelState.Replies)?.suggestions.orEmpty()
@@ -293,13 +296,18 @@ fun AgenticKeyboardLayout(
     /**
      * Smart space: double-tap inserts ". ", a committed word is expanded from
      * shortcut templates or auto-corrected from learned typo rules (revertible
-     * with backspace), and every committed word feeds on-device learning.
+     * with backspace), and every committed word feeds on-device learning. In a
+     * sensitive field none of these rewrites apply and space types a space
+     * (KEYBOARD-006).
      */
     fun handleSpace() {
         val text = currentText()
         val now = System.currentTimeMillis()
 
-        if (now - lastSpaceTime < 400 && text.endsWith(" ") && text.trimEnd().lastOrNull()?.isLetterOrDigit() == true) {
+        val rewritesAllowed = viewModel.allowsSmartSpaceRewrites()
+        if (rewritesAllowed && now - lastSpaceTime < 400 &&
+            text.endsWith(" ") && text.trimEnd().lastOrNull()?.isLetterOrDigit() == true
+        ) {
             lastSpaceTime = 0L
             if (inPlaygroundMode) {
                 onPlaygroundTextChange(text.dropLast(1) + ". ")
@@ -312,7 +320,9 @@ fun AgenticKeyboardLayout(
             gestureAlert = "Period inserted ✏️"
             return
         }
-        lastSpaceTime = now
+        // A space typed in a sensitive field must not arm the double-space period
+        // for the next editor (the input view is reused across onStartInput).
+        lastSpaceTime = if (rewritesAllowed) now else 0L
 
         val lastWord = text.takeLastWhile { !it.isWhitespace() }
         if (lastWord.isNotEmpty()) {

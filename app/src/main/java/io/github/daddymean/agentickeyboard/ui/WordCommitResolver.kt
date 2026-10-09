@@ -6,8 +6,8 @@ import io.github.daddymean.agentickeyboard.util.TextExpansion
 
 /**
  * Pure decision behind [KeyboardViewModel.resolveWordCommit], kept free of Room and
- * flows so the shortcut-before-correction order and the KEYBOARD-002 pause are
- * covered by plain JVM tests with seeded rules.
+ * flows so the shortcut-before-correction order, the KEYBOARD-002 pause and the
+ * KEYBOARD-006 sensitive-field rule are covered by plain JVM tests with seeded rules.
  */
 object WordCommitResolver {
     fun resolve(
@@ -15,8 +15,14 @@ object WordCommitResolver {
         shortcuts: List<ShortcutTemplate>,
         corrections: List<LearnedCorrection>,
         correctionsPaused: Boolean,
-        expand: (String) -> TextExpansion.ExpandedText
+        expand: (String) -> TextExpansion.ExpandedText,
+        sensitiveField: Boolean = false
     ): WordReplacement? {
+        // KEYBOARD-006: password, other sensitive and incognito editors keep exactly
+        // what was typed. Neither shortcuts nor learned corrections may rewrite it
+        // (a passphrase containing "teh" or "brb" must not change, and a shortcut
+        // template must not splice {clipboard} or other text into a secret).
+        if (sensitiveField) return null
         val normalized = word.lowercase().trim()
         if (normalized.isEmpty()) return null
         shortcuts.find { it.shortcut == normalized }?.let {
