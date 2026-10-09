@@ -34,6 +34,10 @@ import io.github.daddymean.agentickeyboard.util.VoiceSample
 import io.github.daddymean.agentickeyboard.util.VoiceVocabulary
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import io.github.daddymean.agentickeyboard.util.LocalSpelling
+import io.github.daddymean.agentickeyboard.util.TouchCalibration
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -516,6 +520,10 @@ class KeyboardViewModel(
         activeAppLabel = appLabel
         previousCommittedWord = null
         pendingUndo = null
+        proofreadJob?.cancel()
+        predictionJob?.cancel()
+        _predictiveSuggestions.value = emptyList()
+        lastSyncedText = null
         // A backspace in the next app must never splice in text from this one.
         pendingAiUndo = null
         _proofreadHint.value = null
@@ -904,6 +912,19 @@ class KeyboardViewModel(
         recordMastery(MasteryEvent.SHORTCUT_EXPANSION)
     }
 
+    val touchCalibration = TouchCalibration(settings?.touchCalibration.orEmpty())
+
+    fun saveTouchCalibration(encoded: String) {
+        if (!isLearningAllowed()) return
+        touchCalibration.restore(encoded)
+        settings?.touchCalibration = touchCalibration.encode()
+    }
+
+    fun resetTouchCalibration() {
+        touchCalibration.clear()
+        settings?.touchCalibration = ""
+    }
+
     // --- Prediction ------------------------------------------------------------
 
     /**
@@ -935,12 +956,14 @@ class KeyboardViewModel(
                     }
                 }
                 else -> {
-                    val lastWord = activeText.split(WHITESPACE_REGEX).lastOrNull()?.lowercase() ?: ""
+                    val sourceWord = activeText.split(WHITESPACE_REGEX).lastOrNull().orEmpty()
+                    val lastWord = sourceWord.lowercase()
                     _predictiveSuggestions.value = if (lastWord.isNotEmpty()) {
-                        topVocabulary.value
-                            .filter { it.word.startsWith(lastWord) && it.word != lastWord }
-                            .take(3)
-                            .map { it.word }
+                        val personal = topVocabulary.value.map { it.word }
+                        val learned = learnedCorrections.value.firstOrNull { it.typo == lastWord }?.correction
+                        withContext(Dispatchers.Default) {
+                            LocalSpelling.shared.predictiveSuggestions(sourceWord, personal, learned)
+                        }
                     } else {
                         emptyList()
                     }
@@ -1008,13 +1031,15 @@ class KeyboardViewModel(
             return
         }
         if (_proofreadHint.value?.original == text) return
+        _proofreadHint.value = null
         proofreadJob = viewModelScope.launch {
-            delay(2500)
+            delay(700)
             // Offline mode (or a secure field) may have started during the delay; the
             // companion app promises nothing leaves the device once it is on.
             if (_isOfflineMode.value || !_isProofreadEnabled.value || _isSensitiveField.value) return@launch
             try {
                 val result = GeminiManager.fixGrammar(text, getPersonalizationContext())
+                if (_inputText.value != text || _isSensitiveField.value || !_isProofreadEnabled.value || _isOfflineMode.value) return@launch
                 _proofreadHint.value = if (result.correctionsCount > 0 && result.corrected.isNotBlank() && result.corrected != text) {
                     result.copy(original = text)
                 } else {
@@ -1034,6 +1059,7 @@ class KeyboardViewModel(
             dismissResults()
             // The background check ran on this draft; typing since then makes it stale.
             aiSession.bindResultSource(it.original)
+            aiSession.setRegenerateAction { fixGrammar(it.original, bypassCache = true) }
             publishAiPanel(AiPanelState.Grammar(it))
             _proofreadHint.value = null
         }
@@ -1046,6 +1072,10 @@ class KeyboardViewModel(
      */
     fun fixGrammar(text: String, bypassCache: Boolean = false) {
         if (text.isBlank() || _isSensitiveField.value) return
+        if (!bypassCache && _proofreadHint.value?.original == text) {
+            promoteProofreadHint()
+            return
+        }
         aiSession.setRegenerateAction { fixGrammar(text, bypassCache = true) }
         launchAi(text) {
             try {

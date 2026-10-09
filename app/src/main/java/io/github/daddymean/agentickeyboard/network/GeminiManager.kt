@@ -105,6 +105,8 @@ object GeminiManager {
             } else {
                 offlineGrammarFix(text)
             }
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
         } catch (e: Exception) {
             Log.e(TAG, "Error in fixGrammar", e)
             offlineGrammarFix(text)
