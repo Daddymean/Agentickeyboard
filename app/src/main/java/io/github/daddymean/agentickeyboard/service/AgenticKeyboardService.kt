@@ -311,14 +311,18 @@ class AgenticKeyboardService : InputMethodService(), LifecycleOwner, ViewModelSt
     }
 
     private fun clearConversationContext(status: String? = null) {
-        val hadContext = conversationContext.value.active || conversationContext.value.pending != null
+        // Clearing an attached conversation must cancel only an AI action that
+        // actually uses that conversation. A regular grammar/rewrite/compose
+        // result may coexist with an attached context and should survive expiry,
+        // accessibility invalidation, or the user's Clear action.
+        val hadContextTool = contextToolActive.value
         contextExpiryJob?.cancel()
         contextExpiryJob = null
         contextLease.clear()
         contextToolActive.value = false
         conversationContext.value = ConversationContextUiState(status = status)
         replyCompletenessSession.clear()
-        if (hadContext) viewModel.dismissResults()
+        if (hadContextTool) viewModel.dismissResults()
     }
 
     private fun captureConversation() {
