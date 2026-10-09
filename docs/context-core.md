@@ -29,8 +29,8 @@ core/
 | Who | Uses |
 | --- | --- |
 | `:context-app` service | `ContextDatabase.get(ctx)`, `ContextStore(db).logEventsJson / queryRangeJson`, `ContextJson.encodeSnapshot` |
-| Distiller | `EventDao` range/type queries, `EpisodeDao.upsertAll`, `Snapshot`, `Snapshot.redactedForSync()` |
-| Sync uploader | `EpisodeDao.overlappingUpTo(from, to, Sensitivity.SYNC_MAX)`, `Sensitivity.isSyncable` |
+| Distiller | `EventDao` range/type queries, `EpisodeDao.upsertChanged`, `Snapshot` (local + sync, with `maxSensitivity`) |
+| Sync uploader | `EpisodeDao.changedSince(sinceMs, afterId, limit)`, `Snapshot.forSync()`, `Sensitivity.isSyncable` |
 | Keyboard | `ContextClient.cachedSnapshot()` / `snapshot` flow, `logNote(text, sensitivity)` |
 | Collectors | `ContextClient.logEvents(events)` (or `EventDao.insertAll` when in-process) |
 
@@ -84,7 +84,9 @@ core/
 13. **Permission** is declared in `:core`'s manifest, so every same-signed app
     defines it. This removes the install-order bug where a client installed
     before the service never gets a signature permission granted.
-14. **Room** schema v1, `exportSchema = true`, WAL. Only `:context-app` opens the
+14. **Room** schema v2 (v1→v2 adds `episodes.updatedMs`; manual
+    `MIGRATION_1_2`, tested against a hand-built v1 database because the v1
+    schema JSON was never committed), `exportSchema = true`, WAL. Only `:context-app` opens the
     database; there is no multi-process access.
 
 ## Integration notes
@@ -132,8 +134,9 @@ class ContextService : Service() {
 **Collectors / distiller** (same process as the DB): use the DAOs directly —
 going through the binder to your own process is pure overhead.
 
-**Sync (Supabase)**: filter with `Sensitivity.isSyncable` / `EpisodeDao.overlappingUpTo(…, SYNC_MAX)`
-and push snapshots only through `Snapshot.redactedForSync()` (see change request 1).
+**Sync (Supabase)**: page episodes with `EpisodeDao.changedSince`, upsert the
+syncable ones and delete the remote copy of the rest; upload only a snapshot for
+which `forSync()` is non-null. Details in `context-handoff.md`.
 
 ## Risks
 
@@ -154,17 +157,19 @@ and push snapshots only through `Snapshot.redactedForSync()` (see change request
 
 ## CONTRACT CHANGE REQUESTS
 
-Implemented against the current contract regardless.
+1. ~~**Snapshot has no sensitivity.**~~ **Accepted.** Added
+   `Snapshot.maxSensitivity` (default `DEVICE_ONLY`, fail closed) and
+   `forSync()`. The distiller publishes a separate sync snapshot built from
+   sensitivity ≤ 1 inputs. Removed `redactedForSync()`, which leaked `today` and
+   `recentNotes`. Chosen over per-item sensitivity because it keeps the
+   contract's list types (`[String]`) unchanged.
+2. ~~**Episode has no `updatedMs`.**~~ **Accepted.** Added `Episode.updatedMs`
+   (indexed), `EpisodeDao.upsertChanged` (stamps only real changes) and
+   `EpisodeDao.changedSince` (keyset on `(updatedMs, id)`, all sensitivities
+   so sync can delete episodes that became private). Schema v2.
 
-1. **Snapshot has no sensitivity.** `get_state_now()` serves the Snapshot
-   off-device, but `today.places`, `today.topApps` and `recentNotes` carry no
-   sensitivity, so the rule "only ≤ 1 ever syncs" cannot be enforced on it.
-   `redactedForSync()` can only strip `activeEpisode`. *Proposal:* the distiller
-   publishes two snapshots (local, and one built only from sensitivity ≤ 1
-   inputs), or add `sensitivity` to each list entry.
-2. **Episode has no `updatedMs`.** Sync needs a change cursor; without one the
-   uploader must re-scan by time range. *Proposal:* add `updatedMs: Long`
-   (indexed) to Episode.
+Still open (implemented against the current contract):
+
 3. **No push for snapshot changes.** The client can only poll. *Proposal:* add
    `oneway void registerListener(ISnapshotListener l)` so the keyboard's cache is
    refreshed exactly when the distiller publishes — fewer binds and fresher data.
@@ -174,3 +179,5 @@ Implemented against the current contract regardless.
 5. **`payload` as a JSON-in-a-string** double-escapes every payload on the wire and
    in Supabase. *Proposal:* type it as a JSON object on the wire (still stored as
    TEXT in Room).
+6. **Episode hard deletes are invisible to sync.** *Proposal if needed:* a
+   tombstone table.

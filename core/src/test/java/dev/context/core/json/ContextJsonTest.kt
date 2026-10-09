@@ -69,15 +69,32 @@ class ContextJsonTest {
   @Test
   fun emptySnapshotEncodesAllKeys() {
     val obj = Json.parseToJsonElement(ContextJson.encodeSnapshot(Snapshot.empty())).jsonObject
-    assertEquals(setOf("generatedAtMs", "today", "activeEpisode", "nextEvent", "recentNotes"), obj.keys)
+    assertEquals(
+      setOf("generatedAtMs", "today", "activeEpisode", "nextEvent", "recentNotes", "maxSensitivity"),
+      obj.keys,
+    )
   }
 
   @Test
-  fun redactedForSyncDropsPrivateActiveEpisodeOnly() {
-    val sensitive = Snapshot(generatedAtMs = 1, activeEpisode = episode)
-    assertNull(sensitive.redactedForSync().activeEpisode)
-    val personal = sensitive.copy(activeEpisode = episode.copy(sensitivity = Sensitivity.PERSONAL))
-    assertNotNull(personal.redactedForSync().activeEpisode)
+  fun snapshotSyncGateFailsClosed() {
+    // Undeclared sensitivity never syncs.
+    assertNull(Snapshot(generatedAtMs = 1).forSync())
+    assertNull(Snapshot(generatedAtMs = 1, maxSensitivity = Sensitivity.PRIVATE).forSync())
+
+    val syncable = Snapshot(generatedAtMs = 1, maxSensitivity = Sensitivity.PERSONAL)
+    assertEquals(syncable, syncable.forSync())
+
+    // A private active episode vetoes a snapshot that claims to be syncable.
+    assertNull(syncable.copy(activeEpisode = episode).forSync())
+    assertNotNull(syncable.copy(activeEpisode = episode.copy(sensitivity = Sensitivity.PUBLIC)).forSync())
+  }
+
+  @Test
+  fun snapshotWithoutMaxSensitivityDecodesAsDeviceOnly() {
+    // A v1 producer that predates the field must not become syncable.
+    val decoded = ContextJson.decodeSnapshot("""{"generatedAtMs": 5}""")
+    assertEquals(Sensitivity.DEVICE_ONLY, decoded.maxSensitivity)
+    assertNull(decoded.forSync())
   }
 
   @Test

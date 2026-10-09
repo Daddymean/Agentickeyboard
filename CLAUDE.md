@@ -67,6 +67,7 @@ app/src/main/java/io/github/daddymean/agentickeyboard/
     └── PersonalModelSerializer.kt  # Privacy-aware personalization export/import
 
 core/src/main/java/dev/context/core/  # :core — context platform contract (Room, Snapshot, AIDL, ContextClient); see docs/context-core.md
+context-app/src/main/java/dev/context/app/  # :context-app — IContextService host, collectors, distiller, Supabase sync (WorkManager)
 ```
 
 ## Conventions

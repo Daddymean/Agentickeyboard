@@ -1,0 +1,85 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  The whole manifest is owned here so collector, UI and sync work never edit it.
+  dev.context.permission.ACCESS and the bind-action <queries> merge in from :core.
+-->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+
+  <!-- Sync to Supabase. -->
+  <uses-permission android:name="android.permission.INTERNET" />
+
+  <!-- usage.session: granted by the user in Settings > Usage access. -->
+  <uses-permission
+      android:name="android.permission.PACKAGE_USAGE_STATS"
+      tools:ignore="ProtectedPermissions" />
+
+  <!-- location.visit / location.activity. No foreground service: passive updates and
+       activity transitions are delivered to the receivers below. -->
+  <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+  <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+  <uses-permission android:name="android.permission.ACCESS_BACKGROUND_LOCATION" />
+  <uses-permission android:name="android.permission.ACTIVITY_RECOGNITION" />
+
+  <!-- calendar.event -->
+  <uses-permission android:name="android.permission.READ_CALENDAR" />
+
+  <!-- health.* via Health Connect; background read lets WorkManager collect. -->
+  <uses-permission android:name="android.permission.health.READ_SLEEP" />
+  <uses-permission android:name="android.permission.health.READ_HEART_RATE" />
+  <uses-permission android:name="android.permission.health.READ_STEPS" />
+  <uses-permission android:name="android.permission.health.READ_HEALTH_DATA_IN_BACKGROUND" />
+
+  <queries>
+    <package android:name="com.google.android.apps.healthdata" />
+  </queries>
+
+  <application
+      android:name=".ContextApp"
+      android:allowBackup="false"
+      android:label="Context"
+      android:supportsRtl="true"
+      android:theme="@android:style/Theme.Material.Light.NoActionBar">
+
+    <activity
+        android:name=".ui.MainActivity"
+        android:exported="true">
+      <intent-filter>
+        <action android:name="android.intent.action.MAIN" />
+        <category android:name="android.intent.category.LAUNCHER" />
+      </intent-filter>
+      <!-- Health Connect shows this when the user asks why the app wants access. -->
+      <intent-filter>
+        <action android:name="androidx.health.ACTION_SHOW_PERMISSIONS_RATIONALE" />
+      </intent-filter>
+    </activity>
+
+    <!-- Android 14+: Health Connect's "privacy policy" link for this app. -->
+    <activity-alias
+        android:name="ViewPermissionUsageActivity"
+        android:exported="true"
+        android:permission="android.permission.START_VIEW_PERMISSION_USAGE"
+        android:targetActivity=".ui.MainActivity">
+      <intent-filter>
+        <action android:name="android.intent.action.VIEW_PERMISSION_USAGE" />
+        <category android:name="android.intent.category.HEALTH_PERMISSIONS" />
+      </intent-filter>
+    </activity-alias>
+
+    <service
+        android:name=".service.ContextService"
+        android:exported="true"
+        android:permission="dev.context.permission.ACCESS">
+      <intent-filter>
+        <action android:name="dev.context.action.BIND_CONTEXT_SERVICE" />
+      </intent-filter>
+    </service>
+
+    <receiver
+        android:name=".collect.location.LocationUpdatesReceiver"
+        android:exported="false" />
+    <receiver
+        android:name=".collect.location.ActivityTransitionReceiver"
+        android:exported="false" />
+  </application>
+</manifest>
