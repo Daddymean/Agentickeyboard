@@ -732,7 +732,8 @@ class KeyboardViewModel(
      * Resolves what a just-typed word should be replaced with when the user commits
      * it (presses space): a shortcut template expansion first, then a learned
      * spelling auto-correction (skipped while [correctionsPaused]). Returns null when
-     * the word should stand as typed.
+     * the word should stand as typed, which is always the case in a sensitive
+     * (password or incognito) field (KEYBOARD-006).
      */
     fun resolveWordCommit(word: String): WordReplacement? =
         WordCommitResolver.resolve(
@@ -740,8 +741,16 @@ class KeyboardViewModel(
             shortcuts.value,
             learnedCorrections.value,
             _correctionsPaused.value,
-            ::expandTemplate
+            ::expandTemplate,
+            sensitiveField = _isSensitiveField.value
         )
+
+    /**
+     * Whether smart space may rewrite text the user already typed (the double-space
+     * ". " shortcut). False in sensitive fields, where a doubled space in a
+     * passphrase must stay two spaces (KEYBOARD-006).
+     */
+    fun allowsSmartSpaceRewrites(): Boolean = !_isSensitiveField.value
 
     // --- Auto-correction undo -------------------------------------------------
 
