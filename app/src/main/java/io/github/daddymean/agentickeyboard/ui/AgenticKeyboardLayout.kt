@@ -43,6 +43,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.collectAsState
@@ -456,6 +457,8 @@ fun AgenticKeyboardLayout(
     // call sites (IME service and the in-app playground) and every descendant
     // composable through LocalKeyboardColors.
     val themeOverride by viewModel.themeOverride.collectAsState()
+    // KEYBOARD-018: one press order for every key, so overlapping taps type in press order.
+    val keyPressOrder = remember { KeyPressOrder() }
     KeyboardTheme(
         darkTheme = when (themeOverride) {
             "Light" -> false
@@ -463,6 +466,7 @@ fun AgenticKeyboardLayout(
             else -> isSystemInDarkTheme()
         }
     ) {
+    CompositionLocalProvider(LocalKeyPressOrder provides keyPressOrder) {
     val keyboardColors = LocalKeyboardColors.current
     Column(
         modifier = modifier
@@ -2023,6 +2027,7 @@ fun AgenticKeyboardLayout(
         }
     }
     }
+    }
 }
 
 /**
@@ -2162,14 +2167,16 @@ fun KeyButton(
     var selectedVariant by remember { mutableStateOf<Int?>(null) }
     val variantGeometry = remember { VariantPopupGeometry() }
     val currentVariants by rememberUpdatedState(longPressVariants)
+    val pressOrder = LocalKeyPressOrder.current
     val density = LocalDensity.current
 
     val currentOnHorizontalDrag by rememberUpdatedState(onHorizontalDrag)
 
     val interactionModifier = when {
         // KEYBOARD-017: the space bar types a space unless the thumb clearly slides.
-        onHorizontalDrag != null -> Modifier.pointerInput(Unit) {
+        onHorizontalDrag != null -> Modifier.pointerInput(pressOrder) {
             detectTapOrHorizontalSlide(
+                order = pressOrder,
                 onTap = { currentOnClick() },
                 onSlide = { steps -> currentOnHorizontalDrag?.invoke(steps) }
             )
@@ -2190,10 +2197,11 @@ fun KeyButton(
                 }
             )
         }
-        longPressVariants.isNotEmpty() || onTapPosition != null -> Modifier.pointerInput(Unit) {
+        longPressVariants.isNotEmpty() || onTapPosition != null -> Modifier.pointerInput(pressOrder) {
             // KEYBOARD-016: holding opens the accents; releasing types the accent
             // slid onto, or the base letter if none was chosen.
             detectKeyPress(
+                order = pressOrder,
                 longPressEnabled = { currentVariants.isNotEmpty() },
                 onTap = { point -> currentOnTapPosition?.invoke(point) ?: currentOnClick() },
                 onLongPress = {
@@ -2223,6 +2231,11 @@ fun KeyButton(
             .shadow(1.dp, RoundedCornerShape(6.dp))
             .clip(RoundedCornerShape(6.dp))
             .background(containerColor)
+            .then(
+                // KEYBOARD-018: keys that do not order themselves still type any held letter first.
+                if (longPressVariants.isNotEmpty() || onTapPosition != null || onHorizontalDrag != null) Modifier
+                else Modifier.flushHeldKeysOnPress(pressOrder)
+            )
             .then(interactionModifier)
             .semantics(mergeDescendants = true) {
                 role = Role.Button

@@ -19,6 +19,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.input.pointer.AwaitPointerEventScope
+import androidx.compose.ui.input.pointer.PointerInputChange
 import androidx.compose.ui.input.pointer.PointerInputScope
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
@@ -143,8 +145,13 @@ internal fun KeyVariantPopup(
  * move is reported to [onHoldMove], and the release to [onHoldEnd] with the down
  * position and the last position. All events of a held press are consumed, so
  * the slide never starts swipe typing.
+ *
+ * KEYBOARD-018: with an [order], the press joins the keyboard's press order. If
+ * another key goes down first, this press is typed at once (at its down
+ * position) and the rest of the gesture is ignored.
  */
 internal suspend fun PointerInputScope.detectKeyPress(
+    order: KeyPressOrder? = null,
     longPressEnabled: () -> Boolean,
     onTap: (Offset) -> Unit,
     onLongPress: () -> Unit,
@@ -153,20 +160,36 @@ internal suspend fun PointerInputScope.detectKeyPress(
 ) = awaitEachGesture {
     val down = awaitFirstDown()
     down.consume()
+    val press = order?.press { onTap(down.position) }
+    /** Ends this press in the order; true if it is still this gesture's to type. */
+    fun stillOurs(): Boolean = press == null || order.finish(press)
+
     if (!longPressEnabled()) {
-        val up = waitForUpOrCancellation() ?: return@awaitEachGesture
+        val up = waitForUpOrCancellation()
+        if (up == null) {
+            stillOurs()
+            return@awaitEachGesture
+        }
         up.consume()
-        onTap(up.position)
+        if (stillOurs()) onTap(up.position)
         return@awaitEachGesture
     }
     var cancelled = false
     val up = withTimeoutOrNull(viewConfiguration.longPressTimeoutMillis) {
         waitForUpOrCancellation().also { if (it == null) cancelled = true }
     }
-    if (cancelled) return@awaitEachGesture
+    if (cancelled) {
+        stillOurs()
+        return@awaitEachGesture
+    }
     if (up != null) {
         up.consume()
-        onTap(up.position)
+        if (stillOurs()) onTap(up.position)
+        return@awaitEachGesture
+    }
+    if (!stillOurs()) {
+        // Already typed because another key went down: no accents for this press.
+        consumeUntilReleased(down)
         return@awaitEachGesture
     }
     onLongPress()
@@ -180,4 +203,12 @@ internal suspend fun PointerInputScope.detectKeyPress(
         onHoldMove(last)
     }
     onHoldEnd(down.position, last)
+}
+
+private suspend fun AwaitPointerEventScope.consumeUntilReleased(down: PointerInputChange) {
+    while (true) {
+        val change = awaitPointerEvent().changes.firstOrNull { it.id == down.id } ?: return
+        change.consume()
+        if (!change.pressed) return
+    }
 }
