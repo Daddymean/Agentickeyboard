@@ -1,6 +1,6 @@
 # Release Candidate Test Matrix
 
-This matrix is the handoff from feature construction to stabilization. Run the automated gates first, then the device checks below. Record device/API level, build SHA, pass/fail, and a short note for every failure.
+This matrix is the handoff from feature construction to stabilization. Run the automated gates first, then the device checks below. Record device, OS/API level, full build SHA, test date, and a separate pass/fail/not_run result with evidence for every scenario. Unexecuted checks remain not_run; omitted checks are not passes.
 
 ## Automated gates
 
@@ -38,7 +38,7 @@ Use the broadest available spread:
 
 ## Clipboard history privacy
 
-1. Confirm the clipboard-history bar says history is off before opt-in.
+1. With history disabled (including before opt-in), confirm the clipboard-history bar is absent and occupies zero space.
 2. Focus a password field and confirm:
    - the clipboard-history bar is absent;
    - no automatic capture occurs;
@@ -114,6 +114,30 @@ Use the broadest available spread:
 5. Confirm `/v command :: draft` still runs only after the result tap.
 6. Confirm ordinary custom slash commands and quick abbreviation expansion remain unchanged.
 
+## Adaptive layout and dynamic templates (KEYBOARD-001)
+
+These are mandatory physical-device checks. CI/Robolectric results do not replace them. Record each scenario separately as pass, fail or not_run with device, OS/API, full installed SHA, date, host editor and observed evidence.
+
+For **each** of portrait, landscape and split-screen, separately verify:
+
+- the bottom row is reachable;
+- the active text field remains visible;
+- keys are usable without overlap or clipping, including IME insets and enabled bars/panels.
+
+With clipboard history enabled in a normal field, separately test capture, display and chip insertion. With history disabled, its bar must occupy zero space. In a sensitive field, history must be suppressed and template `{clipboard}` must neither read nor reveal clipboard contents.
+
+Run all 15 combinations of shortcut-on-space, expand gesture and Snippet Vault with:
+
+| Token case | Expected result for each insertion path |
+|---|---|
+| `{date}` | Matches the recorded device date, locale and time zone |
+| `{clipboard}` | Inserts the ordinary live clipboard value |
+| `A{cursor}B` | Inserts AB with the caret between A and B |
+| `X{unknown}Y` | Preserved unchanged |
+| `X{date:}Y` and unclosed `X{date` | Both preserved unchanged without a crash |
+
+Use real input connections and a live clipboard. Also record nested-JSON preservation, literal `{{clipboard}}` without a clipboard read, and caret-template undo on the device. Link failures to reproducible issues or patches and rerun affected checks on the resulting candidate. A documentation update does not make the keyboard beta-ready; acceptance requires recorded evidence or an explicitly accepted exception.
+
 ## Core keyboard regression
 
 Smoke-test the existing high-risk paths:
@@ -168,3 +192,12 @@ python3 tools/build_manifest.py app-debug.apk --commit FULL_40_CHARACTER_SHA --r
 
 This locally generated manifest binds the supplied metadata to those bytes; check
 the source run yourself. It is not a signature or independent proof of origin.
+
+### APK source identity
+
+The debug artifact includes build-manifest.json. Its commit/built_sha names the
+actual checkout built by CI. For pull_request events this is the synthetic
+merge SHA, and head_sha/base_sha additionally identify reproducible branch
+parents. Never label a merge-ref APK as a head-only build. For push builds the
+main SHA is the built SHA. Match the APK SHA-256 and run URL before device use.
+Passing HTML/XML test reports are retained for app, core and context-app.

@@ -37,6 +37,10 @@ fun TrustPrismBanner(viewModel: KeyboardViewModel) {
         cloudRedactionEnabled = CloudPrivacyPolicy.redactionEnabled
     )
 
+    // Routine states are shown by the toolbar's privacy icon; only the unprotected
+    // cloud state is loud enough to earn a full banner above the keys.
+    if (status.mode != TrustPrismMode.CLOUD_UNPROTECTED) return
+
     val background = when (status.mode) {
         TrustPrismMode.SECURE_FIELD -> Color(0xFF12372A)
         TrustPrismMode.OFFLINE_LOCAL -> Color(0xFF173B57)

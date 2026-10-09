@@ -1,6 +1,14 @@
 # Cloud redaction guard
 
-The keyboard sanitizes the final serialized Gemini request body immediately before OkHttp sends it.
+The keyboard sanitizes the outgoing Gemini request body immediately before OkHttp sends it.
+
+## How a body is redacted
+
+`CloudRequestRedactor` (in `CloudRedactionInterceptor.kt`) parses a JSON body, runs `CloudTextSanitizer` on each string *value* as the plain text it decodes to, and re-serializes the document. Object keys, numbers, booleans and nulls are copied through unchanged.
+
+Running the plain-text patterns over the serialized JSON instead does not work: JSON writes a line break as `\n` and a quote as `\"`, so a card number, SSN, IP or URL at the start of a line was not matched, and a quoted secret or URL (`password: "hunter2"`, `Read "https://…"`) was cut mid-escape, leaking the value and producing invalid JSON that made the AI request fail.
+
+The redactor fails closed: a body that is not JSON, or is labelled JSON but does not parse, gets whole-text sanitization rather than being sent as is.
 
 ## Why the network boundary
 
@@ -9,6 +17,7 @@ Redaction at the request boundary covers every current AI action and any future 
 ## Values currently redacted
 
 - Credential-shaped assignments such as `password=`, `api_key=`, and `access_token=`
+- Bare credentials with no label: PEM private-key blocks, `Bearer <token>`, JWTs, Google `AIza…` and OAuth `ya29.…`, GitHub `ghp_…`/`github_pat_…`, GitLab `glpat-…`, Slack `xox?-…`, Stripe `sk_/rk_live|test_…`, OpenAI `sk-…` and AWS `AKIA…` keys; PEM blocks with any one-word label, including OpenPGP `PRIVATE KEY BLOCK` armor (patterns shared with the clipboard-history filter in `SecretTokenPatterns`)
 - Email addresses
 - Card-like financial numbers
 - Social Security numbers
@@ -30,9 +39,11 @@ Round-trip actions (fix grammar, summarize, translate, rewrite, compose, continu
 ## Validation checklist
 
 - `CloudTextSanitizerTest` passes.
+- `CloudRedactionInterceptorTest` passes: production-serialized request bodies with values at line starts, quoted secrets and quoted URLs come out redacted and as valid JSON that round-trips.
 - Debug APK builds.
 - Release/R8 build succeeds.
 - A request containing an email or credential-shaped value reaches the network layer with a redaction marker instead of the original value.
 - Ordinary writing without sensitive patterns is unchanged.
+- A bare token (`AIza…`, `ghp_…`, JWT, `Bearer …`) reaches the network layer as `[REDACTED_SECRET]` (GEMINI-KEY-REVIEW-001 F1).
 - `RedactionApplyGuardTest` passes: a draft containing a phone/email/long number never acquires a marker through Apply.
 - On device: Fix Grammar on `call me at 555-123-4567` → Apply is refused with a message and the draft keeps the number.

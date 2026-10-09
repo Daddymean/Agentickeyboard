@@ -1,0 +1,97 @@
+name: Supabase
+
+on:
+  push:
+    branches: [main, master]
+    paths:
+      - 'supabase/**'
+      - '.github/workflows/supabase.yml'
+  pull_request:
+    branches: [main, master]
+    paths:
+      - 'supabase/**'
+      - '.github/workflows/supabase.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  schema:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: supabase/tests/package-lock.json
+
+      - name: Schema tests (PGlite)
+        working-directory: supabase/tests
+        run: npm ci && npm test
+
+      - name: Apply migrations to postgres:16
+        env:
+          PGHOST: localhost
+          PGPORT: 5432
+          PGUSER: postgres
+          PGPASSWORD: postgres
+          PGDATABASE: postgres
+        run: |
+          set -euo pipefail
+          psql -v ON_ERROR_STOP=1 -f supabase/tests/roles.sql
+          for f in $(ls supabase/migrations/*.sql | sort); do
+            echo "::group::$f"
+            psql -v ON_ERROR_STOP=1 -f "$f"
+            echo "::endgroup::"
+          done
+          psql -v ON_ERROR_STOP=1 <<'SQL'
+          insert into public.episodes (id, start_ms, end_ms, kind, title, summary, sensitivity)
+            values ('ci', 0, 1000, 'k', 'standup', 'standup', 0);
+          insert into public.notes (text) values ('ci');
+          insert into public.daily_state (date, state)
+            values ('2026-01-01', '{"generatedAtMs":1,"maxSensitivity":1}');
+          set role service_role;
+          select id, start_at, end_at from public.search_episodes('standup');
+          reset role;
+          do $$
+          begin
+            set local role anon;
+            begin
+              perform * from public.episodes;
+              raise exception 'anon could read episodes';
+            exception when insufficient_privilege then null;
+            end;
+          end
+          $$;
+          SQL
+
+  functions:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+
+      - name: Edge Function tests
+        run: |
+          if ls supabase/functions/*/ >/dev/null 2>&1; then
+            deno test --allow-env --allow-net=127.0.0.1 supabase/functions
+          else
+            echo "No Edge Functions yet; skipping."
+          fi

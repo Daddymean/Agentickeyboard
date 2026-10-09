@@ -33,10 +33,23 @@ class KeyboardPassportTransfer(
         )
     }
 
+    /**
+     * @param unverifiedReplaceAcknowledged the user explicitly accepted that an
+     *   unverified (legacy) file will replace existing data; required for REPLACE
+     *   of such a file. See [KeyboardPassportImportPolicy].
+     */
     suspend fun apply(
         opened: KeyboardPassportOpenResult.Success,
-        mode: KeyboardPassportImportMode
+        mode: KeyboardPassportImportMode,
+        unverifiedReplaceAcknowledged: Boolean = false
     ): KeyboardPassportApplyResult = withContext(Dispatchers.IO) {
+        check(KeyboardPassportImportPolicy.canConfirm(opened.preview, mode, unverifiedReplaceAcknowledged)) {
+            if (opened.preview.compatible) {
+                "Replacing data with an unverified file needs explicit confirmation."
+            } else {
+                "This passport version is not compatible with this app."
+            }
+        }
         val current = snapshot()
         val plan = KeyboardPassportImportPlanner.plan(
             current = current,
@@ -51,11 +64,12 @@ class KeyboardPassportTransfer(
         // learned data that the passport was only meant to update.
         //
         // The rows to delete come from `current`, captured before the write, so
-        // no Room Flow is collected inside the transaction.
+        // no Room Flow is collected inside the transaction. Each category is
+        // written with batch statements rather than one DAO call per record.
         database.withTransaction {
             if (PassportCategory.VOCABULARY in plan.affectedCategories) {
                 repository.clearVocabulary()
-                plan.snapshot.vocabulary.forEach { repository.insertWord(it) }
+                repository.insertWords(plan.snapshot.vocabulary)
             }
 
             if (PassportCategory.CORRECTIONS in plan.affectedCategories) {
@@ -66,25 +80,23 @@ class KeyboardPassportTransfer(
             }
 
             if (PassportCategory.SHORTCUTS in plan.affectedCategories) {
-                current.shortcuts.forEach { repository.deleteShortcut(it) }
-                plan.snapshot.shortcuts.forEach { repository.insertShortcut(it) }
+                repository.deleteShortcutsByIds(current.shortcuts.map { it.id })
+                repository.insertShortcuts(plan.snapshot.shortcuts)
             }
 
             if (PassportCategory.CUSTOM_COMMANDS in plan.affectedCategories) {
-                current.customCommands.forEach { repository.deleteCustomCommandById(it.id) }
-                plan.snapshot.customCommands.forEach { repository.insertCustomCommand(it) }
+                repository.deleteCustomCommandsByIds(current.customCommands.map { it.id })
+                repository.insertCustomCommands(plan.snapshot.customCommands)
             }
 
             if (PassportCategory.APP_PERSONAS in plan.affectedCategories) {
-                current.appPersonas.forEach { repository.deleteAppPersona(it.packageName) }
-                plan.snapshot.appPersonas.forEach {
-                    repository.setAppPersona(it.packageName, it.persona, it.appLabel)
-                }
+                repository.deleteAppPersonas(current.appPersonas.map { it.packageName })
+                repository.upsertAppPersonas(plan.snapshot.appPersonas)
             }
 
             if (PassportCategory.WRITING_LOGS in plan.affectedCategories) {
                 repository.clearLogs()
-                plan.snapshot.writingLogs.forEach { repository.insertLog(it) }
+                repository.insertLogs(plan.snapshot.writingLogs)
             }
         }
 

@@ -13,10 +13,11 @@ android {
 
   defaultConfig {
     applicationId = "com.aistudio.agentickeyboard.vqkymt"
-    // ML Kit GenAI (on-device Gemini Nano) libraries declare minSdk 26; Android
-    // 7.x devices are effectively gone, so the app follows rather than
-    // tools:overrideLibrary-ing the manifest.
-    minSdk = 26
+    // :core (the personal context platform SDK) requires minSdk 34, and this
+    // single-user platform targets Android 16. ML Kit GenAI's floor of 26 is
+    // still satisfied. Never tools:overrideLibrary :core: it would crash on
+    // older devices.
+    minSdk = 34
     targetSdk = 36
     versionCode = 1
     versionName = "1.0"
@@ -33,7 +34,7 @@ android {
       val keystorePath = System.getenv("KEYSTORE_PATH") ?: "${rootDir}/my-upload-key.jks"
       storeFile = file(keystorePath)
       storePassword = System.getenv("STORE_PASSWORD")
-      keyAlias = "upload"
+      keyAlias = System.getenv("KEY_ALIAS")?.takeIf { it.isNotBlank() } ?: "upload"
       keyPassword = System.getenv("KEY_PASSWORD")
     }
     create("debugConfig") {
@@ -102,6 +103,7 @@ secrets {
 // Some unused dependencies are commented out below instead of being removed.
 // This makes it easy to add them back in the future if needed.
 dependencies {
+  implementation(project(":core"))
   implementation(platform(libs.androidx.compose.bom))
   // implementation(libs.accompanist.permissions)
   implementation(libs.androidx.activity.compose)

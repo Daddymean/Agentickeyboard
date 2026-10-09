@@ -23,6 +23,7 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
@@ -31,7 +32,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.KeyboardArrowDown
-import androidx.compose.material.icons.filled.KeyboardArrowUp
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -63,6 +64,7 @@ import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.testTag
@@ -70,18 +72,27 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Popup
+import io.github.daddymean.agentickeyboard.network.CloudPrivacyPolicy
 import io.github.daddymean.agentickeyboard.ui.theme.KeyboardTheme
 import io.github.daddymean.agentickeyboard.ui.theme.LocalKeyboardColors
+import io.github.daddymean.agentickeyboard.util.AiApplyGuard
+import io.github.daddymean.agentickeyboard.util.AutoCapitalization
+import io.github.daddymean.agentickeyboard.util.ClipboardSensitivity
 import io.github.daddymean.agentickeyboard.util.CommandPalette
 import io.github.daddymean.agentickeyboard.util.CommittedEditUndo
+import io.github.daddymean.agentickeyboard.util.ContextNotes
+import io.github.daddymean.agentickeyboard.util.EditClipboardAction
 import io.github.daddymean.agentickeyboard.util.RedactionApplyGuard
 import io.github.daddymean.agentickeyboard.util.ReplyIntents
+import io.github.daddymean.agentickeyboard.util.SelectionCommand
 import io.github.daddymean.agentickeyboard.util.SwipePoint
 import io.github.daddymean.agentickeyboard.util.SwipeToTypeEngine
+import io.github.daddymean.agentickeyboard.util.TrustPrism
 import io.github.daddymean.agentickeyboard.util.captureCommittedEditUndo
 import io.github.daddymean.agentickeyboard.util.commitTextWithCaret
 import kotlinx.coroutines.delay
@@ -105,8 +116,6 @@ private val keyVariants = mapOf(
     "." to listOf(",", "!", "?", ";", ":", "…")
 )
 
-private val SENTENCE_ENDINGS = setOf('.', '!', '?')
-
 @Composable
 fun AgenticKeyboardLayout(
     viewModel: KeyboardViewModel,
@@ -116,13 +125,23 @@ fun AgenticKeyboardLayout(
     onAction: () -> Unit = {},
     onMicPress: () -> Unit = {},
     onCursorMove: (Int) -> Unit = {},
+    onSelectionCommand: (SelectionCommand) -> Unit = {},
+    onClipboardAction: (EditClipboardAction) -> Unit = {},
     inputConnectionProvider: () -> InputConnection? = { null },
     inPlaygroundMode: Boolean = false,
     playgroundTextState: String = "",
-    onPlaygroundTextChange: (String) -> Unit = {}
+    onPlaygroundTextChange: (String) -> Unit = {},
+    // Opens the app's keyboard settings; null hides the gear (e.g. in-app playground).
+    onOpenSettings: (() -> Unit)? = null,
+    // Height of the system navigation bar the IME window extends behind; the
+    // keyboard background fills it while the keys stay above it.
+    navigationBarInset: Dp = 0.dp,
+    // Context results are displayed over the keys by the IME without resizing the host.
+    suppressAiPanels: Boolean = false
 ) {
     val haptic = LocalHapticFeedback.current
     val clipboardManager = LocalClipboardManager.current
+    val context = LocalContext.current
     // Lend the view model a clipboard reader only while the keyboard is on screen.
     // It calls this back solely for a template that names {clipboard}, so an ordinary
     // keystroke never touches the clipboard.
@@ -136,7 +155,8 @@ fun AgenticKeyboardLayout(
     var isNumberMode by remember { mutableStateOf(false) }
 
     // Collect states from ViewModel
-    val aiPanelState by viewModel.aiPanelState.collectAsState()
+    val collectedAiPanelState by viewModel.aiPanelState.collectAsState()
+    val aiPanelState = if (suppressAiPanels) AiPanelState.Idle else collectedAiPanelState
     val voiceMatch by viewModel.voiceMatch.collectAsState()
     val isLoading = aiPanelState == AiPanelState.Loading
     val suggestions = (aiPanelState as? AiPanelState.Replies)?.suggestions.orEmpty()
@@ -159,7 +179,11 @@ fun AgenticKeyboardLayout(
     // Mirrors the editor's selection state (playground mode never selects, and
     // the service only updates this flow for real editors, so it stays false).
     val hasEditorSelection by viewModel.hasSelection.collectAsState()
+    // Any selection at all, whitespace included — see KeyboardViewModel.
+    val hasEditorSelectionRange by viewModel.hasSelectionRange.collectAsState()
     val isSensitiveField by viewModel.isSensitiveField.collectAsState()
+    // Display-only personal context (in-memory StateFlow, never a binder call).
+    val contextSnapshot by viewModel.contextSnapshot.collectAsState()
     val isSwipeToTypeEnabled by viewModel.isSwipeEnabled.collectAsState()
     val isAutoCapitalizeEnabled by viewModel.isAutoCapitalizeEnabled.collectAsState()
     val isNumberRowEnabled by viewModel.isNumberRowEnabled.collectAsState()
@@ -170,6 +194,8 @@ fun AgenticKeyboardLayout(
     val showNumberRow = isNumberRowEnabled && !metrics.isCompact
     val isHapticsEnabled by viewModel.isHapticsEnabled.collectAsState()
     val isLearningPaused by viewModel.isLearningPaused.collectAsState()
+    val correctionsPaused by viewModel.correctionsPaused.collectAsState()
+    val learnedCorrectionRules by viewModel.learnedCorrections.collectAsState()
     val sendGuardWarning by viewModel.sendGuardWarning.collectAsState()
     val customCommands by viewModel.customCommands.collectAsState()
 
@@ -215,17 +241,10 @@ fun AgenticKeyboardLayout(
     // Source text for AI actions: the selection when one exists, else the draft.
     fun aiSourceText(): String = selectedText() ?: currentText()
 
-    /** True when the caret sits at a position that should auto-capitalize. */
-    fun isSentenceStart(text: String): Boolean {
-        if (text.isEmpty() || text.endsWith("\n")) return true
-        if (!text.last().isWhitespace()) return false
-        val lastVisible = text.trimEnd().lastOrNull() ?: return true
-        return lastVisible in SENTENCE_ENDINGS
-    }
-
-    // Uppercase rendering combines explicit shift with auto-capitalization.
-    val autoCapActive = isAutoCapitalizeEnabled && !isNumberMode &&
-        shiftState == ShiftState.OFF && isSentenceStart(activeText)
+    // Uppercase rendering combines explicit shift with auto-capitalization, which
+    // never applies in a password, sensitive or incognito field (KEYBOARD-007).
+    val autoCapActive = !isNumberMode && shiftState == ShiftState.OFF &&
+        AutoCapitalization.applies(isAutoCapitalizeEnabled, isSensitiveField, activeText)
     val shiftActive = shiftState != ShiftState.OFF || autoCapActive
 
     /**
@@ -261,6 +280,13 @@ fun AgenticKeyboardLayout(
      * when refused, so the caller keeps the result on screen to copy or dismiss.
      */
     fun applyAiResult(result: String): Boolean {
+        // A result is bound to the draft it was generated from; never write it over
+        // text the user typed or selected afterwards.
+        if (AiApplyGuard.isStale(viewModel.aiResultSource, aiSourceText())) {
+            buzz(HapticFeedbackType.LongPress)
+            gestureAlert = AiApplyGuard.STALE_MESSAGE
+            return false
+        }
         val introduced = RedactionApplyGuard.introducedMarkers(aiSourceText(), result)
         if (introduced.isNotEmpty()) {
             buzz(HapticFeedbackType.LongPress)
@@ -274,13 +300,18 @@ fun AgenticKeyboardLayout(
     /**
      * Smart space: double-tap inserts ". ", a committed word is expanded from
      * shortcut templates or auto-corrected from learned typo rules (revertible
-     * with backspace), and every committed word feeds on-device learning.
+     * with backspace), and every committed word feeds on-device learning. In a
+     * sensitive field none of these rewrites apply and space types a space
+     * (KEYBOARD-006).
      */
     fun handleSpace() {
         val text = currentText()
         val now = System.currentTimeMillis()
 
-        if (now - lastSpaceTime < 400 && text.endsWith(" ") && text.trimEnd().lastOrNull()?.isLetterOrDigit() == true) {
+        val rewritesAllowed = viewModel.allowsSmartSpaceRewrites()
+        if (rewritesAllowed && now - lastSpaceTime < 400 &&
+            text.endsWith(" ") && text.trimEnd().lastOrNull()?.isLetterOrDigit() == true
+        ) {
             lastSpaceTime = 0L
             if (inPlaygroundMode) {
                 onPlaygroundTextChange(text.dropLast(1) + ". ")
@@ -293,7 +324,9 @@ fun AgenticKeyboardLayout(
             gestureAlert = "Period inserted ✏️"
             return
         }
-        lastSpaceTime = now
+        // A space typed in a sensitive field must not arm the double-space period
+        // for the next editor (the input view is reused across onStartInput).
+        lastSpaceTime = if (rewritesAllowed) now else 0L
 
         val lastWord = text.takeLastWhile { !it.isWhitespace() }
         if (lastWord.isNotEmpty()) {
@@ -398,7 +431,12 @@ fun AgenticKeyboardLayout(
     }
 
     // Active AI actions visibility
-    var showAiActions by remember { mutableStateOf(true) }
+    val showAiActions by viewModel.aiToolsExpanded.collectAsState()
+    // The edit bar is opt-in per input session: it costs a row of vertical space,
+    // and most typing never needs it. The playground has no real editor to select
+    // in. State lives in the view model so an input-view rebuild does not close
+    // it, and the service clears it when a genuinely new field starts.
+    val showEditBar by viewModel.editBarExpanded.collectAsState()
 
     // Keyboard palette follows the user's theme override ("System" defers to the
     // OS light/dark setting). Providing it here (once, at the root) themes both
@@ -417,7 +455,7 @@ fun AgenticKeyboardLayout(
         modifier = modifier
             .fillMaxWidth()
             .background(keyboardColors.background)
-            .padding(bottom = metrics.bottomPadding)
+            .padding(bottom = metrics.bottomPadding + navigationBarInset)
             .pointerInput(Unit) {
                 detectDragGestures(
                     onDragEnd = {
@@ -469,10 +507,10 @@ fun AgenticKeyboardLayout(
                         } else if (abs(deltaY) > abs(deltaX) && abs(deltaY) > 120) {
                             if (deltaY < 0) {
                                 gestureAlert = "Gesture: Show AI Actions"
-                                showAiActions = true
+                                viewModel.setAiToolsExpanded(true)
                             } else {
                                 gestureAlert = "Gesture: Hide AI Actions"
-                                showAiActions = false
+                                viewModel.setAiToolsExpanded(false)
                             }
                         }
                     },
@@ -556,7 +594,8 @@ fun AgenticKeyboardLayout(
                 .fillMaxWidth()
                 .then(
                     if (resultExpanded || voiceMatch != null) Modifier.heightIn(min = metrics.shelfHeight)
-                    else Modifier.height(metrics.shelfHeight)
+                    else if (hasAiResult || isLoading) Modifier.height(metrics.shelfHeight)
+                    else Modifier.height(metrics.toolbarHeight)
                 )
                 .animateContentSize()
                 .background(keyboardColors.shelf)
@@ -900,20 +939,90 @@ fun AgenticKeyboardLayout(
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.SpaceBetween
                         ) {
-                            // A compact (landscape) shelf is 40dp: stacking the status label over
-                            // the active line clips the second line, so place them side by side.
-                            val statusLabel: @Composable () -> Unit = {
-                                Text(
-                                    text = when {
-                                        isSensitiveField -> "🔒 Secure field — AI & learning disabled"
-                                        isLearningPaused -> "🕶 Learning paused"
-                                        isOfflineMode -> "🔒 Offline Privacy Active"
-                                        else -> "🚀 Agentic Online Mode"
+                            // Slim toolbar (Gboard-style): settings, AI tools toggle, privacy
+                            // status icon, then suggestions in the remaining space.
+                            if (onOpenSettings != null) {
+                                IconButton(
+                                    onClick = {
+                                        buzz(HapticFeedbackType.TextHandleMove)
+                                        onOpenSettings()
                                     },
-                                    color = if (isSensitiveField || isOfflineMode) keyboardColors.success else keyboardColors.accent,
-                                    fontSize = 11.sp,
-                                    fontWeight = FontWeight.Bold
-                                )
+                                    modifier = Modifier.size(36.dp).testTag("open_settings")
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Settings,
+                                        contentDescription = "Keyboard settings",
+                                        tint = keyboardColors.textMuted,
+                                        modifier = Modifier.size(20.dp)
+                                    )
+                                }
+                            }
+                            if (!isSensitiveField) {
+                                IconButton(
+                                    onClick = {
+                                        buzz(HapticFeedbackType.TextHandleMove)
+                                        viewModel.setAiToolsExpanded(!showAiActions)
+                                    },
+                                    modifier = Modifier
+                                        .size(36.dp)
+                                        .clip(RoundedCornerShape(18.dp))
+                                        .background(if (showAiActions) keyboardColors.keyActive else Color.Transparent)
+                                        .testTag("toggle_ai_tools")
+                                ) {
+                                    Text("✨", fontSize = 16.sp)
+                                }
+                            }
+                            val prism = TrustPrism.resolve(
+                                isOfflineMode = isOfflineMode,
+                                isSensitiveField = isSensitiveField,
+                                cloudRedactionEnabled = CloudPrivacyPolicy.redactionEnabled
+                            )
+                            IconButton(
+                                onClick = {
+                                    gestureAlert = if (isLearningPaused && !isSensitiveField) {
+                                        "${prism.label} · learning paused"
+                                    } else {
+                                        prism.label
+                                    }
+                                },
+                                modifier = Modifier.size(32.dp).testTag("privacy_status")
+                            ) {
+                                Text(prism.icon, fontSize = 14.sp)
+                            }
+                            // KEYBOARD-002: pause learned typo fixes for this field only.
+                            // Shown when there is something to pause (or it is paused),
+                            // so it does not take suggestion space from new users. Hidden in the
+                            // companion playground, like the edit bar: only the IME service marks
+                            // new input sessions, so a pause there would never be cleared.
+                            if (!inPlaygroundMode && !isSensitiveField &&
+                                (correctionsPaused || learnedCorrectionRules.isNotEmpty())
+                            ) {
+                                Box(
+                                    modifier = Modifier
+                                        .padding(horizontal = 2.dp)
+                                        .clip(RoundedCornerShape(12.dp))
+                                        .background(if (correctionsPaused) keyboardColors.keyActive else Color.Transparent)
+                                        .clickable {
+                                            buzz(HapticFeedbackType.TextHandleMove)
+                                            val pause = !correctionsPaused
+                                            viewModel.setCorrectionsPaused(pause)
+                                            gestureAlert = if (pause) {
+                                                "Learned fixes off for this field · shortcuts still expand"
+                                            } else {
+                                                "Learned fixes back on"
+                                            }
+                                        }
+                                        .padding(horizontal = 8.dp, vertical = 4.dp)
+                                        .testTag("toggle_learned_fixes")
+                                ) {
+                                    Text(
+                                        if (correctionsPaused) "Fixes off" else "Fixes",
+                                        color = if (correctionsPaused) keyboardColors.accent else keyboardColors.textMuted,
+                                        fontSize = 11.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        maxLines = 1
+                                    )
+                                }
                             }
                             val activeLine: @Composable () -> Unit = {
                                 if (liveSwipePreviewWord != null) {
@@ -972,60 +1081,37 @@ fun AgenticKeyboardLayout(
                                         }
                                     }
                                 } else {
-                                    Text(
-                                        text = if (activeText.isEmpty()) "Start typing, swipe, or use AI tools below..." else activeText,
-                                        color = if (activeText.isEmpty()) keyboardColors.textMuted else keyboardColors.text,
-                                        fontSize = 13.sp,
-                                        maxLines = 1
-                                    )
+                                    // Idle: leave the strip empty rather than echo the field.
                                 }
                             }
-                            if (metrics.isCompact) {
-                                Row(
-                                    modifier = Modifier.weight(1f),
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    statusLabel()
-                                    Spacer(modifier = Modifier.width(8.dp))
-                                    Box(modifier = Modifier.weight(1f)) { activeLine() }
-                                }
-                            } else {
-                                Column(modifier = Modifier.weight(1f)) {
-                                    statusLabel()
-                                    activeLine()
-                                }
-                            }
-                            Row(verticalAlignment = Alignment.CenterVertically) {
+                            Box(
+                                modifier = Modifier.weight(1f).padding(start = 4.dp),
+                                contentAlignment = Alignment.CenterStart
+                            ) { activeLine() }
+                            if (!isSensitiveField) {
                                 IconButton(
                                     onClick = {
-                                        viewModel.setSwipeEnabled(!isSwipeToTypeEnabled)
-                                        gestureAlert = if (!isSwipeToTypeEnabled) "Swipe-to-Type Enabled ✍️" else "Standard Typing Enabled ⌨️"
+                                        // One read: text and sensitivity flag come from the same ClipData.
+                                        val systemClipboard = context.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as? android.content.ClipboardManager
+                                        val snapshot = systemClipboard?.let { manager ->
+                                            runCatching { ClipboardSensitivity.readPrimaryClip(manager) }.getOrNull()
+                                        }
+                                        val clip = snapshot?.text
+                                        if (clip.isNullOrBlank()) {
+                                            gestureAlert = "Clipboard is empty 📋"
+                                        } else if (snapshot?.flaggedSensitive != false) {
+                                            // A clip the source app marked sensitive never reaches AI actions.
+                                            clipboardText = null
+                                            showClipboardActions = false
+                                            gestureAlert = "Clip marked sensitive 🔒"
+                                        } else {
+                                            clipboardText = clip
+                                            showClipboardActions = !showClipboardActions
+                                        }
                                     },
-                                    modifier = Modifier.size(36.dp).testTag("toggle_swipe")
+                                    modifier = Modifier.size(36.dp).testTag("clipboard_actions")
                                 ) {
-                                    Text(if (isSwipeToTypeEnabled) "✍️" else "⌨️", fontSize = 16.sp)
-                                }
-                                if (!isSensitiveField) {
-                                    IconButton(
-                                        onClick = {
-                                            val clip = clipboardManager.getText()?.text
-                                            if (clip.isNullOrBlank()) {
-                                                gestureAlert = "Clipboard is empty 📋"
-                                            } else {
-                                                clipboardText = clip
-                                                showClipboardActions = !showClipboardActions
-                                            }
-                                        },
-                                        modifier = Modifier.size(36.dp).testTag("clipboard_actions")
-                                    ) {
-                                        Text("📋", fontSize = 14.sp)
-                                    }
-                                }
-                                IconButton(
-                                    onClick = { showGestureGuide = !showGestureGuide },
-                                    modifier = Modifier.size(36.dp)
-                                ) {
-                                    Text("❓", fontSize = 14.sp)
+                                    Text("📋", fontSize = 14.sp)
                                 }
                             }
                         }
@@ -1320,6 +1406,21 @@ fun AgenticKeyboardLayout(
                         modifier = Modifier.testTag("action_grammar")
                     )
 
+                    // Selection is the precondition for every action in this row,
+                    // so its entry point lives here rather than behind a gesture.
+                    if (!inPlaygroundMode) {
+                        AiActionButton(
+                            label = "Select",
+                            icon = "⌗",
+                            highlighted = showEditBar,
+                            onClick = {
+                                buzz(HapticFeedbackType.TextHandleMove)
+                                viewModel.setEditBarExpanded(!showEditBar)
+                            },
+                            modifier = Modifier.testTag("action_select")
+                        )
+                    }
+
                     AiActionButton(
                         label = "Compose",
                         icon = "✉️",
@@ -1389,6 +1490,25 @@ fun AgenticKeyboardLayout(
                         },
                         modifier = Modifier.testTag("action_tone")
                     )
+
+                    // Local note to the personal context service; no model, no
+                    // cloud call here. Only exists inside the IME (the row is
+                    // already hidden in sensitive fields).
+                    if (viewModel.canSaveNotes && !inPlaygroundMode) {
+                        AiActionButton(
+                            label = "Save note",
+                            icon = "📌",
+                            onClick = {
+                                buzz(HapticFeedbackType.TextHandleMove)
+                                gestureAlert = if (viewModel.saveNote(aiSourceText())) {
+                                    "Note saved 📌"
+                                } else {
+                                    "Nothing to save yet"
+                                }
+                            },
+                            modifier = Modifier.testTag("action_save_note")
+                        )
+                    }
                 }
 
                 // Selection-scope indicator: the actions above silently operate
@@ -1409,8 +1529,46 @@ fun AgenticKeyboardLayout(
                     )
                 }
 
+                // Read-only context chip: next calendar event or current
+                // episode. Hidden with no snapshot (service absent, previews,
+                // screenshot tests) and in sensitive fields.
+                val contextChip = if (isSensitiveField) null
+                else ContextNotes.chipText(contextSnapshot, System.currentTimeMillis())
+                if (contextChip != null) {
+                    Text(
+                        text = contextChip,
+                        color = keyboardColors.accent,
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.Medium,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier
+                            .padding(start = 6.dp)
+                            .widthIn(max = 140.dp)
+                            .clip(RoundedCornerShape(8.dp))
+                            .background(keyboardColors.accent.copy(alpha = 0.15f))
+                            .padding(horizontal = 6.dp, vertical = 3.dp)
+                            .testTag("context_chip")
+                    )
+                }
+
                 IconButton(
-                    onClick = { showAiActions = false },
+                    onClick = {
+                        viewModel.setSwipeEnabled(!isSwipeToTypeEnabled)
+                        gestureAlert = if (!isSwipeToTypeEnabled) "Swipe-to-Type Enabled ✍️" else "Standard Typing Enabled ⌨️"
+                    },
+                    modifier = Modifier.size(32.dp).testTag("toggle_swipe")
+                ) {
+                    Text(if (isSwipeToTypeEnabled) "✍️" else "⌨️", fontSize = 15.sp)
+                }
+                IconButton(
+                    onClick = { showGestureGuide = !showGestureGuide },
+                    modifier = Modifier.size(32.dp)
+                ) {
+                    Text("❓", fontSize = 14.sp)
+                }
+                IconButton(
+                    onClick = { viewModel.setAiToolsExpanded(false) },
                     modifier = Modifier.size(32.dp)
                 ) {
                     Icon(
@@ -1422,20 +1580,19 @@ fun AgenticKeyboardLayout(
             }
         }
 
-        if (!showAiActions && !isSensitiveField) {
-            IconButton(
-                onClick = { showAiActions = true },
-                modifier = Modifier
-                    .align(Alignment.CenterHorizontally)
-                    .height(20.dp)
-            ) {
-                Icon(
-                    imageVector = Icons.Default.KeyboardArrowUp,
-                    contentDescription = "Expand AI actions",
-                    tint = keyboardColors.keyActive
-                )
-            }
-        }
+        TextEditBar(
+            visible = showEditBar && !inPlaygroundMode && !isSensitiveField,
+            hasSelection = hasEditorSelectionRange,
+            onCommand = { command ->
+                buzz(HapticFeedbackType.TextHandleMove)
+                onSelectionCommand(command)
+            },
+            onClipboardAction = { action ->
+                buzz(HapticFeedbackType.TextHandleMove)
+                onClipboardAction(action)
+            },
+            onDismiss = { viewModel.setEditBarExpanded(false) }
+        )
 
         Spacer(modifier = Modifier.height(4.dp))
 
@@ -1489,7 +1646,9 @@ fun AgenticKeyboardLayout(
                                     if (finalWord != null) {
                                         buzz(HapticFeedbackType.LongPress)
                                         val capitalize = shiftState != ShiftState.OFF ||
-                                            (isAutoCapitalizeEnabled && isSentenceStart(currentText()))
+                                            AutoCapitalization.applies(
+                                                isAutoCapitalizeEnabled, isSensitiveField, currentText()
+                                            )
                                         val typedText = when {
                                             shiftState == ShiftState.CAPS_LOCK -> finalWord.uppercase()
                                             capitalize -> finalWord.replaceFirstChar { it.uppercase() }
@@ -1965,7 +2124,18 @@ fun KeyButton(
         Text(
             text = text,
             color = contentColor,
-            fontSize = 14.sp,
+            // Letters and digits grow with the key (about 20dp on a 44dp key) but stay
+            // inside its width, and are sized in dp so the system font scale cannot
+            // push a wide glyph like "W" past a fixed-size key. Word labels (?123,
+            // Space, Enter) stay compact so they never wrap.
+            fontSize = if (text.length == 1) {
+                with(density) {
+                    minOf(keyMetrics.keyHeight.value * 0.45f, keyMetrics.keyWidth.value * 0.6f)
+                        .coerceIn(14f, 28f).dp.toSp()
+                }
+            } else {
+                14.sp
+            },
             fontWeight = FontWeight.Medium
         )
 

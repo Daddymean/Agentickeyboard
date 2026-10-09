@@ -38,10 +38,10 @@ flight.
 ### Privacy
 - **Password fields are detected automatically** — AI features, logging, and learning all shut off in secure fields.
 - **Offline mode toggle** blocks all cloud calls; local fallbacks keep the tools functional. The toggle (and all settings) persist across restarts.
-- **Always-on cloud request redaction** — the final serialized Gemini request is sanitized immediately before transmission, replacing credential-shaped secrets, emails, phone numbers, financial identifiers, SSNs, IP addresses, URLs, and long numeric IDs with neutral markers.
+- **Always-on cloud request redaction** — every string value in the outgoing Gemini request is sanitized immediately before transmission (the JSON stays valid), replacing labelled secrets (`password=`, `api_key:`) and bare credential tokens (private keys, `Bearer`, JWT, Google API/OAuth, GitHub classic and fine-grained, GitLab, Slack, Stripe, OpenAI and AWS keys), emails, phone numbers, financial identifiers, SSNs, IP addresses, URLs, and long numeric IDs with neutral markers.
 - **Pause learning** — an incognito switch for the personalization engine.
 - **Data retention** — writing logs auto-expire after 7/30/90 days (your choice).
-- **Cloud backup disabled** — your typing history never leaves the device via Android backup.
+- **Cloud backup and device transfer disabled** — your typing history never leaves the device via Android cloud backup or phone-to-phone transfer (all data domains are excluded in `data_extraction_rules.xml` and `backup_rules.xml`).
 - **No request logging in release builds**; the API key is sent as a header and redacted from debug logs.
 - **Style Hub export & import** — serialize your personalization model to JSON (or Base64) with optional redaction of emails, phone numbers, financial numbers, IPs, URLs, and numeric IDs, then restore it on another device.
 - **Usage dashboard** — on-device stats for auto-fixes, swipes, AI applies, and shortcut expansions.
@@ -88,10 +88,43 @@ tested on a real device without a local toolchain:
 
 1. Open the [Actions tab](https://github.com/Daddymean/Agentickeyboard/actions),
    pick the latest green **Android Build** run, and download the `app-debug`
-   artifact.
+   artifact (or `app-release` from a run on `main`, once release signing is set
+   up below).
 2. Unzip it, then either `adb install -r app-debug.apk` or copy the APK to the
    device and open it (allow installs from unknown sources).
 3. Enable the keyboard as above.
+
+An `app-release-unsigned` artifact cannot be installed: Android rejects
+unsigned APKs. It only proves the R8 release build compiles.
+
+### CI signing keys (repository secrets)
+
+Add these under **Settings → Secrets and variables → Actions → New repository
+secret**. Without them CI still builds an unsigned release APK.
+
+**Debug key**: `debug.keystore` is committed at the repo root (public default
+passwords `android`, alias `androiddebugkey`; SHA-256
+`43:34:53:4D:…:B4:34:14`), so every `app-debug` — CI or local — is signed with
+the same key and installs over the previous one. It is a debug key, not a
+secret: anyone with the repo can sign a build that updates a debug install,
+never a release install. To use a different key, set a `DEBUG_KEYSTORE_BASE64`
+secret (`base64 -w0 debug.keystore`); CI then overwrites the committed file.
+
+**Release (upload) key**: makes runs on `main` publish a signed `app-release`
+artifact. It is never exposed to pull-request builds, because those run the
+PR branch's own build scripts; PR runs keep producing `app-release-unsigned`.
+
+| Secret | Value |
+| --- | --- |
+| `RELEASE_KEYSTORE_BASE64` | `base64 -w0 my-upload-key.jks` |
+| `RELEASE_STORE_PASSWORD` | keystore password |
+| `RELEASE_KEY_PASSWORD` | key password |
+| `RELEASE_KEY_ALIAS` | key alias (optional; defaults to `upload`) |
+
+Each run's **Show APK signing certificates** step prints the SHA-256 of the
+key that signed each APK. A build installs over an earlier one only if the
+digests match. An APK signed with the upload key will not update a copy
+installed from Google Play, which re-signs with Google's app signing key.
 
 CI builds carry no `GEMINI_API_KEY`, so cloud AI actions fall back to their
 offline equivalents. Build locally with a key to exercise the Gemini paths.

@@ -38,6 +38,9 @@ class ReplyCompletenessSession {
     private val _state = MutableStateFlow(ReplyCompletenessUiState())
     val state = _state.asStateFlow()
 
+    /** Explicitly attached text, for foreground AI actions only. */
+    fun incomingContext(): String? = incomingMessage
+
     /**
      * Stores context only after an explicit user action. Returns false for an
      * empty clipboard and resets any warning or dismissal from older context.

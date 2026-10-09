@@ -43,7 +43,11 @@ fun ReplyCompletenessBar(
     viewModel: KeyboardViewModel,
     session: ReplyCompletenessSession,
     onSendAnyway: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    // When false, the bar only appears for an incomplete-reply warning.
+    showIdle: Boolean = true,
+    onClipboardContext: () -> Unit = {},
+    onClearContext: () -> Unit = {}
 ) {
     val clipboardManager = LocalClipboardManager.current
     val uiState by session.state.collectAsState()
@@ -60,6 +64,7 @@ fun ReplyCompletenessBar(
     }
 
     if (isSensitiveField) return
+    if (uiState.warning == null && !showIdle) return
 
     KeyboardTheme(
         darkTheme = when (themeOverride) {
@@ -149,7 +154,7 @@ fun ReplyCompletenessBar(
                                     append(uiState.contextPreview)
                                     if (uiState.contextWasTruncated) append("  •  first 8,000 characters")
                                 }
-                                else -> "Copy the message you are answering, then attach it here."
+                                else -> "Use conversation above, or attach a copied message."
                             },
                             color = if (feedback != null) colors.error else colors.textMuted,
                             fontSize = 9.sp,
@@ -165,6 +170,7 @@ fun ReplyCompletenessBar(
                         modifier = Modifier.testTag("capture_reply_context")
                     ) {
                         val clipboardText = clipboardManager.getText()?.text.orEmpty()
+                        onClipboardContext()
                         feedback = if (session.setIncomingContext(clipboardText)) {
                             null
                         } else {
@@ -178,6 +184,7 @@ fun ReplyCompletenessBar(
                             modifier = Modifier.testTag("clear_reply_context")
                         ) {
                             session.clear()
+                            onClearContext()
                             feedback = null
                         }
                     }

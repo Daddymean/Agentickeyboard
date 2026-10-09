@@ -191,6 +191,93 @@ class KeyboardPassportTest {
         assertEquals("A private writing sample", opened.payload.writingLogs.single().text)
     }
 
+    // --- Legacy sanity checks (issue #101) ---
+
+    private fun legacyJson(
+        exportVersion: String? = "1.0.0",
+        totalRecords: Int? = 3,
+        vocabulary: String = """{ "word": "fantastic", "count": 4, "lastUsed": 1000 }""",
+        corrections: String = """{ "typo": "teh", "correction": "the", "count": 2 }""",
+        logs: String = """{ "text": "hello", "sentiment": "Joyful", "toneScore": 0.9, "timestamp": 5 }"""
+    ): String {
+        val metadata = buildList {
+            add("\"userPersonaPreference\": \"Casual\"")
+            exportVersion?.let { add("\"exportVersion\": \"$it\"") }
+            totalRecords?.let { add("\"totalRecordsExported\": $it") }
+        }.joinToString(", ")
+        return """{ "exportMetadata": { $metadata },
+            "typingPatterns": { "vocabulary": [ $vocabulary ] },
+            "correctionHistory": [ $corrections ],
+            "writingLogs": [ $logs ] }"""
+    }
+
+    private fun assertLegacyRejected(content: String, reasonFragment: String) {
+        val result = KeyboardPassport.open(content)
+        assertTrue("expected Invalid, got $result", result is KeyboardPassportOpenResult.Invalid)
+        val reason = (result as KeyboardPassportOpenResult.Invalid).reason
+        assertTrue(reason, reason.contains(reasonFragment))
+    }
+
+    @Test
+    fun wellFormedLegacyExportOpensButIsMarkedUnverified() {
+        val result = KeyboardPassport.open(legacyJson())
+        assertTrue(result is KeyboardPassportOpenResult.Success)
+        result as KeyboardPassportOpenResult.Success
+        assertTrue(result.preview.legacy)
+        assertFalse(result.preview.verified)
+        assertEquals(PassportRecordCounts(vocabulary = 1, corrections = 1, writingLogs = 1), result.preview.counts)
+    }
+
+    @Test
+    fun envelopePassportsAreVerified() {
+        val opened = KeyboardPassport.open(KeyboardPassport.create(input, KeyboardPassportOptions()))
+        assertTrue((opened as KeyboardPassportOpenResult.Success).preview.verified)
+    }
+
+    @Test
+    fun legacyExportWithoutOptionalMetadataStillOpens() {
+        // Hand-made or very old files may omit exportVersion/totalRecordsExported.
+        assertTrue(KeyboardPassport.open(legacyJson(exportVersion = null, totalRecords = null)) is KeyboardPassportOpenResult.Success)
+        assertTrue(KeyboardPassport.open(legacyJson(exportVersion = "1.4")) is KeyboardPassportOpenResult.Success)
+    }
+
+    @Test
+    fun legacyExportWithUnknownVersionIsRejected() {
+        assertLegacyRejected(legacyJson(exportVersion = "2.0.0"), "version 2.0.0")
+        assertLegacyRejected(legacyJson(exportVersion = "garbage"), "not supported")
+    }
+
+    @Test
+    fun legacyExportWhoseRecordTotalDisagreesWithItsContentsIsRejected() {
+        // e.g. a truncated or hand-damaged file that still parses.
+        assertLegacyRejected(legacyJson(totalRecords = 40), "says it has 40 record(s) but contains 3")
+        assertLegacyRejected(legacyJson(totalRecords = 3, logs = ""), "contains 2")
+    }
+
+    @Test
+    fun legacyExportWithMalformedRecordsIsRejected() {
+        assertLegacyRejected(legacyJson(vocabulary = """{ "word": "  ", "count": 1 }"""), "vocabulary")
+        assertLegacyRejected(legacyJson(vocabulary = """{ "word": "ok", "count": -3 }"""), "vocabulary")
+        assertLegacyRejected(legacyJson(vocabulary = """{ "word": "ok", "lastUsed": -1 }"""), "vocabulary")
+        assertLegacyRejected(legacyJson(corrections = """{ "typo": "", "correction": "the" }"""), "corrections")
+        assertLegacyRejected(legacyJson(corrections = """{ "typo": "teh", "correction": " ", "count": 1 }"""), "corrections")
+        assertLegacyRejected(legacyJson(logs = """{ "text": "hi", "timestamp": -5 }"""), "writing logs")
+    }
+
+    @Test
+    fun legacyChecksAcceptWhatTheLegacySerializerWrites() {
+        // Guard against the sanity checks rejecting genuine exports.
+        val legacy = PersonalModelSerializer.serialize(
+            vocabulary = input.vocabulary,
+            corrections = input.corrections,
+            logs = input.writingLogs,
+            personaPreference = input.personaPreference,
+            stripSensitive = true,
+            exportFormat = "JSON Structure"
+        ).serializedContent
+        assertTrue(KeyboardPassport.open(legacy) is KeyboardPassportOpenResult.Success)
+    }
+
     @Test
     fun unsupportedFutureEnvelopeIsInspectableButNotOpened() {
         val serialized = KeyboardPassport.create(input, createdAt = 5_000L)

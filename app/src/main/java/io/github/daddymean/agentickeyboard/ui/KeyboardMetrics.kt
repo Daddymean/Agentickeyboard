@@ -23,6 +23,8 @@ data class KeyboardMetrics(
     val rowGap: Dp,
     val keyGap: Dp,
     val shelfHeight: Dp,
+    // Height of the idle toolbar strip (no AI result showing).
+    val toolbarHeight: Dp,
     val bottomPadding: Dp,
     /** True when the window is too short to afford the full portrait layout. */
     val isCompact: Boolean
@@ -61,22 +63,46 @@ private const val KEY_GAP_DP = 4
  */
 const val COMPACT_HEIGHT_THRESHOLD_DP = 480
 
+private const val KEY_SCALE_MIN = 0.8f
+private const val KEY_SCALE_MAX = 1.5f
+/** Largest share of the window a boosted keyboard may take. */
+private const val KEYBOARD_HEIGHT_BUDGET = 0.45f
+/** Number row + three letter rows + bottom command row. */
+private const val MAX_KEY_ROWS = 5
+
 /**
  * Derives the keyboard's size budget from the current window. Pure arithmetic so
  * it can be exercised by JVM unit tests.
  */
-fun keyboardMetricsFor(screenWidthDp: Int, screenHeightDp: Int): KeyboardMetrics {
+fun keyboardMetricsFor(
+    screenWidthDp: Int,
+    screenHeightDp: Int,
+    keyHeightScale: Float = 1f
+): KeyboardMetrics {
     val gaps = KEY_GAP_DP * (KEYS_PER_ROW - 1)
     val usableWidth = screenWidthDp - SIDE_MARGIN_DP - gaps
     val keyWidth = (usableWidth / KEYS_PER_ROW).coerceIn(MIN_KEY_WIDTH_DP, MAX_KEY_WIDTH_DP)
     val compact = screenHeightDp < COMPACT_HEIGHT_THRESHOLD_DP
+    // Width is already the full screen split ten ways, so "bigger keys" can only
+    // mean taller ones. A boost is granted only while the tallest layout (five key
+    // rows with the number row) stays within KEYBOARD_HEIGHT_BUDGET of the window,
+    // so borderline split-screen heights never squeeze out the field being edited.
+    val baseKeyHeight = if (compact) 32f else 44f
+    val rowGap = if (compact) 2f else 3f
+    val toolbarHeight = if (compact) 36f else 44f
+    val bottomPadding = if (compact) 2f else 8f
+    val requested = baseKeyHeight * keyHeightScale.coerceIn(KEY_SCALE_MIN, KEY_SCALE_MAX)
+    val fitting = (screenHeightDp * KEYBOARD_HEIGHT_BUDGET - toolbarHeight - bottomPadding) /
+        MAX_KEY_ROWS - rowGap * 2
+    val keyHeight = if (requested <= baseKeyHeight) requested else minOf(requested, maxOf(fitting, baseKeyHeight))
     return KeyboardMetrics(
         keyWidth = keyWidth.dp,
-        keyHeight = if (compact) 32.dp else 44.dp,
-        rowGap = if (compact) 2.dp else 3.dp,
+        keyHeight = Math.round(keyHeight).dp,
+        rowGap = rowGap.dp,
         keyGap = KEY_GAP_DP.dp,
         shelfHeight = if (compact) 40.dp else 64.dp,
-        bottomPadding = if (compact) 2.dp else 8.dp,
+        toolbarHeight = toolbarHeight.dp,
+        bottomPadding = bottomPadding.dp,
         isCompact = compact
     )
 }
@@ -89,10 +115,10 @@ val LocalKeyboardMetrics = staticCompositionLocalOf { keyboardMetricsFor(360, 80
  * the top; descendants read LocalKeyboardMetrics.current.
  */
 @Composable
-fun ProvideKeyboardMetrics(content: @Composable () -> Unit) {
+fun ProvideKeyboardMetrics(keyHeightScale: Float = 1f, content: @Composable () -> Unit) {
     val configuration = LocalConfiguration.current
-    val metrics = remember(configuration.screenWidthDp, configuration.screenHeightDp) {
-        keyboardMetricsFor(configuration.screenWidthDp, configuration.screenHeightDp)
+    val metrics = remember(configuration.screenWidthDp, configuration.screenHeightDp, keyHeightScale) {
+        keyboardMetricsFor(configuration.screenWidthDp, configuration.screenHeightDp, keyHeightScale)
     }
     CompositionLocalProvider(LocalKeyboardMetrics provides metrics) {
         content()

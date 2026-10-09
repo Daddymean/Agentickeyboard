@@ -1,10 +1,11 @@
 package io.github.daddymean.agentickeyboard.ui
 
 import android.content.SharedPreferences
-import android.text.InputType
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
+import dev.context.core.client.ContextClient
+import dev.context.core.model.Snapshot
 import io.github.daddymean.agentickeyboard.db.AppPersona
 import io.github.daddymean.agentickeyboard.db.CustomCommand
 import io.github.daddymean.agentickeyboard.db.KeyboardRepository
@@ -15,8 +16,10 @@ import io.github.daddymean.agentickeyboard.db.WritingLog
 import io.github.daddymean.agentickeyboard.network.GeminiManager
 import io.github.daddymean.agentickeyboard.network.GrammarCorrectionResponse
 import io.github.daddymean.agentickeyboard.network.ToneAnalysisResponse
+import io.github.daddymean.agentickeyboard.util.EditorPrivacy
 import io.github.daddymean.agentickeyboard.util.CommandPalette
 import io.github.daddymean.agentickeyboard.util.CommittedEditUndo
+import io.github.daddymean.agentickeyboard.util.ContextNotes
 import io.github.daddymean.agentickeyboard.util.KeyboardSettings
 import io.github.daddymean.agentickeyboard.util.mastery.KeyboardMastery
 import io.github.daddymean.agentickeyboard.util.mastery.MasteryEvent
@@ -92,7 +95,9 @@ data class VoiceMatchState(
 
 class KeyboardViewModel(
     private val repository: KeyboardRepository,
-    private val settings: KeyboardSettings? = null
+    private val settings: KeyboardSettings? = null,
+    /** Personal context service client; null outside the IME (companion app, tests). */
+    private val contextClient: ContextClient? = null
 ) : ViewModel() {
 
     companion object {
@@ -169,6 +174,18 @@ class KeyboardViewModel(
         _hasSelection.value = active
     }
 
+    // True whenever the editor's selection covers any text at all, including a
+    // run of only spaces or newlines. The edit bar needs this rather than
+    // [hasSelection]: selecting whitespace is a real selection that can be cut
+    // or copied, but it is not something an AI action should be aimed at, so
+    // the two questions stay separate instead of one being widened.
+    private val _hasSelectionRange = MutableStateFlow(false)
+    val hasSelectionRange = _hasSelectionRange.asStateFlow()
+
+    fun setSelectionRangeActive(active: Boolean) {
+        _hasSelectionRange.value = active
+    }
+
     // Exactly one AI panel can be active at a time; the controller owns
     // foreground request lifecycle and the backing result state.
     private val aiSession = AiSessionController(viewModelScope)
@@ -187,6 +204,44 @@ class KeyboardViewModel(
     private val _isOfflineMode = MutableStateFlow(settings?.isOfflineMode ?: false)
     val isOfflineMode = _isOfflineMode.asStateFlow()
 
+    // Whether the AI tools panel (action chips, reply coach) is open above the keys.
+    // Collapsed by default so the keyboard opens as a single slim toolbar.
+    private val _aiToolsExpanded = MutableStateFlow(false)
+    val aiToolsExpanded = _aiToolsExpanded.asStateFlow()
+
+    // Whether the edit bar is open. This lives here rather than in a Compose
+    // remember{} because the IME rebuilds its input view on configuration and
+    // theme changes, which would silently close the bar mid-edit; the view model
+    // is owned by the service and outlives onCreateInputView. The AI toolbar
+    // above already moved here for the same reason.
+    private val _editBarExpanded = MutableStateFlow(false)
+    val editBarExpanded = _editBarExpanded.asStateFlow()
+
+    fun setEditBarExpanded(expanded: Boolean) {
+        _editBarExpanded.value = expanded
+    }
+
+    // KEYBOARD-002: learned typo->fix replacements paused for the current input
+    // session only. In memory, never persisted, and independent of "pause learning"
+    // (which stops new rules being learned). Lives here, not in a Compose remember{},
+    // so it survives input-view rebuilds; the service clears it on a genuinely new
+    // editor session via [onNewInputSession], not on every onStartInput restart.
+    private val _correctionsPaused = MutableStateFlow(false)
+    val correctionsPaused = _correctionsPaused.asStateFlow()
+
+    fun setCorrectionsPaused(paused: Boolean) {
+        _correctionsPaused.value = paused
+    }
+
+    /** A different editor or app took focus (onStartInput with restarting == false). */
+    fun onNewInputSession() {
+        _correctionsPaused.value = false
+    }
+
+    fun setAiToolsExpanded(expanded: Boolean) {
+        _aiToolsExpanded.value = expanded
+    }
+
     private val _isSwipeEnabled = MutableStateFlow(settings?.isSwipeEnabled ?: true)
     val isSwipeEnabled = _isSwipeEnabled.asStateFlow()
 
@@ -195,6 +250,11 @@ class KeyboardViewModel(
 
     private val _isNumberRowEnabled = MutableStateFlow(settings?.isNumberRowEnabled ?: false)
     val isNumberRowEnabled = _isNumberRowEnabled.asStateFlow()
+
+    private val _keyHeightScale = MutableStateFlow(
+        settings?.keyHeightScale ?: KeyboardSettings.DEFAULT_KEY_HEIGHT_SCALE
+    )
+    val keyHeightScale = _keyHeightScale.asStateFlow()
 
     private val _isProofreadEnabled = MutableStateFlow(settings?.isProofreadEnabled ?: false)
     val isProofreadEnabled = _isProofreadEnabled.asStateFlow()
@@ -210,6 +270,18 @@ class KeyboardViewModel(
 
     private val _isSendGuardEnabled = MutableStateFlow(settings?.isSendGuardEnabled ?: false)
     val isSendGuardEnabled = _isSendGuardEnabled.asStateFlow()
+
+    private val _isSyncNotesToCloud = MutableStateFlow(settings?.isSyncNotesToCloud ?: false)
+    val isSyncNotesToCloud = _isSyncNotesToCloud.asStateFlow()
+
+    /**
+     * Latest context snapshot (in-memory; never a binder call). Display-only:
+     * its contents must never be sent to Gemini or any other cloud service.
+     */
+    val contextSnapshot: StateFlow<Snapshot?> = contextClient?.snapshot ?: MutableStateFlow(null)
+
+    /** Whether "Save note" can do anything here (only inside the IME). */
+    val canSaveNotes: Boolean get() = contextClient != null
 
     private val _themeOverride = MutableStateFlow(settings?.themeOverride ?: "System")
     val themeOverride = _themeOverride.asStateFlow()
@@ -274,11 +346,13 @@ class KeyboardViewModel(
             KeyboardSettings.KEY_SWIPE_ENABLED -> _isSwipeEnabled.value = s.isSwipeEnabled
             KeyboardSettings.KEY_AUTO_CAPITALIZE -> _isAutoCapitalizeEnabled.value = s.isAutoCapitalizeEnabled
             KeyboardSettings.KEY_NUMBER_ROW -> _isNumberRowEnabled.value = s.isNumberRowEnabled
+            KeyboardSettings.KEY_KEY_HEIGHT_SCALE -> _keyHeightScale.value = s.keyHeightScale
             KeyboardSettings.KEY_PROOFREAD -> _isProofreadEnabled.value = s.isProofreadEnabled
             KeyboardSettings.KEY_LEARNING_PAUSED -> _isLearningPaused.value = s.isLearningPaused
             KeyboardSettings.KEY_HAPTICS -> _isHapticsEnabled.value = s.isHapticsEnabled
             KeyboardSettings.KEY_VOICE_LOCK -> _isVoiceLockEnabled.value = s.isVoiceLockEnabled
             KeyboardSettings.KEY_SEND_GUARD -> _isSendGuardEnabled.value = s.isSendGuardEnabled
+            KeyboardSettings.KEY_SYNC_NOTES_TO_CLOUD -> _isSyncNotesToCloud.value = s.isSyncNotesToCloud
             KeyboardSettings.KEY_THEME_OVERRIDE -> _themeOverride.value = s.themeOverride
             KeyboardSettings.KEY_PERSONA -> _userPersonaPreference.value = s.persona
             KeyboardSettings.KEY_SOURCE_LANG -> _sourceLanguage.value = s.sourceLanguage
@@ -345,18 +419,28 @@ class KeyboardViewModel(
      */
     fun refineResult(adjustment: String) {
         val current = aiSession.currentState.refinableText ?: return
+        // The refined text still lands on the draft the first result was for.
+        val draftSource = aiSession.resultSource ?: current
         val instruction = RESULT_REFINEMENTS[adjustment] ?: adjustment
         val baseline = _voiceMatch.value?.percent
         recordMastery(MasteryEvent.REFINEMENT)
         dismissResults()
         pendingVoiceBaseline = baseline
-        rewriteWithStyle(current, instruction, bypassCache = true)
+        rewriteWithStyle(current, instruction, bypassCache = true, source = draftSource)
     }
 
-    private fun launchAi(block: suspend () -> Unit) {
+    /**
+     * Starts a foreground AI action. [source] is the editor text the result will
+     * be applied over; Apply refuses once the draft no longer matches it.
+     */
+    private fun launchAi(source: String? = null, block: suspend () -> Unit) {
         _voiceMatch.value = null
-        aiSession.launch { block() }
+        aiSession.launch(source) { block() }
     }
+
+    /** Editor text the shown result was generated from (see AiApplyGuard). */
+    val aiResultSource: String?
+        get() = aiSession.resultSource
 
     /** Clears the active AI panel and any armed send warning. */
     fun dismissResults() {
@@ -423,10 +507,11 @@ class KeyboardViewModel(
 
     /**
      * Called by the IME service whenever a new editor gains focus: detects
-     * password/secure fields and restores the persona last used in this app.
+     * password/secure fields and incognito editors (IME_FLAG_NO_PERSONALIZED_LEARNING)
+     * and restores the persona last used in this app.
      */
-    fun onEditorStarted(packageName: String?, appLabel: String = "", inputType: Int) {
-        _isSensitiveField.value = isPasswordInputType(inputType)
+    fun onEditorStarted(packageName: String?, appLabel: String = "", inputType: Int, imeOptions: Int = 0) {
+        _isSensitiveField.value = EditorPrivacy.isSensitiveEditor(inputType, imeOptions)
         activeAppPackage = packageName
         activeAppLabel = appLabel
         previousCommittedWord = null
@@ -440,19 +525,6 @@ class KeyboardViewModel(
                     _userPersonaPreference.value = stored
                 }
             }
-        }
-    }
-
-    private fun isPasswordInputType(inputType: Int): Boolean {
-        val variation = inputType and InputType.TYPE_MASK_VARIATION
-        return when (inputType and InputType.TYPE_MASK_CLASS) {
-            InputType.TYPE_CLASS_TEXT ->
-                variation == InputType.TYPE_TEXT_VARIATION_PASSWORD ||
-                    variation == InputType.TYPE_TEXT_VARIATION_WEB_PASSWORD ||
-                    variation == InputType.TYPE_TEXT_VARIATION_VISIBLE_PASSWORD
-            InputType.TYPE_CLASS_NUMBER ->
-                variation == InputType.TYPE_NUMBER_VARIATION_PASSWORD
-            else -> false
         }
     }
 
@@ -480,6 +552,11 @@ class KeyboardViewModel(
     fun setAutoCapitalizeEnabled(enabled: Boolean) {
         _isAutoCapitalizeEnabled.value = enabled
         settings?.isAutoCapitalizeEnabled = enabled
+    }
+
+    fun setKeyHeightScale(scale: Float) {
+        _keyHeightScale.value = scale
+        settings?.keyHeightScale = scale
     }
 
     fun setNumberRowEnabled(enabled: Boolean) {
@@ -514,6 +591,26 @@ class KeyboardViewModel(
     fun setThemeOverride(mode: String) {
         _themeOverride.value = mode
         settings?.themeOverride = mode
+    }
+
+    fun setSyncNotesToCloud(enabled: Boolean) {
+        _isSyncNotesToCloud.value = enabled
+        settings?.isSyncNotesToCloud = enabled
+    }
+
+    /**
+     * Queues [text] as a `kb.note` with the context service. Returns false (and
+     * does nothing) for blank text, sensitive fields, or when there is no
+     * context client. Never blocks: the client batches and spools in the
+     * background, and keeps notes on disk if the service is not installed.
+     */
+    fun saveNote(text: String): Boolean {
+        val client = contextClient ?: return false
+        if (_isSensitiveField.value) return false
+        val note = ContextNotes.noteTextOrNull(text) ?: return false
+        return runCatching {
+            client.logNote(note, ContextNotes.noteSensitivity(_isSyncNotesToCloud.value))
+        }.isSuccess
     }
 
     fun setSendGuardEnabled(enabled: Boolean) {
@@ -672,30 +769,26 @@ class KeyboardViewModel(
     /**
      * Resolves what a just-typed word should be replaced with when the user commits
      * it (presses space): a shortcut template expansion first, then a learned
-     * spelling auto-correction. Returns null when the word should stand as typed.
+     * spelling auto-correction (skipped while [correctionsPaused]). Returns null when
+     * the word should stand as typed, which is always the case in a sensitive
+     * (password or incognito) field (KEYBOARD-006).
      */
-    fun resolveWordCommit(word: String): WordReplacement? {
-        val normalized = word.lowercase().trim()
-        if (normalized.isEmpty()) return null
-        shortcuts.value.find { it.shortcut == normalized }?.let {
-            val expanded = expandTemplate(it.template)
-            return WordReplacement(
-                expanded.text,
-                fromLearnedRule = false,
-                cursorOffset = expanded.cursorOffset
-            )
-        }
-        learnedCorrections.value.find { it.typo == normalized }?.let { correction ->
-            // Preserve leading capitalization of the typed word
-            val replacement = if (word.firstOrNull()?.isUpperCase() == true) {
-                correction.correction.replaceFirstChar { it.uppercase() }
-            } else {
-                correction.correction
-            }
-            return WordReplacement(replacement, fromLearnedRule = true)
-        }
-        return null
-    }
+    fun resolveWordCommit(word: String): WordReplacement? =
+        WordCommitResolver.resolve(
+            word,
+            shortcuts.value,
+            learnedCorrections.value,
+            _correctionsPaused.value,
+            ::expandTemplate,
+            sensitiveField = _isSensitiveField.value
+        )
+
+    /**
+     * Whether smart space may rewrite text the user already typed (the double-space
+     * ". " shortcut). False in sensitive fields, where a doubled space in a
+     * passphrase must stay two spaces (KEYBOARD-006).
+     */
+    fun allowsSmartSpaceRewrites(): Boolean = !_isSensitiveField.value
 
     // --- Auto-correction undo -------------------------------------------------
 
@@ -939,6 +1032,8 @@ class KeyboardViewModel(
     fun promoteProofreadHint() {
         _proofreadHint.value?.let {
             dismissResults()
+            // The background check ran on this draft; typing since then makes it stale.
+            aiSession.bindResultSource(it.original)
             publishAiPanel(AiPanelState.Grammar(it))
             _proofreadHint.value = null
         }
@@ -952,7 +1047,7 @@ class KeyboardViewModel(
     fun fixGrammar(text: String, bypassCache: Boolean = false) {
         if (text.isBlank() || _isSensitiveField.value) return
         aiSession.setRegenerateAction { fixGrammar(text, bypassCache = true) }
-        launchAi {
+        launchAi(text) {
             try {
                 // Incorporate personalization preferences inside grammar suggestions
                 val personalization = getPersonalizationContext()
@@ -1029,21 +1124,32 @@ class KeyboardViewModel(
     /**
      * Suggest quick replies (short, medium, and detailed variants)
      */
-    fun suggestReplies(contextMessage: String, intent: String = "", bypassCache: Boolean = false) {
-        if (contextMessage.isBlank() || _isSensitiveField.value) return
-        aiSession.setRegenerateAction { suggestReplies(contextMessage, intent, bypassCache = true) }
+    private var replyContextValidator: (() -> Boolean)? = null
+
+    fun setReplyContextValidator(validator: (() -> Boolean)?) {
+        replyContextValidator = validator
+    }
+
+    private fun contextIsValid(ephemeralContext: Boolean): Boolean =
+        !ephemeralContext || replyContextValidator?.invoke() == true
+
+    fun suggestReplies(contextMessage: String, intent: String = "", bypassCache: Boolean = false, ephemeralContext: Boolean = false) {
+        if (contextMessage.isBlank() || _isSensitiveField.value || !contextIsValid(ephemeralContext)) return
+        aiSession.setRegenerateAction { suggestReplies(contextMessage, intent, bypassCache = true, ephemeralContext = ephemeralContext) }
         launchAi {
             try {
                 val personalization = getPersonalizationContext()
                 val result = if (_isOfflineMode.value) {
                     GeminiManager.offlineReplies(contextMessage, personalization, intent)
                 } else {
-                    GeminiManager.suggestReplies(contextMessage, personalization, intent, bypassCache)
+                    GeminiManager.suggestReplies(contextMessage, personalization, intent, bypassCache, cacheResponse = !ephemeralContext)
                 }
+                if (!contextIsValid(ephemeralContext)) return@launchAi
                 _aiPanelState.value = AiPanelState.Replies(result.suggestions)
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
+                if (!contextIsValid(ephemeralContext)) return@launchAi
                 _aiPanelState.value = AiPanelState.Replies(
                     ReplyIntents.offlineReplies(intent)
                         ?: listOf("Sounds good!", "Sure thing", "Let me check.")
@@ -1056,36 +1162,39 @@ class KeyboardViewModel(
      * First step of intent-directed replies: remember the message being replied
      * to and let the UI show intent chips (Accept/Decline/...) before generating.
      */
-    fun requestReplyIdeas(contextMessage: String) {
+    fun requestReplyIdeas(contextMessage: String, ephemeralContext: Boolean = false) {
         if (contextMessage.isBlank() || _isSensitiveField.value) return
         dismissResults()
-        _aiPanelState.value = AiPanelState.ReplyIntent(contextMessage)
+        if (!contextIsValid(ephemeralContext)) return
+        _aiPanelState.value = AiPanelState.ReplyIntent(contextMessage, ephemeralContext)
     }
 
     /** Second step: generate replies steered by [intent], or unsteered when null. */
     fun chooseReplyIntent(intent: String?) {
-        val contextMessage = (_aiPanelState.value as? AiPanelState.ReplyIntent)?.contextMessage ?: return
-        suggestReplies(contextMessage, intent ?: "")
+        val panel = _aiPanelState.value as? AiPanelState.ReplyIntent ?: return
+        suggestReplies(panel.contextMessage, intent ?: "", ephemeralContext = panel.ephemeralContext)
     }
 
     /**
      * Summarize long text
      */
-    fun summarizeMessage(text: String, bypassCache: Boolean = false) {
-        if (text.isBlank() || _isSensitiveField.value) return
-        aiSession.setRegenerateAction { summarizeMessage(text, bypassCache = true) }
-        launchAi {
+    fun summarizeMessage(text: String, bypassCache: Boolean = false, ephemeralContext: Boolean = false) {
+        if (text.isBlank() || _isSensitiveField.value || !contextIsValid(ephemeralContext)) return
+        aiSession.setRegenerateAction { summarizeMessage(text, bypassCache = true, ephemeralContext = ephemeralContext) }
+        launchAi(text) {
             try {
                 val personalization = getPersonalizationContext()
                 val result = if (_isOfflineMode.value) {
                     GeminiManager.offlineSummary(text)
                 } else {
-                    GeminiManager.summarizeMessage(text, personalization, bypassCache)
+                    GeminiManager.summarizeMessage(text, personalization, bypassCache, cacheResponse = !ephemeralContext)
                 }
+                if (!contextIsValid(ephemeralContext)) return@launchAi
                 _aiPanelState.value = AiPanelState.Summary(result, text)
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
+                if (!contextIsValid(ephemeralContext)) return@launchAi
                 _aiPanelState.value = AiPanelState.Summary(
                     "Failed to summarize text: ${e.localizedMessage}", text
                 )
@@ -1096,21 +1205,23 @@ class KeyboardViewModel(
     /**
      * Translate text
      */
-    fun translateText(text: String, bypassCache: Boolean = false) {
-        if (text.isBlank() || _isSensitiveField.value) return
-        aiSession.setRegenerateAction { translateText(text, bypassCache = true) }
-        launchAi {
+    fun translateText(text: String, bypassCache: Boolean = false, ephemeralContext: Boolean = false) {
+        if (text.isBlank() || _isSensitiveField.value || !contextIsValid(ephemeralContext)) return
+        aiSession.setRegenerateAction { translateText(text, bypassCache = true, ephemeralContext = ephemeralContext) }
+        launchAi(text) {
             try {
                 val personalization = getPersonalizationContext()
                 val result = if (_isOfflineMode.value) {
                     "[Offline] $text"
                 } else {
-                    GeminiManager.translateText(text, _sourceLanguage.value, _targetLanguage.value, personalization, bypassCache)
+                    GeminiManager.translateText(text, _sourceLanguage.value, _targetLanguage.value, personalization, bypassCache, cacheResponse = !ephemeralContext)
                 }
+                if (!contextIsValid(ephemeralContext)) return@launchAi
                 _aiPanelState.value = AiPanelState.Translation(result, text)
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
+                if (!contextIsValid(ephemeralContext)) return@launchAi
                 _aiPanelState.value = AiPanelState.Translation(
                     "Translation error: ${e.localizedMessage}", text
                 )
@@ -1124,7 +1235,7 @@ class KeyboardViewModel(
     fun rewriteTone(text: String, bypassCache: Boolean = false) {
         if (text.isBlank() || _isSensitiveField.value) return
         aiSession.setRegenerateAction { rewriteTone(text, bypassCache = true) }
-        launchAi {
+        launchAi(text) {
             try {
                 val targetTone = effectivePersona()
                 val result = if (_isOfflineMode.value) {
@@ -1149,10 +1260,16 @@ class KeyboardViewModel(
      * Rewrite with an explicit style instruction (command palette, iterate
      * chips) instead of the selected persona.
      */
-    fun rewriteWithStyle(text: String, styleInstruction: String, bypassCache: Boolean = false) {
+    fun rewriteWithStyle(
+        text: String,
+        styleInstruction: String,
+        bypassCache: Boolean = false,
+        // Draft the result will replace; a refinement keeps the original draft.
+        source: String = text
+    ) {
         if (text.isBlank() || _isSensitiveField.value) return
-        aiSession.setRegenerateAction { rewriteWithStyle(text, styleInstruction, bypassCache = true) }
-        launchAi {
+        aiSession.setRegenerateAction { rewriteWithStyle(text, styleInstruction, bypassCache = true, source = source) }
+        launchAi(source) {
             try {
                 val result = if (_isOfflineMode.value) {
                     GeminiManager.offlineRewrite(text, styleInstruction)
@@ -1179,7 +1296,7 @@ class KeyboardViewModel(
     fun composeFromInstruction(instruction: String, bypassCache: Boolean = false) {
         if (instruction.isBlank() || _isSensitiveField.value) return
         aiSession.setRegenerateAction { composeFromInstruction(instruction, bypassCache = true) }
-        launchAi {
+        launchAi(instruction) {
             try {
                 val result = if (_isOfflineMode.value) {
                     GeminiManager.offlineCompose(instruction, effectivePersona(), getPersonalizationContext(), _isVoiceLockEnabled.value)
@@ -1198,20 +1315,22 @@ class KeyboardViewModel(
     /**
      * Explain dense/jargon-heavy text (usually from the clipboard) in plain language.
      */
-    fun explainText(text: String, bypassCache: Boolean = false) {
-        if (text.isBlank() || _isSensitiveField.value) return
-        aiSession.setRegenerateAction { explainText(text, bypassCache = true) }
-        launchAi {
+    fun explainText(text: String, bypassCache: Boolean = false, ephemeralContext: Boolean = false) {
+        if (text.isBlank() || _isSensitiveField.value || !contextIsValid(ephemeralContext)) return
+        aiSession.setRegenerateAction { explainText(text, bypassCache = true, ephemeralContext = ephemeralContext) }
+        launchAi(text) {
             try {
                 val result = if (_isOfflineMode.value) {
                     "[Offline: explanations need cloud mode]"
                 } else {
-                    GeminiManager.explainText(text, bypassCache)
+                    GeminiManager.explainText(text, bypassCache, cacheResponse = !ephemeralContext)
                 }
+                if (!contextIsValid(ephemeralContext)) return@launchAi
                 _aiPanelState.value = AiPanelState.Explanation(result)
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
+                if (!contextIsValid(ephemeralContext)) return@launchAi
                 _aiPanelState.value = AiPanelState.Explanation("Explanation error: ${e.localizedMessage}")
             }
         }
@@ -1223,7 +1342,7 @@ class KeyboardViewModel(
     fun continueDraft(text: String, bypassCache: Boolean = false) {
         if (text.isBlank() || _isSensitiveField.value) return
         aiSession.setRegenerateAction { continueDraft(text, bypassCache = true) }
-        launchAi {
+        launchAi(text) {
             try {
                 val result = if (_isOfflineMode.value) {
                     GeminiManager.offlineContinue(text, getPersonalizationContext(), _isVoiceLockEnabled.value)
@@ -1247,7 +1366,7 @@ class KeyboardViewModel(
      */
     fun analyzeTone(text: String) {
         if (text.isBlank() || _isSensitiveField.value) return
-        launchAi {
+        launchAi(text) {
             try {
                 val personalization = getPersonalizationContext()
                 val result = if (_isOfflineMode.value) {
@@ -1379,46 +1498,27 @@ class KeyboardViewModel(
                 onResult(-1)
                 return@launch
             }
-            var imported = 0
-            model.typingPatterns?.vocabulary?.forEach { item ->
-                if (item.word.isNotBlank()) {
-                    val existing = repository.getWord(item.word)
-                    repository.insertWord(
-                        UserVocabulary(
-                            word = item.word,
-                            count = (existing?.count ?: 0) + item.count,
-                            lastUsed = maxOf(existing?.lastUsed ?: 0L, item.lastUsed, 1L)
-                        )
+            val vocabulary = model.typingPatterns?.vocabulary.orEmpty()
+                .filter { it.word.isNotBlank() }
+                .map { UserVocabulary(word = it.word, count = it.count, lastUsed = it.lastUsed) }
+            val corrections = model.correctionHistory
+                .filter { it.typo.isNotBlank() && it.correction.isNotBlank() }
+                .map { LearnedCorrection(typo = it.typo.lowercase().trim(), correction = it.correction, count = it.count) }
+            val logs = model.writingLogs
+                .filter { it.text.isNotBlank() }
+                .map { item ->
+                    WritingLog(
+                        originalText = item.text,
+                        sentiment = item.sentiment,
+                        toneScore = item.toneScore,
+                        wordCount = item.text.split(WHITESPACE_REGEX).size,
+                        timestamp = if (item.timestamp > 0) item.timestamp else System.currentTimeMillis()
                     )
-                    imported++
                 }
-            }
-            model.correctionHistory.forEach { item ->
-                if (item.typo.isNotBlank() && item.correction.isNotBlank()) {
-                    val typo = item.typo.lowercase().trim()
-                    val existing = repository.getCorrectionForTypo(typo)
-                    if (existing != null) {
-                        repository.insertCorrection(existing.copy(correction = item.correction, count = existing.count + item.count))
-                    } else {
-                        repository.insertCorrection(LearnedCorrection(typo = typo, correction = item.correction, count = item.count))
-                    }
-                    imported++
-                }
-            }
-            model.writingLogs.forEach { item ->
-                if (item.text.isNotBlank()) {
-                    repository.insertLog(
-                        WritingLog(
-                            originalText = item.text,
-                            sentiment = item.sentiment,
-                            toneScore = item.toneScore,
-                            wordCount = item.text.split(WHITESPACE_REGEX).size,
-                            timestamp = if (item.timestamp > 0) item.timestamp else System.currentTimeMillis()
-                        )
-                    )
-                    imported++
-                }
-            }
+            // Batched lookups and writes in one transaction, instead of a read
+            // plus a write per record.
+            repository.importPersonalModel(vocabulary, corrections, logs)
+            val imported = vocabulary.size + corrections.size + logs.size
             model.exportMetadata?.userPersonaPreference?.let { persona ->
                 if (persona in PERSONAS) setUserPersonaPreference(persona)
             }
@@ -1430,12 +1530,13 @@ class KeyboardViewModel(
 
 class KeyboardViewModelFactory(
     private val repository: KeyboardRepository,
-    private val settings: KeyboardSettings? = null
+    private val settings: KeyboardSettings? = null,
+    private val contextClient: ContextClient? = null
 ) : ViewModelProvider.Factory {
     override fun <T : ViewModel> create(modelClass: Class<T>): T {
         if (modelClass.isAssignableFrom(KeyboardViewModel::class.java)) {
             @Suppress("UNCHECKED_CAST")
-            return KeyboardViewModel(repository, settings) as T
+            return KeyboardViewModel(repository, settings, contextClient) as T
         }
         throw IllegalArgumentException("Unknown ViewModel class")
     }
