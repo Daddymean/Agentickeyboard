@@ -32,6 +32,15 @@
 
   <queries>
     <package android:name="com.google.android.apps.healthdata" />
+    <!-- usage.session: find home launchers to exclude, and read app labels of launchable apps. -->
+    <intent>
+      <action android:name="android.intent.action.MAIN" />
+      <category android:name="android.intent.category.HOME" />
+    </intent>
+    <intent>
+      <action android:name="android.intent.action.MAIN" />
+      <category android:name="android.intent.category.LAUNCHER" />
+    </intent>
   </queries>
 
   <application
