@@ -1,12 +1,31 @@
 package io.github.daddymean.agentickeyboard.util
 
-/** Immutable frequency-ranked index. Lookups never scan the whole dictionary. */
-class LocalSpelling(words: List<String>) {
-    private val ranked = words.map { it.lowercase() }.filter { it.all { c -> c in 'a'..'z' } }.distinct()
-    private val ranks = ranked.withIndex().associate { it.value to it.index }
+/**
+ * Immutable frequency-ranked index. Lookups never scan the whole dictionary.
+ *
+ * KEYBOARD-020: [words] is the frequency list followed by the extra SCOWL words
+ * (ranked after it). [knownOnly] words are recognised, so they are never
+ * corrected, but never offered as a suggestion (vulgar and offensive words).
+ */
+class LocalSpelling(
+    words: List<String>,
+    knownOnly: Collection<String> = emptyList(),
+    extraWords: List<String> = emptyList()
+) {
+    private val core = clean(words)
+    private val ranked = (core + clean(extraWords)).distinct()
+    // Extra words rank well below the frequency list, so a frequent word wins a
+    // close call ("speelng" → "spelling", not "speeding").
+    private val ranks = ranked.withIndex().associate { (i, word) ->
+        word to if (i < core.size) i else i + EXTRA_RANK_OFFSET
+    }
+    private val coreSize = core.size
+    private val knownOnly: Set<String> = knownOnly.map { it.lowercase() }.filterNot { it in ranks }.toSet()
     private val alphabetical = ranked.sorted()
+    // The one-edit index (used where keyboard-aware correction is off) covers the
+    // most frequent words only, to keep memory small with the extra words loaded.
     private val deletions = buildMap<String, MutableList<String>> {
-        for (word in ranked) for (i in word.indices) {
+        for (word in ranked.take(DELETION_INDEX_SIZE)) for (i in word.indices) {
             getOrPut(word.removeRange(i, i + 1)) { mutableListOf() }.add(word)
         }
     }
@@ -20,14 +39,16 @@ class LocalSpelling(words: List<String>) {
      */
     fun isKnownWord(word: String): Boolean {
         val lower = word.lowercase()
-        return lower in ranks && lower !in Contractions.UNAMBIGUOUS
+        return (lower in ranks || lower in knownOnly) && lower !in Contractions.UNAMBIGUOUS
     }
 
     fun suggestions(word: String, limit: Int = 3): List<String> {
         val token = word.lowercase()
         if (token.length !in 2..24 || token.any { it !in 'a'..'z' }) return emptyList()
         val prefixes = prefixCompletions(token, limit)
-        if (token in ranks || prefixes.isNotEmpty()) return prefixes.map { preserveCase(word, it) }
+        // As in predictiveSuggestions, only a frequency-list completion stops the correction.
+        val corePrefix = prefixes.any { (ranks[it] ?: Int.MAX_VALUE) < coreSize }
+        if (token in ranks || token in knownOnly || corePrefix) return prefixes.map { preserveCase(word, it) }
         val candidates = linkedSetOf<String>()
         if (token !in ranks) {
             deletions[token]?.let { candidates.addAll(it) }
@@ -41,8 +62,8 @@ class LocalSpelling(words: List<String>) {
                 }
             }
         }
-        return candidates.filter { oneEditAway(token, it) }.sortedBy { ranks[it] ?: Int.MAX_VALUE }
-            .take(limit).map { preserveCase(word, it) }
+        return (candidates.filter { oneEditAway(token, it) }.sortedBy { ranks[it] ?: Int.MAX_VALUE } + prefixes)
+            .distinct().take(limit).map { preserveCase(word, it) }
     }
     private val proximity = ProximitySpelling(ranked, ranks)
 
@@ -65,7 +86,10 @@ class LocalSpelling(words: List<String>) {
         val token = word.lowercase()
         val completions = personal.filter { it.startsWith(token, ignoreCase = true) && !it.equals(token, ignoreCase = true) }
         val dictionaryPrefixes = prefixCompletions(token, limit)
-        val needsCorrection = completions.isEmpty() && dictionaryPrefixes.isEmpty() && token !in ranks
+        // A completion from the extra words ("thw" → "thwart") does not stop the
+        // correction ("the"); it is still offered after it.
+        val corePrefixes = dictionaryPrefixes.filter { (ranks[it] ?: Int.MAX_VALUE) < coreSize }
+        val needsCorrection = completions.isEmpty() && corePrefixes.isEmpty() && token !in ranks && token !in knownOnly
         val edit = when {
             !needsCorrection -> emptyList()
             !proximity -> suggestions(word, 1)
@@ -115,6 +139,11 @@ class LocalSpelling(words: List<String>) {
     }
     companion object {
         private const val MIN_LOADED_WORDS = 1_000
+        private const val DELETION_INDEX_SIZE = 10_000
+        private const val EXTRA_RANK_OFFSET = 50_000
+
+        private fun clean(words: List<String>): List<String> =
+            words.map { it.lowercase() }.filter { it.isNotEmpty() && it.all { c -> c in 'a'..'z' } }.distinct()
 
         /**
          * Common slang and texting words that are meant as typed. They are never

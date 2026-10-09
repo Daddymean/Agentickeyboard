@@ -28,6 +28,11 @@ class AgenticKeyboardApplication : Application() {
     // runs out-of-process in AICore, so the keyboard process stays lean.
     val onDeviceAi: OnDeviceAi by lazy { MlKitOnDeviceAi(this, appScope) }
 
+    private fun readWords(id: Int): List<String> =
+        resources.openRawResource(id).bufferedReader().useLines { lines ->
+            lines.map { it.trim() }.filter { it.isNotEmpty() }.toList()
+        }
+
     override fun onCreate() {
         super.onCreate()
         GeminiManager.onDeviceAi = onDeviceAi
@@ -38,8 +43,12 @@ class AgenticKeyboardApplication : Application() {
                 resources.openRawResource(R.raw.wordlist).bufferedReader().useLines { lines ->
                     val words = lines.toList()
                     SwipeToTypeEngine.loadDictionary(words)
-                    val spelling = io.github.daddymean.agentickeyboard.util.LocalSpelling(words.take(10_000))
-                    io.github.daddymean.agentickeyboard.util.LocalSpelling.shared = spelling
+                    // KEYBOARD-020: common words missing from the frequency list come
+                    // from SCOWL (see assets/third_party/SCOWL-Copyright.txt).
+                    val extra = readWords(R.raw.spelling_extra)
+                    val knownOnly = readWords(R.raw.spelling_known_only)
+                    io.github.daddymean.agentickeyboard.util.LocalSpelling.shared =
+                        io.github.daddymean.agentickeyboard.util.LocalSpelling(words.take(10_000), knownOnly, extra)
                 }
             } catch (e: Exception) {
                 Log.w("AgenticKeyboardApp", "Swipe dictionary unavailable, using built-in fallback", e)
