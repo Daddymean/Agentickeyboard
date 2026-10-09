@@ -2,6 +2,7 @@ package io.github.daddymean.agentickeyboard.ui
 
 import io.github.daddymean.agentickeyboard.db.LearnedCorrection
 import io.github.daddymean.agentickeyboard.db.ShortcutTemplate
+import io.github.daddymean.agentickeyboard.util.Contractions
 import io.github.daddymean.agentickeyboard.util.LearnedRuleFilter
 import io.github.daddymean.agentickeyboard.util.TextExpansion
 
@@ -49,6 +50,9 @@ object WordCommitResolver {
             }
             return WordReplacement(replacement + trailing, fromLearnedRule = true)
         }
+        // KEYBOARD-010: unambiguous contractions ("dont" → "don't") and a lone "i" → "I".
+        // Ambiguous ones (its, were, ill, id, well...) are only suggested in the strip.
+        Contractions.autoApply(core)?.let { return WordReplacement(it + trailing, fromLearnedRule = true) }
         return null
     }
 }

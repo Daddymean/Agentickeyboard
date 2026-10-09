@@ -826,7 +826,8 @@ class KeyboardViewModel(
         val undo = pendingUndo ?: return
         pendingUndo = null
         if (!undo.fromLearnedRule) return
-        val typo = undo.original.lowercase().trim()
+        // "teh," was corrected by the rule for "teh" (KEYBOARD-008).
+        val typo = LearnedRuleFilter.splitTrailingPunctuation(undo.original.trim()).first.lowercase()
         val reverts = (correctionReverts[typo] ?: 0) + 1
         correctionReverts[typo] = reverts
         if (reverts >= 2) {
