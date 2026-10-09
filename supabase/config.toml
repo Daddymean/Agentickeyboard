@@ -1,0 +1,14 @@
+# Supabase CLI project config for the context platform cloud slice.
+# See supabase/README.md for deploy steps.
+project_id = "agentic-context"
+
+[db]
+major_version = 16
+
+# Both functions authenticate requests with their own bearer secrets
+# (SYNC_TOKEN / MCP_TOKEN), not Supabase JWTs.
+[functions.sync]
+verify_jwt = false
+
+[functions.mcp]
+verify_jwt = false

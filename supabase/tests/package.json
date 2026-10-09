@@ -1,0 +1,15 @@
+{
+  "name": "agentic-context-supabase-tests",
+  "private": true,
+  "type": "module",
+  "description": "Schema/RLS tests for supabase/migrations, run on PGlite.",
+  "scripts": {
+    "test": "node --test schema.test.mjs"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "devDependencies": {
+    "@electric-sql/pglite": "0.5.8"
+  }
+}
