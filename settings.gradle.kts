@@ -26,3 +26,4 @@ rootProject.name = "AgenticKeyboard"
 
 include(":app")
 include(":core")
+include(":context-app")

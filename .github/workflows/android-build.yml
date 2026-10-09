@@ -109,6 +109,7 @@ jobs:
           path: |
             app/build/reports/tests/testDebugUnitTest
             core/build/reports/tests/testDebugUnitTest
+            context-app/build/reports/tests/testDebugUnitTest
           if-no-files-found: ignore
 
       - name: Upload UI screenshots
@@ -126,7 +127,14 @@ jobs:
           path: app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
 
-      # Android lint for both modules (lintDebug runs in :app and :core). Lint
+      - name: Upload context-app debug APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: context-app-debug
+          path: context-app/build/outputs/apk/debug/context-app-debug.apk
+          if-no-files-found: error
+
+      # Android lint for every module (lintDebug runs in :app, :core and :context-app). Lint
       # errors fail the build; warnings are reported but do not (main currently
       # has 0 errors, so no baseline is needed). Runs last so a lint failure never
       # prevents the APK/test/screenshot artifacts above from uploading.
@@ -141,4 +149,5 @@ jobs:
           path: |
             app/build/reports/lint-results-debug.*
             core/build/reports/lint-results-debug.*
+            context-app/build/reports/lint-results-debug.*
           if-no-files-found: ignore
