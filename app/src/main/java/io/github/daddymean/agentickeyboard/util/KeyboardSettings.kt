@@ -29,6 +29,7 @@ class KeyboardSettings(context: Context) {
         const val KEY_HAPTICS = "haptics_enabled"
         const val KEY_VOICE_LOCK = "voice_lock"
         const val KEY_SEND_GUARD = "send_guard"
+        const val KEY_SYNC_NOTES_TO_CLOUD = "sync_notes_to_cloud"
         const val KEY_THEME_OVERRIDE = "theme_override"
         const val KEY_PERSONA = "persona"
         const val KEY_SOURCE_LANG = "source_lang"
@@ -90,6 +91,15 @@ class KeyboardSettings(context: Context) {
     var isSendGuardEnabled: Boolean
         get() = prefs.getBoolean(KEY_SEND_GUARD, false)
         set(value) = prefs.edit().putBoolean(KEY_SEND_GUARD, value).apply()
+
+    /**
+     * Whether notes saved from the keyboard may sync off the phone (to the
+     * user's Supabase, via the context service). Off: notes are logged as
+     * PRIVATE and never leave the device. Opt-in.
+     */
+    var isSyncNotesToCloud: Boolean
+        get() = prefs.getBoolean(KEY_SYNC_NOTES_TO_CLOUD, false)
+        set(value) = prefs.edit().putBoolean(KEY_SYNC_NOTES_TO_CLOUD, value).apply()
 
     /** "System", "Light", or "Dark" — pins the keyboard palette independent of the OS. */
     var themeOverride: String

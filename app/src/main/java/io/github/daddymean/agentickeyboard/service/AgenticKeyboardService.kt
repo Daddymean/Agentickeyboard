@@ -29,6 +29,7 @@ import androidx.savedstate.SavedStateRegistry
 import androidx.savedstate.SavedStateRegistryController
 import androidx.savedstate.SavedStateRegistryOwner
 import androidx.savedstate.setViewTreeSavedStateRegistryOwner
+import dev.context.core.client.ContextClient
 import io.github.daddymean.agentickeyboard.AgenticKeyboardApplication
 import io.github.daddymean.agentickeyboard.ClipboardHistoryActivity
 import io.github.daddymean.agentickeyboard.MainActivity
@@ -86,6 +87,10 @@ class AgenticKeyboardService : InputMethodService(), LifecycleOwner, ViewModelSt
     private lateinit var repository: KeyboardRepository
     private lateinit var settings: KeyboardSettings
 
+    // One client per IME process. Binding is lazy and drops when idle, and every
+    // call degrades silently when the context service is not installed.
+    private lateinit var contextClient: ContextClient
+
     override fun onCreate() {
         super.onCreate()
         savedStateController.performRestore(null)
@@ -94,10 +99,11 @@ class AgenticKeyboardService : InputMethodService(), LifecycleOwner, ViewModelSt
         val app = application as AgenticKeyboardApplication
         repository = app.repository
         settings = app.settings
+        contextClient = ContextClient(this)
         refreshClipboardSettings()
         viewModel = ViewModelProvider(
             this,
-            KeyboardViewModelFactory(repository, settings)
+            KeyboardViewModelFactory(repository, settings, contextClient)
         )[KeyboardViewModel::class.java]
     }
 
@@ -461,6 +467,10 @@ class AgenticKeyboardService : InputMethodService(), LifecycleOwner, ViewModelSt
         lifecycleRegistry.handleLifecycleEvent(Lifecycle.Event.ON_RESUME)
         refreshClipboardSettings()
         captureCurrentClipboard(silent = true)
+        // Refresh the context chip off the keystroke path: returns the cache at
+        // once and fetches in the background only when it is stale, so the
+        // context service is not kept bound by every keyboard show.
+        if (!viewModel.isSensitiveField.value) contextClient.cachedSnapshot()
     }
 
     override fun onWindowHidden() {
@@ -482,6 +492,8 @@ class AgenticKeyboardService : InputMethodService(), LifecycleOwner, ViewModelSt
         lifecycleRegistry.handleLifecycleEvent(Lifecycle.Event.ON_DESTROY)
         serviceScope.cancel()
         store.clear()
+        // Flushes queued notes (bounded) and unbinds in the background.
+        if (::contextClient.isInitialized) contextClient.close()
         super.onDestroy()
     }
 }

@@ -1040,6 +1040,7 @@ fun ExportTab(viewModel: KeyboardViewModel) {
     val isHaptics by viewModel.isHapticsEnabled.collectAsState()
     val isVoiceLock by viewModel.isVoiceLockEnabled.collectAsState()
     val isSendGuard by viewModel.isSendGuardEnabled.collectAsState()
+    val isSyncNotes by viewModel.isSyncNotesToCloud.collectAsState()
     val clipboardManager = LocalClipboardManager.current
     val context = LocalContext.current
 
@@ -1159,6 +1160,12 @@ fun ExportTab(viewModel: KeyboardViewModel) {
                         description = "Pauses Send once when a draft reads hostile so you can confirm or soften it. Checked locally on-device.",
                         checked = isSendGuard,
                         onCheckedChange = { viewModel.setSendGuardEnabled(it) }
+                    )
+                    SettingSwitchRow(
+                        title = "Sync notes to cloud",
+                        description = "Notes saved from the keyboard's \"Save note\" action stay on this phone unless enabled; only then may they sync to your Supabase.",
+                        checked = isSyncNotes,
+                        onCheckedChange = { viewModel.setSyncNotesToCloud(it) }
                     )
 
                     Spacer(modifier = Modifier.height(10.dp))
