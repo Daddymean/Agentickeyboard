@@ -31,14 +31,35 @@ class LocalSpelling(words: List<String>) {
         return candidates.filter { oneEditAway(token, it) }.sortedBy { ranks[it] ?: Int.MAX_VALUE }
             .take(limit).map { preserveCase(word, it) }
     }
-    /** Personal prefix completion keeps its original priority in the three-slot strip. */
-    fun predictiveSuggestions(word: String, personal: List<String>, learned: String?, limit: Int = 3): List<String> {
+    private val proximity = ProximitySpelling(ranked, ranks)
+
+    /**
+     * Personal prefix completion keeps its original priority in the three-slot strip.
+     *
+     * KEYBOARD-019: with [proximity] on (the keyboard turns it off in sensitive
+     * fields), a word that is not in the dictionary, has no completion, is not one
+     * of the user's own words and is not common slang gets keyboard-aware
+     * corrections ([ProximitySpelling]), using [taps] when they are known.
+     */
+    fun predictiveSuggestions(
+        word: String,
+        personal: List<String>,
+        learned: String?,
+        limit: Int = 3,
+        proximity: Boolean = false,
+        taps: List<TapOffset>? = null
+    ): List<String> {
         val token = word.lowercase()
         val completions = personal.filter { it.startsWith(token, ignoreCase = true) && !it.equals(token, ignoreCase = true) }
         val dictionaryPrefixes = prefixCompletions(token, limit)
-        val edit = if (completions.isEmpty() && dictionaryPrefixes.isEmpty() && token !in ranks) {
-            suggestions(word, 1)
-        } else emptyList()
+        val needsCorrection = completions.isEmpty() && dictionaryPrefixes.isEmpty() && token !in ranks
+        val edit = when {
+            !needsCorrection -> emptyList()
+            !proximity -> suggestions(word, 1)
+            token.length !in 2..24 || token.any { it !in 'a'..'z' } -> emptyList()
+            token in COMMON_SLANG || personal.any { it.equals(token, ignoreCase = true) } -> emptyList()
+            else -> this.proximity.corrections(token, taps, limit)
+        }
         return (completions + listOfNotNull(learned) + edit + dictionaryPrefixes)
             .distinctBy { it.lowercase() }.take(limit).map { preserveCase(word, it) }
     }
@@ -71,6 +92,17 @@ class LocalSpelling(words: List<String>) {
         return longer.removeRange(first, first + 1) == shorter
     }
     companion object {
+        /**
+         * Common slang and texting words that are meant as typed. They are never
+         * offered a correction (Keith, 2026-10-08 22:11 PT: "Just the most common slang").
+         */
+        val COMMON_SLANG: Set<String> = setOf(
+            "lol", "lmao", "lmk", "btw", "thx", "ty", "pls", "plz", "idk", "omg", "brb", "tbh", "imo", "imho",
+            "ngl", "fr", "rn", "smh", "tho", "ya", "yall", "gonna", "wanna", "gotta", "kinda", "sorta", "nah",
+            "yep", "yup", "ok", "okay", "haha", "hahaha", "bday", "dm", "ur", "u", "k", "np", "gg", "irl", "fyi",
+            "asap", "ttyl", "jk", "omw", "bc", "cuz"
+        )
+
         @Volatile var shared = LocalSpelling(listOf("the", "and", "you", "this", "keyboard", "hello"))
     }
 }

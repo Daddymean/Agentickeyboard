@@ -71,6 +71,8 @@ import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.boundsInRoot
 import androidx.compose.ui.geometry.Offset
+import io.github.daddymean.agentickeyboard.util.TapOffset
+import io.github.daddymean.agentickeyboard.util.TapTrail
 import io.github.daddymean.agentickeyboard.util.TouchBounds
 import io.github.daddymean.agentickeyboard.util.TouchCalibration
 import androidx.compose.ui.platform.LocalClipboardManager
@@ -1833,6 +1835,20 @@ fun AgenticKeyboardLayout(
                                         } else {
                                             val resolved = if (isSensitiveField) char[0] else
                                                 calibration.resolve(char[0], x, y, letterBounds)
+                                            // KEYBOARD-019: remember where this letter was tapped (memory
+                                            // only) so spelling suggestions can tell which neighbour was meant.
+                                            val resolvedBounds = letterBounds[resolved]
+                                            if (!isSensitiveField && !isLearningPaused && resolvedBounds != null &&
+                                                resolvedBounds.width > 0f && resolvedBounds.height > 0f
+                                            ) {
+                                                TapTrail.record(
+                                                    resolved,
+                                                    TapOffset(
+                                                        (x - resolvedBounds.left) / resolvedBounds.width - 0.5f,
+                                                        (y - resolvedBounds.top) / resolvedBounds.height - 0.5f
+                                                    )
+                                                )
+                                            }
                                             buzz(HapticFeedbackType.TextHandleMove)
                                             onKeyPress(if (shiftActive) resolved.uppercaseChar().toString() else resolved.toString())
                                             if (shiftState == ShiftState.SHIFT) shiftState = ShiftState.OFF
