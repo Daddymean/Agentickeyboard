@@ -2159,6 +2159,9 @@ fun KeyButton(
     val currentOnTapPosition by rememberUpdatedState(onTapPosition)
     val scope = rememberCoroutineScope()
     var showVariants by remember { mutableStateOf(false) }
+    var selectedVariant by remember { mutableStateOf<Int?>(null) }
+    val variantGeometry = remember { VariantPopupGeometry() }
+    val currentVariants by rememberUpdatedState(longPressVariants)
     val density = LocalDensity.current
 
     val interactionModifier = when {
@@ -2178,10 +2181,28 @@ fun KeyButton(
                 }
             )
         }
-        longPressVariants.isNotEmpty() || onTapPosition != null -> Modifier.pointerInput(longPressVariants.isNotEmpty()) {
-            detectTapGestures(
+        longPressVariants.isNotEmpty() || onTapPosition != null -> Modifier.pointerInput(Unit) {
+            // KEYBOARD-016: holding opens the accents; releasing types the accent
+            // slid onto, or the base letter if none was chosen.
+            detectKeyPress(
+                longPressEnabled = { currentVariants.isNotEmpty() },
                 onTap = { point -> currentOnTapPosition?.invoke(point) ?: currentOnClick() },
-                onLongPress = if (longPressVariants.isNotEmpty()) ({ _: Offset -> showVariants = true }) else null
+                onLongPress = {
+                    selectedVariant = null
+                    showVariants = true
+                },
+                onHoldMove = { point -> selectedVariant = variantGeometry.variantAt(point, currentVariants.size) },
+                onHoldEnd = { downPoint, lastPoint ->
+                    val variants = currentVariants
+                    val index = variantGeometry.variantAt(lastPoint, variants.size)
+                    showVariants = false
+                    selectedVariant = null
+                    if (index != null) {
+                        currentOnVariant(variants[index])
+                    } else {
+                        currentOnTapPosition?.invoke(downPoint) ?: currentOnClick()
+                    }
+                }
             )
         }
         else -> Modifier.clickable { currentOnClick() }
@@ -2242,33 +2263,16 @@ fun KeyButton(
         )
 
         if (showVariants && longPressVariants.isNotEmpty()) {
-            Popup(
-                alignment = Alignment.TopCenter,
-                offset = IntOffset(0, with(density) { -(52.dp).roundToPx() }),
-                onDismissRequest = { showVariants = false }
-            ) {
-                Surface(
-                    shape = RoundedCornerShape(8.dp),
-                    color = colors.popup,
-                    shadowElevation = 6.dp
-                ) {
-                    Row(modifier = Modifier.padding(4.dp)) {
-                        longPressVariants.forEach { variant ->
-                            Box(
-                                modifier = Modifier
-                                    .clip(RoundedCornerShape(6.dp))
-                                    .clickable {
-                                        currentOnVariant(variant)
-                                        showVariants = false
-                                    }
-                                    .padding(horizontal = 9.dp, vertical = 8.dp)
-                            ) {
-                                Text(variant, fontSize = 16.sp, color = colors.text)
-                            }
-                        }
-                    }
-                }
-            }
+            KeyVariantPopup(
+                variants = longPressVariants,
+                selected = selectedVariant,
+                geometry = variantGeometry,
+                onVariant = { variant ->
+                    currentOnVariant(variant)
+                    showVariants = false
+                },
+                onDismiss = { showVariants = false }
+            )
         }
     }
 }
