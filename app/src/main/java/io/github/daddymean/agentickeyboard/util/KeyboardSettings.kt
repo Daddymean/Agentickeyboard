@@ -48,6 +48,11 @@ class KeyboardSettings(context: Context) {
         const val KEY_MASTERY_AURA = "mastery_aura"
     }
 
+    /** Per-letter normalized tap offsets only; no typed text or raw touch history. */
+    var touchCalibration: String
+        get() = prefs.getString("touch_calibration_v1", "").orEmpty()
+        set(value) = prefs.edit().putString("touch_calibration_v1", value).apply()
+
     var isOfflineMode: Boolean
         get() = prefs.getBoolean(KEY_OFFLINE_MODE, false)
         set(value) = prefs.edit().putBoolean(KEY_OFFLINE_MODE, value).apply()

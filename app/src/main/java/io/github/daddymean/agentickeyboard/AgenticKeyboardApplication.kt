@@ -35,7 +35,10 @@ class AgenticKeyboardApplication : Application() {
         appScope.launch {
             try {
                 resources.openRawResource(R.raw.wordlist).bufferedReader().useLines { lines ->
-                    SwipeToTypeEngine.loadDictionary(lines.toList())
+                    val words = lines.toList()
+                    SwipeToTypeEngine.loadDictionary(words)
+                    io.github.daddymean.agentickeyboard.util.LocalSpelling.shared =
+                        io.github.daddymean.agentickeyboard.util.LocalSpelling(words.take(10_000))
                 }
             } catch (e: Exception) {
                 Log.w("AgenticKeyboardApp", "Swipe dictionary unavailable, using built-in fallback", e)
