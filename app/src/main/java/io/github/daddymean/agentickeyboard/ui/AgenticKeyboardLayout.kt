@@ -1697,6 +1697,9 @@ fun AgenticKeyboardLayout(
                     }
                 }
         ) {
+            // KEYBOARD-015: taps between rows or beside the middle row go to the
+            // nearest letter instead of being lost.
+            KeyGridTouchTargets(metrics) {
             Column(modifier = Modifier.fillMaxWidth()) {
                 // Render QWERTY Rows
                 for (rowIndex in qwertyRows.indices) {
@@ -1785,6 +1788,7 @@ fun AgenticKeyboardLayout(
                         }
                     }
                 }
+            }
             }
 
             // Visual trailing gesture path canvas overlay
