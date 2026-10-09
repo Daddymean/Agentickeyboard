@@ -57,31 +57,53 @@ object SelectionPlanner {
     private const val ZWJ = 0x200D
     private const val ZWNJ = 0x200C
 
+    /** U+2019, the apostrophe iOS, macOS and word processors actually insert. */
+    private const val RIGHT_SINGLE_QUOTE = 0x2019
+
     /**
-     * Whether a Unicode code point counts as part of a word.
+     * A code point that can begin a word on its own.
      *
-     * Two things make this more than `isLetterOrDigit`.
+     * It takes a code point, not a `Char`. Above the BMP a `Char` is only half a
+     * surrogate pair, whose category is `Cs` — never a letter. Classifying per
+     * `Char` therefore finds no word at all in Adlam, Osage, Gothic or the
+     * mathematical alphanumerics common in styled social text, and in mixed text
+     * the scan halts at the pair mid-word.
      *
-     * Combining marks have to be included. A mark is not a letter, so treating
-     * it as a word break makes the word scan stop *at* the mark — inside a
-     * user-visible character — rather than skipping past it. In Devanagari
-     * "नमस्ते" the virama is such a mark, so the word commands stopped after
-     * three characters, and a cut or an AI rewrite of that "word" would take a
-     * fragment and orphan the mark. NFD Latin ("cafe" plus a combining acute)
-     * fails the same way. That is a different mechanism from the surrogate-pair
-     * problem the character commands solve with a grapheme iterator, which is
-     * why fixing those did not fix these.
+     * The apostrophes and the underscore are unconditional, which is the
+     * behaviour `'` has always had here: "o'clock" and "don't_x" are each one
+     * word, and a leading quote is taken along with the word after it. U+2019
+     * joins them because iOS, macOS and most word processors substitute it for a
+     * typed apostrophe, so it is what pasted prose contains — without it the
+     * word scan stopped at the quote and "don’t" selected as "don". It follows
+     * that `‘quoted’` takes its quotes into the word, exactly as `'quoted'`
+     * already did; treating an apostrophe as word-forming only between two bases
+     * would fix both at once, but that is a change to long-standing behaviour
+     * rather than to this one, so it is left alone here.
      *
-     * And it takes a code point, not a `Char`. Above the BMP a `Char` is only
-     * half a surrogate pair, whose category is `Cs` — never a letter and never a
-     * mark. Classifying per `Char` therefore finds no word at all in Adlam,
-     * Osage, Gothic or the mathematical alphanumerics common in styled social
-     * text, and in mixed text the scan halts at the pair mid-word.
+     * U+02BC MODIFIER LETTER APOSTROPHE needs no entry: its category is `Lm`,
+     * so `isLetterOrDigit` already accepts it.
      */
-    private fun isWordCodePoint(codePoint: Int): Boolean {
-        if (Character.isLetterOrDigit(codePoint)) return true
+    private fun isWordBase(codePoint: Int): Boolean =
+        Character.isLetterOrDigit(codePoint) ||
+            codePoint == '\''.code ||
+            codePoint == '_'.code ||
+            codePoint == RIGHT_SINGLE_QUOTE
+
+    /**
+     * A code point that extends a word it is attached to but cannot begin one.
+     *
+     * Combining marks have to count as part of a word. A mark is not a letter,
+     * so treating it as a word break makes the word scan stop *at* the mark —
+     * inside a user-visible character — rather than skipping past it. In
+     * Devanagari "नमस्ते" the virama is such a mark, so the word commands
+     * stopped after three characters, and a cut or an AI rewrite of that "word"
+     * would take a fragment and orphan the mark. NFD Latin ("cafe" plus a
+     * combining acute) fails the same way. That is a different mechanism from
+     * the surrogate-pair problem the character commands solve with a grapheme
+     * iterator, which is why fixing those did not fix these.
+     */
+    private fun isWordExtender(codePoint: Int): Boolean {
         if (codePoint == ZWJ || codePoint == ZWNJ) return true
-        if (codePoint == '\''.code || codePoint == '_'.code) return true
         return when (Character.getType(codePoint)) {
             Character.NON_SPACING_MARK.toInt(),
             Character.COMBINING_SPACING_MARK.toInt(),
@@ -90,13 +112,46 @@ object SelectionPlanner {
         }
     }
 
-    /** The word code point ending at [index], or null when there is none. */
-    private fun wordBefore(text: String, index: Int): Int? =
-        if (index <= 0) null else text.codePointBefore(index).takeIf { isWordCodePoint(it) }
+    /**
+     * Whether the code point starting at [index] is part of a word.
+     *
+     * An extender counts only when a base precedes it, through any run of other
+     * extenders. Classifying extenders on their own made emoji read as words,
+     * because a ZWJ sequence is joiners between pictographs and U+FE0F VARIATION
+     * SELECTOR-16 — the one that makes "❤️" render as an emoji — is category
+     * `Mn`. So "❤️hello" selected the heart along with the word, and on a device,
+     * where the grapheme iterator builds whole extended clusters, word-right ran
+     * to the end of "👨‍👩‍👧" as though it were a word. Requiring a base skips such
+     * a cluster instead: no pictograph is a letter or a digit, so no joiner or
+     * selector inside one ever has a base behind it.
+     *
+     * The marks this exists for are unaffected, since they follow a letter: the
+     * virama in "नमस्ते", the acute in NFD "café", the ZWNJ in Persian
+     * "می‌خواهم", the Adlam lengthener after its letters.
+     */
+    private class WordClassifier(private val text: String) {
+        private val wordStarts = BooleanArray(text.length)
 
-    /** The word code point starting at [index], or null when there is none. */
-    private fun wordAt(text: String, index: Int): Int? =
-        if (index >= text.length) null else text.codePointAt(index).takeIf { isWordCodePoint(it) }
+        init {
+            // Classify each code point once. An extender inherits the preceding
+            // run's base state; a pictograph or separator resets that state.
+            var attachedToBase = false
+            var index = 0
+            while (index < text.length) {
+                val codePoint = text.codePointAt(index)
+                attachedToBase = isWordBase(codePoint) ||
+                    (isWordExtender(codePoint) && attachedToBase)
+                wordStarts[index] = attachedToBase
+                index += Character.charCount(codePoint)
+            }
+        }
+
+        fun hasWordAt(index: Int): Boolean =
+            index < text.length && wordStarts[index]
+
+        fun hasWordBefore(index: Int): Boolean =
+            index > 0 && wordStarts[index - Character.charCount(text.codePointBefore(index))]
+    }
 
     /** Steps [index] one code point left, regardless of what it holds. */
     private fun stepLeft(text: String, index: Int): Int =
@@ -109,7 +164,7 @@ object SelectionPlanner {
     /**
      * Snaps [offset] back onto a grapheme boundary, and [snapForward] snaps on.
      *
-     * Defense in depth behind [isWordCodePoint]: whatever the word scan decides, a
+     * Defense in depth behind [WordClassifier]: whatever the word scan decides, a
      * command can then never hand the editor an offset that sits inside a
      * cluster. Every offset in plain ASCII is already a boundary, so these are
      * identity there.
@@ -229,18 +284,20 @@ object SelectionPlanner {
      * characters first, so a caret sitting after "hello, " lands on the "h".
      */
     fun previousWordBoundary(text: String, from: Int): Int {
+        val words = WordClassifier(text)
         var i = from.coerceIn(0, text.length)
-        while (i > 0 && wordBefore(text, i) == null) i = stepLeft(text, i)
-        while (i > 0 && wordBefore(text, i) != null) i = stepLeft(text, i)
+        while (i > 0 && !words.hasWordBefore(i)) i = stepLeft(text, i)
+        while (i > 0 && words.hasWordBefore(i)) i = stepLeft(text, i)
         return snapBack(text, i)
     }
 
     /** End of the word at or after [from], mirroring [previousWordBoundary]. */
     fun nextWordBoundary(text: String, from: Int): Int {
+        val words = WordClassifier(text)
         val len = text.length
         var i = from.coerceIn(0, len)
-        while (i < len && wordAt(text, i) == null) i = stepRight(text, i)
-        while (i < len && wordAt(text, i) != null) i = stepRight(text, i)
+        while (i < len && !words.hasWordAt(i)) i = stepRight(text, i)
+        while (i < len && words.hasWordAt(i)) i = stepRight(text, i)
         return snapForward(text, i)
     }
 
@@ -250,17 +307,18 @@ object SelectionPlanner {
      * then the one ahead, and collapses only when the text holds no word at all.
      */
     fun selectWordAt(text: String, at: Int): SelectionRange {
+        val words = WordClassifier(text)
         val len = text.length
         val caret = at.coerceIn(0, len)
 
-        val onWord = wordAt(text, caret) != null
-        val afterWord = wordBefore(text, caret) != null
+        val onWord = words.hasWordAt(caret)
+        val afterWord = words.hasWordBefore(caret)
 
         if (onWord || afterWord) {
             var start = caret
-            while (start > 0 && wordBefore(text, start) != null) start = stepLeft(text, start)
+            while (start > 0 && words.hasWordBefore(start)) start = stepLeft(text, start)
             var end = caret
-            while (end < len && wordAt(text, end) != null) end = stepRight(text, end)
+            while (end < len && words.hasWordAt(end)) end = stepRight(text, end)
             return SelectionRange(snapBack(text, start), snapForward(text, end))
         }
 
@@ -269,18 +327,18 @@ object SelectionPlanner {
         // so reaching the edge is the "nothing found" case and there is nothing
         // to smart-cast.
         var back = caret
-        while (back > 0 && wordBefore(text, back) == null) back = stepLeft(text, back)
+        while (back > 0 && !words.hasWordBefore(back)) back = stepLeft(text, back)
         if (back > 0) {
             var start = back
-            while (start > 0 && wordBefore(text, start) != null) start = stepLeft(text, start)
+            while (start > 0 && words.hasWordBefore(start)) start = stepLeft(text, start)
             return SelectionRange(snapBack(text, start), snapForward(text, back))
         }
 
         var forward = caret
-        while (forward < len && wordAt(text, forward) == null) forward = stepRight(text, forward)
+        while (forward < len && !words.hasWordAt(forward)) forward = stepRight(text, forward)
         if (forward < len) {
             var end = forward
-            while (end < len && wordAt(text, end) != null) end = stepRight(text, end)
+            while (end < len && words.hasWordAt(end)) end = stepRight(text, end)
             return SelectionRange(snapBack(text, forward), snapForward(text, end))
         }
         return SelectionRange.caret(caret)
