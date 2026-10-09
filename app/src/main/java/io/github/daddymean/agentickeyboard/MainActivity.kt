@@ -98,6 +98,7 @@ import io.github.daddymean.agentickeyboard.ui.RowDefaultsButtonPadding
 import io.github.daddymean.agentickeyboard.ui.theme.MyApplicationTheme
 import io.github.daddymean.agentickeyboard.util.AppPersonas
 import io.github.daddymean.agentickeyboard.util.KeyboardSettings
+import io.github.daddymean.agentickeyboard.util.LearnedRuleCleanup
 import io.github.daddymean.agentickeyboard.util.KeyboardSetupStatus
 import io.github.daddymean.agentickeyboard.util.OnDeviceAiStatus
 import io.github.daddymean.agentickeyboard.util.TextExpansion
@@ -1684,6 +1685,32 @@ fun ExportTab(viewModel: KeyboardViewModel) {
                         color = Color(0xFF5F5D6B),
                         fontSize = 11.sp
                     )
+                    // KEYBOARD-008: rules removed by the one-time cleanup can be put back.
+                    val cleanupPrefs = remember {
+                        context.getSharedPreferences(LearnedRuleCleanup.PREFS_NAME, android.content.Context.MODE_PRIVATE)
+                    }
+                    var removedRuleCount by remember { mutableStateOf(LearnedRuleCleanup.backupCount(cleanupPrefs)) }
+                    if (removedRuleCount > 0) {
+                        Spacer(modifier = Modifier.height(6.dp))
+                        Text(
+                            "An update removed $removedRuleCount rules that changed real words (for example your → youre).",
+                            color = Color(0xFF5F5D6B),
+                            fontSize = 11.sp
+                        )
+                        Button(
+                            onClick = {
+                                viewModel.restoreCleanedUpCorrections(cleanupPrefs) { restored ->
+                                    removedRuleCount = 0
+                                    Toast.makeText(context, "Restored $restored rules", Toast.LENGTH_SHORT).show()
+                                }
+                            },
+                            colors = ButtonDefaults.buttonColors(containerColor = Color.Transparent, contentColor = Color(0xFF2563EB)),
+                            contentPadding = RowDefaultsButtonPadding,
+                            modifier = Modifier.height(28.dp)
+                        ) {
+                            Text("Restore removed rules ($removedRuleCount)", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                        }
+                    }
                     Spacer(modifier = Modifier.height(10.dp))
 
                     if (learnedCorrections.isEmpty()) {

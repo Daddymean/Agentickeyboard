@@ -10,6 +10,19 @@ class LocalSpelling(words: List<String>) {
             getOrPut(word.removeRange(i, i + 1)) { mutableListOf() }.add(word)
         }
     }
+    /** True once the real dictionary has replaced the tiny built-in fallback. */
+    val isLoaded: Boolean get() = ranked.size >= MIN_LOADED_WORDS
+
+    /**
+     * Whether [word] is a real dictionary word (case-insensitive). Contractions
+     * typed without the apostrophe ("dont") do not count, even though the bundled
+     * list contains some of them.
+     */
+    fun isKnownWord(word: String): Boolean {
+        val lower = word.lowercase()
+        return lower in ranks && lower !in Contractions.UNAMBIGUOUS
+    }
+
     fun suggestions(word: String, limit: Int = 3): List<String> {
         val token = word.lowercase()
         if (token.length !in 2..24 || token.any { it !in 'a'..'z' }) return emptyList()
@@ -92,6 +105,8 @@ class LocalSpelling(words: List<String>) {
         return longer.removeRange(first, first + 1) == shorter
     }
     companion object {
+        private const val MIN_LOADED_WORDS = 1_000
+
         /**
          * Common slang and texting words that are meant as typed. They are never
          * offered a correction (Keith, 2026-10-08 22:11 PT: "Just the most common slang").

@@ -36,6 +36,8 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import io.github.daddymean.agentickeyboard.util.LearnedRuleCleanup
+import io.github.daddymean.agentickeyboard.util.LearnedRuleFilter
 import io.github.daddymean.agentickeyboard.util.LocalSpelling
 import io.github.daddymean.agentickeyboard.util.TapTrail
 import io.github.daddymean.agentickeyboard.util.TouchCalibration
@@ -1124,23 +1126,29 @@ class KeyboardViewModel(
         }
     }
 
+    /** KEYBOARD-008: puts back the rules the one-time cleanup removed. */
+    fun restoreCleanedUpCorrections(prefs: android.content.SharedPreferences, onDone: (Int) -> Unit) {
+        viewModelScope.launch {
+            val restored = withContext(Dispatchers.IO) { LearnedRuleCleanup.restore(prefs, repository) }
+            onDone(restored)
+        }
+    }
+
     /**
      * Dynamic alignment of original and corrected text to extract custom spelling fixes
      */
     private suspend fun extractAndLearnCorrections(original: String, corrected: String) {
-        val origWords = original.split(WHITESPACE_REGEX).map { it.replace(NON_ALPHA_REGEX, "").lowercase() }
-        val corrWords = corrected.split(WHITESPACE_REGEX).map { it.replace(NON_ALPHA_REGEX, "").lowercase() }
-
-        if (origWords.size != corrWords.size) return
-
-        val toProcess = mutableListOf<Pair<String, String>>()
-        for (i in origWords.indices) {
-            val oWord = origWords[i]
-            val cWord = corrWords[i]
-            if (oWord.isNotEmpty() && cWord.isNotEmpty() && oWord != cWord && oWord.length > 2) {
-                toProcess.add(oWord to cWord)
-            }
-        }
+        // KEYBOARD-008: only real misspellings become rules. Apostrophes are kept,
+        // outer punctuation is ignored, and real words are never rewritten. (The
+        // personal vocabulary is not used as a guard: it records every typed word,
+        // typos included, so it would block real fixes.)
+        val spelling = LocalSpelling.shared
+        val toProcess = LearnedRuleFilter.learnablePairs(
+            original,
+            corrected,
+            dictionaryLoaded = spelling.isLoaded,
+            isWord = spelling::isKnownWord
+        )
 
         if (toProcess.isEmpty()) return
 
