@@ -73,8 +73,17 @@ class LocalSpelling(words: List<String>) {
             token in COMMON_SLANG || personal.any { it.equals(token, ignoreCase = true) } -> emptyList()
             else -> this.proximity.corrections(token, taps, limit)
         }
-        return (completions + listOfNotNull(learned) + edit + dictionaryPrefixes)
-            .distinctBy { it.lowercase() }.take(limit).map { preserveCase(word, it) }
+        val candidates = (completions + listOfNotNull(learned) + edit + dictionaryPrefixes)
+            .distinctBy { it.lowercase() }.map { preserveCase(word, it) }
+        // KEYBOARD-010: the contraction ("dont" → "don't", "i" → "I") leads the strip.
+        // Ambiguous forms that are usually real words ("its", "were") come second.
+        val contraction = Contractions.suggestion(word) ?: return candidates.take(limit)
+        val others = candidates.filterNot { it.equals(contraction.first, ignoreCase = true) }
+        if (contraction.second) return (listOf(contraction.first) + others).take(limit)
+        // With nothing else to show first, the word as typed leads, so tapping the
+        // first chip never turns "were" into "we're".
+        val lead = others.take(1).ifEmpty { listOf(word) }
+        return (lead + contraction.first + others.drop(1)).take(limit)
     }
 
     private fun prefixCompletions(token: String, limit: Int): List<String> {
