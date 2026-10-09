@@ -2,6 +2,7 @@ package io.github.daddymean.agentickeyboard.ui
 
 import io.github.daddymean.agentickeyboard.db.LearnedCorrection
 import io.github.daddymean.agentickeyboard.db.ShortcutTemplate
+import io.github.daddymean.agentickeyboard.util.LearnedRuleFilter
 import io.github.daddymean.agentickeyboard.util.TextExpansion
 
 /**
@@ -35,14 +36,18 @@ object WordCommitResolver {
         }
         // Shortcuts above still expand while learned corrections are paused.
         if (correctionsPaused) return null
-        corrections.find { it.typo == normalized }?.let { correction ->
+        // KEYBOARD-008: "teh," and "teh." match the rule for "teh"; the punctuation is kept.
+        val (core, trailing) = LearnedRuleFilter.splitTrailingPunctuation(word.trim())
+        val key = core.lowercase()
+        if (key.isEmpty()) return null
+        corrections.find { it.typo == key }?.let { correction ->
             // Preserve leading capitalization of the typed word
-            val replacement = if (word.firstOrNull()?.isUpperCase() == true) {
+            val replacement = if (core.firstOrNull()?.isUpperCase() == true) {
                 correction.correction.replaceFirstChar { it.uppercase() }
             } else {
                 correction.correction
             }
-            return WordReplacement(replacement, fromLearnedRule = true)
+            return WordReplacement(replacement + trailing, fromLearnedRule = true)
         }
         return null
     }

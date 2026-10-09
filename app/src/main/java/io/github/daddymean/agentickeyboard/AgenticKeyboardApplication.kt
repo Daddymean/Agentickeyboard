@@ -7,6 +7,7 @@ import io.github.daddymean.agentickeyboard.db.KeyboardRepository
 import io.github.daddymean.agentickeyboard.network.GeminiManager
 import io.github.daddymean.agentickeyboard.util.GeminiKeyStore
 import io.github.daddymean.agentickeyboard.util.KeyboardSettings
+import io.github.daddymean.agentickeyboard.util.LearnedRuleCleanup
 import io.github.daddymean.agentickeyboard.util.MlKitOnDeviceAi
 import io.github.daddymean.agentickeyboard.util.OnDeviceAi
 import io.github.daddymean.agentickeyboard.util.SwipeToTypeEngine
@@ -37,11 +38,25 @@ class AgenticKeyboardApplication : Application() {
                 resources.openRawResource(R.raw.wordlist).bufferedReader().useLines { lines ->
                     val words = lines.toList()
                     SwipeToTypeEngine.loadDictionary(words)
-                    io.github.daddymean.agentickeyboard.util.LocalSpelling.shared =
-                        io.github.daddymean.agentickeyboard.util.LocalSpelling(words.take(10_000))
+                    val spelling = io.github.daddymean.agentickeyboard.util.LocalSpelling(words.take(10_000))
+                    io.github.daddymean.agentickeyboard.util.LocalSpelling.shared = spelling
                 }
             } catch (e: Exception) {
                 Log.w("AgenticKeyboardApp", "Swipe dictionary unavailable, using built-in fallback", e)
+            }
+            // KEYBOARD-008: once, remove harmful rules learned before the fix (backed up first).
+            try {
+                val spelling = io.github.daddymean.agentickeyboard.util.LocalSpelling.shared
+                if (spelling.isLoaded) {
+                    val removed = LearnedRuleCleanup.runOnce(
+                        getSharedPreferences(LearnedRuleCleanup.PREFS_NAME, MODE_PRIVATE),
+                        repository,
+                        spelling::isKnownWord
+                    )
+                    if (removed > 0) Log.i("AgenticKeyboardApp", "Removed $removed harmful learned rules (backed up)")
+                }
+            } catch (e: Exception) {
+                Log.w("AgenticKeyboardApp", "Learned-rule cleanup skipped", e)
             }
         }
     }

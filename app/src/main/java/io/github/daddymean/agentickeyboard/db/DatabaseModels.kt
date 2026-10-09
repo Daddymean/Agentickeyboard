@@ -286,6 +286,9 @@ interface LearnedCorrectionDao {
     @Query("SELECT * FROM learned_corrections ORDER BY count DESC")
     fun getAllCorrections(): Flow<List<LearnedCorrection>>
 
+    @Query("SELECT * FROM learned_corrections")
+    suspend fun getAllCorrectionsOnce(): List<LearnedCorrection>
+
     @Query("SELECT * FROM learned_corrections WHERE typo = :typo LIMIT 1")
     suspend fun getCorrectionForTypo(typo: String): LearnedCorrection?
 
@@ -611,6 +614,9 @@ class KeyboardRepository(private val db: AppDatabase) {
     suspend fun getCorrectionForTypo(typo: String): LearnedCorrection? {
         return db.learnedCorrectionDao().getCorrectionForTypo(typo)
     }
+
+    suspend fun getAllCorrectionsOnce(): List<LearnedCorrection> =
+        db.learnedCorrectionDao().getAllCorrectionsOnce()
 
     suspend fun getCorrectionsForTypos(typos: List<String>): List<LearnedCorrection> {
         return db.learnedCorrectionDao().getCorrectionsForTypos(typos)
