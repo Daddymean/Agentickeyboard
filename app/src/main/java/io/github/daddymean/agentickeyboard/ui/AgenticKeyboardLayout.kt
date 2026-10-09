@@ -2164,7 +2164,16 @@ fun KeyButton(
     val currentVariants by rememberUpdatedState(longPressVariants)
     val density = LocalDensity.current
 
+    val currentOnHorizontalDrag by rememberUpdatedState(onHorizontalDrag)
+
     val interactionModifier = when {
+        // KEYBOARD-017: the space bar types a space unless the thumb clearly slides.
+        onHorizontalDrag != null -> Modifier.pointerInput(Unit) {
+            detectTapOrHorizontalSlide(
+                onTap = { currentOnClick() },
+                onSlide = { steps -> currentOnHorizontalDrag?.invoke(steps) }
+            )
+        }
         repeatOnHold -> Modifier.pointerInput(Unit) {
             detectTapGestures(
                 onPress = {
@@ -2208,35 +2217,12 @@ fun KeyButton(
         else -> Modifier.clickable { currentOnClick() }
     }
 
-    // Optional horizontal slide (used by the space bar for cursor control)
-    val dragHandler = onHorizontalDrag
-    val dragModifier = if (dragHandler != null) {
-        Modifier.pointerInput(Unit) {
-            var accumulated = 0f
-            detectDragGestures(
-                onDragStart = { accumulated = 0f },
-                onDrag = { change, dragAmount ->
-                    change.consume()
-                    accumulated += dragAmount.x
-                    val steps = (accumulated / 48f).toInt()
-                    if (steps != 0) {
-                        dragHandler(steps)
-                        accumulated -= steps * 48f
-                    }
-                }
-            )
-        }
-    } else {
-        Modifier
-    }
-
     Box(
         modifier = modifier
             .size(width = keyMetrics.keyWidth, height = keyMetrics.keyHeight)
             .shadow(1.dp, RoundedCornerShape(6.dp))
             .clip(RoundedCornerShape(6.dp))
             .background(containerColor)
-            .then(dragModifier)
             .then(interactionModifier)
             .semantics(mergeDescendants = true) {
                 role = Role.Button
