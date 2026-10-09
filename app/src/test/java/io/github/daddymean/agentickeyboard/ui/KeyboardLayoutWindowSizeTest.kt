@@ -2,6 +2,7 @@ package io.github.daddymean.agentickeyboard.ui
 
 import android.content.Context
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assertDoesNotExist
 import androidx.compose.ui.test.getUnclippedBoundsInRoot
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
@@ -68,6 +69,7 @@ class KeyboardLayoutWindowSizeTest {
         showKeyboard()
         composeTestRule.onNodeWithTag("key_q").assertIsDisplayed()
         composeTestRule.onNodeWithTag("key_space").assertIsDisplayed()
+        composeTestRule.onNodeWithTag("key_comma").assertIsDisplayed()
         val key = composeTestRule.onNodeWithTag("key_q").getUnclippedBoundsInRoot()
         assertCloseTo(44.dp, key.height, "portrait key height")
         // Ten keys plus the nine gaps between them.
@@ -84,6 +86,7 @@ class KeyboardLayoutWindowSizeTest {
         // The regression this guards: at portrait metrics the keyboard was taller
         // than a landscape window, so the bottom row fell off the screen.
         composeTestRule.onNodeWithTag("key_space").assertIsDisplayed()
+        composeTestRule.onNodeWithTag("key_comma").assertIsDisplayed()
     }
 
     @Test

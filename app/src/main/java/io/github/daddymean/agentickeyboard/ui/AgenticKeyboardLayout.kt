@@ -62,7 +62,16 @@ import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.onClick
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.role
 import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.boundsInRoot
+import androidx.compose.ui.geometry.Offset
+import io.github.daddymean.agentickeyboard.util.TouchBounds
+import io.github.daddymean.agentickeyboard.util.TouchCalibration
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
@@ -154,6 +163,10 @@ fun AgenticKeyboardLayout(
     var lastShiftTapTime by remember { mutableLongStateOf(0L) }
     var lastSpaceTime by remember { mutableLongStateOf(0L) }
     var isNumberMode by remember { mutableStateOf(false) }
+    var trainingStep by remember { mutableStateOf<Int?>(null) }
+    var trainingProfile by remember { mutableStateOf<TouchCalibration?>(null) }
+    val letterBounds = remember { mutableMapOf<Char, TouchBounds>() }
+    val calibration = viewModel.touchCalibration
 
     // Collect states from ViewModel
     val collectedAiPanelState by viewModel.aiPanelState.collectAsState()
@@ -1606,6 +1619,42 @@ fun AgenticKeyboardLayout(
 
         // --- KEYBOARD KEYS MATRIX ---
         val digitRow = listOf("1", "2", "3", "4", "5", "6", "7", "8", "9", "0")
+        // Training uses intentional targets rather than treating mistypes as truth.
+        if (!isSensitiveField && !isLearningPaused) {
+            Row(
+                modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 6.dp),
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                ClipActionChip(if (trainingStep == null) "Train touch" else "Cancel training") {
+                    if (trainingStep == null) {
+                        trainingProfile = TouchCalibration()
+                        trainingStep = 0
+                    } else {
+                        trainingStep = null
+                        trainingProfile = null
+                    }
+                    isNumberMode = false
+                }
+                ClipActionChip("Reset touch") {
+                    trainingStep = null
+                    trainingProfile = null
+                    viewModel.resetTouchCalibration()
+                    gestureAlert = "Touch calibration reset"
+                }
+                trainingStep?.let { step ->
+                    Text("Tap ${TouchCalibration.TRAINING_KEYS[step].uppercaseChar()} · ${step + 1}/78",
+                        color = keyboardColors.text, fontSize = 12.sp)
+                }
+            }
+        }
+        androidx.compose.runtime.LaunchedEffect(isSensitiveField, isLearningPaused, isNumberMode) {
+            if (isSensitiveField || isLearningPaused || isNumberMode) {
+                trainingStep = null
+                trainingProfile = null
+            }
+        }
+
         val qwertyRows = if (isNumberMode) {
             listOf(
                 digitRow,
@@ -1629,8 +1678,8 @@ fun AgenticKeyboardLayout(
                     keysAreaWidth = size.width.toFloat()
                     keysAreaHeight = size.height.toFloat()
                 }
-                .pointerInput(isSwipeToTypeEnabled, isNumberMode, showNumberRow) {
-                    if (isSwipeToTypeEnabled && !isNumberMode) {
+                .pointerInput(isSwipeToTypeEnabled, isNumberMode, showNumberRow, trainingStep != null) {
+                    if (isSwipeToTypeEnabled && !isNumberMode && trainingStep == null) {
                         // The swipe decoder maps onto the 3 QWERTY rows; skip the
                         // optional number row band when it is shown.
                         val rowCount = if (showNumberRow) 4f else 3f
@@ -1755,13 +1804,41 @@ fun AgenticKeyboardLayout(
                                 text = keyText,
                                 onClick = {
                                     buzz(HapticFeedbackType.TextHandleMove)
-                                    onKeyPress(keyText)
+                                    if (trainingStep == null) onKeyPress(keyText)
                                     // One-shot shift consumes itself after a letter
                                     if (shiftState == ShiftState.SHIFT && isLetter) {
                                         shiftState = ShiftState.OFF
                                     }
                                 },
-                                longPressVariants = variants,
+                                onTapPosition = if (isLetter && !isNumberMode) { point ->
+                                    val tapped = letterBounds[char[0]]
+                                    if (tapped != null) {
+                                        val x = tapped.left + point.x
+                                        val y = tapped.top + point.y
+                                        val step = trainingStep
+                                        if (step != null && !isSensitiveField && !isLearningPaused) {
+                                            val target = TouchCalibration.TRAINING_KEYS[step]
+                                            val targetBounds = letterBounds[target]
+                                            if (targetBounds != null && trainingProfile?.learn(target, x, y, targetBounds) == true) {
+                                                buzz(HapticFeedbackType.TextHandleMove)
+                                                val next = step + 1
+                                                if (next == TouchCalibration.TRAINING_KEYS.length) {
+                                                    viewModel.saveTouchCalibration(trainingProfile?.encode().orEmpty())
+                                                    trainingProfile = null
+                                                    trainingStep = null
+                                                    gestureAlert = "Touch calibration saved on this device"
+                                                } else trainingStep = next
+                                            }
+                                        } else {
+                                            val resolved = if (isSensitiveField) char[0] else
+                                                calibration.resolve(char[0], x, y, letterBounds)
+                                            buzz(HapticFeedbackType.TextHandleMove)
+                                            onKeyPress(if (shiftActive) resolved.uppercaseChar().toString() else resolved.toString())
+                                            if (shiftState == ShiftState.SHIFT) shiftState = ShiftState.OFF
+                                        }
+                                    }
+                                } else null,
+                                longPressVariants = if (trainingStep == null) variants else emptyList(),
                                 onVariant = { variant ->
                                     buzz(HapticFeedbackType.LongPress)
                                     onKeyPress(variant)
@@ -1769,7 +1846,12 @@ fun AgenticKeyboardLayout(
                                         shiftState = ShiftState.OFF
                                     }
                                 },
-                                modifier = Modifier.testTag("key_$char")
+                                modifier = Modifier.testTag("key_$char").onGloballyPositioned { coordinates ->
+                                    if (isLetter && !isNumberMode) {
+                                        val bounds = coordinates.boundsInRoot()
+                                        letterBounds[char[0]] = TouchBounds(bounds.left, bounds.top, bounds.width, bounds.height)
+                                    }
+                                }
                             )
                             Spacer(modifier = Modifier.width(metrics.keyGap))
                         }
@@ -1897,6 +1979,16 @@ fun AgenticKeyboardLayout(
                     .testTag("key_space")
             )
 
+            Spacer(modifier = Modifier.width(metrics.keyGap))
+
+            KeyButton(
+                text = ",",
+                onClick = {
+                    buzz(HapticFeedbackType.TextHandleMove)
+                    onKeyPress(",")
+                },
+                modifier = Modifier.width(metrics.smallKeyWidth).testTag("key_comma")
+            )
             Spacer(modifier = Modifier.width(metrics.keyGap))
 
             // Period key with punctuation variants on long-press
@@ -2050,7 +2142,8 @@ fun KeyButton(
     repeatOnHold: Boolean = false,
     longPressVariants: List<String> = emptyList(),
     onVariant: (String) -> Unit = {},
-    onHorizontalDrag: ((Int) -> Unit)? = null
+    onHorizontalDrag: ((Int) -> Unit)? = null,
+    onTapPosition: ((Offset) -> Unit)? = null
 ) {
     val colors = LocalKeyboardColors.current
     val keyMetrics = LocalKeyboardMetrics.current
@@ -2065,6 +2158,7 @@ fun KeyButton(
 
     val currentOnClick by rememberUpdatedState(onClick)
     val currentOnVariant by rememberUpdatedState(onVariant)
+    val currentOnTapPosition by rememberUpdatedState(onTapPosition)
     val scope = rememberCoroutineScope()
     var showVariants by remember { mutableStateOf(false) }
     val density = LocalDensity.current
@@ -2086,10 +2180,10 @@ fun KeyButton(
                 }
             )
         }
-        longPressVariants.isNotEmpty() -> Modifier.pointerInput(Unit) {
+        longPressVariants.isNotEmpty() || onTapPosition != null -> Modifier.pointerInput(longPressVariants.isNotEmpty()) {
             detectTapGestures(
-                onTap = { currentOnClick() },
-                onLongPress = { showVariants = true }
+                onTap = { point -> currentOnTapPosition?.invoke(point) ?: currentOnClick() },
+                onLongPress = if (longPressVariants.isNotEmpty()) ({ _: Offset -> showVariants = true }) else null
             )
         }
         else -> Modifier.clickable { currentOnClick() }
@@ -2124,7 +2218,11 @@ fun KeyButton(
             .clip(RoundedCornerShape(6.dp))
             .background(containerColor)
             .then(dragModifier)
-            .then(interactionModifier),
+            .then(interactionModifier)
+            .semantics {
+                role = Role.Button
+                onClick { currentOnClick(); true }
+            },
         contentAlignment = Alignment.Center
     ) {
         Text(
