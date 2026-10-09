@@ -313,6 +313,9 @@ interface UserVocabularyDao {
     @Query("SELECT * FROM user_vocabulary ORDER BY count DESC LIMIT 150")
     fun getTopVocabulary(): Flow<List<UserVocabulary>>
 
+    @Query("SELECT word FROM user_vocabulary WHERE count >= :minimumCount")
+    fun getWordsWithMinimumCount(minimumCount: Int): Flow<List<String>>
+
     @Query("SELECT * FROM user_vocabulary WHERE word = :word LIMIT 1")
     suspend fun getWord(word: String): UserVocabulary?
 
@@ -457,6 +460,8 @@ class KeyboardRepository(private val db: AppDatabase) {
     val allLogs: Flow<List<WritingLog>> = db.writingLogDao().getAllLogs()
     val allCorrections: Flow<List<LearnedCorrection>> = db.learnedCorrectionDao().getAllCorrections()
     val topVocabulary: Flow<List<UserVocabulary>> = db.userVocabularyDao().getTopVocabulary()
+    fun vocabularyWordsWithMinimumCount(minimumCount: Int): Flow<List<String>> =
+        db.userVocabularyDao().getWordsWithMinimumCount(minimumCount)
     val allCustomCommands: Flow<List<CustomCommand>> = db.customCommandDao().getAll()
     val allSavedSnippets: Flow<List<SavedSnippet>> = db.savedSnippetDao().getAll()
     val allClipboardHistory: Flow<List<ClipboardHistoryItem>> = db.clipboardHistoryDao().getAll()
