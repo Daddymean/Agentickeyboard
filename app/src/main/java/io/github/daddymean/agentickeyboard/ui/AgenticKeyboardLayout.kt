@@ -2213,7 +2213,7 @@ fun KeyButton(
             .background(containerColor)
             .then(dragModifier)
             .then(interactionModifier)
-            .semantics {
+            .semantics(mergeDescendants = true) {
                 role = Role.Button
                 onClick { currentOnClick(); true }
             },
