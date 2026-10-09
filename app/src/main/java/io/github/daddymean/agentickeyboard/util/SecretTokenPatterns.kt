@@ -28,12 +28,13 @@ object SecretTokenPatterns {
     )
 
     /**
-     * `Bearer <token>`; group 1 is the scheme (with any `Authorization:` header name) so
-     * it can be kept. After an `Authorization:` header any token counts; a bare "bearer"
-     * needs a digit in the token, so prose like "ring bearer responsibilities" is left alone.
+     * `Bearer <token>`; group 1 is the scheme word so it can be kept. Right after a `:` or
+     * `=` (a header such as `Authorization:` or a label such as `access_token=`, quoted or
+     * not) any token counts. A free-standing "bearer" needs a digit in the token, so prose
+     * like "ring bearer responsibilities" is left alone.
      */
     val bearer = Regex(
-        "\\b((?:authorization:[ \\t]*)bearer|bearer(?=\\s+[A-Za-z._~+/=-]*[0-9]))" +
+        "\\b((?<=[:=][\\s\"']{0,16})bearer|bearer(?=\\s+[A-Za-z._~+/=-]*[0-9]))" +
             "\\s+[A-Za-z0-9._~+/=-]{12,}",
         RegexOption.IGNORE_CASE
     )
