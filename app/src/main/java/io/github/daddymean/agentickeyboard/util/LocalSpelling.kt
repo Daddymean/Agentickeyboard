@@ -110,6 +110,56 @@ class LocalSpelling(
         return (lead + contraction.first + others.drop(1)).take(limit)
     }
 
+    /**
+     * KEYBOARD-011: the word to put in place of [token] on space, or null. Only a
+     * lower-case a–z token that is not a known word or common slang qualifies, and
+     * only when the best keyboard-aware candidate beats the runner-up by [margin]
+     * in score. The caller applies the remaining guards ([AutoFix]).
+     */
+    fun autoFixCandidate(token: String, taps: List<TapOffset>? = null, margin: Double = AutoFix.MARGIN): String? {
+        if (!isLoaded) return null
+        if (token.length !in 2..24 || token.any { it !in 'a'..'z' }) return null
+        if (token in ranks || token in knownOnly || token in COMMON_SLANG) return null
+        val candidates = proximity.scored(token, taps, 2)
+        val best = candidates.firstOrNull() ?: return null
+        if (best.cost > AutoFix.maxCost(token.length)) return null
+        // A word built from known parts ("backyard", "repainted") is fixed only on
+        // the strongest evidence: one dropped double, dropped vowel, neighbour key
+        // or swap ("occured", "untill", "thier").
+        if (best.cost > AutoFix.BUILT_WORD_MAX_COST && looksLikeRealWord(token)) return null
+        val runnerUp = candidates.getOrNull(1) ?: return best.word
+        return best.word.takeIf { runnerUp.score - best.score >= margin }
+    }
+
+    /**
+     * A word the dictionary lacks but English builds from known parts: a compound
+     * of two known words ("backyard"), a common prefix on a known word
+     * ("repainted"), or a common ending on a known stem ("texted", "baking").
+     * Auto-fix leaves these alone; the strip still offers corrections.
+     */
+    internal fun looksLikeRealWord(token: String): Boolean {
+        fun known(w: String) = w.length >= 3 && (w in ranks || w in knownOnly)
+        for (i in 3..token.length - 3) {
+            if (known(token.substring(0, i)) && known(token.substring(i))) return true
+        }
+        for (prefix in WORD_PREFIXES) {
+            if (token.length - prefix.length >= 4 && token.startsWith(prefix) && known(token.substring(prefix.length))) return true
+        }
+        for (suffix in WORD_SUFFIXES) {
+            if (!token.endsWith(suffix)) continue
+            val stem = token.dropLast(suffix.length)
+            if (stem.length < 3) continue
+            if (known(stem) || known(stem + "e") ||
+                (stem.length > 3 && stem.last() == stem[stem.length - 2] && known(stem.dropLast(1))) ||
+                (stem.endsWith("i") && known(stem.dropLast(1) + "y"))
+            ) return true
+        }
+        return false
+    }
+
+    internal fun scoredCandidates(token: String, limit: Int, taps: List<TapOffset>? = null) =
+        proximity.scored(token, taps, limit)
+
     private fun prefixCompletions(token: String, limit: Int): List<String> {
         if (token.length !in 2..24 || token.any { it !in 'a'..'z' }) return emptyList()
         val found = alphabetical.binarySearch(token)
@@ -141,6 +191,8 @@ class LocalSpelling(
         private const val MIN_LOADED_WORDS = 1_000
         private const val DELETION_INDEX_SIZE = 10_000
         private const val EXTRA_RANK_OFFSET = 50_000
+        private val WORD_PREFIXES = listOf("re", "un", "pre", "dis", "mis", "non", "over", "under", "out", "co", "sub", "super", "inter")
+        private val WORD_SUFFIXES = listOf("s", "es", "ed", "ing", "er", "ers", "est", "ly", "ness", "ful", "less", "able", "ment", "ments")
 
         private fun clean(words: List<String>): List<String> =
             words.map { it.lowercase() }.filter { it.isNotEmpty() && it.all { c -> c in 'a'..'z' } }.distinct()

@@ -33,10 +33,16 @@ data class TapOffset(
 
 internal class ProximitySpelling(private val ranked: List<String>, private val ranks: Map<String, Int>) {
 
-    fun corrections(token: String, taps: List<TapOffset?>?, limit: Int): List<String> {
+    fun corrections(token: String, taps: List<TapOffset?>?, limit: Int): List<String> =
+        scored(token, taps, limit).map { it.word }
+
+    /** A candidate with its edit [cost] and ranking [score] (lower is better). */
+    data class Scored(val word: String, val cost: Double, val score: Double)
+
+    fun scored(token: String, taps: List<TapOffset?>?, limit: Int): List<Scored> {
         val maxCost = maxCost(token.length)
         val usableTaps = taps?.takeIf { it.size == token.length }
-        val scored = ArrayList<Pair<String, Double>>()
+        val scored = ArrayList<Scored>()
         for (word in ranked) {
             if (abs(word.length - token.length) > 2) continue
             if (!plausibleStart(token, word)) continue
@@ -44,9 +50,9 @@ internal class ProximitySpelling(private val ranked: List<String>, private val r
             if (cost > maxCost) continue
             val score = cost * COST_WEIGHT + log10((ranks[word] ?: ranked.size) + 10.0) -
                 PREFIX_BONUS * minOf(sharedPrefix(token, word), 4)
-            scored.add(word to score)
+            scored.add(Scored(word, cost, score))
         }
-        return scored.sortedBy { it.second }.take(limit).map { it.first }
+        return scored.sortedBy { it.score }.take(limit)
     }
 
     private fun maxCost(length: Int): Double = when {
@@ -70,13 +76,13 @@ internal class ProximitySpelling(private val ranked: List<String>, private val r
         val m = word.length
         val d = Array(n + 1) { DoubleArray(m + 1) }
         for (i in 1..n) d[i][0] = d[i - 1][0] + deletionCost(typed, i - 1)
-        for (j in 1..m) d[0][j] = d[0][j - 1] + insertionCost(word[j - 1])
+        for (j in 1..m) d[0][j] = d[0][j - 1] + insertionCost(word, j - 1)
         for (i in 1..n) {
             var rowMin = Double.MAX_VALUE
             for (j in 1..m) {
                 var v = minOf(
                     d[i - 1][j] + deletionCost(typed, i - 1),
-                    d[i][j - 1] + insertionCost(word[j - 1]),
+                    d[i][j - 1] + insertionCost(word, j - 1),
                     d[i - 1][j - 1] + substitutionCost(typed[i - 1], word[j - 1], taps?.get(i - 1))
                 )
                 if (i > 1 && j > 1 && typed[i - 1] == word[j - 2] && typed[i - 2] == word[j - 1]) {
@@ -93,7 +99,15 @@ internal class ProximitySpelling(private val ranked: List<String>, private val r
     private fun deletionCost(typed: String, index: Int): Double =
         if (index > 0 && typed[index] == typed[index - 1]) DOUBLED_KEY else 1.0
 
-    private fun insertionCost(missing: Char): Double = if (missing in VOWELS) DROPPED_VOWEL else 1.0
+    /**
+     * The cost of a letter the user left out. A dropped vowel ("probly") is cheap,
+     * and so is one half of a double letter ("helo" for "hello", KEYBOARD-011).
+     */
+    private fun insertionCost(word: String, index: Int): Double = when {
+        index > 0 && word[index] == word[index - 1] -> DROPPED_DOUBLE
+        word[index] in VOWELS -> DROPPED_VOWEL
+        else -> 1.0
+    }
 
     private fun substitutionCost(typed: Char, intended: Char, tap: TapOffset?): Double {
         if (typed == intended) return 0.0
@@ -130,7 +144,8 @@ internal class ProximitySpelling(private val ranked: List<String>, private val r
         private const val MAX_LEAN = 0.75f
         private const val TRANSPOSITION = 0.6
         private const val DOUBLED_KEY = 0.5
-        private const val DROPPED_VOWEL = 0.7
+        private const val DROPPED_DOUBLE = 0.2
+        private const val DROPPED_VOWEL = 0.5
         private const val NEIGHBOUR_DISTANCE = 1.2
         private const val CENTRE_COLUMN = 4.5
         private val VOWELS = setOf('a', 'e', 'i', 'o', 'u')

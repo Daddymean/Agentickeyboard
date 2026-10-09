@@ -346,8 +346,10 @@ fun AgenticKeyboardLayout(
 
         val lastWord = text.takeLastWhile { !it.isWhitespace() }
         if (lastWord.isNotEmpty()) {
-            viewModel.onWordCommitted(lastWord)
-            val replacement = viewModel.resolveWordCommit(lastWord)
+            val replacement = viewModel.resolveWordCommit(lastWord, text.dropLast(lastWord.length))
+            // Learn the word as it ends up: an auto-fixed typo is not the user's word.
+            val fixed = replacement?.takeIf { it.fromLearnedRule || it.fromAutoFix }?.replacement
+            viewModel.onWordCommitted(fixed ?: lastWord)
             if (replacement != null && replacement.replacement != lastWord) {
                 var editorUndo: CommittedEditUndo? = null
                 if (inPlaygroundMode) {
@@ -366,9 +368,10 @@ fun AgenticKeyboardLayout(
                 }
                 val caretInside = if (inPlaygroundMode) null else replacement.cursorOffset
                 viewModel.registerAutoCorrection(
-                    lastWord, replacement.replacement, replacement.fromLearnedRule, editorUndo, caretInside
+                    lastWord, replacement.replacement, replacement.fromLearnedRule, editorUndo, caretInside,
+                    fromAutoFix = replacement.fromAutoFix
                 )
-                if (replacement.fromLearnedRule) {
+                if (replacement.fromLearnedRule || replacement.fromAutoFix) {
                     viewModel.recordAutoCorrectionStat()
                 } else {
                     viewModel.recordShortcutExpansionStat()

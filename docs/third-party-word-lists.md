@@ -28,3 +28,7 @@ How the two files were built:
    are never "corrected", but they are never offered as a suggestion.
 
 Only `LocalSpelling` uses these files. Swipe typing still uses `wordlist.txt` alone.
+
+## `spelling_modern.txt` (KEYBOARD-011)
+
+This is a hand-written list of about 165 everyday words that are missing from both lists above, for example `texting`, `selfie`, `venmo`, `spotify`, `carpooling` and `binge`. Without them, auto-fix on space would "correct" these real words. It is project-authored, so it carries no third-party licence. It is loaded with the extra words and ranked below the frequency list.

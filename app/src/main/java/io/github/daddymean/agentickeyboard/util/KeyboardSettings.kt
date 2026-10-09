@@ -18,6 +18,8 @@ class KeyboardSettings(context: Context) {
         const val KEY_OFFLINE_MODE = "offline_mode"
         const val KEY_SWIPE_ENABLED = "swipe_enabled"
         const val KEY_AUTO_CAPITALIZE = "auto_capitalize"
+        const val KEY_AUTO_FIX = "auto_fix_on_space"
+        const val KEY_AUTO_FIX_NEVER = "auto_fix_never_words"
         const val KEY_NUMBER_ROW = "number_row"
         const val KEY_KEY_HEIGHT_SCALE = "key_height_scale"
 
@@ -64,6 +66,16 @@ class KeyboardSettings(context: Context) {
     var isAutoCapitalizeEnabled: Boolean
         get() = prefs.getBoolean(KEY_AUTO_CAPITALIZE, true)
         set(value) = prefs.edit().putBoolean(KEY_AUTO_CAPITALIZE, value).apply()
+
+    /** KEYBOARD-011: fix clear typos on space. On by default (Keith, 2026-10-08 21:24 PT). */
+    var isAutoFixOnSpace: Boolean
+        get() = prefs.getBoolean(KEY_AUTO_FIX, true)
+        set(value) = prefs.edit().putBoolean(KEY_AUTO_FIX, value).apply()
+
+    /** Words whose auto-fix the user undid twice; they are never auto-fixed again. */
+    var autoFixNeverWords: Set<String>
+        get() = prefs.getStringSet(KEY_AUTO_FIX_NEVER, emptySet()).orEmpty().toSet()
+        set(value) = prefs.edit().putStringSet(KEY_AUTO_FIX_NEVER, value.toSet()).apply()
 
     var isNumberRowEnabled: Boolean
         get() = prefs.getBoolean(KEY_NUMBER_ROW, true)

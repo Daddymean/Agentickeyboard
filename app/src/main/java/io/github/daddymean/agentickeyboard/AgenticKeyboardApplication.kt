@@ -45,7 +45,8 @@ class AgenticKeyboardApplication : Application() {
                     SwipeToTypeEngine.loadDictionary(words)
                     // KEYBOARD-020: common words missing from the frequency list come
                     // from SCOWL (see assets/third_party/SCOWL-Copyright.txt).
-                    val extra = readWords(R.raw.spelling_extra)
+                    // KEYBOARD-011: everyday modern words missing from both lists (hand-written).
+                    val extra = readWords(R.raw.spelling_modern) + readWords(R.raw.spelling_extra)
                     val knownOnly = readWords(R.raw.spelling_known_only)
                     io.github.daddymean.agentickeyboard.util.LocalSpelling.shared =
                         io.github.daddymean.agentickeyboard.util.LocalSpelling(words.take(10_000), knownOnly, extra)
