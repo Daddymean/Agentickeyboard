@@ -50,9 +50,14 @@ object IncomingSentiment {
     private val NEGATIVE_EMOJI = setOf("😢", "😭", "😞", "😔", "💔", "😟", "😕", "🙁", "☹")
     private val ANGRY_EMOJI = setOf("😡", "😠", "🤬", "😤", "🙄", "🖕")
 
-    fun classify(message: String): Mood {
+    /** A mood plus how strongly the evidence points to it, 0.1–1.0 (KEYBOARD-023). */
+    data class Score(val mood: Mood, val intensity: Float)
+
+    fun classify(message: String): Mood = score(message).mood
+
+    fun score(message: String): Score {
         val text = message.trim()
-        if (text.isEmpty()) return Mood.NEUTRAL
+        if (text.isEmpty()) return Score(Mood.NEUTRAL, 0f)
         val tokens = TOKEN.findAll(text).map { it.value }.toList()
         var positive = 0.0
         var negative = 0.0
@@ -87,11 +92,21 @@ object IncomingSentiment {
         if (positive == 0.0 && letters.length >= 8 &&
             letters.count { it.isUpperCase() } >= letters.length * 0.7) hostile += 1.5
         // One strong hostile word is enough; weak ones ("again", "now") need company.
-        return when {
+        val mood = when {
             hostile >= 1.0 && hostile > positive -> Mood.TENSE
             negative >= 1.0 && negative > positive -> Mood.NEGATIVE
             positive >= 1.0 && positive > negative + hostile -> Mood.POSITIVE
             else -> Mood.NEUTRAL
         }
+        val evidence = when (mood) {
+            Mood.TENSE -> hostile + negative * 0.5
+            Mood.NEGATIVE -> negative
+            Mood.POSITIVE -> positive
+            Mood.NEUTRAL -> 0.0
+        }
+        // About three strong cues reads as full intensity; rounded so it carries no detail.
+        val intensity = if (mood == Mood.NEUTRAL) 0f
+            else (kotlin.math.round((evidence / 3.0).coerceIn(0.1, 1.0) * 10) / 10).toFloat()
+        return Score(mood, intensity)
     }
 }

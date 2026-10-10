@@ -17,6 +17,8 @@ import io.github.daddymean.agentickeyboard.network.GeminiManager
 import io.github.daddymean.agentickeyboard.network.GrammarCorrectionResponse
 import io.github.daddymean.agentickeyboard.network.ToneAnalysisResponse
 import io.github.daddymean.agentickeyboard.util.EditorPrivacy
+import io.github.daddymean.agentickeyboard.util.IncomingMoodSession
+import io.github.daddymean.agentickeyboard.util.ToneMatch
 import io.github.daddymean.agentickeyboard.util.CommandPalette
 import io.github.daddymean.agentickeyboard.util.CommittedEditUndo
 import io.github.daddymean.agentickeyboard.util.ContextNotes
@@ -1482,6 +1484,29 @@ class KeyboardViewModel(
     /**
      * Analyze text sentiment & communication tone
      */
+    /**
+     * KEYBOARD-023: one-tap warmer/calmer suggestion for [draft] from the mood
+     * badge. Shows a Rewrite result the user applies (⌫ undoes); never applied on
+     * its own, never in sensitive fields, and nothing is logged or learned.
+     * Online sends only the distilled [ToneMatch.Request]; offline stays on device.
+     */
+    fun matchTone(draft: String, badge: IncomingMoodSession.Badge) {
+        if (_isSensitiveField.value) return
+        val request = ToneMatch.request(draft, badge) ?: return
+        aiSession.setRegenerateAction { matchTone(draft, badge) }
+        launchAi(draft) {
+            val result = try {
+                if (_isOfflineMode.value) GeminiManager.offlineMatchTone(request)
+                else GeminiManager.matchTone(request)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                ToneMatch.template(request)
+            }
+            publishAiPanel(AiPanelState.Rewrite(result, draft, request.target.label))
+        }
+    }
+
     fun analyzeTone(text: String) {
         if (text.isBlank() || _isSensitiveField.value) return
         launchAi(text) {

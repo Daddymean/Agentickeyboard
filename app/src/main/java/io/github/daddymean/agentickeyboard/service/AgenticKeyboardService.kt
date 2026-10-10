@@ -186,6 +186,7 @@ class AgenticKeyboardService : InputMethodService(), LifecycleOwner, ViewModelSt
             val navInsetPx by navigationBarInsetPx.collectAsState()
             val capturedContext by conversationContext.collectAsState()
             val mood by moodBadge.collectAsState()
+            val draftText by viewModel.inputText.collectAsState()
             val themeOverride by viewModel.themeOverride.collectAsState()
             val offline by viewModel.isOfflineMode.collectAsState()
             val contextResultActive by contextToolActive.collectAsState()
@@ -201,6 +202,8 @@ class AgenticKeyboardService : InputMethodService(), LifecycleOwner, ViewModelSt
                         IncomingMoodBadge(
                             badge = badge,
                             themeOverride = themeOverride,
+                            hasDraft = draftText.isNotBlank(),
+                            onMatchTone = { matchToneForDraft() },
                             onDismiss = { clearIncomingMood() }
                         )
                     }
@@ -376,7 +379,7 @@ class AgenticKeyboardService : InputMethodService(), LifecycleOwner, ViewModelSt
             // Read and score off the main thread so opening the keyboard never waits on it;
             // the text stays inside this block and only the mood comes back.
             val mood = withContext(Dispatchers.Default) {
-                ConversationCaptureService.latestIncoming(target)?.let { IncomingSentiment.classify(it) }
+                ConversationCaptureService.latestIncoming(target)?.let { IncomingSentiment.score(it) }
             }
             // The field or screen may have changed while reading: re-check before showing.
             if (!inputViewShown || viewModel.isSensitiveField.value ||
@@ -389,6 +392,16 @@ class AgenticKeyboardService : InputMethodService(), LifecycleOwner, ViewModelSt
                 moodBadge.value = null
             }
         }
+    }
+
+    /** KEYBOARD-023: the same source text the AI panel's Apply guard checks against. */
+    private fun matchToneForDraft() {
+        val badge = moodBadge.value ?: return
+        if (viewModel.isSensitiveField.value) return
+        val ic = currentInputConnection ?: return
+        val draft = ic.getSelectedText(0)?.toString()?.takeIf { it.isNotBlank() }
+            ?: ic.getTextBeforeCursor(CONTEXT_CHARS, 0)?.toString().orEmpty()
+        viewModel.matchTone(draft, badge)
     }
 
     private fun clearIncomingMood() {

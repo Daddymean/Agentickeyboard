@@ -17,7 +17,7 @@ class IncomingMoodSession {
         ): Boolean = autoMoodOn && appAllowed && serviceConnected && !sensitiveField && keyboardShown
     }
 
-    data class Badge(val mood: IncomingSentiment.Mood, val expiresAt: Long)
+    data class Badge(val mood: IncomingSentiment.Mood, val intensity: Float, val expiresAt: Long)
 
     var badge: Badge? = null
         private set
@@ -25,14 +25,14 @@ class IncomingMoodSession {
     /** Classifies [message] and keeps only its mood until [now] + [ttlMs]. */
     fun update(message: String?, now: Long, ttlMs: Long = VisibleContextPolicy.TTL_MS): Badge? {
         badge = message?.takeIf { it.isNotBlank() }?.let {
-            Badge(IncomingSentiment.classify(it), now + ttlMs)
+            IncomingSentiment.score(it).let { s -> Badge(s.mood, s.intensity, now + ttlMs) }
         }
         return badge
     }
 
-    /** Keeps an already computed [mood] (or nothing) until [now] + [ttlMs]. */
-    fun set(mood: IncomingSentiment.Mood?, now: Long, ttlMs: Long = VisibleContextPolicy.TTL_MS): Badge? {
-        badge = mood?.let { Badge(it, now + ttlMs) }
+    /** Keeps an already computed [score] (or nothing) until [now] + [ttlMs]. */
+    fun set(score: IncomingSentiment.Score?, now: Long, ttlMs: Long = VisibleContextPolicy.TTL_MS): Badge? {
+        badge = score?.let { Badge(it.mood, it.intensity, now + ttlMs) }
         return badge
     }
 

@@ -4,10 +4,13 @@ import io.github.daddymean.agentickeyboard.BuildConfig
 import io.github.daddymean.agentickeyboard.util.OnDeviceAi
 import io.github.daddymean.agentickeyboard.util.OnDeviceAiRouter
 import io.github.daddymean.agentickeyboard.util.OnDeviceAiStatus
+import io.github.daddymean.agentickeyboard.util.OnDeviceTone
+import io.github.daddymean.agentickeyboard.util.ToneMatch
 import io.github.daddymean.agentickeyboard.util.ReplyIntents
 import io.github.daddymean.agentickeyboard.util.SafeLog
 import io.github.daddymean.agentickeyboard.util.WritingQualityMeter
 import com.squareup.moshi.Moshi
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
@@ -70,9 +73,7 @@ object GeminiManager {
 
     /** Runs a plain-text generation request, returning the trimmed reply or null. */
     private suspend fun generateText(prompt: String): String? {
-        val request = GenerateContentRequest(
-            contents = listOf(Content(parts = listOf(Part(text = prompt))))
-        )
+        val request = textOnlyRequest(prompt)
         val response = RetrofitClient.service.generateContent(BuildConfig.GEMINI_MODEL, apiKey, request)
         return response.candidates?.firstOrNull()?.content?.parts?.firstOrNull()?.text?.trim()
     }
@@ -387,6 +388,43 @@ object GeminiManager {
         onDevice = { ai -> ai.summarize(text) },
         fallback = { getOfflineSummary(text) }
     )
+
+    /**
+     * KEYBOARD-023: warmer/calmer rewrite of the user's draft from the mood badge.
+     * Sends only [ToneMatch.prompt] (draft + mood label + intensity) — no
+     * personalization context and never the incoming message — and falls back to
+     * the on-device path when there is no key or the call fails.
+     */
+    suspend fun matchTone(request: ToneMatch.Request): String = withContext(Dispatchers.IO) {
+        if (request.draft.isBlank()) return@withContext request.draft
+        if (!isApiKeyAvailable()) return@withContext offlineMatchTone(request)
+        try {
+            generateText(ToneMatch.prompt(request))?.takeIf { it.isNotBlank() } ?: offlineMatchTone(request)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            SafeLog.e(TAG, "Error in matchTone", e)
+            offlineMatchTone(request)
+        }
+    }
+
+    /** Offline warmer/calmer: Nano prompt, then Nano's friendly preset (warmer), then templates. */
+    suspend fun offlineMatchTone(request: ToneMatch.Request): String {
+        OnDeviceAiRouter.route<String?>(
+            onDeviceAi,
+            onDevice = { ai -> ai.generate(ToneMatch.prompt(request))?.trim()?.takeIf { it.isNotEmpty() } },
+            fallback = { null },
+            statusOf = promptStatusOf
+        )?.let { return it }
+        if (request.target == ToneMatch.Target.WARMER) {
+            OnDeviceAiRouter.route<String?>(
+                onDeviceAi,
+                onDevice = { ai -> ai.rewrite(request.draft, OnDeviceTone.FRIENDLY) },
+                fallback = { null }
+            )?.let { return it }
+        }
+        return ToneMatch.template(request)
+    }
 
     /**
      * Offline rewrite: on-device rewriting when available *and* the requested
