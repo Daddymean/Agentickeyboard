@@ -7,6 +7,7 @@ import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityNodeInfo
 import android.view.accessibility.AccessibilityWindowInfo
 import io.github.daddymean.agentickeyboard.util.ConversationCapturePreferences
+import io.github.daddymean.agentickeyboard.util.IncomingMessagePicker
 import io.github.daddymean.agentickeyboard.util.VisibleContext
 import io.github.daddymean.agentickeyboard.util.VisibleContextPolicy
 import io.github.daddymean.agentickeyboard.util.VisibleTextNode
@@ -24,6 +25,13 @@ class ConversationCaptureService : AccessibilityService() {
 
         fun capture(packageName: String): VisibleContext? =
             connected?.readVisibleText(packageName)
+
+        /**
+         * KEYBOARD-022: the latest message that looks incoming, read with the same
+         * consent, skips and limits as [capture]. The caller must use it once and drop it.
+         */
+        fun latestIncoming(packageName: String): String? =
+            connected?.readLatestIncoming(packageName)
 
         private fun invalidate() { _invalidations.value += 1 }
     }
@@ -51,8 +59,19 @@ class ConversationCaptureService : AccessibilityService() {
         super.onDestroy()
     }
 
+    private class Read(val windowId: Int, val hostBounds: Rect, val nodes: List<VisibleTextNode>)
+
+    private fun readVisibleText(targetPackage: String): VisibleContext? =
+        readNodes(targetPackage)?.let { VisibleContextPolicy.build(targetPackage, it.windowId, it.nodes) }
+
+    private fun readLatestIncoming(targetPackage: String): String? {
+        val read = readNodes(targetPackage) ?: return null
+        val blocks = read.nodes.map { IncomingMessagePicker.Block(it.text, it.top, it.left, it.right) }
+        return IncomingMessagePicker.latestIncoming(blocks, read.hostBounds.left, read.hostBounds.right)
+    }
+
     @Suppress("DEPRECATION")
-    private fun readVisibleText(targetPackage: String): VisibleContext? {
+    private fun readNodes(targetPackage: String): Read? {
         if (targetPackage == packageName ||
             !ConversationCapturePreferences(this).isAllowed(targetPackage)) return null
         return runCatching {
@@ -85,7 +104,8 @@ class ConversationCaptureService : AccessibilityService() {
                         (keyboardBounds == null || !Rect.intersects(bounds, keyboardBounds))) {
                         node.text?.toString()?.takeIf { it.isNotBlank() }?.let {
                             nodes.add(VisibleTextNode(node.packageName?.toString().orEmpty(),
-                                it.takeLast(VisibleContextPolicy.MAX_CHARS), bounds.top, bounds.left))
+                                it.takeLast(VisibleContextPolicy.MAX_CHARS), bounds.top, bounds.left,
+                                right = bounds.right))
                         }
                     }
                     if (excluded) return
@@ -96,7 +116,7 @@ class ConversationCaptureService : AccessibilityService() {
                     }
                 }
                 visit(root, false)
-                if (blocked) null else VisibleContextPolicy.build(targetPackage, host.id, nodes)
+                if (blocked) null else Read(host.id, hostBounds, nodes)
             } finally { root.recycle() }
         }.getOrNull()
     }
