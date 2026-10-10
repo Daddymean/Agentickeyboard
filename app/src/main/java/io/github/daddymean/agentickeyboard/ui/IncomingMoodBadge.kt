@@ -15,12 +15,15 @@ import androidx.compose.ui.unit.sp
 import io.github.daddymean.agentickeyboard.ui.theme.KeyboardTheme
 import io.github.daddymean.agentickeyboard.ui.theme.LocalKeyboardColors
 import io.github.daddymean.agentickeyboard.util.IncomingMoodSession
+import io.github.daddymean.agentickeyboard.util.ToneMatch
 
 /** KEYBOARD-022: a small strip with the estimated mood of their latest message. */
 @Composable
 fun IncomingMoodBadge(
     badge: IncomingMoodSession.Badge,
     themeOverride: String,
+    hasDraft: Boolean,
+    onMatchTone: (ToneMatch.Target) -> Unit,
     onDismiss: () -> Unit
 ) {
     KeyboardTheme(darkTheme = when (themeOverride) {
@@ -36,6 +39,13 @@ fun IncomingMoodBadge(
                     color = colors.text, fontSize = 12.sp, maxLines = 1,
                     modifier = Modifier.weight(1f)
                 )
+                // KEYBOARD-023: one tap asks for a suggestion; the draft changes only on Apply.
+                ToneMatch.targetFor(badge.mood)?.takeIf { hasDraft }?.let { target ->
+                    TextButton(
+                        onClick = { onMatchTone(target) },
+                        modifier = Modifier.testTag("tone_match_chip")
+                    ) { Text(target.chip, fontSize = 12.sp) }
+                }
                 TextButton(onClick = onDismiss) { Text("×", color = colors.textMuted) }
             }
         }

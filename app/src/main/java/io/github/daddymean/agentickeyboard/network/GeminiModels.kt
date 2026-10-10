@@ -63,3 +63,7 @@ data class ToneAnalysisResponse(
 data class SuggestionsResponse(
     val suggestions: List<String>
 )
+
+/** The exact body sent for a plain text prompt; shared with tests that inspect payloads. */
+internal fun textOnlyRequest(prompt: String): GenerateContentRequest =
+    GenerateContentRequest(contents = listOf(Content(parts = listOf(Part(text = prompt)))))

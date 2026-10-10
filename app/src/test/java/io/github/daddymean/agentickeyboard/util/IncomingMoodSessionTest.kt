@@ -44,7 +44,7 @@ class IncomingMoodSessionTest {
         val fields = IncomingMoodSession.Badge::class.java.declaredFields
             .filterNot { it.isSynthetic || java.lang.reflect.Modifier.isStatic(it.modifiers) }
             .map { it.name to it.type }
-        assertEquals(listOf("mood" to IncomingSentiment.Mood::class.java, "expiresAt" to Long::class.javaPrimitiveType),
+        assertEquals(listOf("mood" to IncomingSentiment.Mood::class.java, "intensity" to Float::class.javaPrimitiveType, "expiresAt" to Long::class.javaPrimitiveType),
             fields)
         val sessionFields = IncomingMoodSession::class.java.declaredFields
             .filterNot { it.isSynthetic || java.lang.reflect.Modifier.isStatic(it.modifiers) }
