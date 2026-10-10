@@ -58,6 +58,10 @@ import io.github.daddymean.agentickeyboard.ui.TrustPrismBanner
 import io.github.daddymean.agentickeyboard.util.ClipboardCaptureDecision
 import io.github.daddymean.agentickeyboard.util.SafeLog
 import io.github.daddymean.agentickeyboard.util.commitTextWithCaret
+import io.github.daddymean.agentickeyboard.twin.TwinCaptureSession
+import io.github.daddymean.agentickeyboard.twin.TwinLearning
+import io.github.daddymean.agentickeyboard.twin.TwinPreferences
+import io.github.daddymean.agentickeyboard.twin.TwinTextWindow
 import io.github.daddymean.agentickeyboard.util.ClipboardHistoryPolicy
 import io.github.daddymean.agentickeyboard.util.ClipboardSensitivity
 import io.github.daddymean.agentickeyboard.util.KeyboardSettings
@@ -106,6 +110,9 @@ class AgenticKeyboardService : InputMethodService(), LifecycleOwner, ViewModelSt
     private var moodJob: Job? = null
     private var inputViewShown = false
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    // KEYBOARD-024: length bookkeeping only on the main thread; the store work is queued.
+    private val twinSession = TwinCaptureSession()
+    private lateinit var twinPrefs: TwinPreferences
     private val clipboardHistoryEnabled = MutableStateFlow(false)
     private val clipboardHistoryPaused = MutableStateFlow(false)
     private val clipboardStatus = MutableStateFlow<String?>(null)
@@ -132,6 +139,7 @@ class AgenticKeyboardService : InputMethodService(), LifecycleOwner, ViewModelSt
         repository = app.repository
         settings = app.settings
         contextClient = ContextClient(this)
+        twinPrefs = TwinPreferences(this)
         refreshClipboardSettings()
         viewModel = ViewModelProvider(
             this,
@@ -151,6 +159,7 @@ class AgenticKeyboardService : InputMethodService(), LifecycleOwner, ViewModelSt
         viewModel.setReplyContextValidator {
             conversationContext.value.active && validateConversationContext()
         }
+        viewModel.onAiTextInserted = { twinSession.markInserted(System.currentTimeMillis()) }
     }
 
     override fun onCreateInputView(): View {
@@ -254,6 +263,7 @@ class AgenticKeyboardService : InputMethodService(), LifecycleOwner, ViewModelSt
                                     currentInputConnection?.commitText(text, 1)
                                 },
                                 onDelete = {
+                                    twinSession.markOwnDelete(System.currentTimeMillis())
                                     currentInputConnection?.deleteSurroundingText(1, 0)
                                 },
                                 onAction = { performEnterAction() },
@@ -284,6 +294,7 @@ class AgenticKeyboardService : InputMethodService(), LifecycleOwner, ViewModelSt
                                     onIntent = { viewModel.chooseReplyIntent(it) },
                                     onInsert = { text ->
                                         if (validateConversationContext()) {
+                                            twinSession.markInserted(System.currentTimeMillis())
                                             currentInputConnection?.commitText(text, 1)
                                             clearConversationContext()
                                             syncEditorText()
@@ -306,6 +317,7 @@ class AgenticKeyboardService : InputMethodService(), LifecycleOwner, ViewModelSt
     private fun replaceDraftBeforeCursor(text: String, cursorOffset: Int? = null) {
         val ic = currentInputConnection ?: return
         val existing = ic.getTextBeforeCursor(CONTEXT_CHARS, 0)?.length ?: 0
+        twinSession.markInserted(System.currentTimeMillis())
         ic.beginBatchEdit()
         try {
             if (existing > 0) ic.deleteSurroundingText(existing, 0)
@@ -318,6 +330,7 @@ class AgenticKeyboardService : InputMethodService(), LifecycleOwner, ViewModelSt
 
     private fun insertClipboardItem(item: ClipboardHistoryItem) {
         if (viewModel.isSensitiveField.value) return
+        twinSession.markInserted(System.currentTimeMillis())
         currentInputConnection?.commitText(item.content, 1) ?: return
         clipboardStatus.value = "Inserted from local history."
         serviceScope.launch { repository.recordClipboardUse(item.id) }
@@ -563,6 +576,8 @@ class AgenticKeyboardService : InputMethodService(), LifecycleOwner, ViewModelSt
             val draft = ic.getTextBeforeCursor(CONTEXT_CHARS, 0)?.toString() ?: ""
             if (replyCompletenessSession.interceptSend(draft, viewModel.isSensitiveField.value)) return
             if (viewModel.interceptSend(draft)) return
+            twinSession.updateGate(twinGate())
+            twinSession.onSend(twinText(draft), System.currentTimeMillis())?.let(::submitTwin)
         }
         if (hasAction) {
             ic.performEditorAction(action)
@@ -633,6 +648,9 @@ class AgenticKeyboardService : InputMethodService(), LifecycleOwner, ViewModelSt
             EditClipboardAction.Copy -> android.R.id.copy
             EditClipboardAction.Paste -> android.R.id.paste
         }
+        val now = System.currentTimeMillis()
+        if (action == EditClipboardAction.Paste) twinSession.markInserted(now)
+        if (action == EditClipboardAction.Cut) twinSession.markOwnDelete(now)
         ic.performContextMenuAction(id)
         syncEditorText()
     }
@@ -656,12 +674,43 @@ class AgenticKeyboardService : InputMethodService(), LifecycleOwner, ViewModelSt
     private fun syncEditorText() {
         val textBefore = currentInputConnection?.getTextBeforeCursor(CONTEXT_CHARS, 0)?.toString() ?: ""
         viewModel.setInputText(textBefore)
+        observeTwinText(textBefore)
         val selected = currentInputConnection?.getSelectedText(0)?.toString()
         // Two different questions: whether an AI action has a meaningful target
         // (non-blank), and whether the editor holds any selection at all, which
         // a run of spaces or newlines satisfies and the edit bar acts on.
         viewModel.setSelectionActive(!selected.isNullOrBlank())
         viewModel.setSelectionRangeActive(!selected.isNullOrEmpty())
+    }
+
+    // --- KEYBOARD-024: legacy twin learning hook -----------------------------------
+
+    private fun twinGate() = TwinCaptureSession.Gate(
+        twinEnabled = twinPrefs.isEnabled,
+        twinPaused = twinPrefs.isPaused,
+        learningPaused = settings.isLearningPaused,
+        sensitiveField = viewModel.isSensitiveField.value
+    )
+
+    /**
+     * The text the twin sees: the normal 1,000-character window, or up to
+     * [TwinTextWindow.CHARS] when that window is full, so long messages are not cut.
+     * The larger read happens only when the twin may learn here.
+     */
+    private fun twinText(window: String): String =
+        if (!twinGate().allowsCapture) window
+        else TwinTextWindow.expand(window, CONTEXT_CHARS) { currentInputConnection?.getTextBeforeCursor(it, 0) }
+
+    /** Main thread, every editor update: a few preference reads and length arithmetic. */
+    private fun observeTwinText(textBefore: String) {
+        twinSession.updateGate(twinGate())
+        twinSession.onText(twinText(textBefore), System.currentTimeMillis()) {
+            currentInputConnection?.getTextAfterCursor(1, 0).isNullOrEmpty()
+        }?.let(::submitTwin)
+    }
+
+    private fun submitTwin(candidate: TwinCaptureSession.Candidate) {
+        TwinLearning.submit(this, candidate) { twinGate().copy(sensitiveField = false).allowsCapture }
     }
 
     @Suppress("DEPRECATION")
@@ -688,6 +737,14 @@ class AgenticKeyboardService : InputMethodService(), LifecycleOwner, ViewModelSt
             info?.imeOptions ?: 0
         )
         refreshClipboardSettings()
+        if (!restarting) {
+            // KEYBOARD-024: a new field. Whatever it already holds was not typed here.
+            twinSession.start(
+                info?.packageName,
+                twinText(currentInputConnection?.getTextBeforeCursor(CONTEXT_CHARS, 0)?.toString().orEmpty()),
+                twinGate()
+            )
+        }
 
         if (!restarting) {
             viewModel.dismissResults()

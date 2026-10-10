@@ -920,12 +920,19 @@ class KeyboardViewModel(
      * restore [original]. Mirrors the auto-correction undo above but for whole
      * drafts/selections replaced through the result panels.
      */
+    /**
+     * KEYBOARD-024: told when the keyboard has just written AI text into the field,
+     * so the legacy twin does not count it as the user's own typing.
+     */
+    var onAiTextInserted: (() -> Unit)? = null
+
     fun registerAiApply(
         original: String,
         replacement: String,
         editorUndo: CommittedEditUndo? = null,
         cursorOffset: Int? = null
     ) {
+        onAiTextInserted?.invoke()
         pendingUndo = null
         pendingAiUndo = AiApplyUndo(original, replacement, editorUndo, cursorOffset)
             .takeIf { original != replacement }
