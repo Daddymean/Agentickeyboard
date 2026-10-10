@@ -48,6 +48,7 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
@@ -140,7 +141,8 @@ class KeyboardViewModel(
     // under WhileSubscribed their upstream never started and .value stayed an
     // empty list forever — shortcut expansion, learned-correction replacement,
     // and "Match my history" were silently dead in the IME process. They must
-    // be shared Eagerly; all are small, bounded queries.
+    // be shared Eagerly. The high-frequency UI projections are bounded; the
+    // auto-fix guard intentionally keeps every qualifying personal word.
     val shortcuts: StateFlow<List<ShortcutTemplate>> = repository.allShortcuts
         .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
@@ -160,6 +162,11 @@ class KeyboardViewModel(
     // On-device Personalization state flows
     val topVocabulary: StateFlow<List<UserVocabulary>> = repository.topVocabulary
         .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
+
+    private val personalAutoFixWords: StateFlow<Set<String>> = repository
+        .vocabularyWordsWithMinimumCount(PERSONAL_WORD_MIN_COUNT)
+        .map { words -> words.mapTo(mutableSetOf()) { it.lowercase() } }
+        .stateIn(viewModelScope, SharingStarted.Eagerly, emptySet())
 
     val learnedCorrections: StateFlow<List<LearnedCorrection>> = repository.allCorrections
         .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
@@ -248,6 +255,7 @@ class KeyboardViewModel(
     /** A different editor or app took focus (onStartInput with restarting == false). */
     fun onNewInputSession() {
         _correctionsPaused.value = false
+        autoFixKeptThisSession.clear()
     }
 
     fun setAiToolsExpanded(expanded: Boolean) {
@@ -264,7 +272,7 @@ class KeyboardViewModel(
     private val _isAutoFixEnabled = MutableStateFlow(settings?.isAutoFixOnSpace ?: true)
     val isAutoFixEnabled = _isAutoFixEnabled.asStateFlow()
 
-    /** Words whose auto-fix the user undid in this text field; not fixed again here. */
+    /** Words whose auto-fix the user undid in this text field; cleared by onNewInputSession. */
     private val autoFixKeptThisSession = mutableSetOf<String>()
 
     /** Words whose auto-fix was undone at least once since the keyboard started. */
@@ -543,7 +551,6 @@ class KeyboardViewModel(
         activeAppLabel = appLabel
         previousCommittedWord = null
         pendingUndo = null
-        autoFixKeptThisSession.clear()
         // KEYBOARD-019: tap positions never carry over to another editor.
         TapTrail.clear()
         proofreadJob?.cancel()
@@ -842,8 +849,7 @@ class KeyboardViewModel(
      * a typo; three is a word the user means.
      */
     private fun personalAutoFixGuard(): Set<String> =
-        topVocabulary.value.asSequence().filter { it.count >= PERSONAL_WORD_MIN_COUNT }.map { it.word.lowercase() }.toSet() +
-            autoFixKeptThisSession + autoFixNeverWords.value
+        personalAutoFixWords.value + autoFixKeptThisSession + autoFixNeverWords.value
 
     /**
      * Whether smart space may rewrite text the user already typed (the double-space
