@@ -1,11 +1,11 @@
 package io.github.daddymean.agentickeyboard.network
 
-import android.util.Log
 import io.github.daddymean.agentickeyboard.BuildConfig
 import io.github.daddymean.agentickeyboard.util.OnDeviceAi
 import io.github.daddymean.agentickeyboard.util.OnDeviceAiRouter
 import io.github.daddymean.agentickeyboard.util.OnDeviceAiStatus
 import io.github.daddymean.agentickeyboard.util.ReplyIntents
+import io.github.daddymean.agentickeyboard.util.SafeLog
 import io.github.daddymean.agentickeyboard.util.WritingQualityMeter
 import com.squareup.moshi.Moshi
 import kotlinx.coroutines.Dispatchers
@@ -108,7 +108,7 @@ object GeminiManager {
         } catch (e: kotlinx.coroutines.CancellationException) {
             throw e
         } catch (e: Exception) {
-            Log.e(TAG, "Error in fixGrammar", e)
+            SafeLog.e(TAG, "Error in fixGrammar", e)
             offlineGrammarFix(text)
         }
     }
@@ -145,7 +145,7 @@ object GeminiManager {
                 offlineReplies(contextMessage, personalizationContext, intent)
             }
         } catch (e: Exception) {
-            Log.e(TAG, "Error in suggestReplies", e)
+            SafeLog.e(TAG, "Error in suggestReplies", e)
             offlineReplies(contextMessage, personalizationContext, intent)
         }
     }
@@ -171,7 +171,7 @@ object GeminiManager {
             if (cacheResponse && result != null) textCache.put(cacheKey, result)
             result ?: offlineSummary(text)
         } catch (e: Exception) {
-            Log.e(TAG, "Error in summarizeMessage", e)
+            SafeLog.e(TAG, "Error in summarizeMessage", e)
             offlineSummary(text)
         }
     }
@@ -201,7 +201,7 @@ object GeminiManager {
             if (cacheResponse && result != null) textCache.put(cacheKey, result)
             result ?: "[Translation Failed] $text"
         } catch (e: Exception) {
-            Log.e(TAG, "Error in translateText", e)
+            SafeLog.e(TAG, "Error in translateText", e)
             "[Translation Error] $text"
         }
     }
@@ -231,7 +231,7 @@ object GeminiManager {
             if (result != null) textCache.put(cacheKey, result)
             result ?: offlineRewrite(text, targetTone)
         } catch (e: Exception) {
-            Log.e(TAG, "Error in rewriteWithTone", e)
+            SafeLog.e(TAG, "Error in rewriteWithTone", e)
             offlineRewrite(text, targetTone)
         }
     }
@@ -262,7 +262,7 @@ object GeminiManager {
             if (result != null) textCache.put(cacheKey, result)
             result ?: offlineCompose(instruction, targetTone, personalizationContext, preserveVoice)
         } catch (e: Exception) {
-            Log.e(TAG, "Error in composeMessage", e)
+            SafeLog.e(TAG, "Error in composeMessage", e)
             offlineCompose(instruction, targetTone, personalizationContext, preserveVoice)
         }
     }
@@ -286,7 +286,7 @@ object GeminiManager {
             if (cacheResponse && result != null) textCache.put(cacheKey, result)
             result ?: "[Explanation failed]"
         } catch (e: Exception) {
-            Log.e(TAG, "Error in explainText", e)
+            SafeLog.e(TAG, "Error in explainText", e)
             "[Explanation error] ${e.localizedMessage}"
         }
     }
@@ -316,7 +316,7 @@ object GeminiManager {
             if (result != null) textCache.put(cacheKey, result)
             result ?: offlineContinue(text, personalizationContext, preserveVoice)
         } catch (e: Exception) {
-            Log.e(TAG, "Error in continueText", e)
+            SafeLog.e(TAG, "Error in continueText", e)
             offlineContinue(text, personalizationContext, preserveVoice)
         }
     }
@@ -354,7 +354,7 @@ object GeminiManager {
                 offlineTone(text, personalizationContext)
             }
         } catch (e: Exception) {
-            Log.e(TAG, "Error in analyzeTone", e)
+            SafeLog.e(TAG, "Error in analyzeTone", e)
             offlineTone(text, personalizationContext)
         }
     }

@@ -116,7 +116,7 @@ class MlKitOnDeviceAi(context: Context, scope: CoroutineScope) : OnDeviceAi {
         } catch (t: Throwable) {
             // Deliberately broad (incl. Errors from missing GMS/AICore classes):
             // a device without on-device AI must never crash or surface errors.
-            Log.i(TAG, "On-device AI unavailable: ${t.message}")
+            SafeLog.i(TAG, "On-device AI unavailable", t)
             _status.value = OnDeviceAiStatus.UNSUPPORTED
         }
     }
@@ -156,7 +156,7 @@ class MlKitOnDeviceAi(context: Context, scope: CoroutineScope) : OnDeviceAi {
         } catch (e: CancellationException) {
             throw e
         } catch (t: Throwable) {
-            Log.i(TAG, "On-device prompt AI unavailable: ${t.message}")
+            SafeLog.i(TAG, "On-device prompt AI unavailable", t)
             _promptStatus.value = OnDeviceAiStatus.UNSUPPORTED
         }
     }
@@ -173,7 +173,7 @@ class MlKitOnDeviceAi(context: Context, scope: CoroutineScope) : OnDeviceAi {
         }
 
         override fun onDownloadFailed(e: GenAiException) {
-            Log.i(TAG, "$feature model download failed: ${e.message}")
+            SafeLog.i(TAG, "$feature model download failed", e)
         }
     }
 

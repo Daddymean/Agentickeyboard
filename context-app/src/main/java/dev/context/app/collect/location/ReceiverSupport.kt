@@ -26,7 +26,8 @@ internal fun BroadcastReceiver.runAsync(block: suspend () -> Unit) {
     try {
       withTimeout(ASYNC_BUDGET_MS) { block() }
     } catch (e: Exception) {
-      Log.w(TAG, "dropping location broadcast: ${e.javaClass.simpleName}: ${e.message}")
+      // KEYBOARD-021: class name only; an exception message can carry location data.
+      Log.w(TAG, "dropping location broadcast: ${e.javaClass.simpleName}")
     } finally {
       pending.finish()
     }

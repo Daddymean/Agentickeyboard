@@ -63,7 +63,7 @@ object GeminiKeyStore {
             .putString(PREF_IV, Base64.encodeToString(cipher.iv, Base64.NO_WRAP))
             .apply()
         true
-    }.onFailure { Log.w(TAG, "Unable to save Gemini key", it) }.getOrDefault(false)
+    }.onFailure { SafeLog.w(TAG, "Unable to save Gemini key", it) }.getOrDefault(false)
 
     /**
      * Removes the saved key: the encrypted preferences and the Keystore entry that
