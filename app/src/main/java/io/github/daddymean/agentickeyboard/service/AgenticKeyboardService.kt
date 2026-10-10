@@ -61,6 +61,7 @@ import io.github.daddymean.agentickeyboard.util.commitTextWithCaret
 import io.github.daddymean.agentickeyboard.twin.TwinCaptureSession
 import io.github.daddymean.agentickeyboard.twin.TwinLearning
 import io.github.daddymean.agentickeyboard.twin.TwinPreferences
+import io.github.daddymean.agentickeyboard.twin.TwinTextWindow
 import io.github.daddymean.agentickeyboard.util.ClipboardHistoryPolicy
 import io.github.daddymean.agentickeyboard.util.ClipboardSensitivity
 import io.github.daddymean.agentickeyboard.util.KeyboardSettings
@@ -576,7 +577,7 @@ class AgenticKeyboardService : InputMethodService(), LifecycleOwner, ViewModelSt
             if (replyCompletenessSession.interceptSend(draft, viewModel.isSensitiveField.value)) return
             if (viewModel.interceptSend(draft)) return
             twinSession.updateGate(twinGate())
-            twinSession.onSend(draft, System.currentTimeMillis())?.let(::submitTwin)
+            twinSession.onSend(twinText(draft), System.currentTimeMillis())?.let(::submitTwin)
         }
         if (hasAction) {
             ic.performEditorAction(action)
@@ -691,10 +692,19 @@ class AgenticKeyboardService : InputMethodService(), LifecycleOwner, ViewModelSt
         sensitiveField = viewModel.isSensitiveField.value
     )
 
+    /**
+     * The text the twin sees: the normal 1,000-character window, or up to
+     * [TwinTextWindow.CHARS] when that window is full, so long messages are not cut.
+     * The larger read happens only when the twin may learn here.
+     */
+    private fun twinText(window: String): String =
+        if (!twinGate().allowsCapture) window
+        else TwinTextWindow.expand(window, CONTEXT_CHARS) { currentInputConnection?.getTextBeforeCursor(it, 0) }
+
     /** Main thread, every editor update: a few preference reads and length arithmetic. */
     private fun observeTwinText(textBefore: String) {
         twinSession.updateGate(twinGate())
-        twinSession.onText(textBefore, System.currentTimeMillis()) {
+        twinSession.onText(twinText(textBefore), System.currentTimeMillis()) {
             currentInputConnection?.getTextAfterCursor(1, 0).isNullOrEmpty()
         }?.let(::submitTwin)
     }
@@ -731,7 +741,7 @@ class AgenticKeyboardService : InputMethodService(), LifecycleOwner, ViewModelSt
             // KEYBOARD-024: a new field. Whatever it already holds was not typed here.
             twinSession.start(
                 info?.packageName,
-                currentInputConnection?.getTextBeforeCursor(CONTEXT_CHARS, 0)?.toString().orEmpty(),
+                twinText(currentInputConnection?.getTextBeforeCursor(CONTEXT_CHARS, 0)?.toString().orEmpty()),
                 twinGate()
             )
         }

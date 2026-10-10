@@ -14,7 +14,7 @@ import android.widget.TextView
 import io.github.daddymean.agentickeyboard.twin.TwinEntry
 import io.github.daddymean.agentickeyboard.twin.TwinLearning
 import io.github.daddymean.agentickeyboard.twin.TwinPreferences
-import io.github.daddymean.agentickeyboard.twin.TwinStore
+import io.github.daddymean.agentickeyboard.twin.TwinStoragePolicy
 import io.github.daddymean.agentickeyboard.twin.TwinStyleStats
 import io.github.daddymean.agentickeyboard.util.KeyboardSettings
 import io.github.daddymean.agentickeyboard.util.SafeLog
@@ -95,21 +95,24 @@ class TwinActivity : Activity() {
                     val store = TwinLearning.store(this@TwinActivity)
                     val builder = TwinStyleStats.Builder(top = 10)
                     store.forEach { builder.add(it.text) }
-                    Triple(store.count(), store.storedBytes(), builder.build())
+                    Triple(store.count(), store.fileBytes(), builder.build())
                 }
             }.onFailure { SafeLog.w(TAG, "Twin store unavailable", it) }.getOrNull() ?: Triple(0, 0L, null)
             val learningPaused = KeyboardSettings(this@TwinActivity).isLearningPaused
+            val tier = TwinStoragePolicy.tier(bytes)
             status.text = buildString {
                 append(
                     when {
                         !prefs.isEnabled -> "Off: nothing new is learned."
                         prefs.isPaused -> "Paused: nothing new is learned until you resume."
                         learningPaused -> "Paused by \"Pause learning\" in keyboard settings."
+                        prefs.isLowStoragePaused -> "Paused: " + TwinStoragePolicy.LOW_STORAGE_NOTICE
                         else -> "Learning from messages you type and send."
                     }
                 )
-                append("\n$count messages stored, ${bytes / 1024} KB encrypted ")
-                append("(limit ${TwinStore.MAX_ENTRIES} messages or ${TwinStore.MAX_BYTES / (1024 * 1024)} MB; the oldest go first).")
+                append("\n$count messages stored, ${"%.1f".format(Locale.US, bytes / (1024.0 * 1024.0))} MB encrypted on this phone. ")
+                append("Nothing is ever deleted automatically; only you can delete entries.")
+                if (tier >= 1) append("\n\n⚠ " + TwinStoragePolicy.sizeNotice(tier))
             }
             style.text = stats?.let(::describe) ?: "Nothing learned yet."
             loadPage()

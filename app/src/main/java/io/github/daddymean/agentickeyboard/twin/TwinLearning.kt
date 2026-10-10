@@ -1,6 +1,9 @@
 package io.github.daddymean.agentickeyboard.twin
 
 import android.content.Context
+import android.os.Handler
+import android.os.Looper
+import android.widget.Toast
 import io.github.daddymean.agentickeyboard.util.SafeLog
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -21,10 +24,22 @@ class TwinPreferences(context: Context) {
         get() = prefs.getBoolean(KEY_PAUSED, false)
         set(value) = prefs.edit().putBoolean(KEY_PAUSED, value).apply()
 
+    /** Set while capture is paused because the phone has under 500 MB free. */
+    var isLowStoragePaused: Boolean
+        get() = prefs.getBoolean(KEY_LOW_STORAGE, false)
+        set(value) = prefs.edit().putBoolean(KEY_LOW_STORAGE, value).apply()
+
+    /** Highest 64 MB step already announced, so each notice shows once. */
+    var announcedSizeTier: Int
+        get() = prefs.getInt(KEY_SIZE_TIER, 0)
+        set(value) = prefs.edit().putInt(KEY_SIZE_TIER, value).apply()
+
     companion object {
         const val PREFS = "twin_settings"
         const val KEY_ENABLED = "twin_enabled"
         const val KEY_PAUSED = "twin_paused"
+        const val KEY_LOW_STORAGE = "twin_low_storage_paused"
+        const val KEY_SIZE_TIER = "twin_announced_size_tier"
     }
 }
 
@@ -48,6 +63,17 @@ object TwinLearning {
             store ?: TwinStore(context, TwinStore.storeFile(context), KeystoreTwinCipher()).also { store = it }
         }
 
+    private fun writer(context: Context) = TwinWriter(
+        store = store(context),
+        prefs = TwinPreferences(context),
+        freeBytes = { TwinStore.storeFile(context).parentFile?.let { it.mkdirs(); it.usableSpace } ?: 0L },
+        notify = { message ->
+            Handler(Looper.getMainLooper()).post {
+                Toast.makeText(context, message, Toast.LENGTH_LONG).show()
+            }
+        }
+    )
+
     /** Main-thread safe: queues the candidate and returns immediately. */
     fun submit(context: Context, candidate: TwinCaptureSession.Candidate, stillAllowed: () -> Boolean) {
         val appContext = context.applicationContext
@@ -55,7 +81,7 @@ object TwinLearning {
             // Re-check: the user may have paused or deleted everything since the tap.
             if (!stillAllowed()) return@launch
             val text = TwinTextFilter.prepare(candidate.text) ?: return@launch
-            runCatching { store(appContext).add(text, candidate.packageName, candidate.atMillis) }
+            runCatching { writer(appContext).write(text, candidate.packageName, candidate.atMillis) }
                 .onFailure { SafeLog.w(TAG, "Twin entry was not stored", it) }
         }
     }

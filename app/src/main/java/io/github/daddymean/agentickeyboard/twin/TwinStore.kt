@@ -23,16 +23,15 @@ data class TwinEntry(val id: Long, val atMillis: Long, val text: String, val pac
  * overwrites deleted rows. [deleteAll] deletes the database files and destroys the
  * Keystore key.
  *
- * Bounded: at most [maxEntries] rows and [maxBytes] of ciphertext; past either,
- * the oldest rows go first. Every method does disk or Keystore work, so it must
- * be called off the main thread.
+ * **Nothing is ever deleted automatically** (legacy purpose): rows go only when Keith
+ * deletes one or deletes everything. Growth is handled by [TwinStoragePolicy]
+ * warnings and, in slice 3, export. Every method does disk or Keystore work, so it
+ * must be called off the main thread.
  */
 class TwinStore(
     context: Context,
     private val file: File,
-    private val cipher: TwinCipher,
-    private val maxEntries: Int = MAX_ENTRIES,
-    private val maxBytes: Long = MAX_BYTES
+    private val cipher: TwinCipher
 ) {
     private val appContext = context.applicationContext
     private var helper: Helper? = null
@@ -49,13 +48,17 @@ class TwinStore(
             put(COL_IV, sealed.iv)
             put(COL_BODY, sealed.ciphertext)
         })
-        prune(db)
         return id
     }
 
     @Synchronized
     fun count(): Int = if (!file.exists()) 0 else
         db().rawQuery("SELECT COUNT(*) FROM $TABLE", null).use { it.moveToFirst(); it.getInt(0) }
+
+    /** Bytes the store takes on disk: the database plus its journal files. */
+    @Synchronized
+    fun fileBytes(): Long =
+        file.parentFile?.listFiles { f -> f.name.startsWith(file.name) }?.sumOf { it.length() } ?: 0L
 
     @Synchronized
     fun storedBytes(): Long = if (!file.exists()) 0 else
@@ -125,27 +128,6 @@ class TwinStore(
         TwinEntry(id, at, json.getString("t"), json.optString("p").takeIf { it.isNotEmpty() })
     }.getOrNull()
 
-    private fun prune(db: SQLiteDatabase) {
-        val excess = rowCount(db) - maxEntries
-        if (excess > 0) {
-            db.execSQL(
-                "DELETE FROM $TABLE WHERE $COL_ID IN (SELECT $COL_ID FROM $TABLE ORDER BY $COL_AT, $COL_ID LIMIT $excess)"
-            )
-        }
-        var bytes = db.rawQuery("SELECT COALESCE(SUM(LENGTH($COL_BODY)), 0) FROM $TABLE", null)
-            .use { it.moveToFirst(); it.getLong(0) }
-        while (bytes > maxBytes) {
-            val oldest = db.rawQuery(
-                "SELECT $COL_ID, LENGTH($COL_BODY) FROM $TABLE ORDER BY $COL_AT, $COL_ID LIMIT 1", null
-            ).use { if (it.moveToFirst()) it.getLong(0) to it.getLong(1) else null } ?: break
-            db.delete(TABLE, "$COL_ID = ?", arrayOf(oldest.first.toString()))
-            bytes -= oldest.second
-        }
-    }
-
-    private fun rowCount(db: SQLiteDatabase): Int =
-        db.rawQuery("SELECT COUNT(*) FROM $TABLE", null).use { it.moveToFirst(); it.getInt(0) }
-
     private fun db(): SQLiteDatabase {
         val h = helper ?: Helper(appContext, file).also { helper = it }
         return h.writableDatabase
@@ -170,8 +152,6 @@ class TwinStore(
     }
 
     companion object {
-        const val MAX_ENTRIES = 100_000
-        const val MAX_BYTES = 64L * 1024 * 1024
         private const val TABLE = "twin_entries"
         private const val COL_ID = "id"
         private const val COL_AT = "created_at"

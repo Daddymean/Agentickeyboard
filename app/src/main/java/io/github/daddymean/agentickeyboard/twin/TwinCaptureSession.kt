@@ -152,3 +152,20 @@ class TwinCaptureSession(
         const val MARK_WINDOW_MS = 750L
     }
 }
+
+/**
+ * KEYBOARD-024: the keyboard normally reads only the last 1,000 characters before
+ * the cursor. For the twin, a long message must not be cut, so when that window is
+ * full the twin reads a larger one ([CHARS], twice the 4,000-character per-message
+ * cap so redaction never works on a cut-off value). Short messages, the common case,
+ * cost no extra editor read.
+ */
+object TwinTextWindow {
+    const val CHARS = 8_000
+
+    fun expand(window: String, windowLimit: Int, read: (Int) -> CharSequence?): String {
+        if (window.length < windowLimit) return window
+        val larger = runCatching { read(CHARS)?.toString() }.getOrNull() ?: return window
+        return if (larger.length >= window.length) larger else window
+    }
+}

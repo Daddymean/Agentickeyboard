@@ -139,17 +139,16 @@ class TwinStoreTest {
     }
 
     @Test
-    fun boundedByEntriesAndBytesOldestFirst() {
-        val small = TwinStore(context, File(file.parentFile, "small.db"), cipher, maxEntries = 3, maxBytes = Long.MAX_VALUE)
-        (1..5).forEach { small.add("m$it", null, it.toLong()) }
-        assertEquals(listOf("m5", "m4", "m3"), small.recent(10).map { it.text })
-        small.close()
-
-        val tiny = TwinStore(context, File(file.parentFile, "tiny.db"), cipher, maxEntries = 100, maxBytes = 200)
-        (1..10).forEach { tiny.add("x".repeat(40) + it, null, it.toLong()) }
-        assertTrue(tiny.storedBytes() <= 200)
-        assertEquals("x".repeat(40) + 10, tiny.recent(1).single().text)
-        tiny.close()
+    fun nothingIsEverEvicted() {
+        // Legacy purpose: the store never deletes on its own, however much it holds.
+        val n = 5_000
+        (1..n).forEach { store.add("history entry $it " + "x".repeat(200), "pkg", it.toLong()) }
+        assertEquals(n, store.count())
+        val all = ArrayList<Long>()
+        store.forEach { all += it.atMillis }
+        assertEquals((1..n).map { it.toLong() }, all)
+        assertTrue(store.fileBytes() > 1_000_000)
+        assertEquals("history entry 1 " + "x".repeat(200), store.recent(1, offset = n - 1).single().text)
     }
 
     @Test
