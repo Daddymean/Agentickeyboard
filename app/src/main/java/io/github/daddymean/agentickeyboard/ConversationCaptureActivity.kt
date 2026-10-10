@@ -40,6 +40,22 @@ class ConversationCaptureActivity : Activity() {
                 "Disable this app below or revoke the service in Android settings at any time.\n\n" +
                 "App: ${source ?: "Open setup from the keyboard in the app you want to allow."}"
         })
+        // KEYBOARD-022: a separate, explicit yes for the automatic read.
+        layout.addView(android.widget.CheckBox(this).apply {
+            textSize = 16f
+            text = "Show the mood of incoming messages automatically"
+            isChecked = preferences.isAutoMoodEnabled
+            setOnCheckedChangeListener { _, checked -> preferences.isAutoMoodEnabled = checked }
+        })
+        layout.addView(TextView(this).apply {
+            textSize = 14f
+            text = "When this is on and the keyboard opens in an app you allowed above, Lumina reads " +
+                "the visible conversation once, without a tap. It guesses which message is the latest " +
+                "one from the other person (left-side bubble) and estimates its mood (positive, neutral, " +
+                "upset or tense) on this phone. Only the mood is shown, for up to one minute. The message " +
+                "text is discarded right away: it is not sent anywhere, saved or logged. It never runs in " +
+                "password or incognito fields."
+        })
         if (!source.isNullOrBlank() && source != packageName) {
             layout.addView(Button(this).apply {
                 text = "Allow capture in this app and open settings"

@@ -23,7 +23,9 @@ data class VisibleTextNode(
     val top: Int,
     val left: Int,
     val visible: Boolean = true,
-    val excluded: Boolean = false
+    val excluded: Boolean = false,
+    /** Right edge on screen; only the KEYBOARD-022 incoming picker uses it. */
+    val right: Int = left
 )
 
 /** Pure policy shared by the Android reader and tests. */

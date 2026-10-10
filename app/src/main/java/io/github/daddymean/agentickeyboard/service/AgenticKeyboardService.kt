@@ -64,6 +64,9 @@ import io.github.daddymean.agentickeyboard.util.KeyboardSettings
 import io.github.daddymean.agentickeyboard.util.EditClipboardAction
 import io.github.daddymean.agentickeyboard.util.ReplyCompletenessSession
 import io.github.daddymean.agentickeyboard.util.ConversationCapturePreferences
+import io.github.daddymean.agentickeyboard.util.IncomingMoodSession
+import io.github.daddymean.agentickeyboard.util.IncomingSentiment
+import io.github.daddymean.agentickeyboard.ui.IncomingMoodBadge
 import io.github.daddymean.agentickeyboard.util.VisibleContextLease
 import io.github.daddymean.agentickeyboard.util.VisibleContextPolicy
 import io.github.daddymean.agentickeyboard.util.SelectionCommand
@@ -78,6 +81,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.withContext
 
 class AgenticKeyboardService : InputMethodService(), LifecycleOwner, ViewModelStoreOwner, SavedStateRegistryOwner {
 
@@ -85,6 +89,7 @@ class AgenticKeyboardService : InputMethodService(), LifecycleOwner, ViewModelSt
         const val TAG = "AgenticKeyboardIME"
         const val CONTEXT_CHARS = 1000
         const val MAX_CURSOR_STEPS = 20
+        const val MOOD_SETTLE_MS = 300L
     }
 
     private val lifecycleRegistry = LifecycleRegistry(this)
@@ -95,6 +100,11 @@ class AgenticKeyboardService : InputMethodService(), LifecycleOwner, ViewModelSt
     private val contextLease = VisibleContextLease()
     private val contextToolActive = MutableStateFlow(false)
     private var contextExpiryJob: Job? = null
+    // KEYBOARD-022: only the estimated mood and its deadline; never message text.
+    private val incomingMood = IncomingMoodSession()
+    private val moodBadge = MutableStateFlow<IncomingMoodSession.Badge?>(null)
+    private var moodJob: Job? = null
+    private var inputViewShown = false
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val clipboardHistoryEnabled = MutableStateFlow(false)
     private val clipboardHistoryPaused = MutableStateFlow(false)
@@ -132,6 +142,10 @@ class AgenticKeyboardService : InputMethodService(), LifecycleOwner, ViewModelSt
                 if (conversationContext.value.active || conversationContext.value.pending != null) {
                     clearConversationContext("Screen changed. Capture the conversation again.")
                 }
+                // The mood belongs to the screen it was read from: drop it, and
+                // re-read once the screen settles if the keyboard is still up.
+                clearIncomingMood()
+                if (inputViewShown) scheduleIncomingMood()
             }
         }
         viewModel.setReplyContextValidator {
@@ -171,6 +185,7 @@ class AgenticKeyboardService : InputMethodService(), LifecycleOwner, ViewModelSt
             val keyHeightScale by viewModel.keyHeightScale.collectAsState()
             val navInsetPx by navigationBarInsetPx.collectAsState()
             val capturedContext by conversationContext.collectAsState()
+            val mood by moodBadge.collectAsState()
             val themeOverride by viewModel.themeOverride.collectAsState()
             val offline by viewModel.isOfflineMode.collectAsState()
             val contextResultActive by contextToolActive.collectAsState()
@@ -182,6 +197,13 @@ class AgenticKeyboardService : InputMethodService(), LifecycleOwner, ViewModelSt
             ProvideKeyboardMetrics(keyHeightScale) {
                 Column {
                     TrustPrismBanner(viewModel)
+                    mood?.takeIf { !sensitiveField }?.let { badge ->
+                        IncomingMoodBadge(
+                            badge = badge,
+                            themeOverride = themeOverride,
+                            onDismiss = { clearIncomingMood() }
+                        )
+                    }
                     if (aiToolsExpanded && !sensitiveField) {
                         ConversationContextBar(
                             state = capturedContext,
@@ -330,6 +352,50 @@ class AgenticKeyboardService : InputMethodService(), LifecycleOwner, ViewModelSt
         conversationContext.value = ConversationContextUiState(status = status)
         replyCompletenessSession.clear()
         if (hadContextTool) viewModel.dismissResults()
+    }
+
+    /**
+     * KEYBOARD-022: when the keyboard opens in an app the user allowed, read the
+     * latest incoming message once, keep only its estimated mood, and drop the text.
+     * Runs on the phone only; nothing is sent, saved or logged.
+     */
+    private fun scheduleIncomingMood() {
+        moodJob?.cancel()
+        moodJob = serviceScope.launch(Dispatchers.Main) {
+            // Let the host settle after the keyboard or a window change.
+            delay(MOOD_SETTLE_MS)
+            val target = currentInputEditorInfo?.packageName ?: return@launch
+            val prefs = ConversationCapturePreferences(this@AgenticKeyboardService)
+            if (!IncomingMoodSession.shouldRead(
+                    autoMoodOn = prefs.isAutoMoodEnabled,
+                    appAllowed = prefs.isAllowed(target),
+                    serviceConnected = ConversationCaptureService.isConnected(),
+                    sensitiveField = viewModel.isSensitiveField.value,
+                    keyboardShown = inputViewShown
+                )) return@launch
+            // Read and score off the main thread so opening the keyboard never waits on it;
+            // the text stays inside this block and only the mood comes back.
+            val mood = withContext(Dispatchers.Default) {
+                ConversationCaptureService.latestIncoming(target)?.let { IncomingSentiment.classify(it) }
+            }
+            // The field or screen may have changed while reading: re-check before showing.
+            if (!inputViewShown || viewModel.isSensitiveField.value ||
+                currentInputEditorInfo?.packageName != target) return@launch
+            val badge = incomingMood.set(mood, SystemClock.elapsedRealtime())
+            moodBadge.value = badge
+            if (badge != null) {
+                delay(VisibleContextPolicy.TTL_MS)
+                incomingMood.clear()
+                moodBadge.value = null
+            }
+        }
+    }
+
+    private fun clearIncomingMood() {
+        moodJob?.cancel()
+        moodJob = null
+        incomingMood.clear()
+        moodBadge.value = null
     }
 
     private fun captureConversation() {
@@ -599,6 +665,7 @@ class AgenticKeyboardService : InputMethodService(), LifecycleOwner, ViewModelSt
         super.onStartInput(info, restarting)
         lifecycleRegistry.handleLifecycleEvent(Lifecycle.Event.ON_START)
         clearConversationContext()
+        clearIncomingMood()
         clipboardStatus.value = null
 
         viewModel.onEditorStarted(
@@ -646,7 +713,21 @@ class AgenticKeyboardService : InputMethodService(), LifecycleOwner, ViewModelSt
         if (!viewModel.isSensitiveField.value) contextClient.cachedSnapshot()
     }
 
+    override fun onStartInputView(info: EditorInfo?, restarting: Boolean) {
+        super.onStartInputView(info, restarting)
+        inputViewShown = true
+        scheduleIncomingMood()
+    }
+
+    override fun onFinishInputView(finishingInput: Boolean) {
+        inputViewShown = false
+        clearIncomingMood()
+        super.onFinishInputView(finishingInput)
+    }
+
     override fun onWindowHidden() {
+        inputViewShown = false
+        clearIncomingMood()
         clearConversationContext()
         lifecycleRegistry.handleLifecycleEvent(Lifecycle.Event.ON_PAUSE)
         super.onWindowHidden()
@@ -657,6 +738,7 @@ class AgenticKeyboardService : InputMethodService(), LifecycleOwner, ViewModelSt
         // appear later in a different editor.
         viewModel.dismissResults()
         clearConversationContext()
+        clearIncomingMood()
         clipboardStatus.value = null
         lifecycleRegistry.handleLifecycleEvent(Lifecycle.Event.ON_STOP)
         super.onFinishInput()
@@ -664,6 +746,7 @@ class AgenticKeyboardService : InputMethodService(), LifecycleOwner, ViewModelSt
 
     override fun onDestroy() {
         clearConversationContext()
+        clearIncomingMood()
         viewModel.setReplyContextValidator(null)
         lifecycleRegistry.handleLifecycleEvent(Lifecycle.Event.ON_DESTROY)
         serviceScope.cancel()
