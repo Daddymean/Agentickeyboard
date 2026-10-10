@@ -56,6 +56,7 @@ import io.github.daddymean.agentickeyboard.ui.ReplyCompletenessBar
 import io.github.daddymean.agentickeyboard.ui.SnippetVaultBar
 import io.github.daddymean.agentickeyboard.ui.TrustPrismBanner
 import io.github.daddymean.agentickeyboard.util.ClipboardCaptureDecision
+import io.github.daddymean.agentickeyboard.util.SafeLog
 import io.github.daddymean.agentickeyboard.util.commitTextWithCaret
 import io.github.daddymean.agentickeyboard.util.ClipboardHistoryPolicy
 import io.github.daddymean.agentickeyboard.util.ClipboardSensitivity
@@ -303,7 +304,7 @@ class AgenticKeyboardService : InputMethodService(), LifecycleOwner, ViewModelSt
             .putExtra(MainActivity.EXTRA_TAB, MainActivity.TAB_SETTINGS)
         requestHideSelf(0)
         runCatching { startActivity(intent) }
-            .onFailure { Log.w(TAG, "Unable to open keyboard settings", it) }
+            .onFailure { SafeLog.w(TAG, "Unable to open keyboard settings", it) }
     }
 
     private fun openConversationCaptureSettings() {
@@ -395,14 +396,14 @@ class AgenticKeyboardService : InputMethodService(), LifecycleOwner, ViewModelSt
         val intent = Intent(this, SnippetVaultActivity::class.java)
             .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         runCatching { startActivity(intent) }
-            .onFailure { Log.w(TAG, "Unable to open Snippet Vault manager", it) }
+            .onFailure { SafeLog.w(TAG, "Unable to open Snippet Vault manager", it) }
     }
 
     private fun openClipboardHistoryManager() {
         val intent = Intent(this, ClipboardHistoryActivity::class.java)
             .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         runCatching { startActivity(intent) }
-            .onFailure { Log.w(TAG, "Unable to open clipboard manager", it) }
+            .onFailure { SafeLog.w(TAG, "Unable to open clipboard manager", it) }
     }
 
     private fun toggleClipboardHistoryPause() {
@@ -438,7 +439,7 @@ class AgenticKeyboardService : InputMethodService(), LifecycleOwner, ViewModelSt
             val manager = getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
             ClipboardSensitivity.readPrimaryClip(manager)
         }.onFailure {
-            Log.w(TAG, "Clipboard access unavailable; continuing without capture", it)
+            SafeLog.w(TAG, "Clipboard access unavailable; continuing without capture", it)
         }.getOrNull()
         val text = snapshot?.text
         val flaggedSensitive = snapshot?.flaggedSensitive ?: false
@@ -458,7 +459,7 @@ class AgenticKeyboardService : InputMethodService(), LifecycleOwner, ViewModelSt
                             retentionDays = settings.clipboardRetentionDays
                         )
                     }.onFailure {
-                        Log.e(TAG, "Clipboard history write failed", it)
+                        SafeLog.e(TAG, "Clipboard history write failed", it)
                     }
                 }
                 if (!silent) clipboardStatus.value = "Saved locally. Duplicate clips collapse automatically."
