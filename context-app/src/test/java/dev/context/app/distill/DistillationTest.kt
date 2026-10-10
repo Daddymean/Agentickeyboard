@@ -305,6 +305,23 @@ class DistillationTest {
   }
 
   @Test
+  fun legacyCalendarRowsGiveWayToCurrentOnesAfterTheUpgrade() {
+    val out = distill(
+      // Logged by the old collector: stale time, keyed by a cache-row id.
+      calendar("old", at(16), at(17), "Review", instanceId = 5, created = at(8)),
+      // The same meeting re-read after the upgrade, since moved to 17:30.
+      occurrence("new", at(17, 30), at(18), "Review", "42@100", created = at(14)),
+    )
+    assertEquals(NextEvent("Review", at(17, 30)), out.local.nextEvent)
+  }
+
+  @Test
+  fun legacyCalendarRowsStillCountWhileNoCurrentOnesExist() {
+    val out = distill(calendar("old", at(16), at(17), "Review", instanceId = 5))
+    assertEquals(NextEvent("Review", at(16)), out.local.nextEvent)
+  }
+
+  @Test
   fun calendarEditsCollapseToTheNewestVersionPerInstance() {
     val out = distill(
       calendar("v1", at(16), at(17), "Old title", instanceId = 7, created = at(8)),
