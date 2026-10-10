@@ -43,15 +43,17 @@ class TwinTextWindowTest {
         var t = 0L
         while (message.length < 3_000) {
             for (ch in words[i++ % words.size]) {
+                t += 40
+                session.noteKeyboardCommit(ch.toString(), t)
                 message.append(ch)
                 val editor = message.toString()
                 val window = editor.takeLast(1_000)
-                session.onText(TwinTextWindow.expand(window, 1_000) { n -> editor.takeLast(n) }, t++)
+                session.onText(TwinTextWindow.expand(window, 1_000) { n -> editor.takeLast(n) }, t + 5)
             }
         }
-        val candidate = session.onText("", t + 1)
+        val candidate = session.onSend(message.toString(), t + 50)
         assertNotNull(candidate)
         assertEquals(message.toString().trim(), candidate!!.text)
-        assertEquals(TwinTextFilter.MAX_CHARS.coerceAtMost(candidate.text.length), TwinTextFilter.prepare(candidate.text)!!.length)
+        assertEquals(candidate.text.length, TwinTextFilter.prepare(candidate.text)!!.length)
     }
 }

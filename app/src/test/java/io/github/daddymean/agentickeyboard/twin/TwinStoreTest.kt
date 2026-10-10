@@ -167,12 +167,11 @@ class TwinStoreTest {
 
     @Test
     fun capturedSecretsNeverReachTheStore() {
-        val session = TwinCaptureSession().apply {
+        val typing = TwinTyping(TwinCaptureSession().apply {
             start("pkg", "", TwinCaptureSession.Gate(true, false, false, false))
-        }
-        var text = ""
-        for (ch in "my password: hunter2") { text += ch; session.onText(text, 1L) }
-        val candidate = session.onSend(text, 2L)!!
+        })
+        typing.type("my password: hunter2")
+        val candidate = typing.send()!!
         TwinTextFilter.prepare(candidate.text)?.let { store.add(it, candidate.packageName, candidate.atMillis) }
         assertEquals(0, store.count())
     }
@@ -189,6 +188,7 @@ class TwinStoreTest {
         for (i in 0 until keystrokes) {
             if (sb.length > 900) sb.setLength(0)
             sb.append('a')
+            s.noteKeyboardCommit("a", i.toLong())
             s.onText(sb.toString(), i.toLong())
         }
         val perKeyNs = (System.nanoTime() - t0) / keystrokes
