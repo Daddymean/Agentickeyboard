@@ -49,7 +49,7 @@ class CalendarCollector(private val context: Context) : Collector {
   }
 
   private fun readRows(cursor: Cursor): List<CalendarRow> {
-    val id = cursor.getColumnIndexOrThrow(Instances._ID)
+    val eventId = cursor.getColumnIndexOrThrow(Instances.EVENT_ID)
     val begin = cursor.getColumnIndexOrThrow(Instances.BEGIN)
     val end = cursor.getColumnIndexOrThrow(Instances.END)
     val title = cursor.getColumnIndexOrThrow(Instances.TITLE)
@@ -58,10 +58,14 @@ class CalendarCollector(private val context: Context) : Collector {
     val calendar = cursor.getColumnIndexOrThrow(Instances.CALENDAR_DISPLAY_NAME)
     val status = cursor.getColumnIndexOrThrow(Instances.STATUS)
     val selfStatus = cursor.getColumnIndexOrThrow(Instances.SELF_ATTENDEE_STATUS)
+    val rrule = cursor.getColumnIndexOrThrow(Instances.RRULE)
+    val rdate = cursor.getColumnIndexOrThrow(Instances.RDATE)
+    val originalId = cursor.getColumnIndexOrThrow(Instances.ORIGINAL_ID)
+    val originalTime = cursor.getColumnIndexOrThrow(Instances.ORIGINAL_INSTANCE_TIME)
     val rows = ArrayList<CalendarRow>(cursor.count.coerceAtLeast(0))
     while (cursor.moveToNext()) {
       rows += CalendarRow(
-        instanceId = cursor.getLong(id),
+        eventId = cursor.getLong(eventId),
         beginMs = cursor.getLong(begin),
         endMs = if (cursor.isNull(end)) null else cursor.getLong(end),
         title = cursor.stringOrNull(title),
@@ -70,6 +74,9 @@ class CalendarCollector(private val context: Context) : Collector {
         calendar = cursor.stringOrNull(calendar),
         status = if (cursor.isNull(status)) null else cursor.getInt(status),
         selfAttendeeStatus = if (cursor.isNull(selfStatus)) null else cursor.getInt(selfStatus),
+        recurring = !cursor.stringOrNull(rrule).isNullOrBlank() || !cursor.stringOrNull(rdate).isNullOrBlank(),
+        originalId = cursor.stringOrNull(originalId)?.takeIf { it.isNotBlank() },
+        originalInstanceTimeMs = if (cursor.isNull(originalTime)) null else cursor.getLong(originalTime),
       )
     }
     return rows
@@ -81,8 +88,10 @@ class CalendarCollector(private val context: Context) : Collector {
     /** How far past the run's end upcoming instances are read. */
     const val LOOKAHEAD_MS = 7L * 24 * 60 * 60 * 1000
 
+    // Not Instances._ID: the provider renumbers it whenever it rebuilds its
+    // instance cache (event edits, time zone changes). See CalendarEvents.
     private val PROJECTION = arrayOf(
-      Instances._ID,
+      Instances.EVENT_ID,
       Instances.BEGIN,
       Instances.END,
       Instances.TITLE,
@@ -91,6 +100,10 @@ class CalendarCollector(private val context: Context) : Collector {
       Instances.CALENDAR_DISPLAY_NAME,
       Instances.STATUS,
       Instances.SELF_ATTENDEE_STATUS,
+      Instances.RRULE,
+      Instances.RDATE,
+      Instances.ORIGINAL_ID,
+      Instances.ORIGINAL_INSTANCE_TIME,
     )
   }
 }

@@ -9,7 +9,6 @@ import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.boolean
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
-import kotlinx.serialization.json.long
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertNotNull
@@ -18,7 +17,7 @@ import org.junit.Test
 
 class CalendarEventsTest {
   private val row = CalendarRow(
-    instanceId = 42,
+    eventId = 42,
     beginMs = 1_000_000,
     endMs = 4_600_000,
     title = "Standup",
@@ -41,7 +40,7 @@ class CalendarEventsTest {
     assertEquals(Sensitivity.PERSONAL, e.sensitivity)
     assertEquals(5_000_000L, e.createdMs)
     val p = Json.parseToJsonElement(e.payload).jsonObject
-    assertEquals(42L, p.getValue("instanceId").jsonPrimitive.long)
+    assertEquals("42", p.getValue("occurrence").jsonPrimitive.content)
     assertEquals("Standup", p.getValue("title").jsonPrimitive.content)
     assertEquals("Room 1", p.getValue("location").jsonPrimitive.content)
     assertEquals(false, p.getValue("allDay").jsonPrimitive.boolean)
@@ -61,9 +60,29 @@ class CalendarEventsTest {
     assertNotEquals(base, map(row.copy(endMs = 5_000_000)).id)
     assertNotEquals(base, map(row.copy(location = null)).id)
     assertNotEquals(base, map(row.copy(allDay = true)).id)
-    assertNotEquals(base, map(row.copy(instanceId = 43)).id)
+    assertNotEquals(base, map(row.copy(eventId = 43)).id)
     // Not part of the event's identity: calendar name and attendee bookkeeping.
     assertEquals(base, map(row.copy(selfAttendeeStatus = null)).id)
+  }
+
+  @Test
+  fun occurrenceKeyIsStableAcrossMovesAndCacheRebuilds() {
+    // A single event is identified by its event id alone, so moving it keeps the key.
+    assertEquals("42", CalendarEvents.occurrenceKey(row))
+    assertEquals("42", CalendarEvents.occurrenceKey(row.copy(beginMs = 9_000_000, endMs = 9_500_000)))
+
+    // Occurrences of a recurring event are told apart by their start.
+    val weekly = row.copy(recurring = true)
+    assertEquals("42@1000000", CalendarEvents.occurrenceKey(weekly))
+    assertNotEquals(
+      CalendarEvents.occurrenceKey(weekly),
+      CalendarEvents.occurrenceKey(weekly.copy(beginMs = 1_000_000 + 7 * 86_400_000L)),
+    )
+
+    // Moving one occurrence turns it into an exception event with its own
+    // EVENT_ID; ORIGINAL_ID@ORIGINAL_INSTANCE_TIME restores the original key.
+    val moved = row.copy(eventId = 77, beginMs = 2_000_000, originalId = "42", originalInstanceTimeMs = 1_000_000)
+    assertEquals(CalendarEvents.occurrenceKey(weekly), CalendarEvents.occurrenceKey(moved))
   }
 
   @Test

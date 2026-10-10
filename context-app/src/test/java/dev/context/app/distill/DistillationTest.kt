@@ -8,6 +8,8 @@ import dev.context.core.model.NextEvent
 import dev.context.core.model.Sensitivity
 import java.time.ZoneId
 import java.time.ZonedDateTime
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
@@ -68,6 +70,27 @@ class DistillationTest {
     id, EventTypes.CALENDAR_EVENT, start, end,
     """{"instanceId":$instanceId,"title":"$title","location":null,"allDay":$allDay,"calendar":"Work"}""",
     s, created,
+  )
+
+  /** Current collector payload: keyed by the stable `occurrence`, optionally with a legacy `instanceId`. */
+  private fun occurrence(
+    id: String,
+    start: Long,
+    end: Long,
+    title: String,
+    occurrence: String,
+    legacyInstanceId: Long? = null,
+    created: Long = start - Distillation.DAY_MS,
+  ) = ev(
+    id, EventTypes.CALENDAR_EVENT, start, end,
+    buildJsonObject {
+      put("occurrence", occurrence)
+      legacyInstanceId?.let { put("instanceId", it) }
+      put("title", title)
+      put("allDay", false)
+      put("calendar", "Work")
+    }.toString(),
+    Sensitivity.PERSONAL, created,
   )
 
   private fun note(id: String, start: Long, text: String, s: Int = Sensitivity.PERSONAL) =
@@ -263,6 +286,39 @@ class DistillationTest {
       calendar("edge", now + Distillation.DAY_MS, now + Distillation.DAY_MS + 1, "Edge", instanceId = 2),
     )
     assertNull(out.local.nextEvent)
+  }
+
+  @Test
+  fun calendarVersionsCollapseByOccurrenceEvenWhenTheProviderRenumbers() {
+    val out = distill(
+      // Upcoming: one occurrence read under two cache-row ids, then moved an hour later.
+      occurrence("f1", at(16), at(17), "Review", "42@100", legacyInstanceId = 1, created = at(8)),
+      occurrence("f2", at(17), at(18), "Review (moved)", "42@100", legacyInstanceId = 2, created = at(9)),
+      // Past: a single event edited once, again under different cache-row ids.
+      occurrence("p1", at(10), at(11), "Sync", "43", legacyInstanceId = 3, created = at(7)),
+      occurrence("p2", at(10, 30), at(11, 30), "Sync", "43", legacyInstanceId = 4, created = at(8)),
+    )
+    assertEquals(NextEvent("Review (moved)", at(17)), out.local.nextEvent)
+    val meeting = out.episodes.ofKind(EpisodeKinds.MEETING).single()
+    assertEquals(at(10, 30), meeting.startMs)
+    assertEquals("""["p1","p2"]""", meeting.eventIds)
+  }
+
+  @Test
+  fun legacyCalendarRowsGiveWayToCurrentOnesAfterTheUpgrade() {
+    val out = distill(
+      // Logged by the old collector: stale time, keyed by a cache-row id.
+      calendar("old", at(16), at(17), "Review", instanceId = 5, created = at(8)),
+      // The same meeting re-read after the upgrade, since moved to 17:30.
+      occurrence("new", at(17, 30), at(18), "Review", "42@100", created = at(14)),
+    )
+    assertEquals(NextEvent("Review", at(17, 30)), out.local.nextEvent)
+  }
+
+  @Test
+  fun legacyCalendarRowsStillCountWhileNoCurrentOnesExist() {
+    val out = distill(calendar("old", at(16), at(17), "Review", instanceId = 5))
+    assertEquals(NextEvent("Review", at(16)), out.local.nextEvent)
   }
 
   @Test

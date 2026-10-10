@@ -185,9 +185,22 @@ object Distillation {
        * One entry per calendar instance: the version with the newest
        * `createdMs` supplies the content, and every version is a member so
        * the episode id (from the earliest-created version) survives edits.
+       *
+       * Rows logged before the `occurrence` key (keyed by the unstable
+       * `instanceId`) can't be matched to current ones, so once any current
+       * row is present they are dropped: the collector re-reads every run's
+       * window (from 2 h before its last run to 7 days ahead) before each
+       * distill, so current rows already describe those meetings, and keeping
+       * both would duplicate them or let a stale legacy version win.
        */
-      private fun dedupeCalendar(rows: List<Pair<Event, JsonObject>>): List<Calendar> =
-        rows.groupBy { (e, p) -> p.long("instanceId")?.let { "i:$it" } ?: "e:${e.id}" }
+      private fun dedupeCalendar(rows: List<Pair<Event, JsonObject>>): List<Calendar> {
+        val current = rows.filter { (_, p) -> p.string("occurrence") != null }
+        return (current.ifEmpty { rows })
+          .groupBy { (e, p) ->
+            p.string("occurrence")?.let { "o:$it" }
+              ?: p.long("instanceId")?.let { "i:$it" }
+              ?: "e:${e.id}"
+          }
           .values
           .map { versions ->
             val byAge = versions.sortedWith(compareBy({ it.first.createdMs }, { it.first.id }))
@@ -201,6 +214,7 @@ object Distillation {
             )
           }
           .sortedWith(compareBy({ it.event.startMs }, { it.event.id }))
+      }
     }
   }
 
