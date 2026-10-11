@@ -2200,6 +2200,28 @@ fun SetupTab(viewModel: KeyboardViewModel) {
         }
 
         item {
+            // KEYBOARD-024: the legacy twin learns by default, so its notice,
+            // viewer and delete controls need a permanent way in.
+            SetupStepCard(
+                stepNumber = "6",
+                title = "Legacy twin (on)",
+                description = "Learns how you write from messages you type and send, encrypted on this phone only. Never from password or incognito fields. Open to read the privacy notice, view or delete entries, pause, or turn it off.",
+                actionLabel = "Open Legacy twin",
+                onAction = {
+                    runCatching {
+                        context.startActivity(Intent(context, TwinActivity::class.java))
+                    }.onFailure {
+                        Toast.makeText(
+                            context,
+                            "Unable to open Legacy twin.",
+                            Toast.LENGTH_SHORT
+                        ).show()
+                    }
+                }
+            )
+        }
+
+        item {
             Spacer(modifier = Modifier.height(16.dp))
         }
     }

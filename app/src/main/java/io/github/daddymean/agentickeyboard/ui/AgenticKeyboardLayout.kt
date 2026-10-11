@@ -107,6 +107,9 @@ import io.github.daddymean.agentickeyboard.util.SwipeToTypeEngine
 import io.github.daddymean.agentickeyboard.util.TrustPrism
 import io.github.daddymean.agentickeyboard.util.captureCommittedEditUndo
 import io.github.daddymean.agentickeyboard.util.commitTextWithCaret
+import io.github.daddymean.agentickeyboard.util.commitInserted
+import io.github.daddymean.agentickeyboard.util.commitTyped
+import io.github.daddymean.agentickeyboard.util.commitSuggestionPick
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlin.math.abs
@@ -132,7 +135,13 @@ private val keyVariants = mapOf(
 fun AgenticKeyboardLayout(
     viewModel: KeyboardViewModel,
     modifier: Modifier = Modifier,
+    // One typed key (a single character). Anything longer sent here counts as inserted
+    // text for the legacy twin (KEYBOARD-024); use the two callbacks below instead.
     onKeyPress: (String) -> Unit = {},
+    // KEYBOARD-024: text the user did not type here (paste chip, AI, smart replies...).
+    onInsertText: (String) -> Unit = onKeyPress,
+    // KEYBOARD-024: a whole word the user typed by swiping.
+    onTypedWord: (String) -> Unit = onKeyPress,
     onDelete: () -> Unit = {},
     onAction: () -> Unit = {},
     onMicPress: () -> Unit = {},
@@ -278,7 +287,7 @@ fun AgenticKeyboardLayout(
                 if (conn.getSelectedText(0).isNullOrEmpty()) {
                     conn.deleteSurroundingText(currentText().length, 0)
                 }
-                conn.commitTextWithCaret(newText, cursorOffset)
+                conn.commitTextWithCaret(newText, cursorOffset) // twin: inserted (AI apply, template, palette)
                 editorUndo = conn.captureCommittedEditUndo(original, newText, cursorOffset)
             }
         }
@@ -334,7 +343,7 @@ fun AgenticKeyboardLayout(
             } else {
                 inputConnectionProvider()?.let { conn ->
                     conn.deleteSurroundingText(1, 0)
-                    conn.commitText(". ", 1)
+                    conn.commitTyped(". ", 1) // twin: typed (double-space period)
                 }
             }
             gestureAlert = "Period inserted ✏️"
@@ -357,9 +366,12 @@ fun AgenticKeyboardLayout(
                 } else {
                     inputConnectionProvider()?.let { conn ->
                         conn.deleteSurroundingText(lastWord.length, 0)
+                        // twin: typed only for an auto-fix / learned fix of the word just typed;
+                        // a shortcut expansion is inserted text.
                         conn.commitTextWithCaret(
                             "${replacement.replacement} ",
-                            replacement.cursorOffset
+                            replacement.cursorOffset,
+                            typed = replacement.fromLearnedRule || replacement.fromAutoFix
                         )
                         editorUndo = conn.captureCommittedEditUndo(
                             "$lastWord ", "${replacement.replacement} ", replacement.cursorOffset
@@ -412,7 +424,7 @@ fun AgenticKeyboardLayout(
             } else {
                 inputConnectionProvider()?.let { conn ->
                     conn.deleteSurroundingText(pending.replacement.length + 1, 0)
-                    conn.commitText(restored, 1)
+                    conn.commitInserted(restored, 1) // twin: inserted (undo restore, conservative)
                 }
             }
             viewModel.onUndoApplied()
@@ -437,7 +449,7 @@ fun AgenticKeyboardLayout(
             } else {
                 inputConnectionProvider()?.let { conn ->
                     conn.deleteSurroundingText(aiPending.replacement.length, 0)
-                    if (aiPending.original.isNotEmpty()) conn.commitText(aiPending.original, 1)
+                    if (aiPending.original.isNotEmpty()) conn.commitInserted(aiPending.original, 1) // twin: inserted
                 }
             }
             viewModel.clearPendingAiUndo()
@@ -747,7 +759,7 @@ fun AgenticKeyboardLayout(
                                             .background(keyboardColors.emojiChip)
                                             .clickable {
                                                 buzz(HapticFeedbackType.TextHandleMove)
-                                                onKeyPress(emoji)
+                                                onInsertText(emoji) // twin: inserted (tone emoji chip)
                                             }
                                             .padding(horizontal = 8.dp, vertical = 4.dp)
                                     ) {
@@ -906,7 +918,7 @@ fun AgenticKeyboardLayout(
                                         gestureAlert = RedactionApplyGuard.blockedMessage(introduced)
                                     } else {
                                         val separator = if (text.isEmpty() || text.last().isWhitespace()) "" else " "
-                                        onKeyPress(separator + continuation!!)
+                                        onInsertText(separator + continuation!!) // twin: inserted (AI continuation)
                                         // Undo of an append restores by deleting it (empty original)
                                         viewModel.registerAiApply("", separator + continuation!!)
                                         gestureAlert = "Appended ✨ (⌫ undoes)"
@@ -943,7 +955,7 @@ fun AgenticKeyboardLayout(
                                             .background(keyboardColors.chip)
                                             .clickable {
                                                 buzz(HapticFeedbackType.TextHandleMove)
-                                                onKeyPress(reply)
+                                                onInsertText(reply) // twin: inserted (smart reply)
                                                 viewModel.recordAiApplyStat()
                                                 viewModel.dismissResults()
                                             }
@@ -1077,7 +1089,8 @@ fun AgenticKeyboardLayout(
                                         horizontalArrangement = Arrangement.spacedBy(6.dp),
                                         modifier = Modifier.fillMaxWidth().padding(top = 2.dp)
                                     ) {
-                                        items(predictiveSuggestions) { suggestion ->
+                                        items(predictiveSuggestions) { chip ->
+                                            val suggestion = chip.word
                                             Box(
                                                 modifier = Modifier
                                                     .clip(RoundedCornerShape(8.dp))
@@ -1090,8 +1103,8 @@ fun AgenticKeyboardLayout(
                                                             onPlaygroundTextChange(text.dropLast(lastWord.length) + suggestion + " ")
                                                         } else {
                                                             inputConnectionProvider()?.let { conn ->
-                                                                conn.deleteSurroundingText(lastWord.length, 0)
-                                                                conn.commitText("$suggestion ", 1)
+                                                                // twin: typed when it completes/corrects the current word (bounded), else inserted
+                                                                conn.commitSuggestionPick(lastWord, suggestion, chip.sourceWord)
                                                             }
                                                         }
                                                         viewModel.onWordCommitted(suggestion)
@@ -1225,7 +1238,7 @@ fun AgenticKeyboardLayout(
                         horizontalArrangement = Arrangement.spacedBy(6.dp)
                     ) {
                         ClipActionChip("Paste") {
-                            onKeyPress(clipboardText ?: "")
+                            onInsertText(clipboardText ?: "") // twin: inserted (Clipboard Intelligence Paste chip)
                             showClipboardActions = false
                         }
                         ClipActionChip("Reply Ideas 💡") {
@@ -1713,7 +1726,7 @@ fun AgenticKeyboardLayout(
                                             else -> finalWord
                                         }
                                         if (shiftState == ShiftState.SHIFT) shiftState = ShiftState.OFF
-                                        onKeyPress(typedText)
+                                        onTypedWord(typedText) // twin: typed (swipe word)
                                         onKeyPress(" ")
                                         viewModel.onWordCommitted(finalWord)
                                         viewModel.recordSwipeWordStat()
@@ -1810,7 +1823,7 @@ fun AgenticKeyboardLayout(
                                 text = keyText,
                                 onClick = {
                                     buzz(HapticFeedbackType.TextHandleMove)
-                                    if (trainingStep == null) onKeyPress(keyText)
+                                    if (trainingStep == null) onKeyPress(keyText) // twin: single key
                                     // One-shot shift consumes itself after a letter
                                     if (shiftState == ShiftState.SHIFT && isLetter) {
                                         shiftState = ShiftState.OFF
@@ -1853,7 +1866,7 @@ fun AgenticKeyboardLayout(
                                                 )
                                             }
                                             buzz(HapticFeedbackType.TextHandleMove)
-                                            onKeyPress(if (shiftActive) resolved.uppercaseChar().toString() else resolved.toString())
+                                            onKeyPress(if (shiftActive) resolved.uppercaseChar().toString() else resolved.toString()) // twin: single key
                                             if (shiftState == ShiftState.SHIFT) shiftState = ShiftState.OFF
                                         }
                                     }
@@ -1861,7 +1874,7 @@ fun AgenticKeyboardLayout(
                                 longPressVariants = if (trainingStep == null) variants else emptyList(),
                                 onVariant = { variant ->
                                     buzz(HapticFeedbackType.LongPress)
-                                    onKeyPress(variant)
+                                    onKeyPress(variant) // twin: single key (accent / punctuation variant)
                                     if (shiftState == ShiftState.SHIFT && isLetter) {
                                         shiftState = ShiftState.OFF
                                     }
@@ -2022,7 +2035,7 @@ fun AgenticKeyboardLayout(
                 longPressVariants = keyVariants["."].orEmpty(),
                 onVariant = { variant ->
                     buzz(HapticFeedbackType.LongPress)
-                    onKeyPress(variant)
+                    onKeyPress(variant) // twin: single key (accent / punctuation variant)
                 },
                 modifier = Modifier
                     .width(metrics.smallKeyWidth)

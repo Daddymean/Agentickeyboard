@@ -9,6 +9,7 @@ import android.util.Log
 import android.view.KeyEvent
 import android.view.View
 import android.view.inputmethod.EditorInfo
+import android.view.inputmethod.InputConnection
 import android.view.inputmethod.ExtractedTextRequest
 import android.view.inputmethod.InputMethodManager
 import androidx.compose.foundation.layout.Box
@@ -58,6 +59,13 @@ import io.github.daddymean.agentickeyboard.ui.TrustPrismBanner
 import io.github.daddymean.agentickeyboard.util.ClipboardCaptureDecision
 import io.github.daddymean.agentickeyboard.util.SafeLog
 import io.github.daddymean.agentickeyboard.util.commitTextWithCaret
+import io.github.daddymean.agentickeyboard.util.commitInserted
+import io.github.daddymean.agentickeyboard.util.commitTyped
+import io.github.daddymean.agentickeyboard.twin.TwinCaptureSession
+import io.github.daddymean.agentickeyboard.twin.TwinLearning
+import io.github.daddymean.agentickeyboard.twin.TwinPreferences
+import io.github.daddymean.agentickeyboard.twin.TwinTextWindow
+import io.github.daddymean.agentickeyboard.twin.TwinTrackingInputConnection
 import io.github.daddymean.agentickeyboard.util.ClipboardHistoryPolicy
 import io.github.daddymean.agentickeyboard.util.ClipboardSensitivity
 import io.github.daddymean.agentickeyboard.util.KeyboardSettings
@@ -106,6 +114,9 @@ class AgenticKeyboardService : InputMethodService(), LifecycleOwner, ViewModelSt
     private var moodJob: Job? = null
     private var inputViewShown = false
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    // KEYBOARD-024: length bookkeeping only on the main thread; the store work is queued.
+    private val twinSession = TwinCaptureSession()
+    private lateinit var twinPrefs: TwinPreferences
     private val clipboardHistoryEnabled = MutableStateFlow(false)
     private val clipboardHistoryPaused = MutableStateFlow(false)
     private val clipboardStatus = MutableStateFlow<String?>(null)
@@ -132,6 +143,7 @@ class AgenticKeyboardService : InputMethodService(), LifecycleOwner, ViewModelSt
         repository = app.repository
         settings = app.settings
         contextClient = ContextClient(this)
+        twinPrefs = TwinPreferences(this)
         refreshClipboardSettings()
         viewModel = ViewModelProvider(
             this,
@@ -151,6 +163,7 @@ class AgenticKeyboardService : InputMethodService(), LifecycleOwner, ViewModelSt
         viewModel.setReplyContextValidator {
             conversationContext.value.active && validateConversationContext()
         }
+        viewModel.onAiTextInserted = { twinSession.markInserted(System.currentTimeMillis()) }
     }
 
     override fun onCreateInputView(): View {
@@ -251,17 +264,25 @@ class AgenticKeyboardService : InputMethodService(), LifecycleOwner, ViewModelSt
                                 viewModel = viewModel,
                                 suppressAiPanels = contextResultActive,
                                 onKeyPress = { text ->
-                                    currentInputConnection?.commitText(text, 1)
+                                    // twin: single key; a longer payload is treated as inserted by the connection
+                                    trackedInputConnection()?.commitText(text, 1)
+                                },
+                                onInsertText = { text ->
+                                    twinSession.markInserted(System.currentTimeMillis())
+                                    trackedInputConnection()?.commitInserted(text, 1) // twin: inserted
+                                },
+                                onTypedWord = { word ->
+                                    trackedInputConnection()?.commitTyped(word, 1) // twin: typed (swipe word)
                                 },
                                 onDelete = {
-                                    currentInputConnection?.deleteSurroundingText(1, 0)
+                                    trackedInputConnection()?.deleteSurroundingText(1, 0)
                                 },
                                 onAction = { performEnterAction() },
                                 onMicPress = { switchToVoiceInput() },
                                 onCursorMove = { steps -> moveCursor(steps) },
                                 onSelectionCommand = { command -> applySelectionCommand(command) },
                                 onClipboardAction = { action -> performClipboardAction(action) },
-                                inputConnectionProvider = { currentInputConnection },
+                                inputConnectionProvider = { trackedInputConnection() },
                                 navigationBarInset = navigationBarInset,
                                 onOpenSettings = { openKeyboardSettings() }
                             )
@@ -284,7 +305,8 @@ class AgenticKeyboardService : InputMethodService(), LifecycleOwner, ViewModelSt
                                     onIntent = { viewModel.chooseReplyIntent(it) },
                                     onInsert = { text ->
                                         if (validateConversationContext()) {
-                                            currentInputConnection?.commitText(text, 1)
+                                            twinSession.markInserted(System.currentTimeMillis())
+                                            currentInputConnection?.commitText(text, 1) // twin: inserted (context reply)
                                             clearConversationContext()
                                             syncEditorText()
                                         }
@@ -306,10 +328,11 @@ class AgenticKeyboardService : InputMethodService(), LifecycleOwner, ViewModelSt
     private fun replaceDraftBeforeCursor(text: String, cursorOffset: Int? = null) {
         val ic = currentInputConnection ?: return
         val existing = ic.getTextBeforeCursor(CONTEXT_CHARS, 0)?.length ?: 0
+        twinSession.markInserted(System.currentTimeMillis())
         ic.beginBatchEdit()
         try {
             if (existing > 0) ic.deleteSurroundingText(existing, 0)
-            ic.commitTextWithCaret(text, cursorOffset)
+            ic.commitTextWithCaret(text, cursorOffset) // twin: inserted (snippet / draft replace)
         } finally {
             ic.endBatchEdit()
         }
@@ -318,7 +341,8 @@ class AgenticKeyboardService : InputMethodService(), LifecycleOwner, ViewModelSt
 
     private fun insertClipboardItem(item: ClipboardHistoryItem) {
         if (viewModel.isSensitiveField.value) return
-        currentInputConnection?.commitText(item.content, 1) ?: return
+        twinSession.markInserted(System.currentTimeMillis())
+        currentInputConnection?.commitText(item.content, 1) ?: return // twin: inserted (clipboard history)
         clipboardStatus.value = "Inserted from local history."
         serviceScope.launch { repository.recordClipboardUse(item.id) }
     }
@@ -564,6 +588,10 @@ class AgenticKeyboardService : InputMethodService(), LifecycleOwner, ViewModelSt
             if (replyCompletenessSession.interceptSend(draft, viewModel.isSensitiveField.value)) return
             if (viewModel.interceptSend(draft)) return
         }
+        // KEYBOARD-024: the keyboard's Send or Go is the strong send signal.
+        if (hasAction && (action == EditorInfo.IME_ACTION_SEND || action == EditorInfo.IME_ACTION_GO)) {
+            captureTwinOnSend(ic)
+        }
         if (hasAction) {
             ic.performEditorAction(action)
         } else {
@@ -599,6 +627,7 @@ class AgenticKeyboardService : InputMethodService(), LifecycleOwner, ViewModelSt
         // snapshot can cover only part of the document, so planning it here
         // would select the snapshot and quietly leave the rest unselected.
         if (command == SelectionCommand.SelectAll) {
+            twinSession.markOwnDelete(System.currentTimeMillis())
             ic.performContextMenuAction(android.R.id.selectAll)
             syncEditorText()
             return
@@ -633,6 +662,9 @@ class AgenticKeyboardService : InputMethodService(), LifecycleOwner, ViewModelSt
             EditClipboardAction.Copy -> android.R.id.copy
             EditClipboardAction.Paste -> android.R.id.paste
         }
+        val now = System.currentTimeMillis()
+        if (action == EditClipboardAction.Paste) twinSession.markInserted(now)
+        if (action == EditClipboardAction.Cut) twinSession.markOwnDelete(now)
         ic.performContextMenuAction(id)
         syncEditorText()
     }
@@ -657,11 +689,79 @@ class AgenticKeyboardService : InputMethodService(), LifecycleOwner, ViewModelSt
         val textBefore = currentInputConnection?.getTextBeforeCursor(CONTEXT_CHARS, 0)?.toString() ?: ""
         viewModel.setInputText(textBefore)
         val selected = currentInputConnection?.getSelectedText(0)?.toString()
+        observeTwinText(textBefore, selectionActive = !selected.isNullOrEmpty())
         // Two different questions: whether an AI action has a meaningful target
         // (non-blank), and whether the editor holds any selection at all, which
         // a run of spaces or newlines satisfies and the edit bar acts on.
         viewModel.setSelectionActive(!selected.isNullOrBlank())
         viewModel.setSelectionRangeActive(!selected.isNullOrEmpty())
+    }
+
+    // --- KEYBOARD-024: legacy twin learning hook -----------------------------------
+
+    private fun twinGate() = TwinCaptureSession.Gate(
+        twinEnabled = twinPrefs.isEnabled,
+        twinPaused = twinPrefs.isPaused,
+        learningPaused = settings.isLearningPaused,
+        sensitiveField = viewModel.isSensitiveField.value
+    )
+
+    /**
+     * The text the twin sees: the normal 1,000-character window, or up to
+     * [TwinTextWindow.CHARS] when that window is full, so long messages are not cut.
+     * The larger read happens only when the twin may learn here.
+     */
+    private fun twinText(window: String): String =
+        if (!twinGate().allowsCapture) window
+        else TwinTextWindow.expand(window, CONTEXT_CHARS) { currentInputConnection?.getTextBeforeCursor(it, 0) }
+
+    /**
+     * A new field: report both sides of the caret and the selection (KEYBOARD-024,
+     * r4238828515). Reads are bounded; the text after the caret is only checked for
+     * emptiness. In a field where the twin may not learn nothing more is read, and
+     * the unknown state disables clear-as-send for the session.
+     */
+    private fun startTwinSession(info: EditorInfo?) {
+        val ic = currentInputConnection
+        val gate = twinGate()
+        val before = ic?.getTextBeforeCursor(CONTEXT_CHARS, 0)?.toString()?.let(::twinText)
+        val after = if (gate.allowsCapture) ic?.getTextAfterCursor(1, 0)?.toString() else null
+        val selStart = info?.initialSelStart ?: -1
+        val selEnd = info?.initialSelEnd ?: -1
+        val hasSelection = if (selStart < 0 || selEnd < 0) null else selStart != selEnd
+        twinSession.start(
+            info?.packageName,
+            before,
+            gate,
+            chatField = TwinCaptureSession.isChatField(info?.packageName, info?.inputType ?: 0, info?.imeOptions ?: 0),
+            textAfter = after,
+            hasSelection = hasSelection
+        )
+    }
+
+    /** Main thread, every editor update: a few preference reads and a draft-sized comparison. */
+    private fun observeTwinText(textBefore: String, selectionActive: Boolean) {
+        twinSession.updateGate(twinGate())
+        twinSession.onText(twinText(textBefore), System.currentTimeMillis(), selectionActive) {
+            currentInputConnection?.getTextAfterCursor(1, 0)?.isEmpty() // null: the editor cannot say
+        }?.let(::submitTwin)
+    }
+
+    /** The connection the keyboard edits through, reporting each edit to the twin. */
+    private fun trackedInputConnection(): InputConnection? =
+        currentInputConnection?.let { TwinTrackingInputConnection(it, twinSession) }
+
+    /** Send/Go: the whole field must equal what was typed here (checked in the session). */
+    private fun captureTwinOnSend(ic: InputConnection) {
+        twinSession.updateGate(twinGate())
+        if (!twinGate().allowsCapture) return
+        val before = ic.getTextBeforeCursor(TwinTextWindow.CHARS, 0)?.toString() ?: return
+        val after = ic.getTextAfterCursor(TwinTextWindow.CHARS, 0)?.toString() ?: return
+        twinSession.onSend(before + after, System.currentTimeMillis())?.let(::submitTwin)
+    }
+
+    private fun submitTwin(candidate: TwinCaptureSession.Candidate) {
+        TwinLearning.submit(this, candidate) { twinGate().copy(sensitiveField = false).allowsCapture }
     }
 
     @Suppress("DEPRECATION")
@@ -688,6 +788,10 @@ class AgenticKeyboardService : InputMethodService(), LifecycleOwner, ViewModelSt
             info?.imeOptions ?: 0
         )
         refreshClipboardSettings()
+        if (!restarting) {
+            // KEYBOARD-024: a new field. Whatever it already holds was not typed here.
+            startTwinSession(info)
+        }
 
         if (!restarting) {
             viewModel.dismissResults()

@@ -178,8 +178,12 @@ class KeyboardViewModel(
     val userPersonaPreference = _userPersonaPreference.asStateFlow()
 
     // Real-time predictive autocomplete completions
-    private val _predictiveSuggestions = MutableStateFlow<List<String>>(emptyList())
+    // KEYBOARD-024 (Codex review on 2cfae3f, r4239826918): each chip carries the word its
+    // list was generated for, in one immutable value, so a chip that is still rendered
+    // from an older list can never borrow a newer list's source.
+    private val _predictiveSuggestions = MutableStateFlow<List<PredictionChip>>(emptyList())
     val predictiveSuggestions = _predictiveSuggestions.asStateFlow()
+
 
     // Active input text state
     private val _inputText = MutableStateFlow("")
@@ -920,12 +924,19 @@ class KeyboardViewModel(
      * restore [original]. Mirrors the auto-correction undo above but for whole
      * drafts/selections replaced through the result panels.
      */
+    /**
+     * KEYBOARD-024: told when the keyboard has just written AI text into the field,
+     * so the legacy twin does not count it as the user's own typing.
+     */
+    var onAiTextInserted: (() -> Unit)? = null
+
     fun registerAiApply(
         original: String,
         replacement: String,
         editorUndo: CommittedEditUndo? = null,
         cursorOffset: Int? = null
     ) {
+        onAiTextInserted?.invoke()
         pendingUndo = null
         pendingAiUndo = AiApplyUndo(original, replacement, editorUndo, cursorOffset)
             .takeIf { original != replacement }
@@ -1018,25 +1029,25 @@ class KeyboardViewModel(
             when {
                 activeText.isEmpty() -> {
                     val topWords = topVocabulary.value.take(3).map { it.word }
-                    _predictiveSuggestions.value = if (topWords.isNotEmpty()) {
+                    _predictiveSuggestions.value = PredictionChip.unbound(if (topWords.isNotEmpty()) {
                         topWords.map { it.replaceFirstChar { c -> if (c.isLowerCase()) c.titlecase() else c.toString() } }
                     } else {
                         listOf("Hello", "Awesome", "Got it")
-                    }
+                    })
                 }
                 activeText.last().isWhitespace() -> {
                     val previous = activeText.trim().split(WHITESPACE_REGEX).lastOrNull()
                         ?.replace(NON_ALPHA_REGEX, "")?.lowercase().orEmpty()
-                    _predictiveSuggestions.value = if (previous.length >= 2) {
+                    _predictiveSuggestions.value = PredictionChip.unbound(if (previous.length >= 2) {
                         repository.nextWords(previous, 3)
                     } else {
                         emptyList()
-                    }
+                    })
                 }
                 else -> {
                     val sourceWord = activeText.split(WHITESPACE_REGEX).lastOrNull().orEmpty()
                     val lastWord = sourceWord.lowercase()
-                    _predictiveSuggestions.value = if (lastWord.isNotEmpty()) {
+                    val completions = if (lastWord.isNotEmpty()) {
                         val personal = topVocabulary.value.map { it.word }
                         val learned = learnedCorrections.value.firstOrNull { it.typo == lastWord }?.correction
                         // KEYBOARD-019: keyboard-aware corrections, off in sensitive fields;
@@ -1051,6 +1062,7 @@ class KeyboardViewModel(
                     } else {
                         emptyList()
                     }
+                    _predictiveSuggestions.value = completions.map { PredictionChip(it, sourceWord) }
                 }
             }
         }
@@ -1682,5 +1694,17 @@ class KeyboardViewModelFactory(
             return KeyboardViewModel(repository, settings, contextClient) as T
         }
         throw IllegalArgumentException("Unknown ViewModel class")
+    }
+}
+
+/**
+ * KEYBOARD-024: one suggestion-strip chip and the word its list was generated for
+ * ([sourceWord], null for next-word predictions and empty-field prompts). Immutable and
+ * published as one value with its list, so the click handler reads the source of the
+ * chip that is actually rendered.
+ */
+data class PredictionChip(val word: String, val sourceWord: String?) {
+    companion object {
+        fun unbound(words: List<String>): List<PredictionChip> = words.map { PredictionChip(it, null) }
     }
 }
