@@ -31,6 +31,11 @@
                 android:resource="@xml/conversation_capture_service" />
         </service>
         <activity
+            android:name=".TwinActivity"
+            android:exported="false"
+            android:label="Legacy twin"
+            android:theme="@style/Theme.MyApplication" />
+        <activity
             android:name=".ClipboardHistoryActivity"
             android:exported="false"
             android:label="Clipboard History"
