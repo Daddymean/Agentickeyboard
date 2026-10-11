@@ -181,6 +181,16 @@ class KeyboardViewModel(
     private val _predictiveSuggestions = MutableStateFlow<List<String>>(emptyList())
     val predictiveSuggestions = _predictiveSuggestions.asStateFlow()
 
+    /**
+     * KEYBOARD-024: the word the current [predictiveSuggestions] complete or correct, or
+     * null when they are next-word predictions or empty-field prompts. Always set
+     * together with the list, so a stale chip (still showing while a newer list is being
+     * computed) is never taken as a completion of a word typed since.
+     */
+    @Volatile
+    var predictiveSourceWord: String? = null
+        private set
+
     // Active input text state
     private val _inputText = MutableStateFlow("")
     val inputText = _inputText.asStateFlow()
@@ -557,6 +567,7 @@ class KeyboardViewModel(
         TapTrail.clear()
         proofreadJob?.cancel()
         predictionJob?.cancel()
+        predictiveSourceWord = null
         _predictiveSuggestions.value = emptyList()
         lastSyncedText = null
         // A backspace in the next app must never splice in text from this one.
@@ -1025,6 +1036,7 @@ class KeyboardViewModel(
             when {
                 activeText.isEmpty() -> {
                     val topWords = topVocabulary.value.take(3).map { it.word }
+                    predictiveSourceWord = null
                     _predictiveSuggestions.value = if (topWords.isNotEmpty()) {
                         topWords.map { it.replaceFirstChar { c -> if (c.isLowerCase()) c.titlecase() else c.toString() } }
                     } else {
@@ -1034,6 +1046,7 @@ class KeyboardViewModel(
                 activeText.last().isWhitespace() -> {
                     val previous = activeText.trim().split(WHITESPACE_REGEX).lastOrNull()
                         ?.replace(NON_ALPHA_REGEX, "")?.lowercase().orEmpty()
+                    predictiveSourceWord = null
                     _predictiveSuggestions.value = if (previous.length >= 2) {
                         repository.nextWords(previous, 3)
                     } else {
@@ -1043,7 +1056,7 @@ class KeyboardViewModel(
                 else -> {
                     val sourceWord = activeText.split(WHITESPACE_REGEX).lastOrNull().orEmpty()
                     val lastWord = sourceWord.lowercase()
-                    _predictiveSuggestions.value = if (lastWord.isNotEmpty()) {
+                    val completions = if (lastWord.isNotEmpty()) {
                         val personal = topVocabulary.value.map { it.word }
                         val learned = learnedCorrections.value.firstOrNull { it.typo == lastWord }?.correction
                         // KEYBOARD-019: keyboard-aware corrections, off in sensitive fields;
@@ -1058,6 +1071,8 @@ class KeyboardViewModel(
                     } else {
                         emptyList()
                     }
+                    predictiveSourceWord = sourceWord.takeIf { completions.isNotEmpty() }
+                    _predictiveSuggestions.value = completions
                 }
             }
         }

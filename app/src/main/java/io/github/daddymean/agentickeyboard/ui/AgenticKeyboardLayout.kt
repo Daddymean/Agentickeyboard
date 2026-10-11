@@ -1103,7 +1103,7 @@ fun AgenticKeyboardLayout(
                                                         } else {
                                                             inputConnectionProvider()?.let { conn ->
                                                                 // twin: typed when it completes/corrects the current word (bounded), else inserted
-                                                                conn.commitSuggestionPick(lastWord, suggestion)
+                                                                conn.commitSuggestionPick(lastWord, suggestion, viewModel.predictiveSourceWord)
                                                             }
                                                         }
                                                         viewModel.onWordCommitted(suggestion)

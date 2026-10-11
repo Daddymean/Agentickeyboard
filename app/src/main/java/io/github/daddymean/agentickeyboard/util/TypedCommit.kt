@@ -30,13 +30,15 @@ fun InputConnection.commitInserted(text: CharSequence, newCursorPosition: Int): 
  * KEYBOARD-024 (Hax decision, 2026-10-10 17:19 PT): a suggestion-strip pick is Keith's own
  * choice, built from his typed prefix plus the on-device dictionary or his vocabulary, so it
  * counts as typing, but only when bounded: it completes or corrects the word being typed
- * ([currentWord] is non-empty), it replaces exactly that word, and it is one word
- * ([isBoundedWordPick]) followed by one space. Anything else (a next-word prediction or an
- * empty-field prompt, a phrase, an over-long entry) is committed as inserted text.
+ * ([currentWord] is non-empty), the chip was generated for exactly that word
+ * ([generatedFor], null for next-word predictions and empty-field prompts; Codex review
+ * on 6de6407, r4239778214: a stale prediction chip tapped after typing a character must
+ * not pass as a completion), it replaces exactly that word, and it is one word
+ * ([isBoundedWordPick]) followed by one space. Anything else is committed as inserted text.
  */
-fun InputConnection.commitSuggestionPick(currentWord: String, suggestion: String) {
+fun InputConnection.commitSuggestionPick(currentWord: String, suggestion: String, generatedFor: String?) {
     deleteSurroundingText(currentWord.length, 0)
-    if (currentWord.isNotEmpty() && TypedPicks.isBoundedWordPick(suggestion)) {
+    if (TypedPicks.isTypedWordPick(currentWord, suggestion, generatedFor)) {
         commitTyped("$suggestion ", 1) // twin: typed (suggestion pick for the current word)
     } else {
         commitInserted("$suggestion ", 1) // twin: inserted (prediction / prompt / unbounded)
@@ -61,6 +63,10 @@ fun InputConnection.commitPickedEmoji(emoji: String) {
 object TypedPicks {
     /** Longest suggestion accepted as one typed word. */
     const val MAX_WORD_CHARS = 48
+
+    /** A pick that completes or corrects the word being typed, from a chip made for that word. */
+    fun isTypedWordPick(currentWord: String, suggestion: String, generatedFor: String?): Boolean =
+        currentWord.isNotEmpty() && generatedFor == currentWord && isBoundedWordPick(suggestion)
 
     /** One word: no whitespace, at least one letter or digit, bounded length. */
     fun isBoundedWordPick(suggestion: String): Boolean =

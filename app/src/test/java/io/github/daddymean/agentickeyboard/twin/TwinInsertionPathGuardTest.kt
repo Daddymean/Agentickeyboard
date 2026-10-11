@@ -76,7 +76,7 @@ class TwinInsertionPathGuardTest {
         // Non-vacuous: the known insertion sites are present and routed as insertions.
         val layout = layoutSource()
         listOf("onInsertText(clipboardText", "onInsertText(reply)", "onInsertText(emoji)", "onInsertText(separator + continuation",
-            "conn.commitSuggestionPick(lastWord, suggestion)").forEach {
+            "conn.commitSuggestionPick(lastWord, suggestion, viewModel.predictiveSourceWord)").forEach {
             assertTrue("expected routing: $it", it in layout)
         }
         // Declared-typed paths are an allowlist; anything new must be reviewed here.

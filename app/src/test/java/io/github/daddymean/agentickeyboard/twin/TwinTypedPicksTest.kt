@@ -57,21 +57,21 @@ class TwinTypedPicksTest {
     fun suggestionPickThenSendIsSaved() {
         val r = Run()
         r.type("see you tom")
-        r.now += 40; r.conn.commitSuggestionPick(r.currentWord(), "tomorrow"); r.report()
+        r.now += 40; r.conn.commitSuggestionPick(r.currentWord(), "tomorrow", generatedFor = r.currentWord()); r.report()
         r.type("at 5")
         assertEquals("see you tomorrow at 5", r.send()?.text)
 
         // A correction of the current word counts the same way.
         val fix = Run()
         fix.type("teh")
-        fix.now += 40; fix.conn.commitSuggestionPick(fix.currentWord(), "the"); fix.report()
+        fix.now += 40; fix.conn.commitSuggestionPick(fix.currentWord(), "the", generatedFor = fix.currentWord()); fix.report()
         fix.type("plan")
         assertEquals("the plan", fix.send()?.text)
 
         // So does an app-side clear in a chat app afterwards.
         val clear = Run()
         clear.type("thx for the hel")
-        clear.now += 40; clear.conn.commitSuggestionPick(clear.currentWord(), "help"); clear.report()
+        clear.now += 40; clear.conn.commitSuggestionPick(clear.currentWord(), "help", generatedFor = clear.currentWord()); clear.report()
         clear.now += 2_000
         assertEquals("thx for the help", clear.session.onText("", clear.now)?.text)
     }
@@ -81,12 +81,12 @@ class TwinTypedPicksTest {
         // A next-word prediction (no current word) is not built from a typed prefix.
         val next = Run()
         next.type("see you ")
-        next.now += 40; next.conn.commitSuggestionPick(next.currentWord(), "tomorrow"); next.report()
+        next.now += 40; next.conn.commitSuggestionPick(next.currentWord(), "tomorrow", generatedFor = null); next.report()
         assertNull(next.send())
         // A multi-word entry is never a word pick.
         val phrase = Run()
         phrase.type("see you to")
-        phrase.now += 40; phrase.conn.commitSuggestionPick(phrase.currentWord(), "tomorrow at noon"); phrase.report()
+        phrase.now += 40; phrase.conn.commitSuggestionPick(phrase.currentWord(), "tomorrow at noon", generatedFor = phrase.currentWord()); phrase.report()
         assertNull(phrase.send())
         assertFalse(TypedPicks.isBoundedWordPick("x".repeat(TypedPicks.MAX_WORD_CHARS + 1)))
         assertFalse(TypedPicks.isBoundedWordPick("..."))
@@ -126,5 +126,31 @@ class TwinTypedPicksTest {
         tone.type("great ")
         tone.now += 40; tone.conn.commitInserted("\uD83C\uDF89", 1); tone.report()
         assertNull(tone.send())
+    }
+
+    /**
+     * Codex review on 6de6407 (r4239778214): a next-word prediction or prompt chip still
+     * on screen while the prefix completions are recomputed, tapped right after typing a
+     * character, must not pass as a completion of that character. Failed on 6de6407
+     * (saved "see you tonight").
+     */
+    @Test
+    fun staleNextWordChipTappedAfterOneCharIsNeverSaved() {
+        val r = Run()
+        r.type("see you t")
+        // The chip was made for "see you " (a next-word prediction): generatedFor is null.
+        r.now += 40; r.conn.commitSuggestionPick(r.currentWord(), "tonight", generatedFor = null); r.report()
+        assertNull(r.send())
+        // A completion chip made for an older prefix ("to") tapped after typing "ton" is stale too.
+        val older = Run()
+        older.type("see you ton")
+        older.now += 40; older.conn.commitSuggestionPick(older.currentWord(), "tonight", generatedFor = "to"); older.report()
+        assertNull(older.send())
+        assertFalse(TypedPicks.isTypedWordPick("t", "tonight", null))
+        assertFalse(TypedPicks.isTypedWordPick("ton", "tonight", "to"))
+        assertTrue(TypedPicks.isTypedWordPick("ton", "tonight", "ton"))
+        // The layout passes the view model's source word, set together with the list.
+        val layout = TwinInsertionPathGuardTest.layoutSource()
+        assertTrue("conn.commitSuggestionPick(lastWord, suggestion, viewModel.predictiveSourceWord)" in layout)
     }
 }

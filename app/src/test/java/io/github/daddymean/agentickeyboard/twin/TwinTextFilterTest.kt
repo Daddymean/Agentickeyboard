@@ -75,6 +75,12 @@ class TwinTextFilterTest {
             "the combination is 12-34-56",
             "CVV 123",
             "login is dad, passphrase correct horse battery staple",
+            // Codex review on 6de6407 (r4239778219): prepositional PIN forms. Failed on 6de6407.
+            "pin for my card is 1234",
+            "Pin to the safe is 4471",
+            "the pin on my phone: 2580",
+            "pins for the kids' tablets are 1111 and 2222",
+            "code for the alarm is 8812",
         )
         disclosures.forEach { assertNull(it, TwinTextFilter.prepare(it)) }
         // Ordinary uses of nearby words stay.
