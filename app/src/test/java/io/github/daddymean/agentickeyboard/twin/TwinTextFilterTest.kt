@@ -243,4 +243,38 @@ class TwinTextFilterTest {
         // A message that is only an identifier is not learned.
         assertNull(TwinTextFilter.prepare("AB123456"))
     }
+
+    /**
+     * Codex review on 8ff181a (r4242126136): "my access token is violetgarden" was stored.
+     * Per the standing rule (dropping is the safe default when the credential filter is
+     * hit again), token, key, secret and credential words now drop the message too.
+     * Failed on 8ff181a.
+     */
+    @Test
+    fun tokenKeyAndSecretDisclosuresAreDropped() {
+        listOf(
+            "my access token is violetgarden", "the refresh token is violetgarden", "API token is violetgarden",
+            "auth token: violetgarden", "my api key is violetgarden", "the private key is violetgarden",
+            "the key is violetgarden", "secret is violetgarden", "client secret violetgarden",
+            "my credentials are bob and violetgarden", "bearer violetgarden", "the JWT is violetgarden",
+            "ssh passphrase violetgarden", "license key violetgarden", "my apikey violetgarden"
+        ).forEach { assertNull(it, TwinTextFilter.prepare(it)) }
+        val words = listOf(
+            "token", "access token", "refresh token", "auth token", "api token", "session token", "bearer token",
+            "key", "api key", "apikey", "api-key", "private key", "secret key", "access key", "license key",
+            "product key", "secret", "client secret", "credential", "cred", "bearer", "jwt", "oauth",
+            "auth", "session id", "cookie"
+        )
+        val forms = listOf<(String) -> String>({ it }, { it + "s" }, { "$it's" }, { it.uppercase() }, { it.replaceFirstChar { c -> c.uppercase() } })
+        var n = 0
+        for (w in words) for (f in forms) for (frame in listOf("my %s is violetgarden", "%s: violetgarden", "violetgarden is the %s", "(%s) violetgarden")) {
+            val msg = frame.format(f(w))
+            assertNull(msg, TwinTextFilter.prepare(msg))
+            n++
+        }
+        assertTrue(n > 500)
+        listOf("Monkey business tonight", "the turkey was great", "Keyboard works now").forEach {
+            assertEquals(it, TwinTextFilter.prepare(it))
+        }
+    }
 }

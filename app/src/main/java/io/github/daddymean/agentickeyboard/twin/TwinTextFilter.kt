@@ -86,14 +86,18 @@ internal object CredentialMentions {
      * Hax decisions 2026-10-10 18:37 PT): **any credential word drops the message, digits
      * or not**, in any case, singular, plural or possessive. Whole words by letters, so
      * "pin1234" matches but "Pinterest" does not. Many harmless messages ("I'll code it
-     * tonight", "Pin the post") are not learned; dropping is the safe default.
+     * tonight", "Pin the post") are not learned; dropping is the safe default. Token, key,
+     * secret and credential words were added after the review on 8ff181a (r4242126136), so
+     * "grab my keys" is not learned either.
      */
     private val credentialWord = Regex(
         "(?<!\\p{L})(" +
             "code|pin|password|passwd|pwd|pw|passcode|passphrase|passkey|" +
             "combination|combo|otp|2fa|mfa|totp|cvv2?|cvc|csc|" +
             "security\\s+(answer|question)|(seed|recovery|backup)\\s+(phrase|word|code|key)|mnemonic|" +
-            "log-?in|logon|sign-?in|username" +
+            "log-?in|logon|sign-?in|username|" +
+            // Tokens, keys and secrets (Codex review on 8ff181a, r4242126136): "my access token is ...".
+            "token|key|apikey|secret|credential|creds?|bearer|jwt|oauth|auth|cookie|session\\s+id" +
             ")(e?s|['\u2019]s|s['\u2019])?(?!\\p{L})",
         RegexOption.IGNORE_CASE
     )
