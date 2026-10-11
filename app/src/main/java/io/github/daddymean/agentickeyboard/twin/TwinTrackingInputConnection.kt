@@ -25,28 +25,37 @@ class TwinTrackingInputConnection(
     private val clock: () -> Long = System::currentTimeMillis
 ) : InputConnectionWrapper(base, false), TypingAwareConnection {
 
-    private fun report(text: CharSequence) {
-        if (isSingleKey(text)) session.noteKeyboardCommit(text, clock()) else session.markInserted(clock())
+    /**
+     * A single key is credited as typing only after the editor accepted it (Codex review
+     * on 08efa93, r4239970466); anything else is an insertion whether or not it landed.
+     */
+    private fun report(text: CharSequence, accepted: Boolean) {
+        if (!isSingleKey(text)) session.markInserted(clock())
+        else if (accepted) session.noteKeyboardCommit(text, clock())
     }
 
     override fun commitText(text: CharSequence?, newCursorPosition: Int): Boolean {
-        text?.let(::report)
-        return super.commitText(text, newCursorPosition)
+        val ok = super.commitText(text, newCursorPosition)
+        text?.let { report(it, ok) }
+        return ok
     }
 
     override fun commitText(text: CharSequence, newCursorPosition: Int, textAttribute: TextAttribute?): Boolean {
-        report(text)
-        return super.commitText(text, newCursorPosition, textAttribute)
+        val ok = super.commitText(text, newCursorPosition, textAttribute)
+        report(text, ok)
+        return ok
     }
 
     override fun setComposingText(text: CharSequence?, newCursorPosition: Int): Boolean {
-        text?.let(::report)
-        return super.setComposingText(text, newCursorPosition)
+        val ok = super.setComposingText(text, newCursorPosition)
+        text?.let { report(it, ok) }
+        return ok
     }
 
     override fun commitTypedText(text: CharSequence, newCursorPosition: Int): Boolean {
-        session.noteKeyboardCommit(text, clock())
-        return super.commitText(text, newCursorPosition)
+        val ok = super.commitText(text, newCursorPosition)
+        if (ok) session.noteKeyboardCommit(text, clock())
+        return ok
     }
 
     override fun commitInsertedText(text: CharSequence, newCursorPosition: Int): Boolean {

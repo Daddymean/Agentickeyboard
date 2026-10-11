@@ -159,4 +159,42 @@ class TwinCaptureRegressionTest {
         }
         t.setField(field)
     }
+
+    /**
+     * Codex review on 08efa93 (r4239970466): an app-side substitution inside the credit
+     * window, or a commit the editor rejected, must not pass as typing just because the
+     * lengths fit. Failed on 08efa93 (saved "Xhello").
+     */
+    @Test
+    fun substitutedOrRejectedCommitIsNeverSaved() {
+        // The keyboard commits "a", but the app puts "X" there instead.
+        val sub = TwinTyping(emptyChat())
+        sub.session.noteKeyboardCommit("a", sub.now)
+        sub.external("X")
+        sub.type("hello")
+        assertNull(sub.send())
+
+        // The editor rejects the commit; the app inserts "X" in the same window.
+        val rejecting = Proxy.newProxyInstance(InputConnection::class.java.classLoader, arrayOf(InputConnection::class.java)) { _, m, _ ->
+            when (m.returnType) { java.lang.Boolean.TYPE -> false; Integer.TYPE -> 0; else -> null }
+        } as InputConnection
+        val rej = TwinTyping(emptyChat())
+        TwinTrackingInputConnection(rejecting, rej.session) { rej.now }.commitText("a", 1)
+        rej.now += 5
+        rej.session.onText("X", rej.now)
+        rej.setField("X")
+        rej.type("hello")
+        assertNull(rej.send())
+
+        // An auto-fix (delete the typed word, commit the fix) still matches by content.
+        val fix = TwinTyping(emptyChat())
+        fix.type("teh")
+        fix.now += 40
+        fix.session.noteKeyboardDelete(fix.now, 3)
+        fix.session.noteKeyboardCommit("the ", fix.now)
+        fix.session.onText("the ", fix.now + 5)
+        fix.setField("the ")
+        fix.type("end")
+        assertEquals("the end", fix.send()?.text)
+    }
 }

@@ -74,7 +74,13 @@ class TwinCaptureSession {
     var clearCaptureDisabled = false
         private set
 
-    private var credit = 0
+    /**
+     * The exact text the keyboard committed and the editor accepted, not yet seen in an
+     * update (Codex review on 08efa93, r4239970466): an update counts as typing only when
+     * the text it adds is exactly this, in order, so an app-side substitution of the same
+     * length, or a rejected commit, never passes.
+     */
+    private val pending = StringBuilder()
     private var creditUntil = Long.MIN_VALUE
     private var deleteCredit = 0
     private var deleteUntil = Long.MIN_VALUE
@@ -114,7 +120,8 @@ class TwinCaptureSession {
 
     /** The keyboard committed [text] from a key, swipe word or suggestion. */
     fun noteKeyboardCommit(text: CharSequence, nowMillis: Long) {
-        credit = if (nowMillis <= creditUntil) credit + text.length else text.length
+        if (nowMillis > creditUntil) pending.setLength(0)
+        pending.append(text)
         creditUntil = nowMillis + MARK_WINDOW_MS
     }
 
@@ -174,17 +181,17 @@ class TwinCaptureSession {
         }
         if (text == old) return null
 
-        val liveCredit = if (nowMillis <= creditUntil) credit else 0
+        if (nowMillis > creditUntil) pending.setLength(0)
         val liveDeletes = if (nowMillis <= deleteUntil) deleteCredit else 0
-        val common = commonPrefixLength(text, old)
-        val removed = old.length - common
-        val added = text.length - common
+        val edit = keyboardEdit(old, text, liveDeletes)
         when {
-            // The keyboard's own edit at the caret: exactly what it just deleted and
-            // committed (a key, a backspace, or an auto-fix delete-then-commit).
-            (removed > 0 || added > 0) && removed <= liveDeletes && added <= liveCredit -> {
+            // The keyboard's own edit at the caret: it removed at most what it just deleted
+            // and added exactly what it just committed (a key, a backspace, or an auto-fix
+            // delete-then-commit), matched by content.
+            edit != null -> {
+                val (removed, added) = edit
                 val draftStarts = doc.isEmpty() && added > 0
-                credit = liveCredit - added
+                pending.delete(0, added)
                 deleteCredit = liveDeletes - removed
                 doc = text + doc.drop(old.length)
                 // A new draft: anything already after the caret (a quote, a signature,
@@ -242,10 +249,26 @@ class TwinCaptureSession {
         prefix = current
         tainted = false
         clearUnsafe = false
-        credit = 0
+        pending.setLength(0)
         creditUntil = Long.MIN_VALUE
         deleteCredit = 0
         deleteUntil = Long.MIN_VALUE
+    }
+
+    /**
+     * The keyboard edit that turns [old] into [text]: remove r <= [liveDeletes] characters
+     * before the caret, then add a prefix of [pending]. Returns (r, added) or null.
+     */
+    private fun keyboardEdit(old: String, text: String, liveDeletes: Int): Pair<Int, Int>? {
+        val maxR = minOf(liveDeletes, old.length)
+        for (r in 0..maxR) {
+            val base = old.length - r
+            if (text.length < base || !text.regionMatches(0, old, 0, base)) continue
+            val added = text.length - base
+            if (r == 0 && added == 0) return null
+            if (added <= pending.length && pending.regionMatches(0, text, base, added)) return r to added
+        }
+        return null
     }
 
     private fun commonPrefixLength(a: String, b: String): Int {
