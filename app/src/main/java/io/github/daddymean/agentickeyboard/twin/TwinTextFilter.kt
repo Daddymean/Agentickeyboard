@@ -14,6 +14,11 @@ import io.github.daddymean.agentickeyboard.util.SecretTokenPatterns
  *   (Codex security review on 43a7b02, r4239700720). The value itself can't be told
  *   apart from ordinary words, so the label decides, and when in doubt the message
  *   is not kept.
+ * - **Code- or config-like text** (JSON-ish structures, key=value or key: value lines,
+ *   env-style UPPER_SNAKE=..., YAML-ish blocks, URLs with credential query parameters,
+ *   code fences) drops the whole message (Keith's security decision, chat 2026-10-11
+ *   10:09 PT); see [CodeLikeText]. Rare credential formats beyond the covered patterns
+ *   are best effort, an accepted residual risk.
  * - **Identifiers are blanked, best effort** (Keith's security decision, chat
  *   2026-10-11 08:09 PT; Codex reviews on da29f67 and 6b12a27, r4239989012 /
  *   r4240024848): a recognised value after an identifier label (ID, passport, account,
@@ -39,6 +44,7 @@ object TwinTextFilter {
         val sanitized = CloudTextSanitizer.sanitize(trimmed).text
         if (sanitized.contains(SECRET_MARKER)) return null
         if (CredentialMentions.matches(trimmed)) return null
+        if (CodeLikeText.matches(trimmed)) return null
         val blanked = IdentifierBlanker.blank(sanitized)
         if (markers.replace(blanked, "").isBlank()) return null
         return if (blanked.length <= MAX_CHARS) blanked else blanked.take(MAX_CHARS)
@@ -168,7 +174,10 @@ internal object CredentialMentions {
      * a digit or symbol, mixed case, or is not a common English word.
      */
     private val assignment = Regex(
-        "([\\p{L}\\p{Nd}_.\\-]+)(?:\\s+(?i:is|was)\\s+|\\s*(?:=|:|->)\\s*)[\"'\u201C\u2018]?([^\\s\"'\u201D\u2019]+)"
+        // Optional quotes or backticks around the label and the value (Codex review on
+        // 5f7fb93, r4242321005): {"pass":"hunter2"}, `pwd`='x'.
+        "[\"'`\u201C\u2018]?([\\p{L}\\p{Nd}_.\\-]+)[\"'`\u201D\u2019]?" +
+            "(?:\\s+(?i:is|was)\\s+|\\s*(?:=|:|->)\\s*)[\"'`\u201C\u2018]?([^\\s\"'`\u201D\u2019]+)"
     )
     private val commonWords = setOf(
         "about", "after", "again", "all", "also", "always", "back", "because", "been", "being", "best", "better",
@@ -310,5 +319,51 @@ object TwinExportScrubber {
         out = mixed4.replace(out, IdentifierBlanker.MARKER)
         out = longNumber.replace(out, NUM)
         return if (TwinTextFilter.onlyMarkers(out)) null else out
+    }
+}
+
+/**
+ * KEYBOARD-024: code- or config-like text is never learned (Codex review on 5f7fb93,
+ * r4242321005; Keith's security decision, chat 2026-10-11 10:09 PT). Such text is where
+ * credentials hide in forms the word rules can't see, and it isn't how Keith writes to
+ * people, so the whole message is dropped when it has:
+ * - a code fence (``` or ~~~);
+ * - a JSON-ish structure: `{` or `[` followed by a quoted key and a colon, or a quoted
+ *   label assigned with `:` or `=`;
+ * - an env-style `UPPER_SNAKE=...` anywhere;
+ * - a URL query parameter that names a credential (token=, key=, sig=, password=, ...);
+ * - a line that starts with an identifier and `=` ("host=db.local");
+ * - a line that starts with a code-shaped identifier (snake, dotted, kebab or camelCase,
+ *   or with digits) and `:` ("db.answer: x", "theAnswer: x"). A plain "label: value"
+ *   line is left to the credential assignment rule, so "Passport: X1234567" is blanked,
+ *   not dropped, while "answer: Tr0ub4dor" is dropped;
+ * - two or more YAML-ish `key: value` lines.
+ * Ordinary prose like "meet at 5: bring snacks", "Note: bring snacks" or "ratio is 3:1"
+ * is kept.
+ */
+internal object CodeLikeText {
+    private val fence = Regex("```|~~~")
+    private val jsonKey = Regex("[{\\[]\\s*[\"'`][^\"'`\\n]{1,64}[\"'`]\\s*:")
+    private val quotedAssign = Regex("[\"'`][\\p{L}\\p{Nd}_.\\- ]{1,64}[\"'`]\\s*[:=]\\s*[\"'`\\[{\\p{L}\\p{Nd}]")
+    private val envVar = Regex("(?<![\\p{L}\\p{Nd}_])[A-Z][A-Z0-9]*_[A-Z0-9_]+\\s*=")
+    private val urlCredential = Regex(
+        "[?&;][\\w.\\-]*(?i:token|key|sig|signature|pass|pwd|secret|auth|session|code|otp|jwt|cred)[\\w.\\-]*="
+    )
+    private val lineAssign = Regex("(?m)^\\s*[\\p{L}_][\\p{L}\\p{Nd}_.\\-]*\\s*=\\s*\\S")
+    private val lineColon = Regex("(?m)^\\s*([\\p{L}_][\\p{L}\\p{Nd}_.\\-]*)\\s*:[ \\t]*(\\S.*)?$")
+    private val codeShaped = Regex("[_.\\-\\d]|\\p{Ll}\\p{Lu}")
+
+    fun matches(text: String): Boolean {
+        if (fence.containsMatchIn(text) || jsonKey.containsMatchIn(text) || quotedAssign.containsMatchIn(text) ||
+            envVar.containsMatchIn(text) || urlCredential.containsMatchIn(text) || lineAssign.containsMatchIn(text)
+        ) return true
+        var yamlLines = 0
+        for (m in lineColon.findAll(text)) {
+            val key = m.groupValues[1]
+            val value = m.groupValues[2].trim()
+            if (codeShaped.containsMatchIn(key) && value.isNotEmpty()) return true
+            if (value.isEmpty() || !value.contains(' ')) yamlLines++
+        }
+        return yamlLines >= 2
     }
 }

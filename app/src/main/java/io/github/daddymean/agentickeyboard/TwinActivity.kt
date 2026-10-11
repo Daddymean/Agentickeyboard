@@ -194,9 +194,12 @@ class TwinActivity : Activity() {
                 "What it keeps: messages you type on this keyboard and send, in any app, with the app's name and the time. " +
                 "A message counts as sent when you press the keyboard's Send or Go key, or when a chat app clears the box " +
                 "after you typed it. When the keyboard is unsure, it does not save.\n\n" +
-                "Never saved: passwords, PINs, codes and other secrets. Any message that mentions a password, PIN, " +
-                "code, login, token, key, secret or similar, or contains a token or key, is skipped whole. (A secret typed on its own with " +
-                "no word like \"password\" around it can't be recognised, so don't type secrets bare.) Also never saved: anything typed " +
+                "Never saved: passwords, PINs, codes and other secrets in common forms. Any message that mentions a " +
+                "password, PIN, code, login, token, key, secret or similar (also joined, like accessToken or " +
+                "securitycode), or contains a token or key, is skipped whole. Code- or config-like text (JSON, " +
+                "key=value lines, settings, code blocks, links carrying a key or token) is never saved either. Rare " +
+                "formats are best effort, and a secret typed on its own with no word like \"password\" around it " +
+                "can't be recognised, so don't type secrets bare. Also never saved: anything typed " +
                 "in password, private or incognito fields; anything while learning or the twin is paused; other " +
                 "people's messages (it never reads the screen for this); any message that contains pasted, pre-filled, " +
                 "inserted or AI-written text (the whole message is skipped); text you select and cut or clear.\n\n" +

@@ -382,4 +382,26 @@ class TwinTextFilterTest {
         }
         assertNull(TwinTextFilter.prepare("we talked about the zipcode today"))
     }
+
+    /**
+     * Codex review on 5f7fb93 (r4242321005) and Keith's security decision (chat,
+     * 2026-10-11 10:09 PT): quoted labels in assignments, and any code- or config-like
+     * text, drop the whole message. Failed on 5f7fb93.
+     */
+    @Test
+    fun codeLikeTextAndQuotedAssignmentsAreDropped() {
+        listOf(
+            "{\"pass\":\"hunter2\"}", "\"answer\": \"Tr0ub4dor\"", "`pwd`='x'", "'answer' = 'Tr0ub4dor'",
+            "`pass`: `violetgarden`", "DB_PASS=violetgarden", "use DB_PASS=violetgarden on staging",
+            "https://example.com/cb?api_key=violetgarden", "see example.com/x?id=3&sig=abc123 ok",
+            "http://host/path?password=violetgarden", "[\"user\", {\"answer\": \"x\"}]",
+            "```\nfoo = bar\n```", "~~~ anything ~~~", "host=db.local", "  answer = violetgarden",
+            "db.answer: violetgarden", "port: 5432\nuser: admin", "server:\n  answer: x\n  port: 1",
+            "theAnswer: Tr0ub4dor", "answer: Tr0ub4dor"
+        ).forEach { assertNull(it, TwinTextFilter.prepare(it)) }
+        listOf(
+            "meet at 5: bring snacks", "ratio is 3:1", "Note: bring snacks", "Reminder: dinner at 7",
+            "the score was 2-1", "love you :)", "it's 10:30 now", "Q: are we still on? A: yes"
+        ).forEach { assertEquals(it, TwinTextFilter.prepare(it)) }
+    }
 }
