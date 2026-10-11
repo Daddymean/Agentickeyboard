@@ -109,6 +109,7 @@ import io.github.daddymean.agentickeyboard.util.captureCommittedEditUndo
 import io.github.daddymean.agentickeyboard.util.commitTextWithCaret
 import io.github.daddymean.agentickeyboard.util.commitInserted
 import io.github.daddymean.agentickeyboard.util.commitTyped
+import io.github.daddymean.agentickeyboard.util.commitSuggestionPick
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlin.math.abs
@@ -1101,8 +1102,8 @@ fun AgenticKeyboardLayout(
                                                             onPlaygroundTextChange(text.dropLast(lastWord.length) + suggestion + " ")
                                                         } else {
                                                             inputConnectionProvider()?.let { conn ->
-                                                                conn.deleteSurroundingText(lastWord.length, 0)
-                                                                conn.commitInserted("$suggestion ", 1) // twin: inserted (suggestion strip)
+                                                                // twin: typed when it completes/corrects the current word (bounded), else inserted
+                                                                conn.commitSuggestionPick(lastWord, suggestion)
                                                             }
                                                         }
                                                         viewModel.onWordCommitted(suggestion)

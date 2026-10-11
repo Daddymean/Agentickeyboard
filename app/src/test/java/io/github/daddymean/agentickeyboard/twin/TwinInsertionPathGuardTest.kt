@@ -17,6 +17,10 @@ import java.io.File
  *    the same line or within the three lines above;
  *  - `onKeyPress(` (the typed-key callback) is called only with a one-character
  *    string literal, or with a `// twin: single key` marker.
+ *  - the only paths declared typed (`// twin: typed`) are the allowlisted ones: a swipe
+ *    word, the double-space period, an auto-fix of the typed word, and a bounded
+ *    suggestion pick for the current word (Hax decision 2026-10-10 17:19 PT). Smart
+ *    replies, tone emoji, AI continuation and other insertions can't be declared typed.
  * The wrapper also treats any untagged multi-character commit as an insertion
  * (TwinTrackingInputConnectionTest), so this guard is the second line of defence.
  */
@@ -28,7 +32,7 @@ class TwinInsertionPathGuardTest {
         fun layoutSource(): String =
             mainRoot().walkTopDown().single { it.name == "AgenticKeyboardLayout.kt" }.readText()
 
-        private val COMMIT = Regex("""\b(commitText|commitTextWithCaret|commitTyped|commitInserted|onInsertText|onTypedWord)\(""")
+        private val COMMIT = Regex("""\b(commitText|commitTextWithCaret|commitTyped|commitInserted|commitSuggestionPick|commitPickedEmoji|onInsertText|onTypedWord)\(""")
         private val KEY_PRESS = Regex("""\bonKeyPress\(""")
         private val SINGLE_LITERAL = Regex("""\bonKeyPress\("(\\.|[^"\\])"\)""")
 
@@ -41,7 +45,7 @@ class TwinInsertionPathGuardTest {
                 if (line.startsWith("*") || line.startsWith("/*")) return@forEachIndexed
                 val tagged = (maxOf(0, i - 3)..i).any { "// twin:" in lines[it] }
                 // Declarations (`fun commitTyped(`, `override fun commitText(`, parameters) are not calls.
-                val isDecl = Regex("""\bfun\s+(\w+\.)?(commitText|commitTextWithCaret|commitTyped|commitInserted)\(""").containsMatchIn(line) ||
+                val isDecl = Regex("""\bfun\s+(\w+\.)?(commitText|commitTextWithCaret|commitTyped|commitInserted|commitSuggestionPick|commitPickedEmoji)\(""").containsMatchIn(line) ||
                     Regex("""\b(onKeyPress|onInsertText|onTypedWord)\s*:""").containsMatchIn(line)
                 if (isDecl) return@forEachIndexed
                 if (COMMIT.containsMatchIn(line) && !tagged) out += "line ${i + 1}: ${raw.trim()}"
@@ -72,8 +76,26 @@ class TwinInsertionPathGuardTest {
         // Non-vacuous: the known insertion sites are present and routed as insertions.
         val layout = layoutSource()
         listOf("onInsertText(clipboardText", "onInsertText(reply)", "onInsertText(emoji)", "onInsertText(separator + continuation",
-            "conn.commitInserted(\"\$suggestion \"").forEach {
-            assertTrue("expected insertion routing: $it", it in layout)
+            "conn.commitSuggestionPick(lastWord, suggestion)").forEach {
+            assertTrue("expected routing: $it", it in layout)
+        }
+        // Declared-typed paths are an allowlist; anything new must be reviewed here.
+        val typed = files.flatMap { f -> f.readLines().filter { "// twin: typed" in it } }
+            .map { it.substringAfter("// twin: typed").trim() }
+            .sorted()
+        assertEquals(
+            listOf(
+                "(double-space period)",
+                "(swipe word)",
+                "(swipe word)",
+                "only for an auto-fix / learned fix of the word just typed;",
+                "when it completes/corrects the current word (bounded), else inserted",
+            ),
+            typed
+        )
+        for (insertion in listOf("onInsertText(reply)", "onInsertText(emoji)", "onInsertText(separator + continuation", "onInsertText(clipboardText")) {
+            val line = layout.lines().single { insertion in it }
+            assertTrue(line, "// twin: inserted" in line)
         }
     }
 
@@ -87,6 +109,8 @@ class TwinInsertionPathGuardTest {
             """currentInputConnection?.commitText(item.content, 1)""",
             """onInsertText(text)""",
             """ic.commitTextWithCaret(text, offset)""",
+            """conn.commitSuggestionPick(lastWord, suggestion)""",
+            """conn.commitPickedEmoji(emoji)""",
         )
         bad.forEach { assertTrue("should flag: $it", violations(it).isNotEmpty()) }
         val good = listOf(
