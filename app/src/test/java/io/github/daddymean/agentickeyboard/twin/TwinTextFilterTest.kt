@@ -49,4 +49,41 @@ class TwinTextFilterTest {
         val out = TwinTextFilter.prepare("word ".repeat(2_000))!!
         assertEquals(TwinTextFilter.MAX_CHARS, out.length)
     }
+
+    /**
+     * Codex security review on 43a7b02 (r4239700720): credentials phrased naturally must
+     * not be stored. Any message that names a credential is dropped whole.
+     */
+    @Test
+    fun naturalLanguagePasswordDisclosuresAreDropped() {
+        val disclosures = listOf(
+            "my password is hunter2",
+            "My Password is Hunter2!",
+            "the wifi password is sunflower88",
+            "passcode for the door is 4471",
+            "use pw tiger55 to log in",
+            "the PIN is 1234",
+            "my pin is 1234",
+            "card pin 9921",
+            "garage code is 55210",
+            "the code is 482913",
+            "OTP 739201",
+            "verification code: 551203",
+            "2FA code 118822 hurry",
+            "my seed phrase is apple banana cherry",
+            "security answer is fluffy",
+            "the combination is 12-34-56",
+            "CVV 123",
+            "login is dad, passphrase correct horse battery staple",
+        )
+        disclosures.forEach { assertNull(it, TwinTextFilter.prepare(it)) }
+        // Ordinary uses of nearby words stay.
+        listOf(
+            "Pin the post to the top",
+            "Can you pass the salt",
+            "The code review went well",
+            "I'll code it tonight",
+            "Happy to help with the login page design",
+        ).forEach { assertEquals(it, TwinTextFilter.prepare(it)) }
+    }
 }
