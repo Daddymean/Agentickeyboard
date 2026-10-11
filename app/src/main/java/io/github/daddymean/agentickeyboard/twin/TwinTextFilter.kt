@@ -14,9 +14,13 @@ import io.github.daddymean.agentickeyboard.util.SecretTokenPatterns
  *   (Codex security review on 43a7b02, r4239700720). The value itself can't be told
  *   apart from ordinary words, so the label decides, and when in doubt the message
  *   is not kept.
- * - A message with an **identifier** (a label such as ID, passport, licence, account,
- *   member or policy plus any digit, or any letters-and-digits token of 6+ characters)
- *   is dropped whole (Codex review on da29f67, r4239989012); see [IdentifierMentions].
+ * - **Identifiers are blanked, best effort** (Keith's security decision, chat
+ *   2026-10-11 08:09 PT; Codex reviews on da29f67 and 6b12a27, r4239989012 /
+ *   r4240024848): a recognised value after an identifier label (ID, passport, account,
+ *   member, booking, reference, policy, ticket, ...), with or without digits, and any
+ *   letters-and-digits token of 6+ characters become `[ID]`, and the rest of the message
+ *   is still learned. Some identifiers will be missed; that is the accepted residual
+ *   risk. Exports are scrubbed again, more strictly, by [TwinExportScrubber].
  * - Everything else the cloud redactor masks (e-mail addresses, card and ID numbers,
  *   SSNs, phone numbers, IP addresses, URLs) is replaced by its marker, so the
  *   value is never stored but the shape of the sentence is.
@@ -25,7 +29,7 @@ import io.github.daddymean.agentickeyboard.util.SecretTokenPatterns
 object TwinTextFilter {
     const val MAX_CHARS = 4_000
     private const val SECRET_MARKER = "[REDACTED_SECRET]"
-    private val markers = Regex("\\[REDACTED_[A-Z_]+]")
+    private val markers = Regex("\\[REDACTED_[A-Z_]+]|\\[ID]|\\[NUM]")
 
     fun prepare(text: String): String? {
         val trimmed = text.trim()
@@ -35,10 +39,13 @@ object TwinTextFilter {
         val sanitized = CloudTextSanitizer.sanitize(trimmed).text
         if (sanitized.contains(SECRET_MARKER)) return null
         if (CredentialMentions.matches(trimmed)) return null
-        if (IdentifierMentions.matches(trimmed)) return null
-        if (markers.replace(sanitized, "").isBlank()) return null
-        return if (sanitized.length <= MAX_CHARS) sanitized else sanitized.take(MAX_CHARS)
+        val blanked = IdentifierBlanker.blank(sanitized)
+        if (markers.replace(blanked, "").isBlank()) return null
+        return if (blanked.length <= MAX_CHARS) blanked else blanked.take(MAX_CHARS)
     }
+
+    /** True when [text] is only redaction markers and whitespace. */
+    internal fun onlyMarkers(text: String): Boolean = markers.replace(text, "").isBlank()
 }
 
 /**
@@ -99,33 +106,99 @@ internal object CredentialMentions {
 }
 
 /**
- * KEYBOARD-024: identifiers (Codex review on da29f67, r4239989012). The cloud redactor
- * only masks long digit runs, so short or alphanumeric IDs ("my employee ID is 123456",
- * "passport number AB123456") would be stored. Conservatively, the whole message is
- * dropped when:
- * - an identifier label appears together with **any digit anywhere** in the message; or
- * - any token mixes letters and digits and is 6+ characters long (passport, plate,
- *   booking-reference shapes), labeled or not.
- * Harmless messages ("in case 2 people come", "covid19") are not learned; dropping is
- * the safe default.
+ * KEYBOARD-024: best-effort identifier blanking (Keith's security decision, chat
+ * 2026-10-11 08:09 PT; Codex reviews on da29f67 and 6b12a27, r4239989012 / r4240024848).
+ * Credentials are never handled here: they drop the whole message in [CredentialMentions].
+ *
+ * Replaced with [MARKER]:
+ * - the value after an identifier label ("member ID is ABCDEF", "booking reference QWERTY",
+ *   "passport number AB123456", "ref: qx-7z9p"): a token with a digit, an all-capitals
+ *   token, or any token after `:`, `=` or `#`, plus following digit or capital groups
+ *   ("QQ 12 34 56 C");
+ * - a value named before its label ("445566 is my member number");
+ * - any letters-and-digits token of 6+ characters, labeled or not ("AB123456").
+ * Lower-case words after a plain label ("my booking is tomorrow") are kept, so a
+ * lower-case identifier without `:` can be missed. That is the accepted residual risk;
+ * [strict] mode, used by [TwinExportScrubber], blanks any value after a label.
  */
-internal object IdentifierMentions {
-    private val label = Regex(
-        "(?<!\\p{L})(" +
-            "ids?|identification|identifiers?|identity|passports?|licen[cs]es?|dl|ssns?|" +
-            "social\\s+(security|insurance)|national\\s+(insurance|id)|nhs|nino|tin|itin|ein|vat|" +
-            "tax\\s+(id|number|code|file|ref)|iban|routing|swift|bic|sort\\s+code|acct|accounts?|" +
-            "members?|membership|polic(y|ies)|customers?|patients?|mrn|medical\\s+records?|students?|" +
-            "employees?|staff|badges?|serials?|vins?|plates?|registrations?|reg|references?|refs?|" +
-            "bookings?|reservations?|confirmations?|tracking|visas?|permits?|green\\s+card|alien|" +
-            "cases?|claims?|tickets?|numbers?|nos?\\.|nr\\.?|#" +
-            ")(['\u2019]s)?(?!\\p{L})",
-        RegexOption.IGNORE_CASE
-    )
-    private val digit = Regex("\\p{Nd}")
-    /** A run of letters and digits, 6+ long, with at least one of each. */
-    private val mixedToken = Regex("(?<![\\p{L}\\p{Nd}])(?=[\\p{L}\\p{Nd}]*\\p{L})(?=[\\p{L}\\p{Nd}]*\\p{Nd})[\\p{L}\\p{Nd}]{6,}(?![\\p{L}\\p{Nd}])")
+internal object IdentifierBlanker {
+    const val MARKER = "[ID]"
 
-    fun matches(text: String): Boolean =
-        (digit.containsMatchIn(text) && label.containsMatchIn(text)) || mixedToken.containsMatchIn(text)
+    private const val LABELS =
+        "social\\s+security|social\\s+insurance|national\\s+insurance|national\\s+id|medical\\s+records?|" +
+            "tax\\s+(?:id|number|ref|reference)|green\\s+card|identification|identifiers?|identity|ids?|" +
+            "passports?|licen[cs]es?|dl|ssns?|nhs|nino|tin|itin|ein|vat|iban|routing|swift|bic|acct|accounts?|" +
+            "membership|members?|polic(?:y|ies)|customers?|patients?|mrn|students?|employees?|staff|badges?|" +
+            "serials?|vins?|plates?|registrations?|reg|references?|refs?|bookings?|reservations?|confirmations?|" +
+            "tracking|visas?|permits?|claims?|tickets?|orders?|invoices?"
+    private const val FILLERS = "ids?|numbers?|nos?\\.?|nr\\.?|refs?|references?"
+    private const val TOK = "[A-Za-z0-9](?:[A-Za-z0-9./-]*[A-Za-z0-9])?"
+
+    private val labeled = Regex(
+        "(?<![\\p{L}\\p{Nd}])((?i:$LABELS)(?:['\u2019]s)?(?:\\s+(?i:$FILLERS))*)(?!\\p{L})" +
+            "(\\s*[:=#]\\s*|\\s+(?i:is|was)\\s+|\\s+)" +
+            // The value is never the filler or verb itself ("member ID is", "account number").
+            "((?!(?i:is|was|$FILLERS)(?![A-Za-z0-9]))$TOK(?: $TOK){0,6})"
+    )
+    private val valueFirst = Regex(
+        "(?<![\\p{L}\\p{Nd}\\[])($TOK)(\\s+(?i:is|was)\\s+(?i:my|the|your|his|her|our|their)\\s+" +
+            "(?:[\\p{L}'-]+\\s+){0,2}(?i:$LABELS)(?!\\p{L}))"
+    )
+    private val mixedToken = Regex(
+        "(?<![\\p{L}\\p{Nd}\\[_])(?=[\\p{L}\\p{Nd}]*\\p{L})(?=[\\p{L}\\p{Nd}]*\\p{Nd})[\\p{L}\\p{Nd}]{6,}(?![\\p{L}\\p{Nd}])"
+    )
+    private val hasDigit = Regex("\\d")
+    private val caps = Regex("[A-Z]{2,}")
+    private val shortCaps = Regex("[A-Z]{1,2}")
+
+    fun blank(text: String, strict: Boolean = false): String {
+        var out = labeled.replace(text) { m ->
+            val (label, sep, value) = m.destructured
+            val strongSep = sep.trim().let { it.isNotEmpty() && it[0] in ":=#" }
+            val tokens = value.split(' ')
+            if (!firstIsValue(tokens[0], strongSep || strict)) return@replace m.value
+            var n = 1
+            while (n < tokens.size && continuesValue(tokens[n])) n++
+            val rest = tokens.drop(n).joinToString(" ")
+            label + sep + MARKER + (if (rest.isEmpty()) "" else " $rest")
+        }
+        out = valueFirst.replace(out) { m ->
+            if (firstIsValue(m.groupValues[1], strict)) MARKER + m.groupValues[2] else m.value
+        }
+        return mixedToken.replace(out, MARKER)
+    }
+
+    private fun firstIsValue(t: String, anyCase: Boolean): Boolean =
+        t.length >= 2 && (hasDigit.containsMatchIn(t) || caps.matches(t) || anyCase)
+
+    private fun continuesValue(t: String): Boolean =
+        hasDigit.containsMatchIn(t) || caps.matches(t) || (shortCaps.matches(t) && t != "I" && t != "A")
+}
+
+/**
+ * KEYBOARD-024 export-scrub contract (Keith's security decision, chat 2026-10-11 08:09 PT).
+ * **Every** twin entry must pass through [scrub] before it leaves the phone in any export
+ * (slice 3) or hand-off. It is stricter than capture:
+ * - it re-applies everything [TwinTextFilter.prepare] does (secrets and credential words
+ *   drop the entry; e-mail addresses, phones, cards, IDs, IPs and URLs are masked);
+ * - it blanks **any** value after an identifier label, in any case ([IdentifierBlanker]
+ *   strict mode);
+ * - it masks any letters-and-digits token of 4+ characters as `[ID]` and any number of
+ *   4+ digits (with spaces, dots or hyphens between groups) as `[NUM]`.
+ * Returns null when the entry must not be exported at all.
+ */
+object TwinExportScrubber {
+    private const val NUM = "[NUM]"
+    private val mixed4 = Regex(
+        "(?<![\\p{L}\\p{Nd}\\[_])(?=[\\p{L}\\p{Nd}]*\\p{L})(?=[\\p{L}\\p{Nd}]*\\p{Nd})[\\p{L}\\p{Nd}]{4,}(?![\\p{L}\\p{Nd}])"
+    )
+    private val longNumber = Regex("(?<![\\p{L}\\p{Nd}])\\d(?:[ .-]?\\d){3,}(?![\\p{L}\\p{Nd}])")
+
+    fun scrub(text: String): String? {
+        val prepared = TwinTextFilter.prepare(text) ?: return null
+        var out = IdentifierBlanker.blank(prepared, strict = true)
+        out = mixed4.replace(out, IdentifierBlanker.MARKER)
+        out = longNumber.replace(out, NUM)
+        return if (TwinTextFilter.onlyMarkers(out)) null else out
+    }
 }

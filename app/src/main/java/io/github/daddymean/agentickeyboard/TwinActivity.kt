@@ -194,15 +194,21 @@ class TwinActivity : Activity() {
                 "What it keeps: messages you type on this keyboard and send, in any app, with the app's name and the time. " +
                 "A message counts as sent when you press the keyboard's Send or Go key, or when a chat app clears the box " +
                 "after you typed it. When the keyboard is unsure, it does not save.\n\n" +
-                "What it never keeps: anything typed in password, private or incognito fields; anything while learning " +
-                "or the twin is paused; passwords, tokens and keys, and any message that mentions a password, PIN, code or login, " +
-                "or an ID, passport, account, member or reference number (the whole message is skipped); other people's messages " +
-                "(it never reads the screen for this); any message that contains pasted, pre-filled, inserted or AI-written " +
-                "text (the whole message is skipped, not just that part); text you select and cut or clear. Card numbers, " +
-                "e-mail addresses, phone numbers, long ID numbers and links are replaced with a marker before saving.\n\n" +
+                "Never saved: passwords, PINs, codes and other secrets. Any message that mentions a password, PIN, " +
+                "code, login or similar, or contains a token or key, is skipped whole. (A secret typed on its own with " +
+                "no word like \"password\" around it can't be recognised, so don't type secrets bare.) Also never saved: anything typed " +
+                "in password, private or incognito fields; anything while learning or the twin is paused; other " +
+                "people's messages (it never reads the screen for this); any message that contains pasted, pre-filled, " +
+                "inserted or AI-written text (the whole message is skipped); text you select and cut or clear.\n\n" +
+                "Blanked, best effort: other personal identifiers, such as ID, passport, account, member, booking or " +
+                "reference numbers, card numbers, e-mail addresses, phone numbers and links, are replaced with a marker " +
+                "like [ID] before saving, and the rest of the message is kept. This is automatic and some identifiers " +
+                "may be missed, so check the viewer below.\n\n" +
                 "Where it lives: only on this phone, encrypted with a key kept in Android's secure key store. It is not " +
-                "backed up, not transferred to a new phone and never sent to the cloud. Export and the dead-man hand-off " +
-                "come in later versions.\n\n" +
-                "You can turn it off, pause it, delete single entries, or delete everything, which also destroys the key."
+                "backed up, not transferred to a new phone and never sent to the cloud. You can view every saved entry " +
+                "here, delete single entries, or delete everything, which also destroys the key. You can also turn it " +
+                "off or pause it.\n\n" +
+                "Exports (a later version, as is the dead-man hand-off) are scrubbed again, more strictly, before " +
+                "anything leaves the phone."
     }
 }

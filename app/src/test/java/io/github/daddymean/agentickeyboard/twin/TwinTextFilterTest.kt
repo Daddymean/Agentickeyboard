@@ -186,42 +186,61 @@ class TwinTextFilterTest {
     }
 
     /**
-     * Codex review on da29f67 (r4239989012): a labeled short or alphanumeric identifier
-     * ("my employee ID is 123456", "passport number AB123456") was stored unmasked.
-     * Conservative rule: an identifier label plus any digit anywhere, or any unlabeled
-     * letters-and-digits token of 6+ characters, drops the whole message. Failed on da29f67.
+     * Codex reviews on da29f67 and 6b12a27 (r4239989012, r4240024848) and Keith's security
+     * decision (chat, 2026-10-11 08:09 PT): identifiers are **blanked, not dropped**, best
+     * effort. A recognised value after an identifier label, with or without digits, and
+     * any unlabeled letters-and-digits token of 6+ characters become [ID]; the rest of the
+     * message is still learned. Failed on 6b12a27 (the messages were dropped).
      */
     @Test
-    fun labeledOrAlphanumericIdentifiersAreDropped() {
-        listOf(
+    fun labeledAndAlphanumericIdentifiersAreBlanked() {
+        assertEquals("booking reference [ID]", TwinTextFilter.prepare("booking reference QWERTY"))
+        assertEquals("member ID is [ID]", TwinTextFilter.prepare("member ID is ABCDEF"))
+        assertEquals("my member ID is [ID]", TwinTextFilter.prepare("my member ID is ABCDEF"))
+        assertEquals("my employee ID is [ID]", TwinTextFilter.prepare("my employee ID is 123456"))
+        assertEquals("passport number [ID], see you there", TwinTextFilter.prepare("passport number AB123456, see you there"))
+        assertEquals("ref [ID] please", TwinTextFilter.prepare("ref ABC123 please"))
+        assertEquals("booking ref: [ID].", TwinTextFilter.prepare("booking ref: qx-7z9p."))
+        assertEquals("it's [ID] btw", TwinTextFilter.prepare("it's AB123456 btw"))
+        assertEquals("[ID] is my member number", TwinTextFilter.prepare("445566 is my member number"))
+        val labeled = listOf(
             "my employee ID is 123456", "passport number AB123456", "Passport: X1234567",
-            "driver's license D1234-5678", "my licence no. 99 1234", "SSN 123-45-6789 for the form",
-            "member # 4471", "policy number 12-3456", "account 0012 3344", "routing 021000021",
-            "IBAN DE89 3704", "student id 20231234", "patient MRN 445566", "VIN 1HGCM82633A004352",
-            "booking ref QX7Z9P", "my national insurance number is QQ 12 34 56 C", "tax id 12-3456789",
-            "the serial is SN 4471 2", "his badge number is 42", "ref ABC123 please"
-        ).forEach { assertNull(it, TwinTextFilter.prepare(it)) }
-        // Unlabeled letters-and-digits tokens of 6+ characters (passport, ticket, plate shapes).
-        listOf("it's AB123456 btw", "use X1234567", "QX7Z9P is the one", "7ABC123 out front").forEach {
-            assertNull(it, TwinTextFilter.prepare(it))
+            "driver's license D1234-5678", "my licence no. 99 1234", "member # 4471", "policy number 12-3456",
+            "account 0012 3344", "IBAN DE89 3704", "student id 20231234", "patient MRN 445566",
+            "VIN 1HGCM82633A004352", "booking ref QX7Z9P", "my national insurance number is QQ 12 34 56 C",
+            "tax id 12-3456789", "the serial is SN 4471 2", "his badge number is 42", "order #A1B2C3", "ticket ZQXW"
+        )
+        val secretParts = Regex("[A-Z]*\\d[\\dA-Z-]*|QWERTY|ZQXW|MRN|QQ|SN")
+        for (msg in labeled) {
+            val out = TwinTextFilter.prepare(msg)
+            // Long digit runs may already be masked by the cloud redactor's own marker.
+            assertTrue("$msg -> $out", out != null && (out.contains("[ID]") || out.contains("[REDACTED_")))
+            secretParts.findAll(msg).forEach { assertFalse("$msg -> $out", out!!.contains(it.value)) }
         }
         val labels = listOf(
-            "id", "ID", "identification", "identifier", "passport", "license", "licence", "ssn", "social security",
-            "social insurance", "national insurance", "nhs", "tin", "itin", "ein", "tax id", "vat", "iban", "routing",
-            "swift", "acct", "account", "member", "membership", "policy", "customer", "patient", "mrn", "medical record",
-            "student", "employee", "staff", "badge", "serial", "vin", "plate", "registration", "reference", "ref",
-            "booking", "confirmation", "tracking", "visa", "permit", "case", "claim", "ticket", "number", "no."
+            "id", "ID", "identification", "passport", "license", "licence", "ssn", "social security number",
+            "national insurance", "nhs", "tax id", "vat", "iban", "routing", "acct", "account", "member", "membership",
+            "policy", "customer", "patient", "mrn", "medical record", "student", "employee", "badge", "serial", "vin",
+            "plate", "registration", "reference", "ref", "booking", "reservation", "confirmation", "tracking", "visa",
+            "permit", "claim", "ticket", "order", "invoice", "member ID", "account number", "booking reference"
         )
-        val values = listOf("123456", "42", "AB123456", "12-34", "9 9", "x7")
+        val values = listOf("123456", "42", "AB123456", "12-34", "QWERTY", "X7", "ZK-99")
         var n = 0
-        for (l in labels) for (v in values) for (frame in listOf("my %s is %s", "%s: %s", "%2\$s is my %1\$s", "%s #%s")) {
+        for (l in labels) for (v in values) for (frame in listOf("my %s is %s", "%s: %s", "%s #%s", "%s %s thanks", "%2\$s is my %1\$s")) {
             val msg = frame.format(l, v)
-            assertNull(msg, TwinTextFilter.prepare(msg))
+            val out = TwinTextFilter.prepare(msg)
+            assertTrue("$msg -> $out", out != null && (out.contains("[ID]") || out.contains("[REDACTED_")) && !out.contains(v))
             n++
         }
-        assertTrue(n > 1_000)
-        // Without a digit the labels alone stay, and ordinary short numbers stay.
-        listOf("The ticket line was long", "Call me after the case review", "We have 3 kids and 2 dogs", "see you at 7")
+        assertTrue(n > 1_500)
+        // Credentials are still dropped whole, never just blanked.
+        listOf("my password is QWERTY", "pin for my card is 1234", "my TOTPs are 12-34", "login ABC123", "member code 4471")
+            .forEach { assertNull(it, TwinTextFilter.prepare(it)) }
+        // Ordinary text is untouched.
+        listOf("The ticket line was long", "in case 2 people come", "We have 3 kids and 2 dogs", "see you at 7",
+            "my booking is tomorrow", "My order is late again")
             .forEach { assertEquals(it, TwinTextFilter.prepare(it)) }
+        // A message that is only an identifier is not learned.
+        assertNull(TwinTextFilter.prepare("AB123456"))
     }
 }
