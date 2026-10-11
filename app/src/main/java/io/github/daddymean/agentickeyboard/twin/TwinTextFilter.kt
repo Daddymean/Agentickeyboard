@@ -71,24 +71,24 @@ internal object CredentialMentions {
     private val valueThenLabel = Regex("\\d{3,}[^.!?\\n]{0,40}?\\b(pins?|codes?|passcodes?|passwords?|combo|combination)\\b", RegexOption.IGNORE_CASE)
 
     /**
-     * The blunt rule (Codex review on a401124, r4239848795; Hax decision 2026-10-10 18:37 PT):
-     * a credential word anywhere **together with any digit anywhere**, in any order or
-     * format ("12-34 is the code", "code: 4 8 2 9", "the combination is twelve 34").
-     * Accepted false positives, documented: "code review covers 300 lines", "Pin 2 posts".
+     * The broadest rule (Codex reviews on a401124 and 7502783, r4239848795 / r4239941592;
+     * Hax decisions 2026-10-10 18:37 PT): **any credential word drops the message, digits
+     * or not**, in any case, singular, plural or possessive. Whole words by letters, so
+     * "pin1234" matches but "Pinterest" does not. Many harmless messages ("I'll code it
+     * tonight", "Pin the post") are not learned; dropping is the safe default.
      */
     private val credentialWord = Regex(
         "(?<!\\p{L})(" +
-            "codes?|pins?|passwords?|passwds?|pwds?|pws?|passcodes?|passphrases?|passkeys?|" +
-            "combinations?|combos?|otps?|2fa|mfa|totp|cvv2?s?|cvcs?|cscs?|" +
-            "security\\s+(answers?|questions?)|(seed|recovery|backup)\\s+(phrases?|words?|codes?|keys?)|mnemonics?|" +
-            "log-?ins?|logons?|sign-?ins?|usernames?" +
-            ")(?!\\p{L})",
+            "code|pin|password|passwd|pwd|pw|passcode|passphrase|passkey|" +
+            "combination|combo|otp|2fa|mfa|totp|cvv2?|cvc|csc|" +
+            "security\\s+(answer|question)|(seed|recovery|backup)\\s+(phrase|word|code|key)|mnemonic|" +
+            "log-?in|logon|sign-?in|username" +
+            ")(e?s|['\u2019]s|s['\u2019])?(?!\\p{L})",
         RegexOption.IGNORE_CASE
     )
-    private val anyDigit = Regex("\\p{Nd}")
 
     fun matches(text: String): Boolean =
-        (credentialWord.containsMatchIn(text) && anyDigit.containsMatchIn(text)) ||
+        credentialWord.containsMatchIn(text) ||
         labels.containsMatchIn(text) || pinUpper.containsMatchIn(text) ||
             pinLower.containsMatchIn(text) || codeValue.containsMatchIn(text) || nearValue.containsMatchIn(text) ||
             valueThenLabel.containsMatchIn(text)

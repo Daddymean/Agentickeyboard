@@ -90,11 +90,7 @@ class TwinTextFilterTest {
         disclosures.forEach { assertNull(it, TwinTextFilter.prepare(it)) }
         // Ordinary uses of nearby words stay.
         listOf(
-            "Pin the post to the top",
             "Can you pass the salt",
-            "The code review went well",
-            "I'll code it tonight",
-            "Happy to help with the login page design",
         ).forEach { assertEquals(it, TwinTextFilter.prepare(it)) }
     }
 
@@ -119,8 +115,6 @@ class TwinTextFilterTest {
         // Accepted false positives (documented): harmless sentences with a credential word and a digit.
         assertNull(TwinTextFilter.prepare("code review covers 300 lines"))
         assertNull(TwinTextFilter.prepare("Pin 2 posts to the top"))
-        // A credential word without any digit, in ordinary use, is still kept.
-        assertEquals("Pin the post to the top", TwinTextFilter.prepare("Pin the post to the top"))
     }
 
     /** Fuzz: every credential word, value format, order and case combination is dropped. */
@@ -158,5 +152,36 @@ class TwinTextFilterTest {
             checked++
         }
         assertTrue(checked > 2000)
+    }
+
+    /**
+     * Codex review on 7502783 (r4239941592) and the Hax decision of 18:37 PT ("if the
+     * credential filter is hit again, drop any message with a credential word, digits or
+     * not"): every credential word, in any case, singular or plural, drops the message.
+     * Failed on 7502783.
+     */
+    @Test
+    fun anyCredentialWordDropsTheMessageDigitsOrNot() {
+        listOf("my TOTPs are 12-34", "MFAs: x9", "2FAs are on", "Pin the post to the top", "send me the wifi password",
+            "what's the code", "I'll code it tonight", "Happy to help with the login page design").forEach {
+            assertNull(it, TwinTextFilter.prepare(it))
+        }
+        val words = listOf(
+            "code", "pin", "password", "passwd", "pwd", "pw", "passcode", "passphrase", "passkey", "combination", "combo",
+            "otp", "2fa", "mfa", "totp", "cvv", "cvv2", "cvc", "csc", "security answer", "security question",
+            "seed phrase", "recovery phrase", "backup code", "mnemonic", "login", "log-in", "logon", "sign-in", "username"
+        )
+        val forms = listOf<(String) -> String>({ it }, { it + "s" }, { it + "es" }, { "$it's" }, { "$it\u2019s" }, { it + "s'" })
+        val cases = listOf<(String) -> String>({ it }, { it.uppercase() }, { it.replaceFirstChar { c -> c.uppercase() } })
+        var n = 0
+        for (w in words) for (f in forms) for (c in cases) for (frame in listOf("%s", "the %s, ok", "(%s)", "%s!", "about my %s tomorrow")) {
+            val msg = frame.format(c(f(w)))
+            assertNull(msg, TwinTextFilter.prepare(msg))
+            n++
+        }
+        assertTrue(n > 2_500)
+        // Words that merely contain the letters stay: the match is whole-word.
+        listOf("Can you pass the salt", "Pinterest board is cute", "Spinning class at six", "The decoder ring arrived")
+            .forEach { assertEquals(it, TwinTextFilter.prepare(it)) }
     }
 }
