@@ -4,37 +4,54 @@ import android.view.KeyEvent
 import android.view.inputmethod.InputConnection
 import android.view.inputmethod.InputConnectionWrapper
 import android.view.inputmethod.TextAttribute
+import io.github.daddymean.agentickeyboard.util.TypingAwareConnection
 
 /**
  * KEYBOARD-024: the keyboard's own edits, reported to [TwinCaptureSession] as they are
  * made, so the twin can tell typing from caret movement and from text that came from
  * elsewhere. Every edit still goes to the editor unchanged.
  *
- * Commits are typing (keys, swipe words, suggestions). Deletes are the user's own.
- * Pastes and rich content are inserts, which taint the draft. Cut and select-all
- * mean a following clear is a deletion, not a send. Callers that insert
- * non-typed text through this connection (AI apply, snippets, clipboard) must also
- * call [TwinCaptureSession.markInserted].
+ * **Only single key events are typing by default.** A plain commit of one code point
+ * is a typed key; any longer commit is an insertion and taints the draft, so a new
+ * multi-character path is safe by default (KEYBOARD-024 review r4238828510). Typed
+ * multi-character commits (swipe word, auto-fix of the typed word, double-space
+ * period) must use [commitTypedText]; non-typed text should use [commitInsertedText].
+ * Deletes are the user's own. Pastes and rich content are inserts. Cut and
+ * select-all mean a following clear is a deletion, not a send.
  */
 class TwinTrackingInputConnection(
     base: InputConnection,
     private val session: TwinCaptureSession,
     private val clock: () -> Long = System::currentTimeMillis
-) : InputConnectionWrapper(base, false) {
+) : InputConnectionWrapper(base, false), TypingAwareConnection {
+
+    private fun report(text: CharSequence) {
+        if (isSingleKey(text)) session.noteKeyboardCommit(text, clock()) else session.markInserted(clock())
+    }
 
     override fun commitText(text: CharSequence?, newCursorPosition: Int): Boolean {
-        text?.let { session.noteKeyboardCommit(it, clock()) }
+        text?.let(::report)
         return super.commitText(text, newCursorPosition)
     }
 
     override fun commitText(text: CharSequence, newCursorPosition: Int, textAttribute: TextAttribute?): Boolean {
-        session.noteKeyboardCommit(text, clock())
+        report(text)
         return super.commitText(text, newCursorPosition, textAttribute)
     }
 
     override fun setComposingText(text: CharSequence?, newCursorPosition: Int): Boolean {
-        text?.let { session.noteKeyboardCommit(it, clock()) }
+        text?.let(::report)
         return super.setComposingText(text, newCursorPosition)
+    }
+
+    override fun commitTypedText(text: CharSequence, newCursorPosition: Int): Boolean {
+        session.noteKeyboardCommit(text, clock())
+        return super.commitText(text, newCursorPosition)
+    }
+
+    override fun commitInsertedText(text: CharSequence, newCursorPosition: Int): Boolean {
+        session.markInserted(clock())
+        return super.commitText(text, newCursorPosition)
     }
 
     override fun deleteSurroundingText(beforeLength: Int, afterLength: Int): Boolean {
@@ -69,5 +86,11 @@ class TwinTrackingInputConnection(
     ): Boolean {
         session.markInserted(clock())
         return super.commitContent(inputContentInfo, flags, opts)
+    }
+
+    companion object {
+        /** One key: exactly one code point (a letter, digit, punctuation mark or symbol). */
+        fun isSingleKey(text: CharSequence): Boolean =
+            text.isNotEmpty() && Character.codePointCount(text, 0, text.length) == 1
     }
 }

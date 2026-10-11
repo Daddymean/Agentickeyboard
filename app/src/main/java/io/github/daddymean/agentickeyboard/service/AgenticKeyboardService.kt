@@ -59,6 +59,8 @@ import io.github.daddymean.agentickeyboard.ui.TrustPrismBanner
 import io.github.daddymean.agentickeyboard.util.ClipboardCaptureDecision
 import io.github.daddymean.agentickeyboard.util.SafeLog
 import io.github.daddymean.agentickeyboard.util.commitTextWithCaret
+import io.github.daddymean.agentickeyboard.util.commitInserted
+import io.github.daddymean.agentickeyboard.util.commitTyped
 import io.github.daddymean.agentickeyboard.twin.TwinCaptureSession
 import io.github.daddymean.agentickeyboard.twin.TwinLearning
 import io.github.daddymean.agentickeyboard.twin.TwinPreferences
@@ -262,7 +264,15 @@ class AgenticKeyboardService : InputMethodService(), LifecycleOwner, ViewModelSt
                                 viewModel = viewModel,
                                 suppressAiPanels = contextResultActive,
                                 onKeyPress = { text ->
+                                    // twin: single key; a longer payload is treated as inserted by the connection
                                     trackedInputConnection()?.commitText(text, 1)
+                                },
+                                onInsertText = { text ->
+                                    twinSession.markInserted(System.currentTimeMillis())
+                                    trackedInputConnection()?.commitInserted(text, 1) // twin: inserted
+                                },
+                                onTypedWord = { word ->
+                                    trackedInputConnection()?.commitTyped(word, 1) // twin: typed (swipe word)
                                 },
                                 onDelete = {
                                     trackedInputConnection()?.deleteSurroundingText(1, 0)
@@ -296,7 +306,7 @@ class AgenticKeyboardService : InputMethodService(), LifecycleOwner, ViewModelSt
                                     onInsert = { text ->
                                         if (validateConversationContext()) {
                                             twinSession.markInserted(System.currentTimeMillis())
-                                            currentInputConnection?.commitText(text, 1)
+                                            currentInputConnection?.commitText(text, 1) // twin: inserted (context reply)
                                             clearConversationContext()
                                             syncEditorText()
                                         }
@@ -322,7 +332,7 @@ class AgenticKeyboardService : InputMethodService(), LifecycleOwner, ViewModelSt
         ic.beginBatchEdit()
         try {
             if (existing > 0) ic.deleteSurroundingText(existing, 0)
-            ic.commitTextWithCaret(text, cursorOffset)
+            ic.commitTextWithCaret(text, cursorOffset) // twin: inserted (snippet / draft replace)
         } finally {
             ic.endBatchEdit()
         }
@@ -332,7 +342,7 @@ class AgenticKeyboardService : InputMethodService(), LifecycleOwner, ViewModelSt
     private fun insertClipboardItem(item: ClipboardHistoryItem) {
         if (viewModel.isSensitiveField.value) return
         twinSession.markInserted(System.currentTimeMillis())
-        currentInputConnection?.commitText(item.content, 1) ?: return
+        currentInputConnection?.commitText(item.content, 1) ?: return // twin: inserted (clipboard history)
         clipboardStatus.value = "Inserted from local history."
         serviceScope.launch { repository.recordClipboardUse(item.id) }
     }
@@ -705,11 +715,35 @@ class AgenticKeyboardService : InputMethodService(), LifecycleOwner, ViewModelSt
         if (!twinGate().allowsCapture) window
         else TwinTextWindow.expand(window, CONTEXT_CHARS) { currentInputConnection?.getTextBeforeCursor(it, 0) }
 
+    /**
+     * A new field: report both sides of the caret and the selection (KEYBOARD-024,
+     * r4238828515). Reads are bounded; the text after the caret is only checked for
+     * emptiness. In a field where the twin may not learn nothing more is read, and
+     * the unknown state disables clear-as-send for the session.
+     */
+    private fun startTwinSession(info: EditorInfo?) {
+        val ic = currentInputConnection
+        val gate = twinGate()
+        val before = ic?.getTextBeforeCursor(CONTEXT_CHARS, 0)?.toString()?.let(::twinText)
+        val after = if (gate.allowsCapture) ic?.getTextAfterCursor(1, 0)?.toString() else null
+        val selStart = info?.initialSelStart ?: -1
+        val selEnd = info?.initialSelEnd ?: -1
+        val hasSelection = if (selStart < 0 || selEnd < 0) null else selStart != selEnd
+        twinSession.start(
+            info?.packageName,
+            before,
+            gate,
+            chatField = TwinCaptureSession.isChatField(info?.packageName, info?.inputType ?: 0, info?.imeOptions ?: 0),
+            textAfter = after,
+            hasSelection = hasSelection
+        )
+    }
+
     /** Main thread, every editor update: a few preference reads and a draft-sized comparison. */
     private fun observeTwinText(textBefore: String, selectionActive: Boolean) {
         twinSession.updateGate(twinGate())
         twinSession.onText(twinText(textBefore), System.currentTimeMillis(), selectionActive) {
-            currentInputConnection?.getTextAfterCursor(1, 0).isNullOrEmpty()
+            currentInputConnection?.getTextAfterCursor(1, 0)?.isEmpty() // null: the editor cannot say
         }?.let(::submitTwin)
     }
 
@@ -756,12 +790,7 @@ class AgenticKeyboardService : InputMethodService(), LifecycleOwner, ViewModelSt
         refreshClipboardSettings()
         if (!restarting) {
             // KEYBOARD-024: a new field. Whatever it already holds was not typed here.
-            twinSession.start(
-                info?.packageName,
-                twinText(currentInputConnection?.getTextBeforeCursor(CONTEXT_CHARS, 0)?.toString().orEmpty()),
-                twinGate(),
-                chatField = TwinCaptureSession.isChatField(info?.packageName, info?.inputType ?: 0, info?.imeOptions ?: 0)
-            )
+            startTwinSession(info)
         }
 
         if (!restarting) {

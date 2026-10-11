@@ -48,8 +48,15 @@ class TwinTyping(val session: TwinCaptureSession, var now: Long = 1_000L) {
     companion object {
         val OPEN = TwinCaptureSession.Gate(twinEnabled = true, twinPaused = false, learningPaused = false, sensitiveField = false)
 
-        fun chat(initial: String = "", gate: TwinCaptureSession.Gate = OPEN, chatField: Boolean = true) =
-            TwinTyping(TwinCaptureSession().apply { start("com.whatsapp", initial, gate, chatField) }).also {
+        /** A field whose text after the caret is [after] (null: unreadable) and selection state [hasSelection]. */
+        fun chat(
+            initial: String = "",
+            gate: TwinCaptureSession.Gate = OPEN,
+            chatField: Boolean = true,
+            after: String? = "",
+            hasSelection: Boolean? = false
+        ) =
+            TwinTyping(TwinCaptureSession().apply { start("com.whatsapp", initial, gate, chatField, textAfter = after, hasSelection = hasSelection) }).also {
                 if (initial.isNotEmpty()) it.setField(initial)
             }
     }

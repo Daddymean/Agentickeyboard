@@ -32,6 +32,14 @@ package io.github.daddymean.agentickeyboard.twin
  *   just before, no unexplained shrink, the caret at the end and the field truly
  *   empty. A selection followed by a cut, or a clear-all, never saves.
  *
+ * **Both sides of the caret count** (re-review on 90f8f3e, r4238828515). At session
+ * start the service reports the text before the caret, whether there is text after
+ * it, and whether a selection exists. Any initial text anywhere taints the draft. If
+ * any of these cannot be read, clear-as-send is off for the whole session
+ * ([clearCaptureDisabled]); only Send/Go, with its full-field check, can save. A new
+ * draft (typing into an empty model) also asks whether text sits after the caret;
+ * text there, or no answer, taints that draft.
+ *
  * Pure logic with no Android types; it runs on the main thread with string
  * comparisons on the draft only. Sanitising, encrypting and writing happen
  * elsewhere, off the main thread.
@@ -62,6 +70,9 @@ class TwinCaptureSession {
     private var tainted = false
     /** Something made an app-side clear look like a deletion: no clear-as-send. */
     private var clearUnsafe = false
+    /** The field's state could not be established at session start: no clear-as-send at all. */
+    var clearCaptureDisabled = false
+        private set
 
     private var credit = 0
     private var creditUntil = Long.MIN_VALUE
@@ -70,14 +81,29 @@ class TwinCaptureSession {
 
     /**
      * A new field gained focus. Whatever it already holds was not typed here.
-     * [chatField] is the service's chat-app heuristic for allowing clear-as-send.
+     *
+     * [textBefore] is the text before the caret (or selection start), [textAfter] a
+     * bounded read of the text after the caret (or selection end), [hasSelection]
+     * whether text is selected. Each is null when the editor could not say; then the
+     * field's state is unknown and clear-as-send is disabled for this session. Any
+     * non-empty part taints the draft. [chatField] is the service's chat-app
+     * heuristic for allowing clear-as-send.
      */
-    fun start(packageName: String?, initialText: String, gate: Gate, chatField: Boolean = false) {
+    fun start(
+        packageName: String?,
+        textBefore: String?,
+        gate: Gate,
+        chatField: Boolean = false,
+        textAfter: String? = null,
+        hasSelection: Boolean? = null
+    ) {
         this.packageName = packageName
         this.chatField = chatField
         this.gate = gate
-        reset(initialText)
-        tainted = initialText.isNotEmpty()
+        reset(textBefore.orEmpty())
+        clearCaptureDisabled = textBefore == null || textAfter == null || hasSelection == null
+        tainted = !textBefore.isNullOrEmpty() || !textAfter.isNullOrEmpty() || hasSelection == true
+        if (tainted || clearCaptureDisabled) clearUnsafe = true
     }
 
     /** Settings or field state changed mid-session. A closed gate drops the current draft. */
@@ -115,24 +141,36 @@ class TwinCaptureSession {
      * selection start) and whether a selection is active. Returns a candidate only
      * for a safe app-side clear in a chat field.
      *
-     * [fieldIsEmpty] is asked only when the text before the cursor has just become
-     * empty, so the extra editor read stays off normal keystrokes.
+     * [nothingAfterCaret] answers whether the field holds no text after the caret:
+     * true, false, or null when the editor cannot say. It is asked only when the text
+     * before the cursor has just become empty (a possible clear) or a new draft
+     * starts, so the extra editor read stays off normal keystrokes.
      */
     fun onText(
         text: String,
         nowMillis: Long,
         selectionActive: Boolean = false,
-        fieldIsEmpty: () -> Boolean = { true }
+        nothingAfterCaret: () -> Boolean? = { true }
     ): Candidate? {
         val old = prefix
         if (selectionActive) clearUnsafe = true
 
         // The field emptied (checked even when the prefix did not change, so a
         // select-all then cut still resets the draft).
-        if (text.isEmpty() && doc.isNotEmpty() && !selectionActive && fieldIsEmpty()) {
-            val candidate = clearCandidate(old, nowMillis)
-            reset("")
-            return candidate
+        if (text.isEmpty() && doc.isNotEmpty() && !selectionActive) {
+            when (nothingAfterCaret()) {
+                true -> {
+                    val candidate = clearCandidate(old, nowMillis)
+                    reset("")
+                    return candidate
+                }
+                // Text remains after the caret, or the editor cannot say: not a clear.
+                false -> Unit
+                null -> {
+                    tainted = true
+                    clearUnsafe = true
+                }
+            }
         }
         if (text == old) return null
 
@@ -145,9 +183,16 @@ class TwinCaptureSession {
             // The keyboard's own edit at the caret: exactly what it just deleted and
             // committed (a key, a backspace, or an auto-fix delete-then-commit).
             (removed > 0 || added > 0) && removed <= liveDeletes && added <= liveCredit -> {
+                val draftStarts = doc.isEmpty() && added > 0
                 credit = liveCredit - added
                 deleteCredit = liveDeletes - removed
                 doc = text + doc.drop(old.length)
+                // A new draft: anything already after the caret (a quote, a signature,
+                // an app prefill) was not typed here. Unknown counts as present.
+                if (draftStarts && nothingAfterCaret() != true) {
+                    tainted = true
+                    clearUnsafe = true
+                }
             }
             // Caret (or selection start) moved over text already in the model. Never typing.
             doc.startsWith(text) -> {
@@ -179,7 +224,7 @@ class TwinCaptureSession {
     }
 
     private fun clearCandidate(prefixBeforeClear: String, nowMillis: Long): Candidate? {
-        if (!chatField || clearUnsafe) return null
+        if (!chatField || clearUnsafe || clearCaptureDisabled) return null
         if (nowMillis <= deleteUntil) return null
         if (prefixBeforeClear != doc) return null // the caret was not at the end
         return candidateFor(doc, nowMillis)

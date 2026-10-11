@@ -42,7 +42,7 @@ class CommittedEditUndo internal constructor(
             if (!current.deleteSurroundingText(before.length, after.length)) {
                 false
             } else {
-                current.commitText(original, 1)
+                current.commitText(original, 1) // twin: inserted (multi-char default)
                 true
             }
         } finally {

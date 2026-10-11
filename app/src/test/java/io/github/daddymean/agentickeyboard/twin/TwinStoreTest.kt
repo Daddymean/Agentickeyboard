@@ -168,7 +168,7 @@ class TwinStoreTest {
     @Test
     fun capturedSecretsNeverReachTheStore() {
         val typing = TwinTyping(TwinCaptureSession().apply {
-            start("pkg", "", TwinCaptureSession.Gate(true, false, false, false))
+            start("pkg", "", TwinCaptureSession.Gate(true, false, false, false), textAfter = "", hasSelection = false)
         })
         typing.type("my password: hunter2")
         val candidate = typing.send()!!
@@ -181,7 +181,7 @@ class TwinStoreTest {
         // Main-thread cost per keystroke (length arithmetic) and the background cost
         // per stored message (filter + AES-GCM + SQLite insert). JVM/Robolectric only;
         // printed for the PR, with loose bounds so CI noise does not fail it.
-        val s = TwinCaptureSession().apply { start("pkg", "", TwinCaptureSession.Gate(true, false, false, false)) }
+        val s = TwinCaptureSession().apply { start("pkg", "", TwinCaptureSession.Gate(true, false, false, false), textAfter = "", hasSelection = false) }
         val sb = StringBuilder()
         val keystrokes = 200_000
         val t0 = System.nanoTime()

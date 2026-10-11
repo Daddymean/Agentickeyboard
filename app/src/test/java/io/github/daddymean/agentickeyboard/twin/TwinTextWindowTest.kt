@@ -35,7 +35,7 @@ class TwinTextWindowTest {
         // Simulates the service: a 3,000-character message typed key by key, with the
         // editor returning at most 1,000 chars normally and up to CHARS on the larger read.
         val session = TwinCaptureSession().apply {
-            start("com.example.mail", "", TwinCaptureSession.Gate(true, false, false, false))
+            start("com.example.mail", "", TwinCaptureSession.Gate(true, false, false, false), textAfter = "", hasSelection = false)
         }
         val message = StringBuilder()
         val words = listOf("Dear ", "kids, ", "remember ", "that ", "I ", "love ", "you. ")
