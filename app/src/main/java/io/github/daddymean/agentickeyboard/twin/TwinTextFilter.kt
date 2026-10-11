@@ -14,6 +14,9 @@ import io.github.daddymean.agentickeyboard.util.SecretTokenPatterns
  *   (Codex security review on 43a7b02, r4239700720). The value itself can't be told
  *   apart from ordinary words, so the label decides, and when in doubt the message
  *   is not kept.
+ * - A message with an **identifier** (a label such as ID, passport, licence, account,
+ *   member or policy plus any digit, or any letters-and-digits token of 6+ characters)
+ *   is dropped whole (Codex review on da29f67, r4239989012); see [IdentifierMentions].
  * - Everything else the cloud redactor masks (e-mail addresses, card and ID numbers,
  *   SSNs, phone numbers, IP addresses, URLs) is replaced by its marker, so the
  *   value is never stored but the shape of the sentence is.
@@ -32,6 +35,7 @@ object TwinTextFilter {
         val sanitized = CloudTextSanitizer.sanitize(trimmed).text
         if (sanitized.contains(SECRET_MARKER)) return null
         if (CredentialMentions.matches(trimmed)) return null
+        if (IdentifierMentions.matches(trimmed)) return null
         if (markers.replace(sanitized, "").isBlank()) return null
         return if (sanitized.length <= MAX_CHARS) sanitized else sanitized.take(MAX_CHARS)
     }
@@ -92,4 +96,36 @@ internal object CredentialMentions {
         labels.containsMatchIn(text) || pinUpper.containsMatchIn(text) ||
             pinLower.containsMatchIn(text) || codeValue.containsMatchIn(text) || nearValue.containsMatchIn(text) ||
             valueThenLabel.containsMatchIn(text)
+}
+
+/**
+ * KEYBOARD-024: identifiers (Codex review on da29f67, r4239989012). The cloud redactor
+ * only masks long digit runs, so short or alphanumeric IDs ("my employee ID is 123456",
+ * "passport number AB123456") would be stored. Conservatively, the whole message is
+ * dropped when:
+ * - an identifier label appears together with **any digit anywhere** in the message; or
+ * - any token mixes letters and digits and is 6+ characters long (passport, plate,
+ *   booking-reference shapes), labeled or not.
+ * Harmless messages ("in case 2 people come", "covid19") are not learned; dropping is
+ * the safe default.
+ */
+internal object IdentifierMentions {
+    private val label = Regex(
+        "(?<!\\p{L})(" +
+            "ids?|identification|identifiers?|identity|passports?|licen[cs]es?|dl|ssns?|" +
+            "social\\s+(security|insurance)|national\\s+(insurance|id)|nhs|nino|tin|itin|ein|vat|" +
+            "tax\\s+(id|number|code|file|ref)|iban|routing|swift|bic|sort\\s+code|acct|accounts?|" +
+            "members?|membership|polic(y|ies)|customers?|patients?|mrn|medical\\s+records?|students?|" +
+            "employees?|staff|badges?|serials?|vins?|plates?|registrations?|reg|references?|refs?|" +
+            "bookings?|reservations?|confirmations?|tracking|visas?|permits?|green\\s+card|alien|" +
+            "cases?|claims?|tickets?|numbers?|nos?\\.|nr\\.?|#" +
+            ")(['\u2019]s)?(?!\\p{L})",
+        RegexOption.IGNORE_CASE
+    )
+    private val digit = Regex("\\p{Nd}")
+    /** A run of letters and digits, 6+ long, with at least one of each. */
+    private val mixedToken = Regex("(?<![\\p{L}\\p{Nd}])(?=[\\p{L}\\p{Nd}]*\\p{L})(?=[\\p{L}\\p{Nd}]*\\p{Nd})[\\p{L}\\p{Nd}]{6,}(?![\\p{L}\\p{Nd}])")
+
+    fun matches(text: String): Boolean =
+        (digit.containsMatchIn(text) && label.containsMatchIn(text)) || mixedToken.containsMatchIn(text)
 }

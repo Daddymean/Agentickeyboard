@@ -184,4 +184,44 @@ class TwinTextFilterTest {
         listOf("Can you pass the salt", "Pinterest board is cute", "Spinning class at six", "The decoder ring arrived")
             .forEach { assertEquals(it, TwinTextFilter.prepare(it)) }
     }
+
+    /**
+     * Codex review on da29f67 (r4239989012): a labeled short or alphanumeric identifier
+     * ("my employee ID is 123456", "passport number AB123456") was stored unmasked.
+     * Conservative rule: an identifier label plus any digit anywhere, or any unlabeled
+     * letters-and-digits token of 6+ characters, drops the whole message. Failed on da29f67.
+     */
+    @Test
+    fun labeledOrAlphanumericIdentifiersAreDropped() {
+        listOf(
+            "my employee ID is 123456", "passport number AB123456", "Passport: X1234567",
+            "driver's license D1234-5678", "my licence no. 99 1234", "SSN 123-45-6789 for the form",
+            "member # 4471", "policy number 12-3456", "account 0012 3344", "routing 021000021",
+            "IBAN DE89 3704", "student id 20231234", "patient MRN 445566", "VIN 1HGCM82633A004352",
+            "booking ref QX7Z9P", "my national insurance number is QQ 12 34 56 C", "tax id 12-3456789",
+            "the serial is SN 4471 2", "his badge number is 42", "ref ABC123 please"
+        ).forEach { assertNull(it, TwinTextFilter.prepare(it)) }
+        // Unlabeled letters-and-digits tokens of 6+ characters (passport, ticket, plate shapes).
+        listOf("it's AB123456 btw", "use X1234567", "QX7Z9P is the one", "7ABC123 out front").forEach {
+            assertNull(it, TwinTextFilter.prepare(it))
+        }
+        val labels = listOf(
+            "id", "ID", "identification", "identifier", "passport", "license", "licence", "ssn", "social security",
+            "social insurance", "national insurance", "nhs", "tin", "itin", "ein", "tax id", "vat", "iban", "routing",
+            "swift", "acct", "account", "member", "membership", "policy", "customer", "patient", "mrn", "medical record",
+            "student", "employee", "staff", "badge", "serial", "vin", "plate", "registration", "reference", "ref",
+            "booking", "confirmation", "tracking", "visa", "permit", "case", "claim", "ticket", "number", "no."
+        )
+        val values = listOf("123456", "42", "AB123456", "12-34", "9 9", "x7")
+        var n = 0
+        for (l in labels) for (v in values) for (frame in listOf("my %s is %s", "%s: %s", "%2\$s is my %1\$s", "%s #%s")) {
+            val msg = frame.format(l, v)
+            assertNull(msg, TwinTextFilter.prepare(msg))
+            n++
+        }
+        assertTrue(n > 1_000)
+        // Without a digit the labels alone stay, and ordinary short numbers stay.
+        listOf("The ticket line was long", "Call me after the case review", "We have 3 kids and 2 dogs", "see you at 7")
+            .forEach { assertEquals(it, TwinTextFilter.prepare(it)) }
+    }
 }

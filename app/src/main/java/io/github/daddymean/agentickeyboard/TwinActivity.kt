@@ -195,10 +195,11 @@ class TwinActivity : Activity() {
                 "A message counts as sent when you press the keyboard's Send or Go key, or when a chat app clears the box " +
                 "after you typed it. When the keyboard is unsure, it does not save.\n\n" +
                 "What it never keeps: anything typed in password, private or incognito fields; anything while learning " +
-                "or the twin is paused; passwords, tokens and keys (the whole message is skipped); other people's messages " +
+                "or the twin is paused; passwords, tokens and keys, and any message that mentions a password, PIN, code or login, " +
+                "or an ID, passport, account, member or reference number (the whole message is skipped); other people's messages " +
                 "(it never reads the screen for this); any message that contains pasted, pre-filled, inserted or AI-written " +
                 "text (the whole message is skipped, not just that part); text you select and cut or clear. Card numbers, " +
-                "e-mail addresses, phone and ID numbers and links are replaced with a marker before saving.\n\n" +
+                "e-mail addresses, phone numbers, long ID numbers and links are replaced with a marker before saving.\n\n" +
                 "Where it lives: only on this phone, encrypted with a key kept in Android's secure key store. It is not " +
                 "backed up, not transferred to a new phone and never sent to the cloud. Export and the dead-man hand-off " +
                 "come in later versions.\n\n" +
