@@ -178,18 +178,12 @@ class KeyboardViewModel(
     val userPersonaPreference = _userPersonaPreference.asStateFlow()
 
     // Real-time predictive autocomplete completions
-    private val _predictiveSuggestions = MutableStateFlow<List<String>>(emptyList())
+    // KEYBOARD-024 (Codex review on 2cfae3f, r4239826918): each chip carries the word its
+    // list was generated for, in one immutable value, so a chip that is still rendered
+    // from an older list can never borrow a newer list's source.
+    private val _predictiveSuggestions = MutableStateFlow<List<PredictionChip>>(emptyList())
     val predictiveSuggestions = _predictiveSuggestions.asStateFlow()
 
-    /**
-     * KEYBOARD-024: the word the current [predictiveSuggestions] complete or correct, or
-     * null when they are next-word predictions or empty-field prompts. Always set
-     * together with the list, so a stale chip (still showing while a newer list is being
-     * computed) is never taken as a completion of a word typed since.
-     */
-    @Volatile
-    var predictiveSourceWord: String? = null
-        private set
 
     // Active input text state
     private val _inputText = MutableStateFlow("")
@@ -567,7 +561,6 @@ class KeyboardViewModel(
         TapTrail.clear()
         proofreadJob?.cancel()
         predictionJob?.cancel()
-        predictiveSourceWord = null
         _predictiveSuggestions.value = emptyList()
         lastSyncedText = null
         // A backspace in the next app must never splice in text from this one.
@@ -1036,22 +1029,20 @@ class KeyboardViewModel(
             when {
                 activeText.isEmpty() -> {
                     val topWords = topVocabulary.value.take(3).map { it.word }
-                    predictiveSourceWord = null
-                    _predictiveSuggestions.value = if (topWords.isNotEmpty()) {
+                    _predictiveSuggestions.value = PredictionChip.unbound(if (topWords.isNotEmpty()) {
                         topWords.map { it.replaceFirstChar { c -> if (c.isLowerCase()) c.titlecase() else c.toString() } }
                     } else {
                         listOf("Hello", "Awesome", "Got it")
-                    }
+                    })
                 }
                 activeText.last().isWhitespace() -> {
                     val previous = activeText.trim().split(WHITESPACE_REGEX).lastOrNull()
                         ?.replace(NON_ALPHA_REGEX, "")?.lowercase().orEmpty()
-                    predictiveSourceWord = null
-                    _predictiveSuggestions.value = if (previous.length >= 2) {
+                    _predictiveSuggestions.value = PredictionChip.unbound(if (previous.length >= 2) {
                         repository.nextWords(previous, 3)
                     } else {
                         emptyList()
-                    }
+                    })
                 }
                 else -> {
                     val sourceWord = activeText.split(WHITESPACE_REGEX).lastOrNull().orEmpty()
@@ -1071,8 +1062,7 @@ class KeyboardViewModel(
                     } else {
                         emptyList()
                     }
-                    predictiveSourceWord = sourceWord.takeIf { completions.isNotEmpty() }
-                    _predictiveSuggestions.value = completions
+                    _predictiveSuggestions.value = completions.map { PredictionChip(it, sourceWord) }
                 }
             }
         }
@@ -1704,5 +1694,17 @@ class KeyboardViewModelFactory(
             return KeyboardViewModel(repository, settings, contextClient) as T
         }
         throw IllegalArgumentException("Unknown ViewModel class")
+    }
+}
+
+/**
+ * KEYBOARD-024: one suggestion-strip chip and the word its list was generated for
+ * ([sourceWord], null for next-word predictions and empty-field prompts). Immutable and
+ * published as one value with its list, so the click handler reads the source of the
+ * chip that is actually rendered.
+ */
+data class PredictionChip(val word: String, val sourceWord: String?) {
+    companion object {
+        fun unbound(words: List<String>): List<PredictionChip> = words.map { PredictionChip(it, null) }
     }
 }

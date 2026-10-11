@@ -1089,7 +1089,8 @@ fun AgenticKeyboardLayout(
                                         horizontalArrangement = Arrangement.spacedBy(6.dp),
                                         modifier = Modifier.fillMaxWidth().padding(top = 2.dp)
                                     ) {
-                                        items(predictiveSuggestions) { suggestion ->
+                                        items(predictiveSuggestions) { chip ->
+                                            val suggestion = chip.word
                                             Box(
                                                 modifier = Modifier
                                                     .clip(RoundedCornerShape(8.dp))
@@ -1103,7 +1104,7 @@ fun AgenticKeyboardLayout(
                                                         } else {
                                                             inputConnectionProvider()?.let { conn ->
                                                                 // twin: typed when it completes/corrects the current word (bounded), else inserted
-                                                                conn.commitSuggestionPick(lastWord, suggestion, viewModel.predictiveSourceWord)
+                                                                conn.commitSuggestionPick(lastWord, suggestion, chip.sourceWord)
                                                             }
                                                         }
                                                         viewModel.onWordCommitted(suggestion)

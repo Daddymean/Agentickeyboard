@@ -31,9 +31,9 @@ fun InputConnection.commitInserted(text: CharSequence, newCursorPosition: Int): 
  * choice, built from his typed prefix plus the on-device dictionary or his vocabulary, so it
  * counts as typing, but only when bounded: it completes or corrects the word being typed
  * ([currentWord] is non-empty), the chip was generated for exactly that word
- * ([generatedFor], null for next-word predictions and empty-field prompts; Codex review
- * on 6de6407, r4239778214: a stale prediction chip tapped after typing a character must
- * not pass as a completion), it replaces exactly that word, and it is one word
+ * ([generatedFor]: the source carried by the rendered chip itself, null for next-word
+ * predictions and empty-field prompts; Codex reviews on 6de6407 and 2cfae3f,
+ * r4239778214 / r4239826918: a stale chip must never pass as a completion), it replaces exactly that word, and it is one word
  * ([isBoundedWordPick]) followed by one space. Anything else is committed as inserted text.
  */
 fun InputConnection.commitSuggestionPick(currentWord: String, suggestion: String, generatedFor: String?) {

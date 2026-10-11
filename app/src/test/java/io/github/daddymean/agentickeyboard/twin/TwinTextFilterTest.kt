@@ -81,6 +81,11 @@ class TwinTextFilterTest {
             "the pin on my phone: 2580",
             "pins for the kids' tablets are 1111 and 2222",
             "code for the alarm is 8812",
+            // Codex review on 2cfae3f (r4239826927): the value before the label. Failed on 2cfae3f.
+            "1234 is the code",
+            "2580 = my pin",
+            "4471 is the pin for the gate",
+            "it's 9921, that's the passcode",
         )
         disclosures.forEach { assertNull(it, TwinTextFilter.prepare(it)) }
         // Ordinary uses of nearby words stay.

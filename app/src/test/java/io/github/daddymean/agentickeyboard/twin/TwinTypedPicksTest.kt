@@ -149,8 +149,36 @@ class TwinTypedPicksTest {
         assertFalse(TypedPicks.isTypedWordPick("t", "tonight", null))
         assertFalse(TypedPicks.isTypedWordPick("ton", "tonight", "to"))
         assertTrue(TypedPicks.isTypedWordPick("ton", "tonight", "ton"))
-        // The layout passes the view model's source word, set together with the list.
+    }
+
+    /**
+     * Codex review on 2cfae3f (r4239826918): a chip still rendered from an older list
+     * must use its own source, never a newer list's. Failed on 2cfae3f, where the click
+     * handler read the live view-model source (saved "see you tonight").
+     */
+    @Test
+    fun staleRenderedChipNeverBorrowsANewerListsSource() {
+        val rendered = io.github.daddymean.agentickeyboard.ui.PredictionChip.unbound(listOf("tonight", "tomorrow"))
+        val newer = listOf(io.github.daddymean.agentickeyboard.ui.PredictionChip("the", "t"))
+        val r = Run()
+        r.type("see you t")
+        // The newer completions for "t" exist, but the tapped chip is the rendered prediction.
+        assertEquals("t", newer.single().sourceWord)
+        val tapped = rendered.first()
+        r.now += 40; r.conn.commitSuggestionPick(r.currentWord(), tapped.word, tapped.sourceWord); r.report()
+        assertNull(r.send())
+        // A chip from the current list for the current word still learns.
+        val ok = Run()
+        ok.type("see you t")
+        val chip = io.github.daddymean.agentickeyboard.ui.PredictionChip("tonight", "t")
+        ok.now += 40; ok.conn.commitSuggestionPick(ok.currentWord(), chip.word, chip.sourceWord); ok.report()
+        assertEquals("see you tonight", ok.send()?.text)
+        // Source wiring: the click reads the rendered chip, and the list and its source are one value.
         val layout = TwinInsertionPathGuardTest.layoutSource()
-        assertTrue("conn.commitSuggestionPick(lastWord, suggestion, viewModel.predictiveSourceWord)" in layout)
+        assertTrue("conn.commitSuggestionPick(lastWord, suggestion, chip.sourceWord)" in layout)
+        assertTrue("items(predictiveSuggestions) { chip ->" in layout)
+        val vm = TwinInsertionPathGuardTest.mainRoot().walkTopDown().single { it.name == "KeyboardViewModel.kt" }.readText()
+        assertTrue("MutableStateFlow<List<PredictionChip>>" in vm)
+        assertTrue("no separate live source", "predictiveSourceWord" !in vm && "predictiveSourceWord" !in layout)
     }
 }

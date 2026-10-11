@@ -67,8 +67,11 @@ internal object CredentialMentions {
     private val codeValue = Regex("\\bcode\\s*(is|was|=|:)?\\s*[A-Za-z]*\\d{3,}", RegexOption.IGNORE_CASE)
     /** "pin/code ... is 1234" within one clause: a PIN or code with a 3+ digit value nearby. */
     private val nearValue = Regex("\\b(pins?|codes?)\\b[^.!?\\n]{0,40}?\\d{3,}", RegexOption.IGNORE_CASE)
+    /** The value first: "1234 is the code", "2580 = my pin" (Codex review on 2cfae3f, r4239826927). */
+    private val valueThenLabel = Regex("\\d{3,}[^.!?\\n]{0,40}?\\b(pins?|codes?|passcodes?|passwords?|combo|combination)\\b", RegexOption.IGNORE_CASE)
 
     fun matches(text: String): Boolean =
         labels.containsMatchIn(text) || pinUpper.containsMatchIn(text) ||
-            pinLower.containsMatchIn(text) || codeValue.containsMatchIn(text) || nearValue.containsMatchIn(text)
+            pinLower.containsMatchIn(text) || codeValue.containsMatchIn(text) || nearValue.containsMatchIn(text) ||
+            valueThenLabel.containsMatchIn(text)
 }
