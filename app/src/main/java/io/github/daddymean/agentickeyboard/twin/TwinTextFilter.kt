@@ -102,7 +102,46 @@ internal object CredentialMentions {
         RegexOption.IGNORE_CASE
     )
 
+    /** A word as typed, including joiners: "accessToken", "AWS_SECRET_ACCESS_KEY", "X-Auth-Token". */
+    private val rawWord = Regex("[\\p{L}\\p{Nd}_.\\-]+")
+    private val joiners = Regex("[_.\\-]+")
+    private val caseOrDigitBoundary = Regex(
+        "(?<=\\p{Ll})(?=\\p{Lu})|(?<=\\p{Lu})(?=\\p{Lu}\\p{Ll})|(?<=\\p{L})(?=\\p{Nd})|(?<=\\p{Nd})(?=\\p{L})"
+    )
+
+    /**
+     * Credential stems checked as substrings of each lower-cased word, with and without its
+     * joiners (Codex review on 6695c82, r4242165268). "pin" is deliberately absent: it only
+     * counts as a split token, so "spinning" stays. Substrings also catch harmless words
+     * ("author", "seedling", "footprint"); dropping is the safe default.
+     */
+    private val stems = listOf(
+        "passw", "pwd", "passcode", "token", "secret", "apikey", "api_key", "privatekey", "credential", "bearer",
+        "jwt", "oauth", "auth", "cookie", "session", "otp", "2fa", "mfa", "cvv", "cvc", "seed", "mnemonic",
+        "login", "logon", "signin", "username", "passphrase", "passkey", "totp"
+    )
+
+    /** "accessToken" -> "access Token"; "AWS_SECRET_ACCESS_KEY" -> "AWS SECRET ACCESS KEY"; "PIN-code" -> "PIN code". */
+    internal fun splitWord(word: String): String =
+        caseOrDigitBoundary.replace(joiners.replace(word, " "), " ").trim()
+
+    /** True when any word, split into its parts or as a whole, names a credential. */
+    private fun joinedCredential(text: String): Boolean = rawWord.findAll(text).any { m ->
+        val word = m.value
+        val lower = word.lowercase()
+        val bare = joiners.replace(lower, "")
+        stems.any { lower.contains(it) || bare.contains(it) } || credentialWord.containsMatchIn(splitWord(word)) ||
+            joinedPin(bare.filter { it.isLetter() })
+    }
+
+    /** Lower-case joined PIN labels ("userpin", "atmpin", "pincode"), without "spin", "hairpin" or "pinch". */
+    private val pinWords = setOf("spin", "hairpin", "linchpin", "lynchpin", "tiepin", "pippin", "bobbypin", "safetypin", "kingpin")
+    private fun joinedPin(letters: String): Boolean =
+        (letters.length > 3 && letters.endsWith("pin") && letters !in pinWords) ||
+            letters.startsWith("pincode") || letters.startsWith("pinnumber") || letters.startsWith("pinno")
+
     fun matches(text: String): Boolean =
+        joinedCredential(text) ||
         credentialWord.containsMatchIn(text) ||
         labels.containsMatchIn(text) || pinUpper.containsMatchIn(text) ||
             pinLower.containsMatchIn(text) || codeValue.containsMatchIn(text) || nearValue.containsMatchIn(text) ||

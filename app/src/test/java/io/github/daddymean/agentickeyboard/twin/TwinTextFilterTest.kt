@@ -277,4 +277,57 @@ class TwinTextFilterTest {
             assertEquals(it, TwinTextFilter.prepare(it))
         }
     }
+
+    /**
+     * Codex review on 6695c82 (r4242165268): joined credential labels ("accessToken is
+     * violetgarden", "clientSecret is violetgarden") were stored. Every word is now split
+     * on camelCase/PascalCase, snake_case, kebab-case, dots and digits, and the lower-cased
+     * word is also checked for credential stems. Failed on 6695c82.
+     */
+    @Test
+    fun joinedCredentialLabelsAreDropped() {
+        listOf(
+            "accessToken is violetgarden", "clientSecret=violetgarden", "my_api_key violetgarden",
+            "X-Auth-Token: violetgarden", "AWS_SECRET_ACCESS_KEY=violetgarden", "sessionid violetgarden",
+            "passwd violetgarden", "myPassword is violetgarden", "PIN-code 4471", "privateKey is violetgarden",
+            "refresh.token violetgarden", "apiKey2 violetgarden", "userPin 4471", "OTPcode 123"
+        ).forEach { assertNull(it, TwinTextFilter.prepare(it)) }
+    }
+
+    /** Property-style: every joined spelling of a credential label drops the message. */
+    @Test
+    fun joinedCredentialLabelVariantsAreAlwaysDropped() {
+        val labels = listOf(
+            listOf("access", "token"), listOf("auth", "token"), listOf("refresh", "token"), listOf("id", "token"),
+            listOf("client", "secret"), listOf("secret", "access", "key"), listOf("private", "key"), listOf("api", "key"),
+            listOf("password"), listOf("pass", "code"), listOf("user", "pin"), listOf("pin", "code"), listOf("session", "id"),
+            listOf("bearer"), listOf("jwt"), listOf("oauth", "token"), listOf("cookie"), listOf("otp"), listOf("mfa", "code"),
+            listOf("2fa", "code"), listOf("cvv"), listOf("cvc"), listOf("seed", "words"), listOf("mnemonic"), listOf("credential"),
+            listOf("db", "password"), listOf("wifi", "pwd"), listOf("login", "code")
+        )
+        fun cap(w: String) = w.replaceFirstChar { it.uppercase() }
+        val joins = listOf<(List<String>) -> String>(
+            { it.first() + it.drop(1).joinToString("") { w -> cap(w) } },   // camelCase
+            { it.joinToString("") { w -> cap(w) } },                        // PascalCase
+            { it.joinToString("_") },                                       // snake_case
+            { it.joinToString("_").uppercase() },                           // SCREAMING_SNAKE
+            { it.joinToString("-") },                                       // kebab-case
+            { "X-" + it.joinToString("-") { w -> cap(w) } },                // header style
+            { it.joinToString(".") },                                       // dotted
+            { it.joinToString("") },                                        // concatenated
+            { it.joinToString("").uppercase() + "2" },                      // with digits
+            { "my" + it.joinToString("") { w -> cap(w) } }                  // prefixed
+        )
+        val frames = listOf("%s is violetgarden", "%s=violetgarden", "%s: violetgarden", "\"%s\": \"violetgarden\"", "set %s to violetgarden")
+        var n = 0
+        for (l in labels) for (j in joins) for (fr in frames) {
+            val msg = fr.format(j(l))
+            assertNull(msg, TwinTextFilter.prepare(msg))
+            n++
+        }
+        assertTrue(n >= 1_400)
+        // Split tokens only for "pin", so ordinary words containing it stay.
+        listOf("Spinning class at six", "Pinterest board is cute", "Keyboard works now", "Happy birthday Grandpa")
+            .forEach { assertEquals(it, TwinTextFilter.prepare(it)) }
+    }
 }
