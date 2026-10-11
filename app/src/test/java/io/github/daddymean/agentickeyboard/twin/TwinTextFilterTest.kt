@@ -97,4 +97,66 @@ class TwinTextFilterTest {
             "Happy to help with the login page design",
         ).forEach { assertEquals(it, TwinTextFilter.prepare(it)) }
     }
+
+    /**
+     * Codex review on a401124 (r4239848795) and the Hax decision of 2026-10-10 18:37 PT:
+     * a credential word together with any digit anywhere drops the message, in any
+     * order or format. Failed on a401124.
+     */
+    @Test
+    fun credentialWordWithAnyDigitIsDropped() {
+        listOf(
+            "12-34 is the code",
+            "AB12-CD34 is the code",
+            "code: 4 8 2 9",
+            "my pin? 0 0 1 2",
+            "the combination is twelve 34",
+            "Login: dad / x9",
+            "2FA",
+            "pin1234",
+            "1234code",
+        ).forEach { assertNull(it, TwinTextFilter.prepare(it)) }
+        // Accepted false positives (documented): harmless sentences with a credential word and a digit.
+        assertNull(TwinTextFilter.prepare("code review covers 300 lines"))
+        assertNull(TwinTextFilter.prepare("Pin 2 posts to the top"))
+        // A credential word without any digit, in ordinary use, is still kept.
+        assertEquals("Pin the post to the top", TwinTextFilter.prepare("Pin the post to the top"))
+    }
+
+    /** Fuzz: every credential word, value format, order and case combination is dropped. */
+    @Test
+    fun credentialWordDigitFuzzIsAlwaysDropped() {
+        val words = listOf(
+            "code", "codes", "pin", "pins", "password", "passwords", "passcode", "passphrase", "combination",
+            "combo", "otp", "2fa", "cvv", "cvc", "security answer", "seed phrase", "recovery phrase", "login", "logins", "pwd"
+        )
+        val values = listOf("1234", "12-34", "1 2 3 4", "AB12-CD34", "4.8.2.9", "x9", "twelve 34", "#7", "0", "١٢٣", "1_2")
+        val orders = listOf<(String, String) -> String>(
+            { w, v -> "$w $v" },
+            { w, v -> "$v is the $w" },
+            { w, v -> "my $w? $v" },
+            { w, v -> "($v) <- $w" },
+            { w, v -> "$v, that's my ${w.uppercase()} ok" },
+            { w, v -> "the ${w.replaceFirstChar { it.uppercase() }} for the gate:\n$v" },
+            { w, v -> "remember: $w...and then much later in this long message, the number $v." },
+        )
+        val rng = java.util.Random(24)
+        var checked = 0
+        for (w in words) for (v in values) for (o in orders) {
+            val msg = o(w, v)
+            assertNull(msg, TwinTextFilter.prepare(msg))
+            checked++
+        }
+        // Random separators between digits.
+        val seps = listOf("-", " ", ".", "/", "_", ", ", " - ", "\t")
+        repeat(500) {
+            val digits = (1..(1 + rng.nextInt(8))).map { rng.nextInt(10).toString() }
+            val v = digits.joinToString(seps[rng.nextInt(seps.size)])
+            val w = words[rng.nextInt(words.size)]
+            val msg = if (rng.nextBoolean()) "$w $v" else "$v $w"
+            assertNull(msg, TwinTextFilter.prepare(msg))
+            checked++
+        }
+        assertTrue(checked > 2000)
+    }
 }

@@ -70,7 +70,25 @@ internal object CredentialMentions {
     /** The value first: "1234 is the code", "2580 = my pin" (Codex review on 2cfae3f, r4239826927). */
     private val valueThenLabel = Regex("\\d{3,}[^.!?\\n]{0,40}?\\b(pins?|codes?|passcodes?|passwords?|combo|combination)\\b", RegexOption.IGNORE_CASE)
 
+    /**
+     * The blunt rule (Codex review on a401124, r4239848795; Hax decision 2026-10-10 18:37 PT):
+     * a credential word anywhere **together with any digit anywhere**, in any order or
+     * format ("12-34 is the code", "code: 4 8 2 9", "the combination is twelve 34").
+     * Accepted false positives, documented: "code review covers 300 lines", "Pin 2 posts".
+     */
+    private val credentialWord = Regex(
+        "(?<!\\p{L})(" +
+            "codes?|pins?|passwords?|passwds?|pwds?|pws?|passcodes?|passphrases?|passkeys?|" +
+            "combinations?|combos?|otps?|2fa|mfa|totp|cvv2?s?|cvcs?|cscs?|" +
+            "security\\s+(answers?|questions?)|(seed|recovery|backup)\\s+(phrases?|words?|codes?|keys?)|mnemonics?|" +
+            "log-?ins?|logons?|sign-?ins?|usernames?" +
+            ")(?!\\p{L})",
+        RegexOption.IGNORE_CASE
+    )
+    private val anyDigit = Regex("\\p{Nd}")
+
     fun matches(text: String): Boolean =
+        (credentialWord.containsMatchIn(text) && anyDigit.containsMatchIn(text)) ||
         labels.containsMatchIn(text) || pinUpper.containsMatchIn(text) ||
             pinLower.containsMatchIn(text) || codeValue.containsMatchIn(text) || nearValue.containsMatchIn(text) ||
             valueThenLabel.containsMatchIn(text)
