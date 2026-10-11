@@ -330,4 +330,56 @@ class TwinTextFilterTest {
         listOf("Spinning class at six", "Pinterest board is cute", "Keyboard works now", "Happy birthday Grandpa")
             .forEach { assertEquals(it, TwinTextFilter.prepare(it)) }
     }
+
+    /**
+     * Codex review on 97339e1 (r4242257950) and the Hax decision of 2026-10-11 09:18 PT:
+     * a structural rule. A message drops when (a) any word ends with a credential tail
+     * (code, key, phrase, word, pin, answer, pass) joined to something else, outside a
+     * small allowlist, or (b) a label with a credential stem or tail is assigned a single
+     * opaque value ("X is violetgarden"). Failed on 97339e1.
+     */
+    @Test
+    fun joinedCredentialTailsAndAssignmentsAreDropped() {
+        listOf(
+            "securitycode is 4471", "accesskey=violetgarden", "recoveryphrase is apple banana cherry",
+            "backupcode 1234", "secretword: hunter", "mypass is x", "userpin 4471", "zipcode 94110",
+            "the safe word: violetgarden", "pass -> violetgarden", "the answer was Tr0ub4dor"
+        ).forEach { assertNull(it, TwinTextFilter.prepare(it)) }
+        val prefixes = listOf("security", "access", "recovery", "seed", "backup", "secret", "private", "master", "admin",
+            "root", "wifi", "door", "alarm", "safe", "vault", "unlock")
+        val tails = listOf("code", "key", "phrase", "word", "pin", "pass", "answer")
+        val seps = listOf(" is ", "=", ": ", " was ")
+        var n = 0
+        for (p in prefixes) for (t in tails) for (sep in seps) for (v in listOf("violetgarden", "4471", "x9")) {
+            for (label in listOf(p + t, p + t.replaceFirstChar { it.uppercase() }, (p + t).uppercase())) {
+                val msg = "$label$sep$v"
+                assertNull(msg, TwinTextFilter.prepare(msg))
+                n++
+            }
+            // Spaced labels with an opaque value are caught by the assignment rule.
+            if (v != "x9") {
+                val msg = "my $p $t$sep$v"
+                assertNull(msg, TwinTextFilter.prepare(msg))
+                n++
+            }
+        }
+        assertTrue(n > 3_000)
+        listOf(
+            "the monkey is cute", "hockey game at 7", "my keyword research", "crossword is hard", "barcode scanner broke",
+            "Turkey sandwich: delicious", "the compass was broken", "lowkey tired today", "a catchphrase: just do it",
+            "Can you pass the salt", "The answer is yes"
+        ).forEach { assertEquals(it, TwinTextFilter.prepare(it)) }
+    }
+
+    /** The tail allowlist stays small and every entry is really kept; "zipcode" is not exempt. */
+    @Test
+    fun credentialTailAllowlistIsSmallAndPinned() {
+        val allow = CredentialMentions.TAIL_ALLOWLIST
+        assertTrue(allow.size <= 35)
+        assertFalse("zipcode" in allow)
+        for (w in allow) {
+            assertEquals(w, "we talked about the $w today", TwinTextFilter.prepare("we talked about the $w today"))
+        }
+        assertNull(TwinTextFilter.prepare("we talked about the zipcode today"))
+    }
 }

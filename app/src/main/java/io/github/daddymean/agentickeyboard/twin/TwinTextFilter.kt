@@ -131,7 +131,74 @@ internal object CredentialMentions {
         val lower = word.lowercase()
         val bare = joiners.replace(lower, "")
         stems.any { lower.contains(it) || bare.contains(it) } || credentialWord.containsMatchIn(splitWord(word)) ||
-            joinedPin(bare.filter { it.isLetter() })
+            joinedPin(bare.filter { it.isLetter() }) ||
+            (splitWord(word).lowercase().split(' ') + bare.filter { it.isLetter() }).any(::joinedTail)
+    }
+
+    /**
+     * Structural rule (a) (Codex review on 97339e1, r4242257950; Hax decision 2026-10-11
+     * 09:18 PT): a word that **ends with a generic credential tail joined to something
+     * else** ("securitycode", "accesskey", "recoveryphrase", "secretword", "userpin",
+     * "mypass"; a plural s is allowed) is a credential label, unless it is one of the
+     * common English words in [TAIL_ALLOWLIST]. "zipcode" is deliberately not exempt.
+     */
+    private val tails = listOf("code", "key", "phrase", "word", "pin", "answer", "pass")
+
+    /** Kept small on purpose; each entry is pinned by a test. */
+    internal val TAIL_ALLOWLIST = setOf(
+        "monkey", "turkey", "donkey", "jockey", "hockey", "whiskey", "lowkey",
+        "barcode", "encode", "decode", "unicode", "opcode", "postcode",
+        "catchphrase", "paraphrase",
+        "crossword", "buzzword", "foreword", "afterword", "sword", "byword", "keyword",
+        "compass", "bypass", "overpass", "underpass", "trespass", "surpass",
+        "spin", "hairpin", "linchpin", "kingpin",
+        // Identifiers, not credentials: blanked by IdentifierBlanker instead.
+        "passport"
+    )
+
+    private fun joinedTail(word: String): Boolean =
+        listOf(word, word.removeSuffix("s")).any { w ->
+            w !in TAIL_ALLOWLIST && tails.any { t -> w.length > t.length && w.endsWith(t) }
+        }
+
+    /**
+     * Structural rule (b): an assignment ("label is value", "label=value", "label: value",
+     * "label was value", "label -> value") whose label contains a credential stem or tail
+     * (outside the allowlist) and whose value is one opaque token of 4+ characters: it has
+     * a digit or symbol, mixed case, or is not a common English word.
+     */
+    private val assignment = Regex(
+        "([\\p{L}\\p{Nd}_.\\-]+)(?:\\s+(?i:is|was)\\s+|\\s*(?:=|:|->)\\s*)[\"'\u201C\u2018]?([^\\s\"'\u201D\u2019]+)"
+    )
+    private val commonWords = setOf(
+        "about", "after", "again", "all", "also", "always", "back", "because", "been", "being", "best", "better",
+        "both", "broken", "busy", "came", "cold", "come", "cool", "could", "cute", "delicious", "different", "done",
+        "down", "easy", "even", "every", "fine", "first", "from", "full", "funny", "gone", "good", "great", "hard",
+        "have", "here", "home", "hot", "into", "just", "late", "later", "less", "like", "little", "long", "lost",
+        "made", "make", "many", "maybe", "more", "most", "much", "must", "never", "next", "nice", "none", "nothing",
+        "okay", "only", "open", "over", "perfect", "probably", "ready", "real", "really", "right", "same", "simple",
+        "some", "something", "soon", "still", "sure", "that", "then", "there", "these", "they", "this", "today",
+        "together", "tomorrow", "tonight", "true", "very", "wait", "want", "well", "were", "what", "when", "where",
+        "which", "while", "will", "with", "work", "working", "wrong", "yeah", "yesterday", "your"
+    )
+
+    private fun credentialLabel(label: String): Boolean {
+        val lower = label.lowercase()
+        val letters = lower.filter { it.isLetter() }
+        if (letters in TAIL_ALLOWLIST || letters.removeSuffix("s") in TAIL_ALLOWLIST) return false
+        return stems.any { lower.contains(it) } || tails.any { letters.contains(it) }
+    }
+
+    private fun opaque(value: String): Boolean {
+        val v = value.trimEnd('.', ',', '!', '?', ';', ')')
+        if (v.length < 4) return false
+        val hasDigitOrSymbol = v.any { !it.isLetter() }
+        val mixedCase = v.drop(1).any { it.isUpperCase() } && v.any { it.isLowerCase() }
+        return hasDigitOrSymbol || mixedCase || v.lowercase() !in commonWords
+    }
+
+    private fun credentialAssignment(text: String): Boolean = assignment.findAll(text).any { m ->
+        credentialLabel(m.groupValues[1]) && opaque(m.groupValues[2])
     }
 
     /** Lower-case joined PIN labels ("userpin", "atmpin", "pincode"), without "spin", "hairpin" or "pinch". */
@@ -141,7 +208,7 @@ internal object CredentialMentions {
             letters.startsWith("pincode") || letters.startsWith("pinnumber") || letters.startsWith("pinno")
 
     fun matches(text: String): Boolean =
-        joinedCredential(text) ||
+        joinedCredential(text) || credentialAssignment(text) ||
         credentialWord.containsMatchIn(text) ||
         labels.containsMatchIn(text) || pinUpper.containsMatchIn(text) ||
             pinLower.containsMatchIn(text) || codeValue.containsMatchIn(text) || nearValue.containsMatchIn(text) ||
