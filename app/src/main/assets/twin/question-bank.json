@@ -1,0 +1,6638 @@
+{
+ "schema_version": "1.0",
+ "title": "Legacy Digital Twin: Interview Question Bank",
+ "owner": "Keith Birnbaum",
+ "generated": "2026-10-10",
+ "field_notes": {
+  "depth": "1 = light/warm-up, 2 = reflective, 3 = deep/vulnerable",
+  "answer_mode": "voice | text | either (suggested only; always allow both)",
+  "emotionally_heavy": "true = pace it: max one per day, never two days in a row, never at bedtime by default, offer skip/snooze, follow with a light prompt next session",
+  "teaches": "what the answer trains in the twin: memory, voice, values, advice, humor, decision_style, emotion, relationships, identity, tastes, routine, worldview, comfort, family_history, boundaries",
+  "per_child": "true = ask once per child; substitute [child name] and store answer tagged with that child_id",
+  "placeholders": "[child name] = substitute per child; [partner name] = substitute the co-parent/partner's name, or rephrase if not applicable",
+  "revisit": "none | yearly (re-ask ~12 months later and keep both answers, dated) | per_milestone_and_yearly (re-record as the child ages)",
+  "use_in_twin": "retrieval = memory store for RAG; persona_prompt = summarise into persona/system prompt; guardrail = hard rules for the twin; voice_style = phrasing exemplars; scheduled_message = deliver at milestone, verbatim, as a recording, never regenerated",
+  "est_minutes": "rough time to answer, including follow-ups"
+ },
+ "categories": [
+  {
+   "key": "childhood",
+   "label": "Childhood & family of origin",
+   "prefix": "CH",
+   "count": 16
+  },
+  {
+   "key": "life_story",
+   "label": "Life story by decade",
+   "prefix": "LS",
+   "count": 16
+  },
+  {
+   "key": "turning_points",
+   "label": "Turning points",
+   "prefix": "TP",
+   "count": 11
+  },
+  {
+   "key": "work",
+   "label": "Work & craft",
+   "prefix": "WK",
+   "count": 13
+  },
+  {
+   "key": "values",
+   "label": "Values, beliefs, faith & philosophy",
+   "prefix": "VB",
+   "count": 16
+  },
+  {
+   "key": "pride_regret",
+   "label": "Pride, regrets & lessons",
+   "prefix": "PR",
+   "count": 12
+  },
+  {
+   "key": "love",
+   "label": "Love & relationships",
+   "prefix": "LR",
+   "count": 12
+  },
+  {
+   "key": "parenting",
+   "label": "Being a parent",
+   "prefix": "PA",
+   "count": 15
+  },
+  {
+   "key": "messages",
+   "label": "Messages & advice for each child (templates)",
+   "prefix": "MC",
+   "count": 23
+  },
+  {
+   "key": "humor",
+   "label": "Humor, jokes & stories",
+   "prefix": "HU",
+   "count": 12
+  },
+  {
+   "key": "tastes",
+   "label": "Tastes: music, food, places, books, movies",
+   "prefix": "TA",
+   "count": 14
+  },
+  {
+   "key": "habits",
+   "label": "Habits & daily life",
+   "prefix": "HD",
+   "count": 12
+  },
+  {
+   "key": "conflict_stress",
+   "label": "Conflict, anger, stress & decisions",
+   "prefix": "CF",
+   "count": 14
+  },
+  {
+   "key": "opinions",
+   "label": "Opinions on money, work, success & health",
+   "prefix": "OP",
+   "count": 12
+  },
+  {
+   "key": "people",
+   "label": "People who mattered",
+   "prefix": "PE",
+   "count": 12
+  },
+  {
+   "key": "family_history",
+   "label": "Family history & traditions",
+   "prefix": "FH",
+   "count": 12
+  },
+  {
+   "key": "phrasing",
+   "label": "Phrasing & voice: how he says things",
+   "prefix": "PH",
+   "count": 16
+  },
+  {
+   "key": "hypotheticals",
+   "label": "Hypotheticals that reveal reasoning",
+   "prefix": "HY",
+   "count": 15
+  },
+  {
+   "key": "hidden_self",
+   "label": "What he wants his kids to know about him",
+   "prefix": "UK",
+   "count": 10
+  },
+  {
+   "key": "remembered",
+   "label": "How he wants to be remembered",
+   "prefix": "RM",
+   "count": 8
+  },
+  {
+   "key": "boundaries",
+   "label": "Boundaries of the twin",
+   "prefix": "BD",
+   "count": 12
+  }
+ ],
+ "items": [
+  {
+   "id": "CH-001",
+   "category": "childhood",
+   "category_label": "Childhood & family of origin",
+   "subcategory": "home",
+   "prompt": "Close your eyes for a second and walk me through the front door of the house you remember most from being a kid. What do you see, hear and smell?",
+   "follow_ups": [
+    "Which room did you spend the most time in, and why?",
+    "Is there one object from that house you wish you still had?",
+    "What did the house sound like at night?"
+   ],
+   "depth": 1,
+   "answer_mode": "voice",
+   "emotionally_heavy": false,
+   "teaches": [
+    "memory",
+    "voice"
+   ],
+   "per_child": false,
+   "placeholders": [],
+   "revisit": "none",
+   "use_in_twin": "retrieval",
+   "est_minutes": 3
+  },
+  {
+   "id": "CH-002",
+   "category": "childhood",
+   "category_label": "Childhood & family of origin",
+   "subcategory": "home",
+   "prompt": "What was your neighborhood like? Who lived next door, and where did the kids go to play?",
+   "follow_ups": [
+    "Was there a place you weren't supposed to go but did anyway?",
+    "Who was the neighbor everyone talked about?"
+   ],
+   "depth": 1,
+   "answer_mode": "voice",
+   "emotionally_heavy": false,
+   "teaches": [
+    "memory"
+   ],
+   "per_child": false,
+   "placeholders": [],
+   "revisit": "none",
+   "use_in_twin": "retrieval",
+   "est_minutes": 3
+  },
+  {
+   "id": "CH-003",
+   "category": "childhood",
+   "category_label": "Childhood & family of origin",
+   "subcategory": "parents",
+   "prompt": "Describe your mom the way you'd describe her to someone who never got to meet her.",
+   "follow_ups": [
+    "What's a phrase she said so often you can still hear it?",
+    "What did she do with her hands when she was thinking or worried?",
+    "What did she teach you without ever meaning to?"
+   ],
+   "depth": 2,
+   "answer_mode": "voice",
+   "emotionally_heavy": false,
+   "teaches": [
+    "memory",
+    "relationships"
+   ],
+   "per_child": false,
+   "placeholders": [],
+   "revisit": "none",
+   "use_in_twin": "retrieval",
+   "est_minutes": 6
+  },
+  {
+   "id": "CH-004",
+   "category": "childhood",
+   "category_label": "Childhood & family of origin",
+   "subcategory": "parents",
+   "prompt": "Describe your dad the way you'd describe him to someone who never got to meet him.",
+   "follow_ups": [
+    "What did he do when he was proud of you, and did he say it out loud?",
+    "What's something about him you only understood once you became a dad?",
+    "What did he smell like? Coffee, sawdust, aftershave?"
+   ],
+   "depth": 2,
+   "answer_mode": "voice",
+   "emotionally_heavy": false,
+   "teaches": [
+    "memory",
+    "relationships"
+   ],
+   "per_child": false,
+   "placeholders": [],
+   "revisit": "none",
+   "use_in_twin": "retrieval",
+   "est_minutes": 6
+  },
+  {
+   "id": "CH-005",
+   "category": "childhood",
+   "category_label": "Childhood & family of origin",
+   "subcategory": "parents",
+   "prompt": "What did you need from your parents as a kid that you didn't always get? How has that shaped the kind of father you try to be?",
+   "follow_ups": [
+    "When did you first notice that gap?",
+    "Have you made peace with it? What did that take?"
+   ],
+   "depth": 3,
+   "answer_mode": "voice",
+   "emotionally_heavy": true,
+   "teaches": [
+    "relationships",
+    "emotion"
+   ],
+   "per_child": false,
+   "placeholders": [],
+   "revisit": "none",
+   "use_in_twin": "retrieval",
+   "est_minutes": 16
+  },
+  {
+   "id": "CH-006",
+   "category": "childhood",
+   "category_label": "Childhood & family of origin",
+   "subcategory": "siblings",
+   "prompt": "If you had brothers or sisters, or cousins who felt like them, tell me about them as kids. Who was the troublemaker, who was the peacemaker, and which one were you?",
+   "follow_ups": [
+    "What's the best prank or fight you remember?",
+    "Who did you go to when you were in trouble?"
+   ],
+   "depth": 1,
+   "answer_mode": "voice",
+   "emotionally_heavy": false,
+   "teaches": [
+    "memory",
+    "humor"
+   ],
+   "per_child": false,
+   "placeholders": [],
+   "revisit": "none",
+   "use_in_twin": "retrieval",
+   "est_minutes": 3
+  },
+  {
+   "id": "CH-007",
+   "category": "childhood",
+   "category_label": "Childhood & family of origin",
+   "subcategory": "school",
+   "prompt": "What kind of student were you? Tell me about a teacher you loved and one you couldn't stand.",
+   "follow_ups": [
+    "What subject made time disappear for you?",
+    "Did anyone at school see something in you before you saw it yourself?"
+   ],
+   "depth": 1,
+   "answer_mode": "voice",
+   "emotionally_heavy": false,
+   "teaches": [
+    "memory"
+   ],
+   "per_child": false,
+   "placeholders": [],
+   "revisit": "none",
+   "use_in_twin": "retrieval",
+   "est_minutes": 3
+  },
+  {
+   "id": "CH-008",
+   "category": "childhood",
+   "category_label": "Childhood & family of origin",
+   "subcategory": "play",
+   "prompt": "What did a perfect Saturday look like when you were ten?",
+   "follow_ups": [
+    "What toys, games or shows were you obsessed with?",
+    "Who were you with?"
+   ],
+   "depth": 1,
+   "answer_mode": "voice",
+   "emotionally_heavy": false,
+   "teaches": [
+    "memory",
+    "tastes"
+   ],
+   "per_child": false,
+   "placeholders": [],
+   "revisit": "none",
+   "use_in_twin": "retrieval",
+   "est_minutes": 3
+  },
+  {
+   "id": "CH-009",
+   "category": "childhood",
+   "category_label": "Childhood & family of origin",
+   "subcategory": "friends",
+   "prompt": "Who was your best friend growing up? How did you meet, and what did you two get up to?",
+   "follow_ups": [
+    "Do you still talk? What happened?",
+    "What did that friendship teach you about being a friend?"
+   ],
+   "depth": 1,
+   "answer_mode": "voice",
+   "emotionally_heavy": false,
+   "teaches": [
+    "memory",
+    "relationships"
+   ],
+   "per_child": false,
+   "placeholders": [],
+   "revisit": "none",
+   "use_in_twin": "retrieval",
+   "est_minutes": 3
+  },
+  {
+   "id": "CH-010",
+   "category": "childhood",
+   "category_label": "Childhood & family of origin",
+   "subcategory": "fear",
+   "prompt": "What scared you as a kid? How did you deal with it, and who helped?",
+   "follow_ups": [
+    "Is any of that fear still with you in some form?",
+    "What would you tell little you about it now?"
+   ],
+   "depth": 2,
+   "answer_mode": "voice",
+   "emotionally_heavy": false,
+   "teaches": [
+    "emotion",
+    "memory"
+   ],
+   "per_child": false,
+   "placeholders": [],
+   "revisit": "none",
+   "use_in_twin": "retrieval",
+   "est_minutes": 6
+  },
+  {
+   "id": "CH-011",
+   "category": "childhood",
+   "category_label": "Childhood & family of origin",
+   "subcategory": "trouble",
+   "prompt": "Tell me about a time you got in real trouble as a kid. What did you do and what happened next?",
+   "follow_ups": [
+    "Did you deserve it?",
+    "How did your parents handle it, and would you handle it the same way?"
+   ],
+   "depth": 1,
+   "answer_mode": "voice",
+   "emotionally_heavy": false,
+   "teaches": [
+    "humor",
+    "memory"
+   ],
+   "per_child": false,
+   "placeholders": [],
+   "revisit": "none",
+   "use_in_twin": "retrieval",
+   "est_minutes": 3
+  },
+  {
+   "id": "CH-012",
+   "category": "childhood",
+   "category_label": "Childhood & family of origin",
+   "subcategory": "money",
+   "prompt": "Was money tight, comfortable, or something nobody talked about in your house growing up? How did you know?",
+   "follow_ups": [
+    "What's a moment you first realised what things cost?",
+    "How did that shape how you handle money now?"
+   ],
+   "depth": 2,
+   "answer_mode": "either",
+   "emotionally_heavy": false,
+   "teaches": [
+    "values",
+    "memory"
+   ],
+   "per_child": false,
+   "placeholders": [],
+   "revisit": "none",
+   "use_in_twin": "retrieval",
+   "est_minutes": 6
+  },
+  {
+   "id": "CH-013",
+   "category": "childhood",
+   "category_label": "Childhood & family of origin",
+   "subcategory": "rules",
+   "prompt": "What were the unspoken rules in your family? The things everybody just knew you did or didn't do.",
+   "follow_ups": [
+    "Which of those rules have you kept?",
+    "Which ones did you deliberately break with your own kids?"
+   ],
+   "depth": 2,
+   "answer_mode": "either",
+   "emotionally_heavy": false,
+   "teaches": [
+    "values"
+   ],
+   "per_child": false,
+   "placeholders": [],
+   "revisit": "none",
+   "use_in_twin": "retrieval",
+   "est_minutes": 6
+  },
+  {
+   "id": "CH-014",
+   "category": "childhood",
+   "category_label": "Childhood & family of origin",
+   "subcategory": "hard_times",
+   "prompt": "Was there a hard season in your childhood, an illness, a move, a divorce, a loss, that changed the feel of home? Tell me about it only as far as you want to.",
+   "follow_ups": [
+    "Who held things together?",
+    "What did you understand then, and what do you understand now?"
+   ],
+   "depth": 3,
+   "answer_mode": "voice",
+   "emotionally_heavy": true,
+   "teaches": [
+    "memory",
+    "emotion"
+   ],
+   "per_child": false,
+   "placeholders": [],
+   "revisit": "none",
+   "use_in_twin": "retrieval",
+   "est_minutes": 16
+  },
+  {
+   "id": "CH-015",
+   "category": "childhood",
+   "category_label": "Childhood & family of origin",
+   "subcategory": "proud_kid",
+   "prompt": "What's the first thing you remember being really proud of yourself for?",
+   "follow_ups": [
+    "Who did you want to show?",
+    "Do you still feel a little of that pride when you think about it?"
+   ],
+   "depth": 1,
+   "answer_mode": "voice",
+   "emotionally_heavy": false,
+   "teaches": [
+    "memory",
+    "identity"
+   ],
+   "per_child": false,
+   "placeholders": [],
+   "revisit": "none",
+   "use_in_twin": "retrieval",
+   "est_minutes": 3
+  },
+  {
+   "id": "CH-016",
+   "category": "childhood",
+   "category_label": "Childhood & family of origin",
+   "subcategory": "food",
+   "prompt": "What did dinner look like in your house growing up? Who cooked, where did everyone sit, and what was the meal you hoped for?",
+   "follow_ups": [
+    "Was there a dish you hated but had to eat?",
+    "Is there a recipe from that kitchen that should be passed down?"
+   ],
+   "depth": 1,
+   "answer_mode": "voice",
+   "emotionally_heavy": false,
+   "teaches": [
+    "memory",
+    "tastes"
+   ],
+   "per_child": false,
+   "placeholders": [],
+   "revisit": "none",
+   "use_in_twin": "retrieval",
+   "est_minutes": 3
+  },
+  {
+   "id": "LS-001",
+   "category": "life_story",
+   "category_label": "Life story by decade",
+   "subcategory": "0-10",
+   "prompt": "Start at the very beginning: where and when were you born, and what's the story you've been told about the day you arrived?",
+   "follow_ups": [
+    "Who told you that story?",
+    "What do you know about what the world was like that year?"
+   ],
+   "depth": 1,
+   "answer_mode": "voice",
+   "emotionally_heavy": false,
+   "teaches": [
+    "memory"
+   ],
+   "per_child": false,
+   "placeholders": [],
+   "revisit": "none",
+   "use_in_twin": "retrieval",
+   "est_minutes": 3
+  },
+  {
+   "id": "LS-002",
+   "category": "life_story",
+   "category_label": "Life story by decade",
+   "subcategory": "0-10",
+   "prompt": "What's your very earliest memory? Describe it in as much detail as you can, even if it's blurry.",
+   "follow_ups": [
+    "How old do you think you were?",
+    "Why do you think that moment stuck?"
+   ],
+   "depth": 1,
+   "answer_mode": "voice",
+   "emotionally_heavy": false,
+   "teaches": [
+    "memory"
+   ],
+   "per_child": false,
+   "placeholders": [],
+   "revisit": "none",
+   "use_in_twin": "retrieval",
+   "est_minutes": 3
+  },
+  {
+   "id": "LS-003",
+   "category": "life_story",
+   "category_label": "Life story by decade",
+   "subcategory": "10-20",
+   "prompt": "Who were you at thirteen? What did you care about, what did you wear, what did you worry about?",
+   "follow_ups": [
+    "What would thirteen-year-old you think of you now?",
+    "What music was playing in your room?"
+   ],
+   "depth": 1,
+   "answer_mode": "voice",
+   "emotionally_heavy": false,
+   "teaches": [
+    "memory",
+    "identity"
+   ],
+   "per_child": false,
+   "placeholders": [],
+   "revisit": "none",
+   "use_in_twin": "retrieval",
+   "est_minutes": 3
+  },
+  {
+   "id": "LS-004",
+   "category": "life_story",
+   "category_label": "Life story by decade",
+   "subcategory": "10-20",
+   "prompt": "Tell me about your teenage years: the friends, the trouble, the first job, the first car, the first time you felt grown up.",
+   "follow_ups": [
+    "What's a night from those years you'll never forget?",
+    "What did you think your life would look like by now?"
+   ],
+   "depth": 2,
+   "answer_mode": "voice",
+   "emotionally_heavy": false,
+   "teaches": [
+    "memory",
+    "identity"
+   ],
+   "per_child": false,
+   "placeholders": [],
+   "revisit": "none",
+   "use_in_twin": "retrieval",
+   "est_minutes": 6
+  },
+  {
+   "id": "LS-005",
+   "category": "life_story",
+   "category_label": "Life story by decade",
+   "subcategory": "10-20",
+   "prompt": "Who was your first crush or first love, and what was that like?",
+   "follow_ups": [
+    "How did it end?",
+    "What did you learn about yourself?"
+   ],
+   "depth": 2,
+   "answer_mode": "voice",
+   "emotionally_heavy": false,
+   "teaches": [
+    "memory",
+    "relationships"
+   ],
+   "per_child": false,
+   "placeholders": [],
+   "revisit": "none",
+   "use_in_twin": "retrieval",
+   "est_minutes": 6
+  },
+  {
+   "id": "LS-006",
+   "category": "life_story",
+   "category_label": "Life story by decade",
+   "subcategory": "20-30",
+   "prompt": "What were your twenties like? Where did you live, what did you do for money, and what did you do for fun?",
+   "follow_ups": [
+    "What's the worst apartment you ever lived in?",
+    "What were you searching for in that decade?"
+   ],
+   "depth": 2,
+   "answer_mode": "voice",
+   "emotionally_heavy": false,
+   "teaches": [
+    "memory"
+   ],
+   "per_child": false,
+   "placeholders": [],
+   "revisit": "none",
+   "use_in_twin": "retrieval",
+   "est_minutes": 6
+  },
+  {
+   "id": "LS-007",
+   "category": "life_story",
+   "category_label": "Life story by decade",
+   "subcategory": "20-30",
+   "prompt": "What was the biggest gamble you took in your twenties? How did it turn out?",
+   "follow_ups": [
+    "Would you take it again?",
+    "Who tried to talk you out of it?"
+   ],
+   "depth": 2,
+   "answer_mode": "voice",
+   "emotionally_heavy": false,
+   "teaches": [
+    "memory",
+    "decision_style"
+   ],
+   "per_child": false,
+   "placeholders": [],
+   "revisit": "none",
+   "use_in_twin": "retrieval",
+   "est_minutes": 6
+  },
+  {
+   "id": "LS-008",
+   "category": "life_story",
+   "category_label": "Life story by decade",
+   "subcategory": "20-30",
+   "prompt": "What was the loneliest or most lost you felt as a young adult? How did you find your way back?",
+   "follow_ups": [
+    "What, or who, was the turning point?",
+    "What would you say to one of the kids if they felt that way?"
+   ],
+   "depth": 3,
+   "answer_mode": "voice",
+   "emotionally_heavy": true,
+   "teaches": [
+    "emotion",
+    "identity"
+   ],
+   "per_child": false,
+   "placeholders": [],
+   "revisit": "none",
+   "use_in_twin": "retrieval",
+   "est_minutes": 16
+  },
+  {
+   "id": "LS-009",
+   "category": "life_story",
+   "category_label": "Life story by decade",
+   "subcategory": "30-40",
+   "prompt": "Tell me about your thirties. What was taking most of your energy, and what was giving you energy back?",
+   "follow_ups": [
+    "What did you start taking more seriously?",
+    "What did you stop caring about?"
+   ],
+   "depth": 2,
+   "answer_mode": "voice",
+   "emotionally_heavy": false,
+   "teaches": [
+    "memory"
+   ],
+   "per_child": false,
+   "placeholders": [],
+   "revisit": "none",
+   "use_in_twin": "retrieval",
+   "est_minutes": 6
+  },
+  {
+   "id": "LS-010",
+   "category": "life_story",
+   "category_label": "Life story by decade",
+   "subcategory": "30-40",
+   "prompt": "What was it like becoming a dad, in that decade of your life? What changed first, outside and inside?",
+   "follow_ups": [
+    "What surprised you the most?",
+    "What did you lose, and what did you gain?"
+   ],
+   "depth": 2,
+   "answer_mode": "voice",
+   "emotionally_heavy": false,
+   "teaches": [
+    "memory",
+    "relationships"
+   ],
+   "per_child": false,
+   "placeholders": [],
+   "revisit": "none",
+   "use_in_twin": "retrieval",
+   "est_minutes": 6
+  },
+  {
+   "id": "LS-011",
+   "category": "life_story",
+   "category_label": "Life story by decade",
+   "subcategory": "40-50",
+   "prompt": "What does your forties feel like, or what did it feel like? What do you know now that you didn't at thirty?",
+   "follow_ups": [
+    "What are you still figuring out?",
+    "What's become simpler?"
+   ],
+   "depth": 2,
+   "answer_mode": "voice",
+   "emotionally_heavy": false,
+   "teaches": [
+    "memory",
+    "identity"
+   ],
+   "per_child": false,
+   "placeholders": [],
+   "revisit": "none",
+   "use_in_twin": "retrieval",
+   "est_minutes": 6
+  },
+  {
+   "id": "LS-012",
+   "category": "life_story",
+   "category_label": "Life story by decade",
+   "subcategory": "50+",
+   "prompt": "Looking at the decades still ahead of you, what do you hope each one holds? Tell me about the version of you at sixty, seventy, eighty.",
+   "follow_ups": [
+    "What do you want to be doing on an ordinary Tuesday at seventy?",
+    "What are you afraid of about getting older?"
+   ],
+   "depth": 2,
+   "answer_mode": "either",
+   "emotionally_heavy": false,
+   "teaches": [
+    "identity",
+    "advice"
+   ],
+   "per_child": false,
+   "placeholders": [],
+   "revisit": "none",
+   "use_in_twin": "retrieval",
+   "est_minutes": 6
+  },
+  {
+   "id": "LS-013",
+   "category": "life_story",
+   "category_label": "Life story by decade",
+   "subcategory": "now",
+   "prompt": "What's going on in your life right now, this week? Just a snapshot for the record.",
+   "follow_ups": [
+    "What's on your mind most days lately?",
+    "What's something small that made you happy this week?"
+   ],
+   "depth": 1,
+   "answer_mode": "either",
+   "emotionally_heavy": false,
+   "teaches": [
+    "memory",
+    "routine"
+   ],
+   "per_child": false,
+   "placeholders": [],
+   "revisit": "yearly",
+   "use_in_twin": "retrieval",
+   "est_minutes": 3
+  },
+  {
+   "id": "LS-014",
+   "category": "life_story",
+   "category_label": "Life story by decade",
+   "subcategory": "now",
+   "prompt": "If your life were a book, what would the chapters be called so far? Give me the titles and a sentence for each.",
+   "follow_ups": [
+    "Which chapter was the hardest to live through?",
+    "What do you want the next chapter to be called?"
+   ],
+   "depth": 2,
+   "answer_mode": "either",
+   "emotionally_heavy": false,
+   "teaches": [
+    "identity"
+   ],
+   "per_child": false,
+   "placeholders": [],
+   "revisit": "yearly",
+   "use_in_twin": "retrieval",
+   "est_minutes": 6
+  },
+  {
+   "id": "LS-015",
+   "category": "life_story",
+   "category_label": "Life story by decade",
+   "subcategory": "places",
+   "prompt": "List every place you've lived, in order, and give me one sentence about each.",
+   "follow_ups": [
+    "Which one felt most like home?",
+    "Which one would you go back to?"
+   ],
+   "depth": 1,
+   "answer_mode": "voice",
+   "emotionally_heavy": false,
+   "teaches": [
+    "memory"
+   ],
+   "per_child": false,
+   "placeholders": [],
+   "revisit": "none",
+   "use_in_twin": "retrieval",
+   "est_minutes": 3
+  },
+  {
+   "id": "LS-016",
+   "category": "life_story",
+   "category_label": "Life story by decade",
+   "subcategory": "era",
+   "prompt": "What big world events happened during your life that you remember exactly where you were for? Tell me about one.",
+   "follow_ups": [
+    "How did it change the way you saw the world?",
+    "How did the people around you react?"
+   ],
+   "depth": 1,
+   "answer_mode": "voice",
+   "emotionally_heavy": false,
+   "teaches": [
+    "memory",
+    "worldview"
+   ],
+   "per_child": false,
+   "placeholders": [],
+   "revisit": "none",
+   "use_in_twin": "retrieval",
+   "est_minutes": 3
+  },
+  {
+   "id": "TP-001",
+   "category": "turning_points",
+   "category_label": "Turning points",
+   "subcategory": "forks",
+   "prompt": "Tell me about a moment where your life could have gone one of two ways. Which way did you go, and why?",
+   "follow_ups": [
+    "What do you think the other version of you is doing?",
+    "Did you know at the time it was a big moment?"
+   ],
+   "depth": 2,
+   "answer_mode": "voice",
+   "emotionally_heavy": false,
+   "teaches": [
+    "decision_style",
+    "memory"
+   ],
+   "per_child": false,
+   "placeholders": [],
+   "revisit": "none",
+   "use_in_twin": "retrieval",
+   "est_minutes": 6
+  },
+  {
+   "id": "TP-002",
+   "category": "turning_points",
+   "category_label": "Turning points",
+   "subcategory": "forks",
+   "prompt": "What's the best decision you ever made? Walk me through how you made it.",
+   "follow_ups": [
+    "Was it a gut call or did you think it through?",
+    "What did it cost you?"
+   ],
+   "depth": 2,
+   "answer_mode": "voice",
+   "emotionally_heavy": false,
+   "teaches": [
+    "decision_style"
+   ],
+   "per_child": false,
+   "placeholders": [],
+   "revisit": "none",
+   "use_in_twin": "retrieval",
+   "est_minutes": 6
+  },
+  {
+   "id": "TP-003",
+   "category": "turning_points",
+   "category_label": "Turning points",
+   "subcategory": "forks",
+   "prompt": "What's a decision you'd unmake if you could? What happened, and what do you understand about it now?",
+   "follow_ups": [
+    "What made it feel right at the time?",
+    "How have you lived with it?"
+   ],
+   "depth": 3,
+   "answer_mode": "voice",
+   "emotionally_heavy": true,
+   "teaches": [
+    "decision_style",
+    "emotion"
+   ],
+   "per_child": false,
+   "placeholders": [],
+   "revisit": "none",
+   "use_in_twin": "retrieval",
+   "est_minutes": 16
+  },
+  {
+   "id": "TP-004",
+   "category": "turning_points",
+   "category_label": "Turning points",
+   "subcategory": "people",
+   "prompt": "Who walked into your life at exactly the right time? Tell me about that meeting.",
+   "follow_ups": [
+    "Did they know how much they mattered?",
+    "Where are they now?"
+   ],
+   "depth": 2,
+   "answer_mode": "voice",
+   "emotionally_heavy": false,
+   "teaches": [
+    "relationships",
+    "memory"
+   ],
+   "per_child": false,
+   "placeholders": [],
+   "revisit": "none",
+   "use_in_twin": "retrieval",
+   "est_minutes": 6
+  },
+  {
+   "id": "TP-005",
+   "category": "turning_points",
+   "category_label": "Turning points",
+   "subcategory": "loss",
+   "prompt": "Tell me about a loss that divided your life into before and after.",
+   "follow_ups": [
+    "What did you do in the first days after?",
+    "What helped, and what did people say that didn't help?",
+    "How do you carry it now?"
+   ],
+   "depth": 3,
+   "answer_mode": "voice",
+   "emotionally_heavy": true,
+   "teaches": [
+    "emotion",
+    "memory"
+   ],
+   "per_child": false,
+   "placeholders": [],
+   "revisit": "none",
+   "use_in_twin": "retrieval",
+   "est_minutes": 16
+  },
+  {
+   "id": "TP-006",
+   "category": "turning_points",
+   "category_label": "Turning points",
+   "subcategory": "wake_up",
+   "prompt": "Was there a moment you suddenly saw yourself clearly, maybe not in a flattering way, and decided to change?",
+   "follow_ups": [
+    "What did you actually change?",
+    "Did it stick?"
+   ],
+   "depth": 2,
+   "answer_mode": "voice",
+   "emotionally_heavy": false,
+   "teaches": [
+    "identity",
+    "values"
+   ],
+   "per_child": false,
+   "placeholders": [],
+   "revisit": "none",
+   "use_in_twin": "retrieval",
+   "est_minutes": 6
+  },
+  {
+   "id": "TP-007",
+   "category": "turning_points",
+   "category_label": "Turning points",
+   "subcategory": "luck",
+   "prompt": "Where in your life did luck play a bigger part than you usually admit?",
+   "follow_ups": [
+    "And where did hard work get less credit than it deserved?",
+    "How do you think about luck when you talk to the kids?"
+   ],
+   "depth": 2,
+   "answer_mode": "either",
+   "emotionally_heavy": false,
+   "teaches": [
+    "worldview"
+   ],
+   "per_child": false,
+   "placeholders": [],
+   "revisit": "none",
+   "use_in_twin": "retrieval",
+   "est_minutes": 6
+  },
+  {
+   "id": "TP-008",
+   "category": "turning_points",
+   "category_label": "Turning points",
+   "subcategory": "courage",
+   "prompt": "When were you the bravest you've ever been?",
+   "follow_ups": [
+    "Did anyone see it?",
+    "What gave you the nerve?"
+   ],
+   "depth": 2,
+   "answer_mode": "voice",
+   "emotionally_heavy": false,
+   "teaches": [
+    "values",
+    "memory"
+   ],
+   "per_child": false,
+   "placeholders": [],
+   "revisit": "none",
+   "use_in_twin": "retrieval",
+   "est_minutes": 6
+  },
+  {
+   "id": "TP-009",
+   "category": "turning_points",
+   "category_label": "Turning points",
+   "subcategory": "faith_shift",
+   "prompt": "Has your view of faith, meaning or the big questions ever shifted dramatically? What triggered it?",
+   "follow_ups": [
+    "What did you lose and what did you find?",
+    "How did the people around you react?"
+   ],
+   "depth": 3,
+   "answer_mode": "either",
+   "emotionally_heavy": true,
+   "teaches": [
+    "worldview",
+    "values"
+   ],
+   "per_child": false,
+   "placeholders": [],
+   "revisit": "none",
+   "use_in_twin": "retrieval",
+   "est_minutes": 16
+  },
+  {
+   "id": "TP-010",
+   "category": "turning_points",
+   "category_label": "Turning points",
+   "subcategory": "health",
+   "prompt": "Has your health or the health of someone close to you ever forced a turning point? What happened, and what did it change in how you live?",
+   "follow_ups": [
+    "What did you promise yourself then?",
+    "Have you kept it?"
+   ],
+   "depth": 3,
+   "answer_mode": "voice",
+   "emotionally_heavy": true,
+   "teaches": [
+    "emotion",
+    "memory"
+   ],
+   "per_child": false,
+   "placeholders": [],
+   "revisit": "none",
+   "use_in_twin": "retrieval",
+   "est_minutes": 16
+  },
+  {
+   "id": "TP-011",
+   "category": "turning_points",
+   "category_label": "Turning points",
+   "subcategory": "small",
+   "prompt": "What's a tiny, almost random moment that ended up changing everything, like a wrong turn, a conversation, a flyer on a wall?",
+   "follow_ups": [
+    "Do you believe in coincidences?",
+    "Who else was there?"
+   ],
+   "depth": 1,
+   "answer_mode": "voice",
+   "emotionally_heavy": false,
+   "teaches": [
+    "memory"
+   ],
+   "per_child": false,
+   "placeholders": [],
+   "revisit": "none",
+   "use_in_twin": "retrieval",
+   "est_minutes": 3
+  },
+  {
+   "id": "WK-001",
+   "category": "work",
+   "category_label": "Work & craft",
+   "subcategory": "first_jobs",
+   "prompt": "What was your very first job? How much did it pay and what did you learn from it?",
+   "follow_ups": [
+    "Worst boss or best boss from back then?",
+    "What's a story from that job you still tell?"
+   ],
+   "depth": 1,
+   "answer_mode": "voice",
+   "emotionally_heavy": false,
+   "teaches": [
+    "memory",
+    "humor"
+   ],
+   "per_child": false,
+   "placeholders": [],
+   "revisit": "none",
+   "use_in_twin": "retrieval",
+   "est_minutes": 3
+  },
+  {
+   "id": "WK-002",
+   "category": "work",
+   "category_label": "Work & craft",
+   "subcategory": "path",
+   "prompt": "How did you end up doing the work you do now? Tell me the real story, including the detours.",
+   "follow_ups": [
+    "Was there a moment you almost quit?",
+    "Who opened a door for you?"
+   ],
+   "depth": 2,
+   "answer_mode": "voice",
+   "emotionally_heavy": false,
+   "teaches": [
+    "memory",
+    "decision_style"
+   ],
+   "per_child": false,
+   "placeholders": [],
+   "revisit": "none",
+   "use_in_twin": "retrieval",
+   "est_minutes": 6
+  },
+  {
+   "id": "WK-003",
+   "category": "work",
+   "category_label": "Work & craft",
+   "subcategory": "craft",
+   "prompt": "Explain what you do to one of the kids at age ten. Then explain it the way you'd explain it to a colleague.",
+   "follow_ups": [
+    "What part of it do you love so much you'd do it for free?",
+    "What part of it drains you?"
+   ],
+   "depth": 2,
+   "answer_mode": "voice",
+   "emotionally_heavy": false,
+   "teaches": [
+    "identity",
+    "voice"
+   ],
+   "per_child": false,
+   "placeholders": [],
+   "revisit": "none",
+   "use_in_twin": "retrieval",
+   "est_minutes": 6
+  },
+  {
+   "id": "WK-004",
+   "category": "work",
+   "category_label": "Work & craft",
+   "subcategory": "craft",
+   "prompt": "What does doing your work really well look like? What do the best people in your field do that others don't?",
+   "follow_ups": [
+    "How did you learn that?",
+    "What's a piece of craft knowledge you'd hate to see lost?"
+   ],
+   "depth": 2,
+   "answer_mode": "either",
+   "emotionally_heavy": false,
+   "teaches": [
+    "advice",
+    "identity"
+   ],
+   "per_child": false,
+   "placeholders": [],
+   "revisit": "none",
+   "use_in_twin": "retrieval",
+   "est_minutes": 6
+  },
+  {
+   "id": "WK-005",
+   "category": "work",
+   "category_label": "Work & craft",
+   "subcategory": "craft",
+   "prompt": "What tools, methods or habits do you swear by in your work, and why?",
+   "follow_ups": [
+    "What's something everyone in your field does that you think is wrong?",
+    "What would you teach an apprentice on day one?"
+   ],
+   "depth": 2,
+   "answer_mode": "either",
+   "emotionally_heavy": false,
+   "teaches": [
+    "advice"
+   ],
+   "per_child": false,
+   "placeholders": [],
+   "revisit": "none",
+   "use_in_twin": "retrieval",
+   "est_minutes": 6
+  },
+  {
+   "id": "WK-006",
+   "category": "work",
+   "category_label": "Work & craft",
+   "subcategory": "projects",
+   "prompt": "Tell me about the piece of work you're proudest of. What went into it?",
+   "follow_ups": [
+    "What almost went wrong?",
+    "Who should get credit that didn't?"
+   ],
+   "depth": 2,
+   "answer_mode": "voice",
+   "emotionally_heavy": false,
+   "teaches": [
+    "memory",
+    "identity"
+   ],
+   "per_child": false,
+   "placeholders": [],
+   "revisit": "none",
+   "use_in_twin": "retrieval",
+   "est_minutes": 6
+  },
+  {
+   "id": "WK-007",
+   "category": "work",
+   "category_label": "Work & craft",
+   "subcategory": "failure",
+   "prompt": "Tell me about a professional failure that really stung. What happened, and how did you get back up?",
+   "follow_ups": [
+    "What did you say to yourself at the time?",
+    "What would you say to the kids if the same thing happened to them?"
+   ],
+   "depth": 3,
+   "answer_mode": "voice",
+   "emotionally_heavy": true,
+   "teaches": [
+    "memory",
+    "advice"
+   ],
+   "per_child": false,
+   "placeholders": [],
+   "revisit": "none",
+   "use_in_twin": "retrieval",
+   "est_minutes": 16
+  },
+  {
+   "id": "WK-008",
+   "category": "work",
+   "category_label": "Work & craft",
+   "subcategory": "people",
+   "prompt": "Who taught you the most about work? Mentors, bosses, coworkers, even people you didn't like.",
+   "follow_ups": [
+    "What exactly did they teach you?",
+    "Did you ever tell them?"
+   ],
+   "depth": 2,
+   "answer_mode": "voice",
+   "emotionally_heavy": false,
+   "teaches": [
+    "relationships",
+    "advice"
+   ],
+   "per_child": false,
+   "placeholders": [],
+   "revisit": "none",
+   "use_in_twin": "retrieval",
+   "est_minutes": 6
+  },
+  {
+   "id": "WK-009",
+   "category": "work",
+   "category_label": "Work & craft",
+   "subcategory": "ethics",
+   "prompt": "Have you ever been asked to do something at work that didn't sit right with you? What did you do?",
+   "follow_ups": [
+    "Where's your line?",
+    "Did it cost you anything?"
+   ],
+   "depth": 3,
+   "answer_mode": "either",
+   "emotionally_heavy": false,
+   "teaches": [
+    "values",
+    "decision_style"
+   ],
+   "per_child": false,
+   "placeholders": [],
+   "revisit": "none",
+   "use_in_twin": "retrieval",
+   "est_minutes": 12
+  },
+  {
+   "id": "WK-010",
+   "category": "work",
+   "category_label": "Work & craft",
+   "subcategory": "building",
+   "prompt": "If you've built things, apps, tools, a team, anything, what made you want to build them? What does building feel like when it's going well?",
+   "follow_ups": [
+    "What did you build that nobody knows about?",
+    "What are you building right now?"
+   ],
+   "depth": 2,
+   "answer_mode": "either",
+   "emotionally_heavy": false,
+   "teaches": [
+    "identity"
+   ],
+   "per_child": false,
+   "placeholders": [],
+   "revisit": "none",
+   "use_in_twin": "retrieval",
+   "est_minutes": 6
+  },
+  {
+   "id": "WK-011",
+   "category": "work",
+   "category_label": "Work & craft",
+   "subcategory": "balance",
+   "prompt": "Has work ever cost you time with the family that you wish you had back? Tell me honestly.",
+   "follow_ups": [
+    "What did you change because of it?",
+    "What would you tell the kids about that balance?"
+   ],
+   "depth": 3,
+   "answer_mode": "voice",
+   "emotionally_heavy": true,
+   "teaches": [
+    "values",
+    "relationships"
+   ],
+   "per_child": false,
+   "placeholders": [],
+   "revisit": "none",
+   "use_in_twin": "retrieval",
+   "est_minutes": 16
+  },
+  {
+   "id": "WK-012",
+   "category": "work",
+   "category_label": "Work & craft",
+   "subcategory": "advice",
+   "prompt": "What should one of the kids know before they take their first real job?",
+   "follow_ups": [
+    "How do you know when it's time to leave a job?",
+    "How do you ask for a raise?"
+   ],
+   "depth": 2,
+   "answer_mode": "either",
+   "emotionally_heavy": false,
+   "teaches": [
+    "advice"
+   ],
+   "per_child": false,
+   "placeholders": [],
+   "revisit": "none",
+   "use_in_twin": "retrieval",
+   "est_minutes": 6
+  },
+  {
+   "id": "WK-013",
+   "category": "work",
+   "category_label": "Work & craft",
+   "subcategory": "future",
+   "prompt": "How do you think work will change in the kids' lifetimes, and what skills do you hope they hold onto no matter what?",
+   "follow_ups": [
+    "What do you hope never gets automated away?",
+    "What are you excited about?"
+   ],
+   "depth": 1,
+   "answer_mode": "either",
+   "emotionally_heavy": false,
+   "teaches": [
+    "worldview"
+   ],
+   "per_child": false,
+   "placeholders": [],
+   "revisit": "none",
+   "use_in_twin": "retrieval",
+   "est_minutes": 3
+  },
+  {
+   "id": "VB-001",
+   "category": "values",
+   "category_label": "Values, beliefs, faith & philosophy",
+   "subcategory": "core",
+   "prompt": "If you had to boil down what you believe about how to live into five rules, what would they be?",
+   "follow_ups": [
+    "Which one is hardest for you to live by?",
+    "Where did each one come from?"
+   ],
+   "depth": 2,
+   "answer_mode": "either",
+   "emotionally_heavy": false,
+   "teaches": [
+    "values"
+   ],
+   "per_child": false,
+   "placeholders": [],
+   "revisit": "yearly",
+   "use_in_twin": "persona_prompt+retrieval",
+   "est_minutes": 6
+  },
+  {
+   "id": "VB-002",
+   "category": "values",
+   "category_label": "Values, beliefs, faith & philosophy",
+   "subcategory": "core",
+   "prompt": "What does being a good person actually mean to you, day to day, not in theory?",
+   "follow_ups": [
+    "Who's the best person you've ever known, by that standard?",
+    "When do you fall short?"
+   ],
+   "depth": 2,
+   "answer_mode": "either",
+   "emotionally_heavy": false,
+   "teaches": [
+    "values"
+   ],
+   "per_child": false,
+   "placeholders": [],
+   "revisit": "yearly",
+   "use_in_twin": "persona_prompt+retrieval",
+   "est_minutes": 6
+  },
+  {
+   "id": "VB-003",
+   "category": "values",
+   "category_label": "Values, beliefs, faith & philosophy",
+   "subcategory": "honesty",
+   "prompt": "How do you think about honesty? Is there ever a time a lie is the right thing?",
+   "follow_ups": [
+    "Tell me about a time you told a hard truth.",
+    "Tell me about a time you wish you had."
+   ],
+   "depth": 2,
+   "answer_mode": "voice",
+   "emotionally_heavy": false,
+   "teaches": [
+    "values",
+    "advice"
+   ],
+   "per_child": false,
+   "placeholders": [],
+   "revisit": "yearly",
+   "use_in_twin": "persona_prompt+retrieval",
+   "est_minutes": 6
+  },
+  {
+   "id": "VB-004",
+   "category": "values",
+   "category_label": "Values, beliefs, faith & philosophy",
+   "subcategory": "kindness",
+   "prompt": "Tell me about a small act of kindness someone did for you that you've never forgotten.",
+   "follow_ups": [
+    "Have you paid it forward?",
+    "Why do you think it stuck with you?"
+   ],
+   "depth": 2,
+   "answer_mode": "voice",
+   "emotionally_heavy": false,
+   "teaches": [
+    "values",
+    "memory"
+   ],
+   "per_child": false,
+   "placeholders": [],
+   "revisit": "yearly",
+   "use_in_twin": "persona_prompt+retrieval",
+   "est_minutes": 6
+  },
+  {
+   "id": "VB-005",
+   "category": "values",
+   "category_label": "Values, beliefs, faith & philosophy",
+   "subcategory": "faith",
+   "prompt": "What do you believe about God, the universe, or whatever's bigger than us? It's fine if the answer is complicated or 'I don't know'.",
+   "follow_ups": [
+    "How has that changed over your life?",
+    "What would you want the kids to know about how you got there?",
+    "What do you hope they believe, if anything, and what would you never want to force on them?"
+   ],
+   "depth": 3,
+   "answer_mode": "either",
+   "emotionally_heavy": false,
+   "teaches": [
+    "worldview"
+   ],
+   "per_child": false,
+   "placeholders": [],
+   "revisit": "yearly",
+   "use_in_twin": "persona_prompt+retrieval",
+   "est_minutes": 12
+  },
+  {
+   "id": "VB-006",
+   "category": "values",
+   "category_label": "Values, beliefs, faith & philosophy",
+   "subcategory": "faith",
+   "prompt": "What do you think happens after we die? And how do you feel about that?",
+   "follow_ups": [
+    "Does it comfort you or scare you?",
+    "How would you want the kids to talk about it?"
+   ],
+   "depth": 3,
+   "answer_mode": "either",
+   "emotionally_heavy": true,
+   "teaches": [
+    "worldview",
+    "emotion"
+   ],
+   "per_child": false,
+   "placeholders": [],
+   "revisit": "yearly",
+   "use_in_twin": "persona_prompt+retrieval",
+   "est_minutes": 16
+  },
+  {
+   "id": "VB-007",
+   "category": "values",
+   "category_label": "Values, beliefs, faith & philosophy",
+   "subcategory": "meaning",
+   "prompt": "What makes a life meaningful? How do you know when yours feels meaningful?",
+   "follow_ups": [
+    "When did life feel least meaningful, and what brought it back?",
+    "Is meaning found or made?"
+   ],
+   "depth": 3,
+   "answer_mode": "either",
+   "emotionally_heavy": false,
+   "teaches": [
+    "worldview",
+    "values"
+   ],
+   "per_child": false,
+   "placeholders": [],
+   "revisit": "yearly",
+   "use_in_twin": "persona_prompt+retrieval",
+   "est_minutes": 12
+  },
+  {
+   "id": "VB-008",
+   "category": "values",
+   "category_label": "Values, beliefs, faith & philosophy",
+   "subcategory": "justice",
+   "prompt": "What's an injustice in the world that really gets under your skin? What do you think people should do about it?",
+   "follow_ups": [
+    "Have you ever acted on it?",
+    "What do you want the kids to do when they see unfairness?"
+   ],
+   "depth": 2,
+   "answer_mode": "either",
+   "emotionally_heavy": false,
+   "teaches": [
+    "values",
+    "worldview"
+   ],
+   "per_child": false,
+   "placeholders": [],
+   "revisit": "yearly",
+   "use_in_twin": "persona_prompt+retrieval",
+   "est_minutes": 6
+  },
+  {
+   "id": "VB-009",
+   "category": "values",
+   "category_label": "Values, beliefs, faith & philosophy",
+   "subcategory": "tolerance",
+   "prompt": "How do you deal with people whose beliefs are very different from yours?",
+   "follow_ups": [
+    "Have you ever changed your mind because of someone like that?",
+    "Where do you draw the line?"
+   ],
+   "depth": 2,
+   "answer_mode": "either",
+   "emotionally_heavy": false,
+   "teaches": [
+    "values"
+   ],
+   "per_child": false,
+   "placeholders": [],
+   "revisit": "yearly",
+   "use_in_twin": "persona_prompt+retrieval",
+   "est_minutes": 6
+  },
+  {
+   "id": "VB-010",
+   "category": "values",
+   "category_label": "Values, beliefs, faith & philosophy",
+   "subcategory": "change_mind",
+   "prompt": "What's something you believed strongly once and later changed your mind about? What changed it?",
+   "follow_ups": [
+    "How did it feel to admit it?",
+    "What do you believe now that you suspect you'll change your mind about?"
+   ],
+   "depth": 2,
+   "answer_mode": "either",
+   "emotionally_heavy": false,
+   "teaches": [
+    "values",
+    "decision_style"
+   ],
+   "per_child": false,
+   "placeholders": [],
+   "revisit": "yearly",
+   "use_in_twin": "persona_prompt+retrieval",
+   "est_minutes": 6
+  },
+  {
+   "id": "VB-011",
+   "category": "values",
+   "category_label": "Values, beliefs, faith & philosophy",
+   "subcategory": "gratitude",
+   "prompt": "What are you most grateful for right now? Go past the obvious.",
+   "follow_ups": [
+    "Who haven't you thanked that you should?",
+    "What's something small you're grateful for every day?"
+   ],
+   "depth": 1,
+   "answer_mode": "either",
+   "emotionally_heavy": false,
+   "teaches": [
+    "values",
+    "emotion"
+   ],
+   "per_child": false,
+   "placeholders": [],
+   "revisit": "yearly",
+   "use_in_twin": "persona_prompt+retrieval",
+   "est_minutes": 3
+  },
+  {
+   "id": "VB-012",
+   "category": "values",
+   "category_label": "Values, beliefs, faith & philosophy",
+   "subcategory": "nature",
+   "prompt": "Where do you feel most at peace or most in awe? Describe the place and the feeling.",
+   "follow_ups": [
+    "When were you last there?",
+    "Would you want the kids to go there to think of you?"
+   ],
+   "depth": 1,
+   "answer_mode": "voice",
+   "emotionally_heavy": false,
+   "teaches": [
+    "worldview",
+    "tastes"
+   ],
+   "per_child": false,
+   "placeholders": [],
+   "revisit": "yearly",
+   "use_in_twin": "persona_prompt+retrieval",
+   "est_minutes": 3
+  },
+  {
+   "id": "VB-013",
+   "category": "values",
+   "category_label": "Values, beliefs, faith & philosophy",
+   "subcategory": "forgiveness",
+   "prompt": "What do you believe about forgiveness? Is there anything you haven't forgiven, or haven't been forgiven for?",
+   "follow_ups": [
+    "What would it take?",
+    "What do you want the kids to know about forgiving you?"
+   ],
+   "depth": 3,
+   "answer_mode": "voice",
+   "emotionally_heavy": true,
+   "teaches": [
+    "values",
+    "emotion"
+   ],
+   "per_child": false,
+   "placeholders": [],
+   "revisit": "yearly",
+   "use_in_twin": "persona_prompt+retrieval",
+   "est_minutes": 16
+  },
+  {
+   "id": "VB-014",
+   "category": "values",
+   "category_label": "Values, beliefs, faith & philosophy",
+   "subcategory": "mortality",
+   "prompt": "How often do you think about your own death, and how does thinking about it change how you live?",
+   "follow_ups": [
+    "What made you want to build this twin?",
+    "What are you hoping it gives the kids?"
+   ],
+   "depth": 3,
+   "answer_mode": "either",
+   "emotionally_heavy": true,
+   "teaches": [
+    "worldview",
+    "emotion"
+   ],
+   "per_child": false,
+   "placeholders": [],
+   "revisit": "yearly",
+   "use_in_twin": "persona_prompt+retrieval",
+   "est_minutes": 16
+  },
+  {
+   "id": "VB-015",
+   "category": "values",
+   "category_label": "Values, beliefs, faith & philosophy",
+   "subcategory": "politics",
+   "prompt": "How do you want the twin to handle politics and hot-button topics? Share your general outlook and tell me how much of it you want the twin to say out loud.",
+   "follow_ups": [
+    "Which views are firm for you, and which are you unsure about?",
+    "What do you want the kids to know about how you formed your opinions, not just what they are?"
+   ],
+   "depth": 2,
+   "answer_mode": "either",
+   "emotionally_heavy": false,
+   "teaches": [
+    "worldview",
+    "boundaries"
+   ],
+   "per_child": false,
+   "placeholders": [],
+   "revisit": "yearly",
+   "use_in_twin": "persona_prompt+retrieval",
+   "est_minutes": 6
+  },
+  {
+   "id": "VB-016",
+   "category": "values",
+   "category_label": "Values, beliefs, faith & philosophy",
+   "subcategory": "rituals",
+   "prompt": "Are there any practices, prayer, meditation, journaling, long walks, that keep you grounded?",
+   "follow_ups": [
+    "When did you start?",
+    "What happens when you skip it?"
+   ],
+   "depth": 1,
+   "answer_mode": "either",
+   "emotionally_heavy": false,
+   "teaches": [
+    "values",
+    "routine"
+   ],
+   "per_child": false,
+   "placeholders": [],
+   "revisit": "yearly",
+   "use_in_twin": "persona_prompt+retrieval",
+   "est_minutes": 3
+  },
+  {
+   "id": "PR-001",
+   "category": "pride_regret",
+   "category_label": "Pride, regrets & lessons",
+   "subcategory": "pride",
+   "prompt": "What are you proudest of in your whole life? Not your résumé, the thing that actually makes your chest feel full.",
+   "follow_ups": [
+    "Who helped make it happen?",
+    "Does anyone know how much it means to you?"
+   ],
+   "depth": 1,
+   "answer_mode": "voice",
+   "emotionally_heavy": false,
+   "teaches": [
+    "identity",
+    "values"
+   ],
+   "per_child": false,
+   "placeholders": [],
+   "revisit": "none",
+   "use_in_twin": "retrieval",
+   "est_minutes": 3
+  },
+  {
+   "id": "PR-002",
+   "category": "pride_regret",
+   "category_label": "Pride, regrets & lessons",
+   "subcategory": "pride",
+   "prompt": "What's something you're proud of that nobody would ever guess?",
+   "follow_ups": [
+    "Why have you kept it quiet?",
+    "Would you want the kids to know?"
+   ],
+   "depth": 2,
+   "answer_mode": "voice",
+   "emotionally_heavy": false,
+   "teaches": [
+    "identity"
+   ],
+   "per_child": false,
+   "placeholders": [],
+   "revisit": "none",
+   "use_in_twin": "retrieval",
+   "est_minutes": 6
+  },
+  {
+   "id": "PR-003",
+   "category": "pride_regret",
+   "category_label": "Pride, regrets & lessons",
+   "subcategory": "pride",
+   "prompt": "What's a moment one of the kids made you prouder than you could say? Tell me exactly what happened.",
+   "follow_ups": [
+    "Did you tell them?",
+    "What do you hope they remember about that day?"
+   ],
+   "depth": 2,
+   "answer_mode": "voice",
+   "emotionally_heavy": false,
+   "teaches": [
+    "relationships",
+    "emotion"
+   ],
+   "per_child": false,
+   "placeholders": [],
+   "revisit": "none",
+   "use_in_twin": "retrieval",
+   "est_minutes": 6
+  },
+  {
+   "id": "PR-004",
+   "category": "pride_regret",
+   "category_label": "Pride, regrets & lessons",
+   "subcategory": "regret",
+   "prompt": "What's your biggest regret? Take your time.",
+   "follow_ups": [
+    "What would you need to do, or have done, to let it go?",
+    "What did it teach you?",
+    "What do you want the kids to take from it so they don't repeat it?"
+   ],
+   "depth": 3,
+   "answer_mode": "voice",
+   "emotionally_heavy": true,
+   "teaches": [
+    "emotion",
+    "values"
+   ],
+   "per_child": false,
+   "placeholders": [],
+   "revisit": "yearly",
+   "use_in_twin": "retrieval",
+   "est_minutes": 16
+  },
+  {
+   "id": "PR-005",
+   "category": "pride_regret",
+   "category_label": "Pride, regrets & lessons",
+   "subcategory": "regret",
+   "prompt": "Is there someone you owe an apology to? What would you say to them?",
+   "follow_ups": [
+    "Is there still time to say it?",
+    "What's stopping you?"
+   ],
+   "depth": 3,
+   "answer_mode": "voice",
+   "emotionally_heavy": true,
+   "teaches": [
+    "relationships",
+    "emotion"
+   ],
+   "per_child": false,
+   "placeholders": [],
+   "revisit": "yearly",
+   "use_in_twin": "retrieval",
+   "est_minutes": 16
+  },
+  {
+   "id": "PR-006",
+   "category": "pride_regret",
+   "category_label": "Pride, regrets & lessons",
+   "subcategory": "regret",
+   "prompt": "What's a regret you used to have that you've made peace with? How?",
+   "follow_ups": [
+    "What finally shifted?",
+    "Do you ever slip back?"
+   ],
+   "depth": 2,
+   "answer_mode": "either",
+   "emotionally_heavy": false,
+   "teaches": [
+    "advice"
+   ],
+   "per_child": false,
+   "placeholders": [],
+   "revisit": "none",
+   "use_in_twin": "retrieval",
+   "est_minutes": 6
+  },
+  {
+   "id": "PR-007",
+   "category": "pride_regret",
+   "category_label": "Pride, regrets & lessons",
+   "subcategory": "lessons",
+   "prompt": "What's a lesson you had to learn more than once?",
+   "follow_ups": [
+    "Why do you think it took so long?",
+    "How would you teach it to the kids faster?"
+   ],
+   "depth": 2,
+   "answer_mode": "either",
+   "emotionally_heavy": false,
+   "teaches": [
+    "advice"
+   ],
+   "per_child": false,
+   "placeholders": [],
+   "revisit": "none",
+   "use_in_twin": "retrieval",
+   "est_minutes": 6
+  },
+  {
+   "id": "PR-008",
+   "category": "pride_regret",
+   "category_label": "Pride, regrets & lessons",
+   "subcategory": "lessons",
+   "prompt": "What do you know now that you wish someone had told you at eighteen?",
+   "follow_ups": [
+    "Would you have listened?",
+    "Who did try to tell you?"
+   ],
+   "depth": 2,
+   "answer_mode": "either",
+   "emotionally_heavy": false,
+   "teaches": [
+    "advice"
+   ],
+   "per_child": false,
+   "placeholders": [],
+   "revisit": "none",
+   "use_in_twin": "retrieval",
+   "est_minutes": 6
+  },
+  {
+   "id": "PR-009",
+   "category": "pride_regret",
+   "category_label": "Pride, regrets & lessons",
+   "subcategory": "lessons",
+   "prompt": "What's the best piece of advice you ever got, and who gave it to you?",
+   "follow_ups": [
+    "And the worst?",
+    "Did you follow the good one right away?"
+   ],
+   "depth": 2,
+   "answer_mode": "either",
+   "emotionally_heavy": false,
+   "teaches": [
+    "advice"
+   ],
+   "per_child": false,
+   "placeholders": [],
+   "revisit": "none",
+   "use_in_twin": "retrieval",
+   "est_minutes": 6
+  },
+  {
+   "id": "PR-010",
+   "category": "pride_regret",
+   "category_label": "Pride, regrets & lessons",
+   "subcategory": "lessons",
+   "prompt": "What's something most people believe that you think is wrong?",
+   "follow_ups": [
+    "How did you come to see it differently?",
+    "Is there a chance you're the one who's wrong?"
+   ],
+   "depth": 2,
+   "answer_mode": "either",
+   "emotionally_heavy": false,
+   "teaches": [
+    "advice",
+    "worldview"
+   ],
+   "per_child": false,
+   "placeholders": [],
+   "revisit": "none",
+   "use_in_twin": "retrieval",
+   "est_minutes": 6
+  },
+  {
+   "id": "PR-011",
+   "category": "pride_regret",
+   "category_label": "Pride, regrets & lessons",
+   "subcategory": "mistakes",
+   "prompt": "Tell me about a mistake that turned out to be one of the best things that ever happened to you.",
+   "follow_ups": [
+    "Did you realise it right away?",
+    "Who laughed about it with you?"
+   ],
+   "depth": 2,
+   "answer_mode": "voice",
+   "emotionally_heavy": false,
+   "teaches": [
+    "humor",
+    "memory"
+   ],
+   "per_child": false,
+   "placeholders": [],
+   "revisit": "none",
+   "use_in_twin": "retrieval",
+   "est_minutes": 6
+  },
+  {
+   "id": "PR-012",
+   "category": "pride_regret",
+   "category_label": "Pride, regrets & lessons",
+   "subcategory": "do_over",
+   "prompt": "If you could relive one day of your life exactly as it was, which day would it be? And if you could redo one day differently, which one?",
+   "follow_ups": [
+    "What would you notice this time?",
+    "What would you do differently?"
+   ],
+   "depth": 3,
+   "answer_mode": "voice",
+   "emotionally_heavy": true,
+   "teaches": [
+    "emotion",
+    "values"
+   ],
+   "per_child": false,
+   "placeholders": [],
+   "revisit": "yearly",
+   "use_in_twin": "retrieval",
+   "est_minutes": 16
+  },
+  {
+   "id": "LR-001",
+   "category": "love",
+   "category_label": "Love & relationships",
+   "subcategory": "partner",
+   "prompt": "Tell me the story of how you met [partner name], or the great love of your life, from your point of view. What did you notice first?",
+   "follow_ups": [
+    "When did you know?",
+    "What did your friends think?"
+   ],
+   "depth": 2,
+   "answer_mode": "voice",
+   "emotionally_heavy": false,
+   "teaches": [
+    "relationships",
+    "memory"
+   ],
+   "per_child": false,
+   "placeholders": [
+    "[partner name]"
+   ],
+   "revisit": "none",
+   "use_in_twin": "retrieval",
+   "est_minutes": 6
+  },
+  {
+   "id": "LR-002",
+   "category": "love",
+   "category_label": "Love & relationships",
+   "subcategory": "partner",
+   "prompt": "What has your marriage or your longest relationship taught you about love that you didn't know going in?",
+   "follow_ups": [
+    "What's the hardest thing about staying together?",
+    "What's the best thing?"
+   ],
+   "depth": 2,
+   "answer_mode": "voice",
+   "emotionally_heavy": false,
+   "teaches": [
+    "relationships",
+    "advice"
+   ],
+   "per_child": false,
+   "placeholders": [],
+   "revisit": "none",
+   "use_in_twin": "retrieval",
+   "est_minutes": 6
+  },
+  {
+   "id": "LR-003",
+   "category": "love",
+   "category_label": "Love & relationships",
+   "subcategory": "partner",
+   "prompt": "What has been the hardest period in your love life, and how did you get through it, or not?",
+   "follow_ups": [
+    "What do you wish you'd done differently?",
+    "What would you want the kids to understand about that time?"
+   ],
+   "depth": 3,
+   "answer_mode": "voice",
+   "emotionally_heavy": true,
+   "teaches": [
+    "relationships",
+    "emotion"
+   ],
+   "per_child": false,
+   "placeholders": [],
+   "revisit": "yearly",
+   "use_in_twin": "retrieval",
+   "est_minutes": 16
+  },
+  {
+   "id": "LR-004",
+   "category": "love",
+   "category_label": "Love & relationships",
+   "subcategory": "partner",
+   "prompt": "What do you love most about your partner that the kids might not see?",
+   "follow_ups": [
+    "What's a small thing they do that you'd miss most?",
+    "How do you show them you love them?"
+   ],
+   "depth": 2,
+   "answer_mode": "either",
+   "emotionally_heavy": false,
+   "teaches": [
+    "relationships"
+   ],
+   "per_child": false,
+   "placeholders": [],
+   "revisit": "none",
+   "use_in_twin": "retrieval",
+   "est_minutes": 6
+  },
+  {
+   "id": "LR-005",
+   "category": "love",
+   "category_label": "Love & relationships",
+   "subcategory": "love",
+   "prompt": "How do you know when you love someone? How would you describe that feeling to one of the kids?",
+   "follow_ups": [
+    "How is loving a partner different from loving a kid?",
+    "Is love a feeling or a decision?"
+   ],
+   "depth": 2,
+   "answer_mode": "either",
+   "emotionally_heavy": false,
+   "teaches": [
+    "values",
+    "advice"
+   ],
+   "per_child": false,
+   "placeholders": [],
+   "revisit": "none",
+   "use_in_twin": "retrieval",
+   "est_minutes": 6
+  },
+  {
+   "id": "LR-006",
+   "category": "love",
+   "category_label": "Love & relationships",
+   "subcategory": "romance",
+   "prompt": "What's the most romantic thing you've ever done, or tried to do and messed up?",
+   "follow_ups": [
+    "How did it go over?",
+    "What would you do differently now?"
+   ],
+   "depth": 1,
+   "answer_mode": "voice",
+   "emotionally_heavy": false,
+   "teaches": [
+    "memory",
+    "humor"
+   ],
+   "per_child": false,
+   "placeholders": [],
+   "revisit": "none",
+   "use_in_twin": "retrieval",
+   "est_minutes": 3
+  },
+  {
+   "id": "LR-007",
+   "category": "love",
+   "category_label": "Love & relationships",
+   "subcategory": "breakups",
+   "prompt": "Tell me about a heartbreak before you met your partner. How did you get over it?",
+   "follow_ups": [
+    "How long did it take?",
+    "What helped the most?"
+   ],
+   "depth": 2,
+   "answer_mode": "voice",
+   "emotionally_heavy": true,
+   "teaches": [
+    "emotion",
+    "advice"
+   ],
+   "per_child": false,
+   "placeholders": [],
+   "revisit": "none",
+   "use_in_twin": "retrieval",
+   "est_minutes": 10
+  },
+  {
+   "id": "LR-008",
+   "category": "love",
+   "category_label": "Love & relationships",
+   "subcategory": "friendship",
+   "prompt": "Who are your closest friends right now, and what makes each of those friendships work?",
+   "follow_ups": [
+    "Who would you call at 3 a.m.?",
+    "What's a friendship you let slip that you miss?"
+   ],
+   "depth": 2,
+   "answer_mode": "voice",
+   "emotionally_heavy": false,
+   "teaches": [
+    "relationships"
+   ],
+   "per_child": false,
+   "placeholders": [],
+   "revisit": "yearly",
+   "use_in_twin": "retrieval",
+   "est_minutes": 6
+  },
+  {
+   "id": "LR-009",
+   "category": "love",
+   "category_label": "Love & relationships",
+   "subcategory": "friendship",
+   "prompt": "What makes someone a good friend? What makes someone a friend you should let go of?",
+   "follow_ups": [
+    "Have you ever had to end a friendship?",
+    "How do you make new friends as an adult?"
+   ],
+   "depth": 2,
+   "answer_mode": "either",
+   "emotionally_heavy": false,
+   "teaches": [
+    "advice",
+    "relationships"
+   ],
+   "per_child": false,
+   "placeholders": [],
+   "revisit": "yearly",
+   "use_in_twin": "retrieval",
+   "est_minutes": 6
+  },
+  {
+   "id": "LR-010",
+   "category": "love",
+   "category_label": "Love & relationships",
+   "subcategory": "red_flags",
+   "prompt": "What should the kids watch out for in a partner? And what should they look for?",
+   "follow_ups": [
+    "What are your dealbreakers?",
+    "How do you know someone is safe to trust?"
+   ],
+   "depth": 2,
+   "answer_mode": "either",
+   "emotionally_heavy": false,
+   "teaches": [
+    "advice"
+   ],
+   "per_child": false,
+   "placeholders": [],
+   "revisit": "none",
+   "use_in_twin": "retrieval",
+   "est_minutes": 6
+  },
+  {
+   "id": "LR-011",
+   "category": "love",
+   "category_label": "Love & relationships",
+   "subcategory": "loving_well",
+   "prompt": "What does a healthy fight between two people who love each other look like?",
+   "follow_ups": [
+    "What's a rule you and your partner have for arguing?",
+    "How do you make up?"
+   ],
+   "depth": 2,
+   "answer_mode": "either",
+   "emotionally_heavy": false,
+   "teaches": [
+    "advice",
+    "relationships"
+   ],
+   "per_child": false,
+   "placeholders": [],
+   "revisit": "none",
+   "use_in_twin": "retrieval",
+   "est_minutes": 6
+  },
+  {
+   "id": "LR-012",
+   "category": "love",
+   "category_label": "Love & relationships",
+   "subcategory": "community",
+   "prompt": "Beyond family, what groups or communities have you belonged to, teams, congregations, online groups, neighbors, and what did you get from them?",
+   "follow_ups": [
+    "Which one shaped you most?",
+    "What did you give back?"
+   ],
+   "depth": 1,
+   "answer_mode": "either",
+   "emotionally_heavy": false,
+   "teaches": [
+    "relationships"
+   ],
+   "per_child": false,
+   "placeholders": [],
+   "revisit": "none",
+   "use_in_twin": "retrieval",
+   "est_minutes": 3
+  },
+  {
+   "id": "PA-001",
+   "category": "parenting",
+   "category_label": "Being a parent",
+   "subcategory": "becoming",
+   "prompt": "Tell me about the day each of the kids was born, or came into your life. Start with whichever one you want.",
+   "follow_ups": [
+    "What did you feel holding them for the first time?",
+    "What was the first thing you said to them?",
+    "What was the world like that day?"
+   ],
+   "depth": 2,
+   "answer_mode": "voice",
+   "emotionally_heavy": true,
+   "teaches": [
+    "memory",
+    "emotion"
+   ],
+   "per_child": true,
+   "placeholders": [],
+   "revisit": "yearly",
+   "use_in_twin": "retrieval",
+   "est_minutes": 10
+  },
+  {
+   "id": "PA-002",
+   "category": "parenting",
+   "category_label": "Being a parent",
+   "subcategory": "becoming",
+   "prompt": "What did you think being a dad would be like, and how is it actually?",
+   "follow_ups": [
+    "What's harder than you expected?",
+    "What's better than you expected?"
+   ],
+   "depth": 2,
+   "answer_mode": "voice",
+   "emotionally_heavy": false,
+   "teaches": [
+    "identity"
+   ],
+   "per_child": false,
+   "placeholders": [],
+   "revisit": "yearly",
+   "use_in_twin": "retrieval",
+   "est_minutes": 6
+  },
+  {
+   "id": "PA-003",
+   "category": "parenting",
+   "category_label": "Being a parent",
+   "subcategory": "each_child",
+   "prompt": "Describe each of your kids in a paragraph, as they are right now. Who are they? What lights them up?",
+   "follow_ups": [
+    "What's one thing you see in each of them that they might not see?",
+    "How are they like you, and how are they not?"
+   ],
+   "depth": 2,
+   "answer_mode": "voice",
+   "emotionally_heavy": false,
+   "teaches": [
+    "relationships",
+    "memory"
+   ],
+   "per_child": false,
+   "placeholders": [],
+   "revisit": "yearly",
+   "use_in_twin": "retrieval",
+   "est_minutes": 6
+  },
+  {
+   "id": "PA-004",
+   "category": "parenting",
+   "category_label": "Being a parent",
+   "subcategory": "each_child",
+   "prompt": "What's a funny story about each kid when they were little that they've probably forgotten?",
+   "follow_ups": [
+    "What did they call things before they could say the real words?",
+    "What's a phase you'll miss?"
+   ],
+   "depth": 2,
+   "answer_mode": "voice",
+   "emotionally_heavy": false,
+   "teaches": [
+    "memory",
+    "humor"
+   ],
+   "per_child": true,
+   "placeholders": [],
+   "revisit": "yearly",
+   "use_in_twin": "retrieval",
+   "est_minutes": 6
+  },
+  {
+   "id": "PA-005",
+   "category": "parenting",
+   "category_label": "Being a parent",
+   "subcategory": "philosophy",
+   "prompt": "What's your philosophy of parenting in a few sentences? What are you trying to do?",
+   "follow_ups": [
+    "Where did you get it from?",
+    "Where do you and [partner name] agree and differ?"
+   ],
+   "depth": 2,
+   "answer_mode": "either",
+   "emotionally_heavy": false,
+   "teaches": [
+    "values",
+    "decision_style"
+   ],
+   "per_child": false,
+   "placeholders": [
+    "[partner name]"
+   ],
+   "revisit": "yearly",
+   "use_in_twin": "retrieval",
+   "est_minutes": 6
+  },
+  {
+   "id": "PA-006",
+   "category": "parenting",
+   "category_label": "Being a parent",
+   "subcategory": "discipline",
+   "prompt": "How do you handle it when the kids misbehave? What do you think discipline is for?",
+   "follow_ups": [
+    "What's something you'll never do as a parent, and why?",
+    "What's a time you got it wrong?"
+   ],
+   "depth": 2,
+   "answer_mode": "either",
+   "emotionally_heavy": false,
+   "teaches": [
+    "values",
+    "decision_style"
+   ],
+   "per_child": false,
+   "placeholders": [],
+   "revisit": "yearly",
+   "use_in_twin": "retrieval",
+   "est_minutes": 6
+  },
+  {
+   "id": "PA-007",
+   "category": "parenting",
+   "category_label": "Being a parent",
+   "subcategory": "hard_moments",
+   "prompt": "What's the hardest moment you've had as a parent so far?",
+   "follow_ups": [
+    "What did you do?",
+    "What would you do now?"
+   ],
+   "depth": 3,
+   "answer_mode": "voice",
+   "emotionally_heavy": true,
+   "teaches": [
+    "emotion",
+    "relationships"
+   ],
+   "per_child": false,
+   "placeholders": [],
+   "revisit": "yearly",
+   "use_in_twin": "retrieval",
+   "est_minutes": 16
+  },
+  {
+   "id": "PA-008",
+   "category": "parenting",
+   "category_label": "Being a parent",
+   "subcategory": "worries",
+   "prompt": "What do you worry about most for each of the kids?",
+   "follow_ups": [
+    "What do you do with that worry?",
+    "What do you trust about them that helps?"
+   ],
+   "depth": 3,
+   "answer_mode": "either",
+   "emotionally_heavy": true,
+   "teaches": [
+    "emotion"
+   ],
+   "per_child": true,
+   "placeholders": [],
+   "revisit": "yearly",
+   "use_in_twin": "retrieval",
+   "est_minutes": 16
+  },
+  {
+   "id": "PA-009",
+   "category": "parenting",
+   "category_label": "Being a parent",
+   "subcategory": "hopes",
+   "prompt": "What do you hope each of the kids becomes, not their job, but the kind of person?",
+   "follow_ups": [
+    "What would make you feel you'd done your job?",
+    "What do you not care about that other parents seem to?"
+   ],
+   "depth": 2,
+   "answer_mode": "either",
+   "emotionally_heavy": false,
+   "teaches": [
+    "values"
+   ],
+   "per_child": true,
+   "placeholders": [],
+   "revisit": "yearly",
+   "use_in_twin": "retrieval",
+   "est_minutes": 6
+  },
+  {
+   "id": "PA-010",
+   "category": "parenting",
+   "category_label": "Being a parent",
+   "subcategory": "apology",
+   "prompt": "Is there anything you want to apologise to the kids for? Say it as if they're listening.",
+   "follow_ups": [
+    "What were you dealing with at the time?",
+    "What do you want them to do with this apology?"
+   ],
+   "depth": 3,
+   "answer_mode": "voice",
+   "emotionally_heavy": true,
+   "teaches": [
+    "relationships",
+    "emotion"
+   ],
+   "per_child": false,
+   "placeholders": [],
+   "revisit": "yearly",
+   "use_in_twin": "retrieval",
+   "est_minutes": 16
+  },
+  {
+   "id": "PA-011",
+   "category": "parenting",
+   "category_label": "Being a parent",
+   "subcategory": "traditions",
+   "prompt": "What are the little things you do with the kids that are just yours, bedtime routines, car games, inside jokes, special breakfasts?",
+   "follow_ups": [
+    "How did they start?",
+    "Which one do you hope they keep with their own kids?"
+   ],
+   "depth": 1,
+   "answer_mode": "voice",
+   "emotionally_heavy": false,
+   "teaches": [
+    "memory",
+    "routine"
+   ],
+   "per_child": false,
+   "placeholders": [],
+   "revisit": "yearly",
+   "use_in_twin": "retrieval",
+   "est_minutes": 3
+  },
+  {
+   "id": "PA-012",
+   "category": "parenting",
+   "category_label": "Being a parent",
+   "subcategory": "teaching",
+   "prompt": "What skills have you taught the kids or wanted to teach them? Riding a bike, cooking, fixing things, writing code, being kind?",
+   "follow_ups": [
+    "Tell me about the moment one of them clicked.",
+    "What haven't you gotten to yet?"
+   ],
+   "depth": 2,
+   "answer_mode": "either",
+   "emotionally_heavy": false,
+   "teaches": [
+    "advice",
+    "voice"
+   ],
+   "per_child": false,
+   "placeholders": [],
+   "revisit": "yearly",
+   "use_in_twin": "retrieval",
+   "est_minutes": 6
+  },
+  {
+   "id": "PA-013",
+   "category": "parenting",
+   "category_label": "Being a parent",
+   "subcategory": "watching",
+   "prompt": "What's it like watching the kids grow up? What do you notice that they don't?",
+   "follow_ups": [
+    "When do you feel the passage of time most?",
+    "What do you hope you never forget?"
+   ],
+   "depth": 2,
+   "answer_mode": "voice",
+   "emotionally_heavy": false,
+   "teaches": [
+    "emotion",
+    "relationships"
+   ],
+   "per_child": false,
+   "placeholders": [],
+   "revisit": "yearly",
+   "use_in_twin": "retrieval",
+   "est_minutes": 6
+  },
+  {
+   "id": "PA-014",
+   "category": "parenting",
+   "category_label": "Being a parent",
+   "subcategory": "their_mom",
+   "prompt": "What do you want the kids to know about [partner name] from your point of view, things you admire or that make her who she is?",
+   "follow_ups": [
+    "How does [partner name] parent differently from you, and what do you learn from her?",
+    "What do you hope they say to her when you're not around?"
+   ],
+   "depth": 2,
+   "answer_mode": "either",
+   "emotionally_heavy": false,
+   "teaches": [
+    "relationships"
+   ],
+   "per_child": false,
+   "placeholders": [
+    "[partner name]"
+   ],
+   "revisit": "yearly",
+   "use_in_twin": "retrieval",
+   "est_minutes": 6
+  },
+  {
+   "id": "PA-015",
+   "category": "parenting",
+   "category_label": "Being a parent",
+   "subcategory": "future_parent",
+   "prompt": "If any of the kids become parents themselves, what would you want them to know going in?",
+   "follow_ups": [
+    "What would you want them to do differently from you?",
+    "What would you want them to steal from you?"
+   ],
+   "depth": 2,
+   "answer_mode": "either",
+   "emotionally_heavy": false,
+   "teaches": [
+    "advice"
+   ],
+   "per_child": false,
+   "placeholders": [],
+   "revisit": "yearly",
+   "use_in_twin": "retrieval",
+   "est_minutes": 6
+  },
+  {
+   "id": "MC-001",
+   "category": "messages",
+   "category_label": "Messages & advice for each child (templates)",
+   "subcategory": "first_heartbreak",
+   "prompt": "Record a message for [child name] for the day they get their heart broken for the first time. Talk to them like they're sitting next to you on the couch.",
+   "follow_ups": [
+    "What do you want them to do tonight, and what should they not do?",
+    "Tell them about your own first heartbreak.",
+    "What do you want them to remember about how lovable they are?"
+   ],
+   "depth": 3,
+   "answer_mode": "voice",
+   "emotionally_heavy": true,
+   "teaches": [
+    "advice",
+    "comfort",
+    "voice"
+   ],
+   "per_child": true,
+   "placeholders": [
+    "[child name]"
+   ],
+   "revisit": "per_milestone_and_yearly",
+   "use_in_twin": "scheduled_message+retrieval",
+   "est_minutes": 16
+  },
+  {
+   "id": "MC-002",
+   "category": "messages",
+   "category_label": "Messages & advice for each child (templates)",
+   "subcategory": "graduation",
+   "prompt": "Record a message for [child name] for their high school graduation.",
+   "follow_ups": [
+    "What do you remember about them on their first day of school?",
+    "What do you hope they carry into the next chapter?"
+   ],
+   "depth": 2,
+   "answer_mode": "voice",
+   "emotionally_heavy": false,
+   "teaches": [
+    "advice",
+    "emotion",
+    "voice"
+   ],
+   "per_child": true,
+   "placeholders": [
+    "[child name]"
+   ],
+   "revisit": "per_milestone_and_yearly",
+   "use_in_twin": "scheduled_message+retrieval",
+   "est_minutes": 6
+  },
+  {
+   "id": "MC-003",
+   "category": "messages",
+   "category_label": "Messages & advice for each child (templates)",
+   "subcategory": "graduation",
+   "prompt": "Record a message for [child name] for the day they finish college, a trade program, or whatever path they choose, or decide not to.",
+   "follow_ups": [
+    "What do you want them to know about not having it all figured out?",
+    "What would you say if they took a completely different road than you imagined?"
+   ],
+   "depth": 2,
+   "answer_mode": "voice",
+   "emotionally_heavy": false,
+   "teaches": [
+    "advice",
+    "voice"
+   ],
+   "per_child": true,
+   "placeholders": [
+    "[child name]"
+   ],
+   "revisit": "per_milestone_and_yearly",
+   "use_in_twin": "scheduled_message+retrieval",
+   "est_minutes": 6
+  },
+  {
+   "id": "MC-004",
+   "category": "messages",
+   "category_label": "Messages & advice for each child (templates)",
+   "subcategory": "leaving_home",
+   "prompt": "Record a message for [child name] for their first night living away from home.",
+   "follow_ups": [
+    "What practical stuff do you want them to know (laundry, money, calling home)?",
+    "What do you want them to know about homesickness?"
+   ],
+   "depth": 2,
+   "answer_mode": "voice",
+   "emotionally_heavy": true,
+   "teaches": [
+    "advice",
+    "comfort"
+   ],
+   "per_child": true,
+   "placeholders": [
+    "[child name]"
+   ],
+   "revisit": "per_milestone_and_yearly",
+   "use_in_twin": "scheduled_message+retrieval",
+   "est_minutes": 10
+  },
+  {
+   "id": "MC-005",
+   "category": "messages",
+   "category_label": "Messages & advice for each child (templates)",
+   "subcategory": "first_job",
+   "prompt": "Write a note for [child name] for their first day at their first real job.",
+   "follow_ups": [
+    "What should they do in the first week?",
+    "What should they never compromise on?"
+   ],
+   "depth": 2,
+   "answer_mode": "either",
+   "emotionally_heavy": false,
+   "teaches": [
+    "advice"
+   ],
+   "per_child": true,
+   "placeholders": [
+    "[child name]"
+   ],
+   "revisit": "per_milestone_and_yearly",
+   "use_in_twin": "scheduled_message+retrieval",
+   "est_minutes": 6
+  },
+  {
+   "id": "MC-006",
+   "category": "messages",
+   "category_label": "Messages & advice for each child (templates)",
+   "subcategory": "wedding",
+   "prompt": "Record a message for [child name] for their wedding day, or the day they commit their life to someone.",
+   "follow_ups": [
+    "What do you hope for their marriage?",
+    "What do you want to say to the person they're marrying?",
+    "What's one piece of advice from your own relationship?"
+   ],
+   "depth": 3,
+   "answer_mode": "voice",
+   "emotionally_heavy": true,
+   "teaches": [
+    "advice",
+    "emotion",
+    "voice"
+   ],
+   "per_child": true,
+   "placeholders": [
+    "[child name]"
+   ],
+   "revisit": "per_milestone_and_yearly",
+   "use_in_twin": "scheduled_message+retrieval",
+   "est_minutes": 16
+  },
+  {
+   "id": "MC-007",
+   "category": "messages",
+   "category_label": "Messages & advice for each child (templates)",
+   "subcategory": "becoming_parent",
+   "prompt": "Record a message for [child name] for the day they become a parent.",
+   "follow_ups": [
+    "What do you want to tell them about the first few weeks?",
+    "What do you want to say to your grandchild?",
+    "What do you wish someone had told you?"
+   ],
+   "depth": 3,
+   "answer_mode": "voice",
+   "emotionally_heavy": true,
+   "teaches": [
+    "advice",
+    "emotion"
+   ],
+   "per_child": true,
+   "placeholders": [
+    "[child name]"
+   ],
+   "revisit": "per_milestone_and_yearly",
+   "use_in_twin": "scheduled_message+retrieval",
+   "est_minutes": 16
+  },
+  {
+   "id": "MC-008",
+   "category": "messages",
+   "category_label": "Messages & advice for each child (templates)",
+   "subcategory": "losing_someone",
+   "prompt": "Record a message for [child name] for when they lose someone they love, including if that someone is you.",
+   "follow_ups": [
+    "What do you want them to know about grief?",
+    "What do you want them to do with their memories of you?",
+    "Who should they lean on?"
+   ],
+   "depth": 3,
+   "answer_mode": "voice",
+   "emotionally_heavy": true,
+   "teaches": [
+    "comfort",
+    "advice"
+   ],
+   "per_child": true,
+   "placeholders": [
+    "[child name]"
+   ],
+   "revisit": "per_milestone_and_yearly",
+   "use_in_twin": "scheduled_message+retrieval",
+   "est_minutes": 16
+  },
+  {
+   "id": "MC-009",
+   "category": "messages",
+   "category_label": "Messages & advice for each child (templates)",
+   "subcategory": "failure",
+   "prompt": "Record a message for [child name] for a day when they've failed at something that mattered to them.",
+   "follow_ups": [
+    "Tell them about a time you failed big.",
+    "What do you want them to do tomorrow morning?"
+   ],
+   "depth": 3,
+   "answer_mode": "voice",
+   "emotionally_heavy": true,
+   "teaches": [
+    "comfort",
+    "advice"
+   ],
+   "per_child": true,
+   "placeholders": [
+    "[child name]"
+   ],
+   "revisit": "per_milestone_and_yearly",
+   "use_in_twin": "scheduled_message+retrieval",
+   "est_minutes": 16
+  },
+  {
+   "id": "MC-010",
+   "category": "messages",
+   "category_label": "Messages & advice for each child (templates)",
+   "subcategory": "scared",
+   "prompt": "Record a message for [child name] for when they're scared, of the dark, of a test, of a diagnosis, of the future. Comfort them the way you actually would.",
+   "follow_ups": [
+    "What do you say to them at bedtime when they're scared?",
+    "What helps you when you're scared?"
+   ],
+   "depth": 3,
+   "answer_mode": "voice",
+   "emotionally_heavy": true,
+   "teaches": [
+    "comfort",
+    "voice"
+   ],
+   "per_child": true,
+   "placeholders": [
+    "[child name]"
+   ],
+   "revisit": "per_milestone_and_yearly",
+   "use_in_twin": "scheduled_message+retrieval",
+   "est_minutes": 16
+  },
+  {
+   "id": "MC-011",
+   "category": "messages",
+   "category_label": "Messages & advice for each child (templates)",
+   "subcategory": "mistake",
+   "prompt": "Record a message for [child name] for when they've done something they're ashamed of.",
+   "follow_ups": [
+    "What do you want them to know about your love in that moment?",
+    "What's the first step to making it right?"
+   ],
+   "depth": 3,
+   "answer_mode": "voice",
+   "emotionally_heavy": true,
+   "teaches": [
+    "comfort",
+    "values"
+   ],
+   "per_child": true,
+   "placeholders": [
+    "[child name]"
+   ],
+   "revisit": "per_milestone_and_yearly",
+   "use_in_twin": "scheduled_message+retrieval",
+   "est_minutes": 16
+  },
+  {
+   "id": "MC-012",
+   "category": "messages",
+   "category_label": "Messages & advice for each child (templates)",
+   "subcategory": "birthday",
+   "prompt": "Record a short birthday message for [child name] that could be played on any birthday.",
+   "follow_ups": [
+    "What's your favorite memory of one of their birthdays?",
+    "What do you hope this year brings them?"
+   ],
+   "depth": 1,
+   "answer_mode": "voice",
+   "emotionally_heavy": false,
+   "teaches": [
+    "voice",
+    "emotion"
+   ],
+   "per_child": true,
+   "placeholders": [
+    "[child name]"
+   ],
+   "revisit": "per_milestone_and_yearly",
+   "use_in_twin": "scheduled_message+retrieval",
+   "est_minutes": 3
+  },
+  {
+   "id": "MC-013",
+   "category": "messages",
+   "category_label": "Messages & advice for each child (templates)",
+   "subcategory": "milestone_ages",
+   "prompt": "Record a message for [child name] for when they turn 18, and another for 21, 30 or 40. Pick whichever age feels right today.",
+   "follow_ups": [
+    "What do you think they'll be like at that age?",
+    "What do you hope they've stopped worrying about by then?"
+   ],
+   "depth": 2,
+   "answer_mode": "voice",
+   "emotionally_heavy": false,
+   "teaches": [
+    "advice",
+    "emotion"
+   ],
+   "per_child": true,
+   "placeholders": [
+    "[child name]"
+   ],
+   "revisit": "per_milestone_and_yearly",
+   "use_in_twin": "scheduled_message+retrieval",
+   "est_minutes": 6
+  },
+  {
+   "id": "MC-014",
+   "category": "messages",
+   "category_label": "Messages & advice for each child (templates)",
+   "subcategory": "proud",
+   "prompt": "Record a message for [child name] for a day when they've done something amazing and wish you were there to see it.",
+   "follow_ups": [
+    "How would you celebrate with them?",
+    "What would you say to them in private, after the celebration?"
+   ],
+   "depth": 2,
+   "answer_mode": "voice",
+   "emotionally_heavy": false,
+   "teaches": [
+    "emotion",
+    "voice"
+   ],
+   "per_child": true,
+   "placeholders": [
+    "[child name]"
+   ],
+   "revisit": "per_milestone_and_yearly",
+   "use_in_twin": "scheduled_message+retrieval",
+   "est_minutes": 6
+  },
+  {
+   "id": "MC-015",
+   "category": "messages",
+   "category_label": "Messages & advice for each child (templates)",
+   "subcategory": "missing_dad",
+   "prompt": "Record a message for [child name] for a day when they miss you so much it hurts.",
+   "follow_ups": [
+    "What do you want them to do on that day?",
+    "Where should they go, what should they listen to or eat to feel close to you?",
+    "What do you want them to know about this twin, and its limits?"
+   ],
+   "depth": 3,
+   "answer_mode": "voice",
+   "emotionally_heavy": true,
+   "teaches": [
+    "comfort",
+    "emotion"
+   ],
+   "per_child": true,
+   "placeholders": [
+    "[child name]"
+   ],
+   "revisit": "per_milestone_and_yearly",
+   "use_in_twin": "scheduled_message+retrieval",
+   "est_minutes": 16
+  },
+  {
+   "id": "MC-016",
+   "category": "messages",
+   "category_label": "Messages & advice for each child (templates)",
+   "subcategory": "identity",
+   "prompt": "Write a note for [child name] about who they are becoming: whoever they love, whatever they believe, whatever they choose, what do you want them to know about your love?",
+   "follow_ups": [
+    "What would you never want them to hide from you?",
+    "What do you hope they never hide from themselves?"
+   ],
+   "depth": 2,
+   "answer_mode": "either",
+   "emotionally_heavy": false,
+   "teaches": [
+    "values",
+    "comfort"
+   ],
+   "per_child": true,
+   "placeholders": [
+    "[child name]"
+   ],
+   "revisit": "per_milestone_and_yearly",
+   "use_in_twin": "scheduled_message+retrieval",
+   "est_minutes": 6
+  },
+  {
+   "id": "MC-017",
+   "category": "messages",
+   "category_label": "Messages & advice for each child (templates)",
+   "subcategory": "big_decision",
+   "prompt": "Write a note for [child name] for when they're facing a big decision and can't choose.",
+   "follow_ups": [
+    "Walk them through how you would decide.",
+    "What should they do if they choose wrong?"
+   ],
+   "depth": 2,
+   "answer_mode": "either",
+   "emotionally_heavy": false,
+   "teaches": [
+    "decision_style",
+    "advice"
+   ],
+   "per_child": true,
+   "placeholders": [
+    "[child name]"
+   ],
+   "revisit": "per_milestone_and_yearly",
+   "use_in_twin": "scheduled_message+retrieval",
+   "est_minutes": 6
+  },
+  {
+   "id": "MC-018",
+   "category": "messages",
+   "category_label": "Messages & advice for each child (templates)",
+   "subcategory": "illness",
+   "prompt": "Record a message for [child name] for if they're ever seriously ill or hurt.",
+   "follow_ups": [
+    "What do you want them to know about fighting and about resting?",
+    "Who do you want them to let in?"
+   ],
+   "depth": 3,
+   "answer_mode": "voice",
+   "emotionally_heavy": true,
+   "teaches": [
+    "comfort"
+   ],
+   "per_child": true,
+   "placeholders": [
+    "[child name]"
+   ],
+   "revisit": "per_milestone_and_yearly",
+   "use_in_twin": "scheduled_message+retrieval",
+   "est_minutes": 16
+  },
+  {
+   "id": "MC-019",
+   "category": "messages",
+   "category_label": "Messages & advice for each child (templates)",
+   "subcategory": "money_trouble",
+   "prompt": "Write a note for [child name] for when they're in money trouble.",
+   "follow_ups": [
+    "What practical steps would you want them to take?",
+    "What do you want them to know about asking for help?"
+   ],
+   "depth": 2,
+   "answer_mode": "either",
+   "emotionally_heavy": false,
+   "teaches": [
+    "advice"
+   ],
+   "per_child": true,
+   "placeholders": [
+    "[child name]"
+   ],
+   "revisit": "per_milestone_and_yearly",
+   "use_in_twin": "scheduled_message+retrieval",
+   "est_minutes": 6
+  },
+  {
+   "id": "MC-020",
+   "category": "messages",
+   "category_label": "Messages & advice for each child (templates)",
+   "subcategory": "ordinary_day",
+   "prompt": "Record a message for [child name] for an ordinary Tuesday. No milestone. Just because.",
+   "follow_ups": [
+    "What would you want to do with them on a lazy afternoon?",
+    "What do you love about them that has nothing to do with achievement?"
+   ],
+   "depth": 1,
+   "answer_mode": "voice",
+   "emotionally_heavy": false,
+   "teaches": [
+    "voice",
+    "emotion"
+   ],
+   "per_child": true,
+   "placeholders": [
+    "[child name]"
+   ],
+   "revisit": "per_milestone_and_yearly",
+   "use_in_twin": "scheduled_message+retrieval",
+   "est_minutes": 3
+  },
+  {
+   "id": "MC-021",
+   "category": "messages",
+   "category_label": "Messages & advice for each child (templates)",
+   "subcategory": "siblings",
+   "prompt": "Record a message for [child name] about their brothers or sisters, or the people who will be family to them.",
+   "follow_ups": [
+    "What do you hope their relationship looks like in twenty years?",
+    "What should they do when they fight?"
+   ],
+   "depth": 2,
+   "answer_mode": "voice",
+   "emotionally_heavy": false,
+   "teaches": [
+    "relationships",
+    "advice"
+   ],
+   "per_child": true,
+   "placeholders": [
+    "[child name]"
+   ],
+   "revisit": "per_milestone_and_yearly",
+   "use_in_twin": "scheduled_message+retrieval",
+   "est_minutes": 6
+  },
+  {
+   "id": "MC-022",
+   "category": "messages",
+   "category_label": "Messages & advice for each child (templates)",
+   "subcategory": "their_mom",
+   "prompt": "Record a message for [child name] about taking care of [partner name], or the people who'll still be here.",
+   "follow_ups": [
+    "What do you want them to do for [partner name] on hard days?",
+    "What do you want them to let [partner name] do for them?"
+   ],
+   "depth": 2,
+   "answer_mode": "voice",
+   "emotionally_heavy": true,
+   "teaches": [
+    "relationships"
+   ],
+   "per_child": true,
+   "placeholders": [
+    "[child name]",
+    "[partner name]"
+   ],
+   "revisit": "per_milestone_and_yearly",
+   "use_in_twin": "scheduled_message+retrieval",
+   "est_minutes": 10
+  },
+  {
+   "id": "MC-023",
+   "category": "messages",
+   "category_label": "Messages & advice for each child (templates)",
+   "subcategory": "anytime",
+   "prompt": "Record a message for [child name] with the things you'd want to say if you only had two minutes left.",
+   "follow_ups": [
+    "Now say it again but shorter.",
+    "What's the one sentence?"
+   ],
+   "depth": 2,
+   "answer_mode": "voice",
+   "emotionally_heavy": false,
+   "teaches": [
+    "voice",
+    "emotion"
+   ],
+   "per_child": true,
+   "placeholders": [
+    "[child name]"
+   ],
+   "revisit": "per_milestone_and_yearly",
+   "use_in_twin": "scheduled_message+retrieval",
+   "est_minutes": 6
+  },
+  {
+   "id": "HU-001",
+   "category": "humor",
+   "category_label": "Humor, jokes & stories",
+   "subcategory": "jokes",
+   "prompt": "Tell me your favorite joke, exactly the way you tell it, pauses and all.",
+   "follow_ups": [
+    "Where did you first hear it?",
+    "What's your favorite terrible pun?"
+   ],
+   "depth": 1,
+   "answer_mode": "voice",
+   "emotionally_heavy": false,
+   "teaches": [
+    "humor",
+    "voice"
+   ],
+   "per_child": false,
+   "placeholders": [],
+   "revisit": "none",
+   "use_in_twin": "persona_prompt+retrieval",
+   "est_minutes": 3
+  },
+  {
+   "id": "HU-002",
+   "category": "humor",
+   "category_label": "Humor, jokes & stories",
+   "subcategory": "jokes",
+   "prompt": "What are the dad jokes you've inflicted on the kids most often? Do a few.",
+   "follow_ups": [
+    "Which one gets the biggest eye roll?",
+    "Which one secretly makes them laugh?"
+   ],
+   "depth": 1,
+   "answer_mode": "voice",
+   "emotionally_heavy": false,
+   "teaches": [
+    "humor",
+    "voice"
+   ],
+   "per_child": false,
+   "placeholders": [],
+   "revisit": "none",
+   "use_in_twin": "persona_prompt+retrieval",
+   "est_minutes": 3
+  },
+  {
+   "id": "HU-003",
+   "category": "humor",
+   "category_label": "Humor, jokes & stories",
+   "subcategory": "stories",
+   "prompt": "What's the funniest thing that's ever happened to you? Tell it like you'd tell it at a dinner party.",
+   "follow_ups": [
+    "Who else was there?",
+    "Has the story grown over the years?"
+   ],
+   "depth": 1,
+   "answer_mode": "voice",
+   "emotionally_heavy": false,
+   "teaches": [
+    "humor",
+    "memory"
+   ],
+   "per_child": false,
+   "placeholders": [],
+   "revisit": "none",
+   "use_in_twin": "persona_prompt+retrieval",
+   "est_minutes": 3
+  },
+  {
+   "id": "HU-004",
+   "category": "humor",
+   "category_label": "Humor, jokes & stories",
+   "subcategory": "stories",
+   "prompt": "What's a story you tell over and over that the family can probably recite?",
+   "follow_ups": [
+    "Tell it again anyway, the full version.",
+    "What's the true version versus the improved version?"
+   ],
+   "depth": 1,
+   "answer_mode": "voice",
+   "emotionally_heavy": false,
+   "teaches": [
+    "humor",
+    "memory"
+   ],
+   "per_child": false,
+   "placeholders": [],
+   "revisit": "none",
+   "use_in_twin": "persona_prompt+retrieval",
+   "est_minutes": 3
+  },
+  {
+   "id": "HU-005",
+   "category": "humor",
+   "category_label": "Humor, jokes & stories",
+   "subcategory": "embarrassing",
+   "prompt": "What's the most embarrassing moment of your life?",
+   "follow_ups": [
+    "Can you laugh about it now?",
+    "How long did that take?"
+   ],
+   "depth": 2,
+   "answer_mode": "voice",
+   "emotionally_heavy": false,
+   "teaches": [
+    "humor"
+   ],
+   "per_child": false,
+   "placeholders": [],
+   "revisit": "none",
+   "use_in_twin": "persona_prompt+retrieval",
+   "est_minutes": 6
+  },
+  {
+   "id": "HU-006",
+   "category": "humor",
+   "category_label": "Humor, jokes & stories",
+   "subcategory": "style",
+   "prompt": "How would you describe your sense of humor? Dry, silly, sarcastic, wordplay, physical comedy?",
+   "follow_ups": [
+    "Who influenced it?",
+    "When is humor the wrong move?"
+   ],
+   "depth": 2,
+   "answer_mode": "either",
+   "emotionally_heavy": false,
+   "teaches": [
+    "humor",
+    "identity"
+   ],
+   "per_child": false,
+   "placeholders": [],
+   "revisit": "none",
+   "use_in_twin": "persona_prompt+retrieval",
+   "est_minutes": 6
+  },
+  {
+   "id": "HU-007",
+   "category": "humor",
+   "category_label": "Humor, jokes & stories",
+   "subcategory": "style",
+   "prompt": "What kinds of jokes are off-limits for you, and why?",
+   "follow_ups": [
+    "Have you ever told a joke you regretted?",
+    "How should the twin know when to joke and when not to?"
+   ],
+   "depth": 2,
+   "answer_mode": "either",
+   "emotionally_heavy": false,
+   "teaches": [
+    "humor",
+    "boundaries"
+   ],
+   "per_child": false,
+   "placeholders": [],
+   "revisit": "none",
+   "use_in_twin": "persona_prompt+retrieval",
+   "est_minutes": 6
+  },
+  {
+   "id": "HU-008",
+   "category": "humor",
+   "category_label": "Humor, jokes & stories",
+   "subcategory": "teasing",
+   "prompt": "How do you tease the people you love? Give me examples of what you'd say to each of the kids.",
+   "follow_ups": [
+    "Where's the line between teasing and hurting?",
+    "How do they tease you back?"
+   ],
+   "depth": 1,
+   "answer_mode": "voice",
+   "emotionally_heavy": false,
+   "teaches": [
+    "humor",
+    "relationships"
+   ],
+   "per_child": true,
+   "placeholders": [],
+   "revisit": "none",
+   "use_in_twin": "persona_prompt+retrieval",
+   "est_minutes": 3
+  },
+  {
+   "id": "HU-009",
+   "category": "humor",
+   "category_label": "Humor, jokes & stories",
+   "subcategory": "comedy",
+   "prompt": "Who makes you laugh hardest: comedians, shows, movies, friends, writers?",
+   "follow_ups": [
+    "What's a bit or scene you can quote?",
+    "What did you find funny as a kid that holds up?"
+   ],
+   "depth": 1,
+   "answer_mode": "either",
+   "emotionally_heavy": false,
+   "teaches": [
+    "tastes",
+    "humor"
+   ],
+   "per_child": false,
+   "placeholders": [],
+   "revisit": "none",
+   "use_in_twin": "persona_prompt+retrieval",
+   "est_minutes": 3
+  },
+  {
+   "id": "HU-010",
+   "category": "humor",
+   "category_label": "Humor, jokes & stories",
+   "subcategory": "family",
+   "prompt": "What's the funniest thing each of the kids has ever said or done?",
+   "follow_ups": [
+    "Do they know you still think about it?",
+    "What was the context?"
+   ],
+   "depth": 1,
+   "answer_mode": "voice",
+   "emotionally_heavy": false,
+   "teaches": [
+    "humor",
+    "memory"
+   ],
+   "per_child": true,
+   "placeholders": [],
+   "revisit": "none",
+   "use_in_twin": "persona_prompt+retrieval",
+   "est_minutes": 3
+  },
+  {
+   "id": "HU-011",
+   "category": "humor",
+   "category_label": "Humor, jokes & stories",
+   "subcategory": "humor_coping",
+   "prompt": "When has humor gotten you through something hard?",
+   "follow_ups": [
+    "Who was the person who made you laugh then?",
+    "Is there a joke you'd want told at your funeral?"
+   ],
+   "depth": 2,
+   "answer_mode": "voice",
+   "emotionally_heavy": true,
+   "teaches": [
+    "humor",
+    "emotion"
+   ],
+   "per_child": false,
+   "placeholders": [],
+   "revisit": "none",
+   "use_in_twin": "persona_prompt+retrieval",
+   "est_minutes": 10
+  },
+  {
+   "id": "HU-012",
+   "category": "humor",
+   "category_label": "Humor, jokes & stories",
+   "subcategory": "bits",
+   "prompt": "Do you have any running bits, silly voices, characters, nicknames or songs you do around the house? Perform one.",
+   "follow_ups": [
+    "How did it start?",
+    "Who does it best besides you?"
+   ],
+   "depth": 1,
+   "answer_mode": "voice",
+   "emotionally_heavy": false,
+   "teaches": [
+    "humor",
+    "voice"
+   ],
+   "per_child": false,
+   "placeholders": [],
+   "revisit": "none",
+   "use_in_twin": "persona_prompt+retrieval",
+   "est_minutes": 3
+  },
+  {
+   "id": "TA-001",
+   "category": "tastes",
+   "category_label": "Tastes: music, food, places, books, movies",
+   "subcategory": "music",
+   "prompt": "What ten songs would be on the soundtrack of your life? Give me the song and the moment.",
+   "follow_ups": [
+    "Which one makes you cry?",
+    "Which one should be played at your memorial?"
+   ],
+   "depth": 1,
+   "answer_mode": "either",
+   "emotionally_heavy": false,
+   "teaches": [
+    "tastes"
+   ],
+   "per_child": false,
+   "placeholders": [],
+   "revisit": "none",
+   "use_in_twin": "retrieval",
+   "est_minutes": 3
+  },
+  {
+   "id": "TA-002",
+   "category": "tastes",
+   "category_label": "Tastes: music, food, places, books, movies",
+   "subcategory": "music",
+   "prompt": "What music did you grow up with in the house, and what did you rebel with?",
+   "follow_ups": [
+    "First concert you ever went to?",
+    "What album have you listened to more than any other?"
+   ],
+   "depth": 1,
+   "answer_mode": "voice",
+   "emotionally_heavy": false,
+   "teaches": [
+    "tastes",
+    "memory"
+   ],
+   "per_child": false,
+   "placeholders": [],
+   "revisit": "none",
+   "use_in_twin": "retrieval",
+   "est_minutes": 3
+  },
+  {
+   "id": "TA-003",
+   "category": "tastes",
+   "category_label": "Tastes: music, food, places, books, movies",
+   "subcategory": "music",
+   "prompt": "What music do you want the kids to know and love? Make them a playlist with a note for each song.",
+   "follow_ups": [
+    "Which song do you associate with each kid?",
+    "What's a guilty pleasure song?"
+   ],
+   "depth": 1,
+   "answer_mode": "either",
+   "emotionally_heavy": false,
+   "teaches": [
+    "tastes",
+    "relationships"
+   ],
+   "per_child": false,
+   "placeholders": [],
+   "revisit": "none",
+   "use_in_twin": "retrieval",
+   "est_minutes": 3
+  },
+  {
+   "id": "TA-004",
+   "category": "tastes",
+   "category_label": "Tastes: music, food, places, books, movies",
+   "subcategory": "food",
+   "prompt": "What's your favorite meal of all time? Describe it so I can taste it.",
+   "follow_ups": [
+    "Where were you the best time you ate it?",
+    "Can you write down how to make it?"
+   ],
+   "depth": 1,
+   "answer_mode": "voice",
+   "emotionally_heavy": false,
+   "teaches": [
+    "tastes"
+   ],
+   "per_child": false,
+   "placeholders": [],
+   "revisit": "none",
+   "use_in_twin": "retrieval",
+   "est_minutes": 3
+  },
+  {
+   "id": "TA-005",
+   "category": "tastes",
+   "category_label": "Tastes: music, food, places, books, movies",
+   "subcategory": "food",
+   "prompt": "Write down a recipe you want passed down, with all your notes and cheats.",
+   "follow_ups": [
+    "Who taught you this?",
+    "When do you make it?"
+   ],
+   "depth": 1,
+   "answer_mode": "text",
+   "emotionally_heavy": false,
+   "teaches": [
+    "tastes",
+    "family_history"
+   ],
+   "per_child": false,
+   "placeholders": [],
+   "revisit": "none",
+   "use_in_twin": "retrieval",
+   "est_minutes": 3
+  },
+  {
+   "id": "TA-006",
+   "category": "tastes",
+   "category_label": "Tastes: music, food, places, books, movies",
+   "subcategory": "food",
+   "prompt": "What foods do you hate, and what's your weirdest food habit?",
+   "follow_ups": [
+    "What's your go-to order at your favorite takeout?",
+    "What's your snack when nobody's looking?"
+   ],
+   "depth": 1,
+   "answer_mode": "either",
+   "emotionally_heavy": false,
+   "teaches": [
+    "tastes",
+    "humor"
+   ],
+   "per_child": false,
+   "placeholders": [],
+   "revisit": "none",
+   "use_in_twin": "retrieval",
+   "est_minutes": 3
+  },
+  {
+   "id": "TA-007",
+   "category": "tastes",
+   "category_label": "Tastes: music, food, places, books, movies",
+   "subcategory": "books",
+   "prompt": "What books changed how you think? List them and say what each one did to you.",
+   "follow_ups": [
+    "Which one would you hand to each of the kids, and at what age?",
+    "What book do you reread?"
+   ],
+   "depth": 1,
+   "answer_mode": "either",
+   "emotionally_heavy": false,
+   "teaches": [
+    "tastes",
+    "worldview"
+   ],
+   "per_child": false,
+   "placeholders": [],
+   "revisit": "none",
+   "use_in_twin": "retrieval",
+   "est_minutes": 3
+  },
+  {
+   "id": "TA-008",
+   "category": "tastes",
+   "category_label": "Tastes: music, food, places, books, movies",
+   "subcategory": "movies",
+   "prompt": "What movies or shows could you watch over and over? Which ones do you want to watch with the kids someday?",
+   "follow_ups": [
+    "What scene do you know by heart?",
+    "What movie made you cry?"
+   ],
+   "depth": 1,
+   "answer_mode": "either",
+   "emotionally_heavy": false,
+   "teaches": [
+    "tastes"
+   ],
+   "per_child": false,
+   "placeholders": [],
+   "revisit": "none",
+   "use_in_twin": "retrieval",
+   "est_minutes": 3
+  },
+  {
+   "id": "TA-009",
+   "category": "tastes",
+   "category_label": "Tastes: music, food, places, books, movies",
+   "subcategory": "places",
+   "prompt": "What's the most beautiful place you've ever been? Describe it.",
+   "follow_ups": [
+    "Who were you with?",
+    "Should the kids go there?"
+   ],
+   "depth": 1,
+   "answer_mode": "voice",
+   "emotionally_heavy": false,
+   "teaches": [
+    "tastes",
+    "memory"
+   ],
+   "per_child": false,
+   "placeholders": [],
+   "revisit": "none",
+   "use_in_twin": "retrieval",
+   "est_minutes": 3
+  },
+  {
+   "id": "TA-010",
+   "category": "tastes",
+   "category_label": "Tastes: music, food, places, books, movies",
+   "subcategory": "places",
+   "prompt": "Where in the world do you still want to go, and why?",
+   "follow_ups": [
+    "Who would you take?",
+    "If you never make it, what should the kids do there for you?"
+   ],
+   "depth": 1,
+   "answer_mode": "either",
+   "emotionally_heavy": false,
+   "teaches": [
+    "tastes"
+   ],
+   "per_child": false,
+   "placeholders": [],
+   "revisit": "none",
+   "use_in_twin": "retrieval",
+   "est_minutes": 3
+  },
+  {
+   "id": "TA-011",
+   "category": "tastes",
+   "category_label": "Tastes: music, food, places, books, movies",
+   "subcategory": "seasons",
+   "prompt": "What's your favorite season, holiday, time of day and kind of weather?",
+   "follow_ups": [
+    "What's a perfect autumn evening for you?",
+    "What do you always do on that holiday?"
+   ],
+   "depth": 1,
+   "answer_mode": "either",
+   "emotionally_heavy": false,
+   "teaches": [
+    "tastes",
+    "routine"
+   ],
+   "per_child": false,
+   "placeholders": [],
+   "revisit": "none",
+   "use_in_twin": "retrieval",
+   "est_minutes": 3
+  },
+  {
+   "id": "TA-012",
+   "category": "tastes",
+   "category_label": "Tastes: music, food, places, books, movies",
+   "subcategory": "tech",
+   "prompt": "What tech, gadgets, games or tools have you loved over the years? What did your first computer or phone mean to you?",
+   "follow_ups": [
+    "What's a game you sank too many hours into?",
+    "What tool or app do you use every day?"
+   ],
+   "depth": 1,
+   "answer_mode": "either",
+   "emotionally_heavy": false,
+   "teaches": [
+    "tastes",
+    "identity"
+   ],
+   "per_child": false,
+   "placeholders": [],
+   "revisit": "none",
+   "use_in_twin": "retrieval",
+   "est_minutes": 3
+  },
+  {
+   "id": "TA-013",
+   "category": "tastes",
+   "category_label": "Tastes: music, food, places, books, movies",
+   "subcategory": "style",
+   "prompt": "What's your style? Clothes, cars, furniture, the stuff you surround yourself with.",
+   "follow_ups": [
+    "What's an item of clothing you've kept forever?",
+    "What do you think is overrated?"
+   ],
+   "depth": 1,
+   "answer_mode": "either",
+   "emotionally_heavy": false,
+   "teaches": [
+    "tastes",
+    "identity"
+   ],
+   "per_child": false,
+   "placeholders": [],
+   "revisit": "none",
+   "use_in_twin": "retrieval",
+   "est_minutes": 3
+  },
+  {
+   "id": "TA-014",
+   "category": "tastes",
+   "category_label": "Tastes: music, food, places, books, movies",
+   "subcategory": "art",
+   "prompt": "What art, design, sports or hobbies move you or obsess you?",
+   "follow_ups": [
+    "What team do you root for and why?",
+    "What hobby did you give up that you miss?"
+   ],
+   "depth": 1,
+   "answer_mode": "either",
+   "emotionally_heavy": false,
+   "teaches": [
+    "tastes"
+   ],
+   "per_child": false,
+   "placeholders": [],
+   "revisit": "none",
+   "use_in_twin": "retrieval",
+   "est_minutes": 3
+  },
+  {
+   "id": "HD-001",
+   "category": "habits",
+   "category_label": "Habits & daily life",
+   "subcategory": "routine",
+   "prompt": "Walk me through a typical weekday, from the moment your alarm goes off to the moment you fall asleep.",
+   "follow_ups": [
+    "What's the first thing you reach for?",
+    "What's the best part of the day?"
+   ],
+   "depth": 1,
+   "answer_mode": "voice",
+   "emotionally_heavy": false,
+   "teaches": [
+    "routine"
+   ],
+   "per_child": false,
+   "placeholders": [],
+   "revisit": "none",
+   "use_in_twin": "retrieval",
+   "est_minutes": 3
+  },
+  {
+   "id": "HD-002",
+   "category": "habits",
+   "category_label": "Habits & daily life",
+   "subcategory": "routine",
+   "prompt": "Walk me through a perfect lazy Sunday.",
+   "follow_ups": [
+    "Who's there?",
+    "What are you eating?"
+   ],
+   "depth": 1,
+   "answer_mode": "voice",
+   "emotionally_heavy": false,
+   "teaches": [
+    "routine"
+   ],
+   "per_child": false,
+   "placeholders": [],
+   "revisit": "none",
+   "use_in_twin": "retrieval",
+   "est_minutes": 3
+  },
+  {
+   "id": "HD-003",
+   "category": "habits",
+   "category_label": "Habits & daily life",
+   "subcategory": "coffee",
+   "prompt": "How do you take your coffee or tea, and what's the ritual around it?",
+   "follow_ups": [
+    "When did that start?",
+    "What's your opinion on people who do it differently?"
+   ],
+   "depth": 1,
+   "answer_mode": "either",
+   "emotionally_heavy": false,
+   "teaches": [
+    "routine",
+    "tastes"
+   ],
+   "per_child": false,
+   "placeholders": [],
+   "revisit": "none",
+   "use_in_twin": "retrieval",
+   "est_minutes": 3
+  },
+  {
+   "id": "HD-004",
+   "category": "habits",
+   "category_label": "Habits & daily life",
+   "subcategory": "quirks",
+   "prompt": "What are your quirks? The little habits the family teases you about.",
+   "follow_ups": [
+    "Which ones do you secretly like?",
+    "Which ones would you like to break?"
+   ],
+   "depth": 1,
+   "answer_mode": "either",
+   "emotionally_heavy": false,
+   "teaches": [
+    "routine",
+    "humor"
+   ],
+   "per_child": false,
+   "placeholders": [],
+   "revisit": "none",
+   "use_in_twin": "retrieval",
+   "est_minutes": 3
+  },
+  {
+   "id": "HD-005",
+   "category": "habits",
+   "category_label": "Habits & daily life",
+   "subcategory": "home",
+   "prompt": "Where in the house are you most likely to be found, and what are you doing?",
+   "follow_ups": [
+    "What's on your desk or nightstand right now?",
+    "What's your spot on the couch?"
+   ],
+   "depth": 1,
+   "answer_mode": "voice",
+   "emotionally_heavy": false,
+   "teaches": [
+    "routine"
+   ],
+   "per_child": false,
+   "placeholders": [],
+   "revisit": "none",
+   "use_in_twin": "retrieval",
+   "est_minutes": 3
+  },
+  {
+   "id": "HD-006",
+   "category": "habits",
+   "category_label": "Habits & daily life",
+   "subcategory": "energy",
+   "prompt": "When do you feel most like yourself during the day? When do you feel least like yourself?",
+   "follow_ups": [
+    "How do you recharge?",
+    "What drains you fastest?"
+   ],
+   "depth": 2,
+   "answer_mode": "either",
+   "emotionally_heavy": false,
+   "teaches": [
+    "routine",
+    "emotion"
+   ],
+   "per_child": false,
+   "placeholders": [],
+   "revisit": "none",
+   "use_in_twin": "retrieval",
+   "est_minutes": 6
+  },
+  {
+   "id": "HD-007",
+   "category": "habits",
+   "category_label": "Habits & daily life",
+   "subcategory": "phone",
+   "prompt": "What does your phone or computer say about you? Your most-used apps, your home screen, your tabs right now?",
+   "follow_ups": [
+    "What are you trying to use less?",
+    "What would you never delete?"
+   ],
+   "depth": 1,
+   "answer_mode": "either",
+   "emotionally_heavy": false,
+   "teaches": [
+    "routine"
+   ],
+   "per_child": false,
+   "placeholders": [],
+   "revisit": "none",
+   "use_in_twin": "retrieval",
+   "est_minutes": 3
+  },
+  {
+   "id": "HD-008",
+   "category": "habits",
+   "category_label": "Habits & daily life",
+   "subcategory": "chores",
+   "prompt": "What chores do you actually like? Which ones do you dodge?",
+   "follow_ups": [
+    "Who taught you to do them?",
+    "What's your method for loading the dishwasher, and is everyone else wrong?"
+   ],
+   "depth": 1,
+   "answer_mode": "voice",
+   "emotionally_heavy": false,
+   "teaches": [
+    "routine",
+    "humor"
+   ],
+   "per_child": false,
+   "placeholders": [],
+   "revisit": "none",
+   "use_in_twin": "retrieval",
+   "est_minutes": 3
+  },
+  {
+   "id": "HD-009",
+   "category": "habits",
+   "category_label": "Habits & daily life",
+   "subcategory": "health",
+   "prompt": "How do you take care of your body, exercise, sleep, food? Be honest.",
+   "follow_ups": [
+    "What's your best habit?",
+    "What's the one you keep promising to start?"
+   ],
+   "depth": 2,
+   "answer_mode": "either",
+   "emotionally_heavy": false,
+   "teaches": [
+    "routine"
+   ],
+   "per_child": false,
+   "placeholders": [],
+   "revisit": "none",
+   "use_in_twin": "retrieval",
+   "est_minutes": 6
+  },
+  {
+   "id": "HD-010",
+   "category": "habits",
+   "category_label": "Habits & daily life",
+   "subcategory": "learning",
+   "prompt": "What are you learning right now, or what do you want to learn next?",
+   "follow_ups": [
+    "How do you like to learn: books, videos, doing, asking someone?",
+    "What's something you learned recently that surprised you?"
+   ],
+   "depth": 1,
+   "answer_mode": "either",
+   "emotionally_heavy": false,
+   "teaches": [
+    "routine",
+    "identity"
+   ],
+   "per_child": false,
+   "placeholders": [],
+   "revisit": "none",
+   "use_in_twin": "retrieval",
+   "est_minutes": 3
+  },
+  {
+   "id": "HD-011",
+   "category": "habits",
+   "category_label": "Habits & daily life",
+   "subcategory": "driving",
+   "prompt": "What are you like as a driver, and what's the car situation, music, snacks, mood?",
+   "follow_ups": [
+    "What's the best road trip you've taken?",
+    "What do you yell at other drivers?"
+   ],
+   "depth": 1,
+   "answer_mode": "voice",
+   "emotionally_heavy": false,
+   "teaches": [
+    "routine",
+    "humor"
+   ],
+   "per_child": false,
+   "placeholders": [],
+   "revisit": "none",
+   "use_in_twin": "retrieval",
+   "est_minutes": 3
+  },
+  {
+   "id": "HD-012",
+   "category": "habits",
+   "category_label": "Habits & daily life",
+   "subcategory": "sleep",
+   "prompt": "What's on your mind as you fall asleep most nights?",
+   "follow_ups": [
+    "Do you dream much? Any recurring dreams?",
+    "What helps you sleep when you can't?"
+   ],
+   "depth": 1,
+   "answer_mode": "voice",
+   "emotionally_heavy": false,
+   "teaches": [
+    "routine",
+    "emotion"
+   ],
+   "per_child": false,
+   "placeholders": [],
+   "revisit": "none",
+   "use_in_twin": "retrieval",
+   "est_minutes": 3
+  },
+  {
+   "id": "CF-001",
+   "category": "conflict_stress",
+   "category_label": "Conflict, anger, stress & decisions",
+   "subcategory": "anger",
+   "prompt": "What makes you angry, really angry? What does anger look like on you, from the outside?",
+   "follow_ups": [
+    "What do you do to cool down?",
+    "Who's seen the worst of your temper?"
+   ],
+   "depth": 2,
+   "answer_mode": "voice",
+   "emotionally_heavy": false,
+   "teaches": [
+    "emotion",
+    "decision_style"
+   ],
+   "per_child": false,
+   "placeholders": [],
+   "revisit": "none",
+   "use_in_twin": "persona_prompt+retrieval",
+   "est_minutes": 6
+  },
+  {
+   "id": "CF-002",
+   "category": "conflict_stress",
+   "category_label": "Conflict, anger, stress & decisions",
+   "subcategory": "anger",
+   "prompt": "Tell me about a time your anger hurt someone you love. What happened, and how did you repair it?",
+   "follow_ups": [
+    "What did you learn about yourself?",
+    "What do you want the kids to know about it?"
+   ],
+   "depth": 3,
+   "answer_mode": "voice",
+   "emotionally_heavy": true,
+   "teaches": [
+    "emotion",
+    "relationships"
+   ],
+   "per_child": false,
+   "placeholders": [],
+   "revisit": "none",
+   "use_in_twin": "persona_prompt+retrieval",
+   "est_minutes": 16
+  },
+  {
+   "id": "CF-003",
+   "category": "conflict_stress",
+   "category_label": "Conflict, anger, stress & decisions",
+   "subcategory": "conflict",
+   "prompt": "When you disagree with someone, do you tend to confront, avoid, joke, go quiet, or get logical? Give me a real example.",
+   "follow_ups": [
+    "Is that how your parents did it?",
+    "How do you want the kids to handle conflict?"
+   ],
+   "depth": 2,
+   "answer_mode": "either",
+   "emotionally_heavy": false,
+   "teaches": [
+    "decision_style"
+   ],
+   "per_child": false,
+   "placeholders": [],
+   "revisit": "none",
+   "use_in_twin": "persona_prompt+retrieval",
+   "est_minutes": 6
+  },
+  {
+   "id": "CF-004",
+   "category": "conflict_stress",
+   "category_label": "Conflict, anger, stress & decisions",
+   "subcategory": "conflict",
+   "prompt": "How do you apologise? What does a real apology sound like to you?",
+   "follow_ups": [
+    "What's an apology you've received that really landed?",
+    "Is it hard for you to say sorry?"
+   ],
+   "depth": 2,
+   "answer_mode": "either",
+   "emotionally_heavy": false,
+   "teaches": [
+    "decision_style",
+    "relationships"
+   ],
+   "per_child": false,
+   "placeholders": [],
+   "revisit": "none",
+   "use_in_twin": "persona_prompt+retrieval",
+   "est_minutes": 6
+  },
+  {
+   "id": "CF-005",
+   "category": "conflict_stress",
+   "category_label": "Conflict, anger, stress & decisions",
+   "subcategory": "stress",
+   "prompt": "What does stress do to you, in your body, your mood, your sleep? How do people know you're stressed?",
+   "follow_ups": [
+    "What do you do first when you notice it?",
+    "What actually works, versus what you wish worked?"
+   ],
+   "depth": 2,
+   "answer_mode": "voice",
+   "emotionally_heavy": false,
+   "teaches": [
+    "emotion",
+    "routine"
+   ],
+   "per_child": false,
+   "placeholders": [],
+   "revisit": "none",
+   "use_in_twin": "persona_prompt+retrieval",
+   "est_minutes": 6
+  },
+  {
+   "id": "CF-006",
+   "category": "conflict_stress",
+   "category_label": "Conflict, anger, stress & decisions",
+   "subcategory": "stress",
+   "prompt": "What's the most stressed or overwhelmed you've ever been? How did you get through it?",
+   "follow_ups": [
+    "Who helped?",
+    "What would you do differently?"
+   ],
+   "depth": 3,
+   "answer_mode": "voice",
+   "emotionally_heavy": true,
+   "teaches": [
+    "emotion"
+   ],
+   "per_child": false,
+   "placeholders": [],
+   "revisit": "none",
+   "use_in_twin": "persona_prompt+retrieval",
+   "est_minutes": 16
+  },
+  {
+   "id": "CF-007",
+   "category": "conflict_stress",
+   "category_label": "Conflict, anger, stress & decisions",
+   "subcategory": "decisions",
+   "prompt": "How do you make big decisions? Lists, gut, talking it out, sleeping on it? Walk me through a real one.",
+   "follow_ups": [
+    "When has your gut been wrong?",
+    "When should you not trust the data?"
+   ],
+   "depth": 2,
+   "answer_mode": "either",
+   "emotionally_heavy": false,
+   "teaches": [
+    "decision_style"
+   ],
+   "per_child": false,
+   "placeholders": [],
+   "revisit": "none",
+   "use_in_twin": "persona_prompt+retrieval",
+   "est_minutes": 6
+  },
+  {
+   "id": "CF-008",
+   "category": "conflict_stress",
+   "category_label": "Conflict, anger, stress & decisions",
+   "subcategory": "decisions",
+   "prompt": "How do you make small everyday decisions, what to eat, what to buy, whether to go out? Are you quick or do you agonise?",
+   "follow_ups": [
+    "What do you overthink?",
+    "What do you decide too fast?"
+   ],
+   "depth": 2,
+   "answer_mode": "either",
+   "emotionally_heavy": false,
+   "teaches": [
+    "decision_style"
+   ],
+   "per_child": false,
+   "placeholders": [],
+   "revisit": "none",
+   "use_in_twin": "persona_prompt+retrieval",
+   "est_minutes": 6
+  },
+  {
+   "id": "CF-009",
+   "category": "conflict_stress",
+   "category_label": "Conflict, anger, stress & decisions",
+   "subcategory": "risk",
+   "prompt": "How do you think about risk? When do you go for it and when do you play it safe?",
+   "follow_ups": [
+    "What's a risk you're glad you took?",
+    "What's a risk you're glad you didn't?"
+   ],
+   "depth": 2,
+   "answer_mode": "either",
+   "emotionally_heavy": false,
+   "teaches": [
+    "decision_style"
+   ],
+   "per_child": false,
+   "placeholders": [],
+   "revisit": "none",
+   "use_in_twin": "persona_prompt+retrieval",
+   "est_minutes": 6
+  },
+  {
+   "id": "CF-010",
+   "category": "conflict_stress",
+   "category_label": "Conflict, anger, stress & decisions",
+   "subcategory": "criticism",
+   "prompt": "How do you handle criticism? How do you give it?",
+   "follow_ups": [
+    "What's the most useful criticism you ever got?",
+    "How do you want the twin to give the kids hard feedback?"
+   ],
+   "depth": 2,
+   "answer_mode": "either",
+   "emotionally_heavy": false,
+   "teaches": [
+    "emotion",
+    "decision_style"
+   ],
+   "per_child": false,
+   "placeholders": [],
+   "revisit": "none",
+   "use_in_twin": "persona_prompt+retrieval",
+   "est_minutes": 6
+  },
+  {
+   "id": "CF-011",
+   "category": "conflict_stress",
+   "category_label": "Conflict, anger, stress & decisions",
+   "subcategory": "fear",
+   "prompt": "What are you afraid of now, as an adult?",
+   "follow_ups": [
+    "How do you act when you're scared?",
+    "What do you do to be brave anyway?"
+   ],
+   "depth": 2,
+   "answer_mode": "voice",
+   "emotionally_heavy": false,
+   "teaches": [
+    "emotion"
+   ],
+   "per_child": false,
+   "placeholders": [],
+   "revisit": "none",
+   "use_in_twin": "persona_prompt+retrieval",
+   "est_minutes": 6
+  },
+  {
+   "id": "CF-012",
+   "category": "conflict_stress",
+   "category_label": "Conflict, anger, stress & decisions",
+   "subcategory": "sadness",
+   "prompt": "How do you handle sadness? Do you let yourself cry? When did you last?",
+   "follow_ups": [
+    "Who do you let see you sad?",
+    "What do you want the kids to know about it being OK to be sad?"
+   ],
+   "depth": 3,
+   "answer_mode": "voice",
+   "emotionally_heavy": true,
+   "teaches": [
+    "emotion"
+   ],
+   "per_child": false,
+   "placeholders": [],
+   "revisit": "none",
+   "use_in_twin": "persona_prompt+retrieval",
+   "est_minutes": 16
+  },
+  {
+   "id": "CF-013",
+   "category": "conflict_stress",
+   "category_label": "Conflict, anger, stress & decisions",
+   "subcategory": "mental_health",
+   "prompt": "Have you ever struggled with anxiety, depression, burnout or dark stretches? Share what you're comfortable sharing, and what you'd want the kids to know if they ever do.",
+   "follow_ups": [
+    "What helped, and what didn't?",
+    "When should someone get professional help, in your view?"
+   ],
+   "depth": 3,
+   "answer_mode": "either",
+   "emotionally_heavy": true,
+   "teaches": [
+    "emotion",
+    "advice"
+   ],
+   "per_child": false,
+   "placeholders": [],
+   "revisit": "none",
+   "use_in_twin": "persona_prompt+retrieval",
+   "est_minutes": 16
+  },
+  {
+   "id": "CF-014",
+   "category": "conflict_stress",
+   "category_label": "Conflict, anger, stress & decisions",
+   "subcategory": "pressure",
+   "prompt": "What are you like in a crisis? Tell me about a real emergency and what you did in the first five minutes.",
+   "follow_ups": [
+    "Did you surprise yourself?",
+    "What do you do after the crisis passes?"
+   ],
+   "depth": 2,
+   "answer_mode": "voice",
+   "emotionally_heavy": false,
+   "teaches": [
+    "decision_style"
+   ],
+   "per_child": false,
+   "placeholders": [],
+   "revisit": "none",
+   "use_in_twin": "persona_prompt+retrieval",
+   "est_minutes": 6
+  },
+  {
+   "id": "OP-001",
+   "category": "opinions",
+   "category_label": "Opinions on money, work, success & health",
+   "subcategory": "money",
+   "prompt": "What do you believe about money? What is it for?",
+   "follow_ups": [
+    "What's the smartest money move you've made?",
+    "The dumbest?"
+   ],
+   "depth": 2,
+   "answer_mode": "either",
+   "emotionally_heavy": false,
+   "teaches": [
+    "values",
+    "advice"
+   ],
+   "per_child": false,
+   "placeholders": [],
+   "revisit": "yearly",
+   "use_in_twin": "retrieval",
+   "est_minutes": 6
+  },
+  {
+   "id": "OP-002",
+   "category": "opinions",
+   "category_label": "Opinions on money, work, success & health",
+   "subcategory": "money",
+   "prompt": "What practical money advice do you want the kids to have, saving, debt, investing, spending on experiences versus things?",
+   "follow_ups": [
+    "What do you think about credit cards?",
+    "How much is enough?"
+   ],
+   "depth": 2,
+   "answer_mode": "either",
+   "emotionally_heavy": false,
+   "teaches": [
+    "advice"
+   ],
+   "per_child": false,
+   "placeholders": [],
+   "revisit": "yearly",
+   "use_in_twin": "retrieval",
+   "est_minutes": 6
+  },
+  {
+   "id": "OP-003",
+   "category": "opinions",
+   "category_label": "Opinions on money, work, success & health",
+   "subcategory": "money",
+   "prompt": "Is it OK to want to be rich? How would you feel if one of the kids became very wealthy, or chose a life with very little money?",
+   "follow_ups": [
+    "What does wealth do to people?",
+    "Who's someone rich you admire, and why?"
+   ],
+   "depth": 2,
+   "answer_mode": "either",
+   "emotionally_heavy": false,
+   "teaches": [
+    "values"
+   ],
+   "per_child": false,
+   "placeholders": [],
+   "revisit": "yearly",
+   "use_in_twin": "retrieval",
+   "est_minutes": 6
+  },
+  {
+   "id": "OP-004",
+   "category": "opinions",
+   "category_label": "Opinions on money, work, success & health",
+   "subcategory": "generosity",
+   "prompt": "How do you think about giving, money, time, help? Who do you give to and why?",
+   "follow_ups": [
+    "How should the kids decide who to help?",
+    "What's the most generous thing someone did for you?"
+   ],
+   "depth": 2,
+   "answer_mode": "either",
+   "emotionally_heavy": false,
+   "teaches": [
+    "values"
+   ],
+   "per_child": false,
+   "placeholders": [],
+   "revisit": "yearly",
+   "use_in_twin": "retrieval",
+   "est_minutes": 6
+  },
+  {
+   "id": "OP-005",
+   "category": "opinions",
+   "category_label": "Opinions on money, work, success & health",
+   "subcategory": "success",
+   "prompt": "How do you define success? Has that definition changed?",
+   "follow_ups": [
+    "Do you feel successful?",
+    "What would make you feel you'd failed?"
+   ],
+   "depth": 2,
+   "answer_mode": "either",
+   "emotionally_heavy": false,
+   "teaches": [
+    "values",
+    "worldview"
+   ],
+   "per_child": false,
+   "placeholders": [],
+   "revisit": "yearly",
+   "use_in_twin": "retrieval",
+   "est_minutes": 6
+  },
+  {
+   "id": "OP-006",
+   "category": "opinions",
+   "category_label": "Opinions on money, work, success & health",
+   "subcategory": "work",
+   "prompt": "What's the point of work, for you? Paycheck, purpose, craft, people?",
+   "follow_ups": [
+    "Should work be your passion?",
+    "What's a job you'd be ashamed to do, if any?"
+   ],
+   "depth": 2,
+   "answer_mode": "either",
+   "emotionally_heavy": false,
+   "teaches": [
+    "values"
+   ],
+   "per_child": false,
+   "placeholders": [],
+   "revisit": "yearly",
+   "use_in_twin": "retrieval",
+   "est_minutes": 6
+  },
+  {
+   "id": "OP-007",
+   "category": "opinions",
+   "category_label": "Opinions on money, work, success & health",
+   "subcategory": "ambition",
+   "prompt": "How ambitious are you, and how ambitious do you want the kids to be?",
+   "follow_ups": [
+    "What's healthy ambition versus the kind that eats you?",
+    "What are you still hungry for?"
+   ],
+   "depth": 2,
+   "answer_mode": "either",
+   "emotionally_heavy": false,
+   "teaches": [
+    "values",
+    "advice"
+   ],
+   "per_child": false,
+   "placeholders": [],
+   "revisit": "yearly",
+   "use_in_twin": "retrieval",
+   "est_minutes": 6
+  },
+  {
+   "id": "OP-008",
+   "category": "opinions",
+   "category_label": "Opinions on money, work, success & health",
+   "subcategory": "health",
+   "prompt": "What do you believe about health, food, exercise, doctors, sleep, drinking? What do you want the kids to take seriously?",
+   "follow_ups": [
+    "What do you want them not to stress about?",
+    "What health history in the family should they know about?"
+   ],
+   "depth": 2,
+   "answer_mode": "either",
+   "emotionally_heavy": false,
+   "teaches": [
+    "advice",
+    "values"
+   ],
+   "per_child": false,
+   "placeholders": [],
+   "revisit": "yearly",
+   "use_in_twin": "retrieval",
+   "est_minutes": 6
+  },
+  {
+   "id": "OP-009",
+   "category": "opinions",
+   "category_label": "Opinions on money, work, success & health",
+   "subcategory": "tech",
+   "prompt": "What do you think about screens, social media and AI, including this twin, and how the kids should use them?",
+   "follow_ups": [
+    "What rules would you set if you could?",
+    "What's the good stuff tech has done for us?"
+   ],
+   "depth": 2,
+   "answer_mode": "either",
+   "emotionally_heavy": false,
+   "teaches": [
+    "worldview",
+    "advice"
+   ],
+   "per_child": false,
+   "placeholders": [],
+   "revisit": "yearly",
+   "use_in_twin": "retrieval",
+   "est_minutes": 6
+  },
+  {
+   "id": "OP-010",
+   "category": "opinions",
+   "category_label": "Opinions on money, work, success & health",
+   "subcategory": "education",
+   "prompt": "How important is school and formal education? What matters more or less than people think?",
+   "follow_ups": [
+    "What did school get wrong for you?",
+    "What would you tell a kid who wants to drop out?"
+   ],
+   "depth": 2,
+   "answer_mode": "either",
+   "emotionally_heavy": false,
+   "teaches": [
+    "values",
+    "advice"
+   ],
+   "per_child": false,
+   "placeholders": [],
+   "revisit": "yearly",
+   "use_in_twin": "retrieval",
+   "est_minutes": 6
+  },
+  {
+   "id": "OP-011",
+   "category": "opinions",
+   "category_label": "Opinions on money, work, success & health",
+   "subcategory": "time",
+   "prompt": "What's the best way to spend time? What do you waste time on, and do you regret it?",
+   "follow_ups": [
+    "If you had one more free hour a day, what would you do?",
+    "What's worth being bored for?"
+   ],
+   "depth": 2,
+   "answer_mode": "either",
+   "emotionally_heavy": false,
+   "teaches": [
+    "values"
+   ],
+   "per_child": false,
+   "placeholders": [],
+   "revisit": "yearly",
+   "use_in_twin": "retrieval",
+   "est_minutes": 6
+  },
+  {
+   "id": "OP-012",
+   "category": "opinions",
+   "category_label": "Opinions on money, work, success & health",
+   "subcategory": "happiness",
+   "prompt": "What do you think makes people happy over a whole life, not just today?",
+   "follow_ups": [
+    "When were you happiest?",
+    "What gets in the way?"
+   ],
+   "depth": 3,
+   "answer_mode": "either",
+   "emotionally_heavy": false,
+   "teaches": [
+    "worldview",
+    "advice"
+   ],
+   "per_child": false,
+   "placeholders": [],
+   "revisit": "yearly",
+   "use_in_twin": "retrieval",
+   "est_minutes": 12
+  },
+  {
+   "id": "PE-001",
+   "category": "people",
+   "category_label": "People who mattered",
+   "subcategory": "grandparents",
+   "prompt": "Tell me about your grandparents. What were they like, and what did they give you?",
+   "follow_ups": [
+    "What did they call you?",
+    "What's a story about them the kids should know?"
+   ],
+   "depth": 2,
+   "answer_mode": "voice",
+   "emotionally_heavy": false,
+   "teaches": [
+    "memory",
+    "family_history"
+   ],
+   "per_child": false,
+   "placeholders": [],
+   "revisit": "none",
+   "use_in_twin": "retrieval",
+   "est_minutes": 6
+  },
+  {
+   "id": "PE-002",
+   "category": "people",
+   "category_label": "People who mattered",
+   "subcategory": "mentors",
+   "prompt": "Who's the person outside your family who shaped you most? Tell me their story.",
+   "follow_ups": [
+    "What did they see in you?",
+    "What would you say to them now?"
+   ],
+   "depth": 2,
+   "answer_mode": "voice",
+   "emotionally_heavy": false,
+   "teaches": [
+    "relationships",
+    "advice"
+   ],
+   "per_child": false,
+   "placeholders": [],
+   "revisit": "none",
+   "use_in_twin": "retrieval",
+   "est_minutes": 6
+  },
+  {
+   "id": "PE-003",
+   "category": "people",
+   "category_label": "People who mattered",
+   "subcategory": "friends",
+   "prompt": "Tell me about a friend who's been with you through a lot. What's your history together?",
+   "follow_ups": [
+    "What's the best adventure you had together?",
+    "What did they teach you?"
+   ],
+   "depth": 2,
+   "answer_mode": "voice",
+   "emotionally_heavy": false,
+   "teaches": [
+    "relationships",
+    "memory"
+   ],
+   "per_child": false,
+   "placeholders": [],
+   "revisit": "none",
+   "use_in_twin": "retrieval",
+   "est_minutes": 6
+  },
+  {
+   "id": "PE-004",
+   "category": "people",
+   "category_label": "People who mattered",
+   "subcategory": "lost",
+   "prompt": "Tell me about someone who's died that you still think about. What do you miss most?",
+   "follow_ups": [
+    "What would you tell them if you could?",
+    "How do you keep their memory alive?"
+   ],
+   "depth": 3,
+   "answer_mode": "voice",
+   "emotionally_heavy": true,
+   "teaches": [
+    "emotion",
+    "memory"
+   ],
+   "per_child": false,
+   "placeholders": [],
+   "revisit": "yearly",
+   "use_in_twin": "retrieval",
+   "est_minutes": 16
+  },
+  {
+   "id": "PE-005",
+   "category": "people",
+   "category_label": "People who mattered",
+   "subcategory": "difficult",
+   "prompt": "Who was a difficult person in your life, someone who hurt you or that you clashed with? What did they teach you, even unintentionally?",
+   "follow_ups": [
+    "Do you understand them better now?",
+    "Have you forgiven them?"
+   ],
+   "depth": 3,
+   "answer_mode": "either",
+   "emotionally_heavy": true,
+   "teaches": [
+    "relationships",
+    "emotion"
+   ],
+   "per_child": false,
+   "placeholders": [],
+   "revisit": "yearly",
+   "use_in_twin": "retrieval",
+   "est_minutes": 16
+  },
+  {
+   "id": "PE-006",
+   "category": "people",
+   "category_label": "People who mattered",
+   "subcategory": "unsung",
+   "prompt": "Who's an unsung hero in your life, someone who did quiet good and never got credit?",
+   "follow_ups": [
+    "What exactly did they do?",
+    "Do they know?"
+   ],
+   "depth": 1,
+   "answer_mode": "voice",
+   "emotionally_heavy": false,
+   "teaches": [
+    "relationships",
+    "values"
+   ],
+   "per_child": false,
+   "placeholders": [],
+   "revisit": "none",
+   "use_in_twin": "retrieval",
+   "est_minutes": 3
+  },
+  {
+   "id": "PE-007",
+   "category": "people",
+   "category_label": "People who mattered",
+   "subcategory": "strangers",
+   "prompt": "Tell me about a stranger who made a difference, even in a single moment.",
+   "follow_ups": [
+    "Do you ever think about where they are now?",
+    "Have you tried to be that for someone?"
+   ],
+   "depth": 1,
+   "answer_mode": "voice",
+   "emotionally_heavy": false,
+   "teaches": [
+    "memory",
+    "values"
+   ],
+   "per_child": false,
+   "placeholders": [],
+   "revisit": "none",
+   "use_in_twin": "retrieval",
+   "est_minutes": 3
+  },
+  {
+   "id": "PE-008",
+   "category": "people",
+   "category_label": "People who mattered",
+   "subcategory": "heroes",
+   "prompt": "Who are your heroes, people you've never met: historical figures, artists, athletes, thinkers?",
+   "follow_ups": [
+    "What do they have in common?",
+    "Has a hero ever let you down?"
+   ],
+   "depth": 1,
+   "answer_mode": "either",
+   "emotionally_heavy": false,
+   "teaches": [
+    "values",
+    "tastes"
+   ],
+   "per_child": false,
+   "placeholders": [],
+   "revisit": "none",
+   "use_in_twin": "retrieval",
+   "est_minutes": 3
+  },
+  {
+   "id": "PE-009",
+   "category": "people",
+   "category_label": "People who mattered",
+   "subcategory": "the_kids_know",
+   "prompt": "Who are the people you want the kids to stay connected with after you're gone? Why each one?",
+   "follow_ups": [
+    "What stories could those people tell them about you?",
+    "Who would they go to for advice in your place?"
+   ],
+   "depth": 2,
+   "answer_mode": "either",
+   "emotionally_heavy": false,
+   "teaches": [
+    "relationships"
+   ],
+   "per_child": false,
+   "placeholders": [],
+   "revisit": "none",
+   "use_in_twin": "retrieval",
+   "est_minutes": 6
+  },
+  {
+   "id": "PE-010",
+   "category": "people",
+   "category_label": "People who mattered",
+   "subcategory": "rivals",
+   "prompt": "Did you ever have a rival, in school, sports, work? What was that like?",
+   "follow_ups": [
+    "Did you ever win?",
+    "Did you become friends?"
+   ],
+   "depth": 1,
+   "answer_mode": "voice",
+   "emotionally_heavy": false,
+   "teaches": [
+    "humor",
+    "memory"
+   ],
+   "per_child": false,
+   "placeholders": [],
+   "revisit": "none",
+   "use_in_twin": "retrieval",
+   "est_minutes": 3
+  },
+  {
+   "id": "PE-011",
+   "category": "people",
+   "category_label": "People who mattered",
+   "subcategory": "teachers",
+   "prompt": "Which teacher, coach or instructor changed something in you?",
+   "follow_ups": [
+    "What did they say or do?",
+    "Did you ever tell them?"
+   ],
+   "depth": 1,
+   "answer_mode": "voice",
+   "emotionally_heavy": false,
+   "teaches": [
+    "memory",
+    "advice"
+   ],
+   "per_child": false,
+   "placeholders": [],
+   "revisit": "none",
+   "use_in_twin": "retrieval",
+   "est_minutes": 3
+  },
+  {
+   "id": "PE-012",
+   "category": "people",
+   "category_label": "People who mattered",
+   "subcategory": "kindred",
+   "prompt": "Who in your life just gets you, without needing to explain? What's that like?",
+   "follow_ups": [
+    "When did you meet?",
+    "What do you have in common?"
+   ],
+   "depth": 2,
+   "answer_mode": "either",
+   "emotionally_heavy": false,
+   "teaches": [
+    "relationships"
+   ],
+   "per_child": false,
+   "placeholders": [],
+   "revisit": "none",
+   "use_in_twin": "retrieval",
+   "est_minutes": 6
+  },
+  {
+   "id": "FH-001",
+   "category": "family_history",
+   "category_label": "Family history & traditions",
+   "subcategory": "roots",
+   "prompt": "What do you know about where your family comes from, countries, towns, languages, how they ended up where they did?",
+   "follow_ups": [
+    "Who in the family knows the most about this?",
+    "What would you want to find out before it's too late?"
+   ],
+   "depth": 1,
+   "answer_mode": "either",
+   "emotionally_heavy": false,
+   "teaches": [
+    "family_history"
+   ],
+   "per_child": false,
+   "placeholders": [],
+   "revisit": "none",
+   "use_in_twin": "retrieval",
+   "est_minutes": 3
+  },
+  {
+   "id": "FH-002",
+   "category": "family_history",
+   "category_label": "Family history & traditions",
+   "subcategory": "roots",
+   "prompt": "What's the most dramatic story in your family's history? Tell it the way it was told to you.",
+   "follow_ups": [
+    "How much of it do you think is true?",
+    "Who told it best?"
+   ],
+   "depth": 2,
+   "answer_mode": "voice",
+   "emotionally_heavy": false,
+   "teaches": [
+    "family_history",
+    "memory"
+   ],
+   "per_child": false,
+   "placeholders": [],
+   "revisit": "none",
+   "use_in_twin": "retrieval",
+   "est_minutes": 6
+  },
+  {
+   "id": "FH-003",
+   "category": "family_history",
+   "category_label": "Family history & traditions",
+   "subcategory": "names",
+   "prompt": "Where do your name and the kids' names come from? Why did you choose them?",
+   "follow_ups": [
+    "What names almost made it?",
+    "Are there family names that should be carried on?"
+   ],
+   "depth": 1,
+   "answer_mode": "either",
+   "emotionally_heavy": false,
+   "teaches": [
+    "family_history"
+   ],
+   "per_child": false,
+   "placeholders": [],
+   "revisit": "none",
+   "use_in_twin": "retrieval",
+   "est_minutes": 3
+  },
+  {
+   "id": "FH-004",
+   "category": "family_history",
+   "category_label": "Family history & traditions",
+   "subcategory": "heritage",
+   "prompt": "What's your cultural or religious heritage, and what parts of it matter to you?",
+   "follow_ups": [
+    "What do you want the kids to keep?",
+    "What can they let go of?"
+   ],
+   "depth": 2,
+   "answer_mode": "either",
+   "emotionally_heavy": false,
+   "teaches": [
+    "family_history",
+    "values"
+   ],
+   "per_child": false,
+   "placeholders": [],
+   "revisit": "none",
+   "use_in_twin": "retrieval",
+   "est_minutes": 6
+  },
+  {
+   "id": "FH-005",
+   "category": "family_history",
+   "category_label": "Family history & traditions",
+   "subcategory": "holidays",
+   "prompt": "Walk me through how your family celebrates the biggest holiday of the year, start to finish.",
+   "follow_ups": [
+    "What's the food?",
+    "What's the one thing that must happen for it to count?"
+   ],
+   "depth": 1,
+   "answer_mode": "voice",
+   "emotionally_heavy": false,
+   "teaches": [
+    "family_history",
+    "routine"
+   ],
+   "per_child": false,
+   "placeholders": [],
+   "revisit": "none",
+   "use_in_twin": "retrieval",
+   "est_minutes": 3
+  },
+  {
+   "id": "FH-006",
+   "category": "family_history",
+   "category_label": "Family history & traditions",
+   "subcategory": "traditions",
+   "prompt": "What traditions did you start in your own family? Why?",
+   "follow_ups": [
+    "Which ones do the kids love most?",
+    "Which ones do you want them to carry on?"
+   ],
+   "depth": 1,
+   "answer_mode": "either",
+   "emotionally_heavy": false,
+   "teaches": [
+    "family_history",
+    "routine"
+   ],
+   "per_child": false,
+   "placeholders": [],
+   "revisit": "none",
+   "use_in_twin": "retrieval",
+   "est_minutes": 3
+  },
+  {
+   "id": "FH-007",
+   "category": "family_history",
+   "category_label": "Family history & traditions",
+   "subcategory": "heirlooms",
+   "prompt": "What objects in the house have stories behind them? Tell me about a few.",
+   "follow_ups": [
+    "Who should get what?",
+    "What looks like junk but is precious?"
+   ],
+   "depth": 1,
+   "answer_mode": "either",
+   "emotionally_heavy": false,
+   "teaches": [
+    "family_history",
+    "memory"
+   ],
+   "per_child": false,
+   "placeholders": [],
+   "revisit": "none",
+   "use_in_twin": "retrieval",
+   "est_minutes": 3
+  },
+  {
+   "id": "FH-008",
+   "category": "family_history",
+   "category_label": "Family history & traditions",
+   "subcategory": "health",
+   "prompt": "What health history runs in the family that the kids and their doctors should know?",
+   "follow_ups": [
+    "What have you done about it?",
+    "What do you want them to watch for?"
+   ],
+   "depth": 2,
+   "answer_mode": "text",
+   "emotionally_heavy": false,
+   "teaches": [
+    "family_history",
+    "advice"
+   ],
+   "per_child": false,
+   "placeholders": [],
+   "revisit": "none",
+   "use_in_twin": "retrieval",
+   "est_minutes": 6
+  },
+  {
+   "id": "FH-009",
+   "category": "family_history",
+   "category_label": "Family history & traditions",
+   "subcategory": "secrets",
+   "prompt": "Are there family secrets or hard truths in your family history that the kids should eventually know? Share what you're comfortable with and when they should hear it.",
+   "follow_ups": [
+    "How did you find out?",
+    "How do you want them to hear it?"
+   ],
+   "depth": 3,
+   "answer_mode": "either",
+   "emotionally_heavy": true,
+   "teaches": [
+    "family_history",
+    "emotion"
+   ],
+   "per_child": false,
+   "placeholders": [],
+   "revisit": "none",
+   "use_in_twin": "retrieval",
+   "est_minutes": 16
+  },
+  {
+   "id": "FH-010",
+   "category": "family_history",
+   "category_label": "Family history & traditions",
+   "subcategory": "photos",
+   "prompt": "Pick an old family photo and describe it: who's in it, where, when, and what was happening just outside the frame.",
+   "follow_ups": [
+    "What do you remember about that day?",
+    "Who took the picture?"
+   ],
+   "depth": 1,
+   "answer_mode": "voice",
+   "emotionally_heavy": false,
+   "teaches": [
+    "memory",
+    "family_history"
+   ],
+   "per_child": false,
+   "placeholders": [],
+   "revisit": "none",
+   "use_in_twin": "retrieval",
+   "est_minutes": 3
+  },
+  {
+   "id": "FH-011",
+   "category": "family_history",
+   "category_label": "Family history & traditions",
+   "subcategory": "sayings",
+   "prompt": "What sayings, phrases or words in your family get passed down? Even weird ones.",
+   "follow_ups": [
+    "Who started them?",
+    "What do they mean?"
+   ],
+   "depth": 1,
+   "answer_mode": "voice",
+   "emotionally_heavy": false,
+   "teaches": [
+    "voice",
+    "family_history"
+   ],
+   "per_child": false,
+   "placeholders": [],
+   "revisit": "none",
+   "use_in_twin": "retrieval",
+   "est_minutes": 3
+  },
+  {
+   "id": "FH-012",
+   "category": "family_history",
+   "category_label": "Family history & traditions",
+   "subcategory": "tree",
+   "prompt": "Build out the family tree as far as you can: names, dates, places, one fact each.",
+   "follow_ups": [
+    "Who can you call to fill the gaps?",
+    "Who's the person on the tree you'd most like to have met?"
+   ],
+   "depth": 1,
+   "answer_mode": "text",
+   "emotionally_heavy": false,
+   "teaches": [
+    "family_history"
+   ],
+   "per_child": false,
+   "placeholders": [],
+   "revisit": "none",
+   "use_in_twin": "retrieval",
+   "est_minutes": 3
+  },
+  {
+   "id": "PH-001",
+   "category": "phrasing",
+   "category_label": "Phrasing & voice: how he says things",
+   "subcategory": "hello",
+   "prompt": "How do you say hello to each of the kids? Say it out loud exactly how you do, when they come home, when you wake them up, when you pick up the phone.",
+   "follow_ups": [
+    "Do you have nicknames for them? Where did they come from?",
+    "How do you greet them after a long time apart?"
+   ],
+   "depth": 1,
+   "answer_mode": "voice",
+   "emotionally_heavy": false,
+   "teaches": [
+    "voice"
+   ],
+   "per_child": true,
+   "placeholders": [],
+   "revisit": "none",
+   "use_in_twin": "persona_prompt+voice_style",
+   "est_minutes": 3
+  },
+  {
+   "id": "PH-002",
+   "category": "phrasing",
+   "category_label": "Phrasing & voice: how he says things",
+   "subcategory": "goodbye",
+   "prompt": "How do you say goodbye, at the door, on the phone, at bedtime, at the airport? Say each one.",
+   "follow_ups": [
+    "Is there a ritual, a hand squeeze, a wave, a phrase?",
+    "What did your parents say?"
+   ],
+   "depth": 1,
+   "answer_mode": "voice",
+   "emotionally_heavy": false,
+   "teaches": [
+    "voice"
+   ],
+   "per_child": false,
+   "placeholders": [],
+   "revisit": "none",
+   "use_in_twin": "persona_prompt+voice_style",
+   "est_minutes": 3
+  },
+  {
+   "id": "PH-003",
+   "category": "phrasing",
+   "category_label": "Phrasing & voice: how he says things",
+   "subcategory": "i_love_you",
+   "prompt": "How do you say 'I love you' to each of the kids? Say it the way you do, and then the way you would on the biggest day of their life.",
+   "follow_ups": [
+    "Do you have a code or shorthand for it?",
+    "When do you say it most?"
+   ],
+   "depth": 2,
+   "answer_mode": "voice",
+   "emotionally_heavy": true,
+   "teaches": [
+    "voice",
+    "emotion"
+   ],
+   "per_child": true,
+   "placeholders": [],
+   "revisit": "none",
+   "use_in_twin": "persona_prompt+voice_style",
+   "est_minutes": 10
+  },
+  {
+   "id": "PH-004",
+   "category": "phrasing",
+   "category_label": "Phrasing & voice: how he says things",
+   "subcategory": "comfort",
+   "prompt": "Someone you love just got terrible news and they're crying. What do you actually say and do? Talk to them now.",
+   "follow_ups": [
+    "What do you never say in that moment?",
+    "What do you do with your hands, a hug, a hand on the back, just sitting?"
+   ],
+   "depth": 2,
+   "answer_mode": "voice",
+   "emotionally_heavy": false,
+   "teaches": [
+    "voice",
+    "comfort"
+   ],
+   "per_child": false,
+   "placeholders": [],
+   "revisit": "none",
+   "use_in_twin": "persona_prompt+voice_style",
+   "est_minutes": 6
+  },
+  {
+   "id": "PH-005",
+   "category": "phrasing",
+   "category_label": "Phrasing & voice: how he says things",
+   "subcategory": "comfort",
+   "prompt": "One of the kids had a really bad day at school. They walk in the door. Go.",
+   "follow_ups": [
+    "What question do you ask first?",
+    "How do you know when to fix it and when to just listen?"
+   ],
+   "depth": 2,
+   "answer_mode": "voice",
+   "emotionally_heavy": false,
+   "teaches": [
+    "voice",
+    "comfort"
+   ],
+   "per_child": false,
+   "placeholders": [],
+   "revisit": "none",
+   "use_in_twin": "persona_prompt+voice_style",
+   "est_minutes": 6
+  },
+  {
+   "id": "PH-006",
+   "category": "phrasing",
+   "category_label": "Phrasing & voice: how he says things",
+   "subcategory": "catchphrases",
+   "prompt": "What are your catchphrases? The things you say so often the family could finish the sentence.",
+   "follow_ups": [
+    "Where did each one come from?",
+    "Which one do you hope the kids say someday?"
+   ],
+   "depth": 1,
+   "answer_mode": "either",
+   "emotionally_heavy": false,
+   "teaches": [
+    "voice",
+    "humor"
+   ],
+   "per_child": false,
+   "placeholders": [],
+   "revisit": "none",
+   "use_in_twin": "persona_prompt+voice_style",
+   "est_minutes": 3
+  },
+  {
+   "id": "PH-007",
+   "category": "phrasing",
+   "category_label": "Phrasing & voice: how he says things",
+   "subcategory": "swearing",
+   "prompt": "Do you swear? What words do you use when you stub your toe, and what would you want the twin to say instead around the kids?",
+   "follow_ups": [
+    "What's your 'clean' substitute?",
+    "What's an expression of surprise you use?"
+   ],
+   "depth": 1,
+   "answer_mode": "either",
+   "emotionally_heavy": false,
+   "teaches": [
+    "voice",
+    "boundaries"
+   ],
+   "per_child": false,
+   "placeholders": [],
+   "revisit": "none",
+   "use_in_twin": "persona_prompt+voice_style",
+   "est_minutes": 3
+  },
+  {
+   "id": "PH-008",
+   "category": "phrasing",
+   "category_label": "Phrasing & voice: how he says things",
+   "subcategory": "praise",
+   "prompt": "How do you tell someone they did a great job? Say a few versions, for a big win and a small one.",
+   "follow_ups": [
+    "What's praise you'd never give because it sounds fake to you?",
+    "How did your dad praise you?"
+   ],
+   "depth": 1,
+   "answer_mode": "voice",
+   "emotionally_heavy": false,
+   "teaches": [
+    "voice"
+   ],
+   "per_child": false,
+   "placeholders": [],
+   "revisit": "none",
+   "use_in_twin": "persona_prompt+voice_style",
+   "est_minutes": 3
+  },
+  {
+   "id": "PH-009",
+   "category": "phrasing",
+   "category_label": "Phrasing & voice: how he says things",
+   "subcategory": "disappointment",
+   "prompt": "How do you tell one of the kids you're disappointed? Say it the way you would.",
+   "follow_ups": [
+    "What do you make sure they know at the same time?",
+    "How do you end that conversation?"
+   ],
+   "depth": 2,
+   "answer_mode": "voice",
+   "emotionally_heavy": false,
+   "teaches": [
+    "voice",
+    "values"
+   ],
+   "per_child": false,
+   "placeholders": [],
+   "revisit": "none",
+   "use_in_twin": "persona_prompt+voice_style",
+   "est_minutes": 6
+  },
+  {
+   "id": "PH-010",
+   "category": "phrasing",
+   "category_label": "Phrasing & voice: how he says things",
+   "subcategory": "encouragement",
+   "prompt": "What do you say right before one of the kids does something nerve-wracking, a game, a recital, an exam?",
+   "follow_ups": [
+    "Do you have a pre-game ritual?",
+    "What do you say after, win or lose?"
+   ],
+   "depth": 1,
+   "answer_mode": "voice",
+   "emotionally_heavy": false,
+   "teaches": [
+    "voice",
+    "comfort"
+   ],
+   "per_child": false,
+   "placeholders": [],
+   "revisit": "none",
+   "use_in_twin": "persona_prompt+voice_style",
+   "est_minutes": 3
+  },
+  {
+   "id": "PH-011",
+   "category": "phrasing",
+   "category_label": "Phrasing & voice: how he says things",
+   "subcategory": "words",
+   "prompt": "What words or phrases do you overuse? What words do you never use because they're not 'you'?",
+   "follow_ups": [
+    "Any regional or family expressions?",
+    "Any words you mispronounce on purpose?"
+   ],
+   "depth": 1,
+   "answer_mode": "either",
+   "emotionally_heavy": false,
+   "teaches": [
+    "voice"
+   ],
+   "per_child": false,
+   "placeholders": [],
+   "revisit": "none",
+   "use_in_twin": "persona_prompt+voice_style",
+   "est_minutes": 3
+  },
+  {
+   "id": "PH-012",
+   "category": "phrasing",
+   "category_label": "Phrasing & voice: how he says things",
+   "subcategory": "texting",
+   "prompt": "How do you write texts and emails? Emojis, punctuation, sign-offs? Paste a few real texts you'd send to the kids (edited for privacy).",
+   "follow_ups": [
+    "How do you sign off with family versus work?",
+    "What emoji do you overuse?"
+   ],
+   "depth": 1,
+   "answer_mode": "text",
+   "emotionally_heavy": false,
+   "teaches": [
+    "voice"
+   ],
+   "per_child": false,
+   "placeholders": [],
+   "revisit": "none",
+   "use_in_twin": "persona_prompt+voice_style",
+   "est_minutes": 3
+  },
+  {
+   "id": "PH-013",
+   "category": "phrasing",
+   "category_label": "Phrasing & voice: how he says things",
+   "subcategory": "storytelling",
+   "prompt": "How do you start a story? Do you have a way of telling bedtime stories? Tell a short one now in your bedtime voice.",
+   "follow_ups": [
+    "Are there recurring characters in your made-up stories?",
+    "What story do the kids always ask for?"
+   ],
+   "depth": 1,
+   "answer_mode": "voice",
+   "emotionally_heavy": false,
+   "teaches": [
+    "voice"
+   ],
+   "per_child": false,
+   "placeholders": [],
+   "revisit": "none",
+   "use_in_twin": "persona_prompt+voice_style",
+   "est_minutes": 3
+  },
+  {
+   "id": "PH-014",
+   "category": "phrasing",
+   "category_label": "Phrasing & voice: how he says things",
+   "subcategory": "thinking_aloud",
+   "prompt": "Think out loud about a decision you're facing right now, for two minutes, exactly the way you'd talk it through with a friend.",
+   "follow_ups": [
+    "What words do you use when you're unsure?",
+    "How do you sound when you've decided?"
+   ],
+   "depth": 2,
+   "answer_mode": "voice",
+   "emotionally_heavy": false,
+   "teaches": [
+    "voice",
+    "decision_style"
+   ],
+   "per_child": false,
+   "placeholders": [],
+   "revisit": "none",
+   "use_in_twin": "persona_prompt+voice_style",
+   "est_minutes": 6
+  },
+  {
+   "id": "PH-015",
+   "category": "phrasing",
+   "category_label": "Phrasing & voice: how he says things",
+   "subcategory": "explaining",
+   "prompt": "Explain something you know well, like how a car engine works, how the internet works, how to make pancakes, as if teaching one of the kids.",
+   "follow_ups": [
+    "How do you check whether they understood?",
+    "What analogies do you love?"
+   ],
+   "depth": 2,
+   "answer_mode": "voice",
+   "emotionally_heavy": false,
+   "teaches": [
+    "voice"
+   ],
+   "per_child": false,
+   "placeholders": [],
+   "revisit": "none",
+   "use_in_twin": "persona_prompt+voice_style",
+   "est_minutes": 6
+  },
+  {
+   "id": "PH-016",
+   "category": "phrasing",
+   "category_label": "Phrasing & voice: how he says things",
+   "subcategory": "mood_voices",
+   "prompt": "Say the same sentence, 'Come here, I want to tell you something', the way you'd say it when you're excited, when it's serious, when you're teasing, and when it's bad news.",
+   "follow_ups": [
+    "How do the kids tell your moods apart from your voice?",
+    "What's your 'I mean it' voice?"
+   ],
+   "depth": 2,
+   "answer_mode": "voice",
+   "emotionally_heavy": false,
+   "teaches": [
+    "voice",
+    "emotion"
+   ],
+   "per_child": false,
+   "placeholders": [],
+   "revisit": "none",
+   "use_in_twin": "persona_prompt+voice_style",
+   "est_minutes": 6
+  },
+  {
+   "id": "HY-001",
+   "category": "hypotheticals",
+   "category_label": "Hypotheticals that reveal reasoning",
+   "subcategory": "moral",
+   "prompt": "You find a wallet with $500 and an ID. Nobody's watching. Walk me through exactly what you do and why.",
+   "follow_ups": [
+    "Would it change anything if you were broke?",
+    "What if the ID belonged to someone you dislike?"
+   ],
+   "depth": 2,
+   "answer_mode": "either",
+   "emotionally_heavy": false,
+   "teaches": [
+    "values",
+    "decision_style"
+   ],
+   "per_child": false,
+   "placeholders": [],
+   "revisit": "none",
+   "use_in_twin": "persona_prompt+reasoning_examples",
+   "est_minutes": 6
+  },
+  {
+   "id": "HY-002",
+   "category": "hypotheticals",
+   "category_label": "Hypotheticals that reveal reasoning",
+   "subcategory": "moral",
+   "prompt": "One of the kids confesses they did something wrong and someone else got blamed. What do you tell them to do?",
+   "follow_ups": [
+    "What if fixing it would cost them a lot?",
+    "What would you do in their place?"
+   ],
+   "depth": 3,
+   "answer_mode": "either",
+   "emotionally_heavy": false,
+   "teaches": [
+    "values",
+    "decision_style"
+   ],
+   "per_child": false,
+   "placeholders": [],
+   "revisit": "none",
+   "use_in_twin": "persona_prompt+reasoning_examples",
+   "est_minutes": 12
+  },
+  {
+   "id": "HY-003",
+   "category": "hypotheticals",
+   "category_label": "Hypotheticals that reveal reasoning",
+   "subcategory": "moral",
+   "prompt": "A close friend asks you to lie for them, a small lie, to cover something that isn't hurting anyone. What do you do?",
+   "follow_ups": [
+    "Would it matter if it was to their spouse?",
+    "Where's your line?"
+   ],
+   "depth": 3,
+   "answer_mode": "either",
+   "emotionally_heavy": false,
+   "teaches": [
+    "values",
+    "decision_style"
+   ],
+   "per_child": false,
+   "placeholders": [],
+   "revisit": "none",
+   "use_in_twin": "persona_prompt+reasoning_examples",
+   "est_minutes": 12
+  },
+  {
+   "id": "HY-004",
+   "category": "hypotheticals",
+   "category_label": "Hypotheticals that reveal reasoning",
+   "subcategory": "life",
+   "prompt": "If you had ten million dollars tomorrow, what would change and what wouldn't?",
+   "follow_ups": [
+    "What's the first thing you'd buy?",
+    "What would you worry about?"
+   ],
+   "depth": 2,
+   "answer_mode": "either",
+   "emotionally_heavy": false,
+   "teaches": [
+    "values"
+   ],
+   "per_child": false,
+   "placeholders": [],
+   "revisit": "none",
+   "use_in_twin": "persona_prompt+reasoning_examples",
+   "est_minutes": 6
+  },
+  {
+   "id": "HY-005",
+   "category": "hypotheticals",
+   "category_label": "Hypotheticals that reveal reasoning",
+   "subcategory": "life",
+   "prompt": "If you could live in any time period for a year, when and where, and why?",
+   "follow_ups": [
+    "What would you miss most from now?",
+    "What would you bring back?"
+   ],
+   "depth": 2,
+   "answer_mode": "either",
+   "emotionally_heavy": false,
+   "teaches": [
+    "values",
+    "worldview"
+   ],
+   "per_child": false,
+   "placeholders": [],
+   "revisit": "none",
+   "use_in_twin": "persona_prompt+reasoning_examples",
+   "est_minutes": 6
+  },
+  {
+   "id": "HY-006",
+   "category": "hypotheticals",
+   "category_label": "Hypotheticals that reveal reasoning",
+   "subcategory": "life",
+   "prompt": "If you had one year left to live, how would you spend it? What about one month? One day?",
+   "follow_ups": [
+    "Who would you call first?",
+    "What would you stop doing immediately?"
+   ],
+   "depth": 3,
+   "answer_mode": "either",
+   "emotionally_heavy": true,
+   "teaches": [
+    "values",
+    "emotion"
+   ],
+   "per_child": false,
+   "placeholders": [],
+   "revisit": "none",
+   "use_in_twin": "persona_prompt+reasoning_examples",
+   "est_minutes": 16
+  },
+  {
+   "id": "HY-007",
+   "category": "hypotheticals",
+   "category_label": "Hypotheticals that reveal reasoning",
+   "subcategory": "life",
+   "prompt": "If you could have any other career for one lifetime, what would it be?",
+   "follow_ups": [
+    "What's stopping you from doing some of it now?",
+    "What would the kids think?"
+   ],
+   "depth": 2,
+   "answer_mode": "either",
+   "emotionally_heavy": false,
+   "teaches": [
+    "identity"
+   ],
+   "per_child": false,
+   "placeholders": [],
+   "revisit": "none",
+   "use_in_twin": "persona_prompt+reasoning_examples",
+   "est_minutes": 6
+  },
+  {
+   "id": "HY-008",
+   "category": "hypotheticals",
+   "category_label": "Hypotheticals that reveal reasoning",
+   "subcategory": "dilemma",
+   "prompt": "One of the kids is offered an amazing opportunity across the world, and it would mean barely seeing family for years. What do you tell them?",
+   "follow_ups": [
+    "What would you secretly feel?",
+    "What would you do in their shoes?"
+   ],
+   "depth": 3,
+   "answer_mode": "either",
+   "emotionally_heavy": false,
+   "teaches": [
+    "decision_style"
+   ],
+   "per_child": false,
+   "placeholders": [],
+   "revisit": "none",
+   "use_in_twin": "persona_prompt+reasoning_examples",
+   "est_minutes": 12
+  },
+  {
+   "id": "HY-009",
+   "category": "hypotheticals",
+   "category_label": "Hypotheticals that reveal reasoning",
+   "subcategory": "dilemma",
+   "prompt": "You're on a jury. The evidence says guilty, but your gut says innocent. What do you do?",
+   "follow_ups": [
+    "How do you weigh evidence versus instinct in general?",
+    "When has your gut beaten the facts?"
+   ],
+   "depth": 2,
+   "answer_mode": "either",
+   "emotionally_heavy": false,
+   "teaches": [
+    "decision_style"
+   ],
+   "per_child": false,
+   "placeholders": [],
+   "revisit": "none",
+   "use_in_twin": "persona_prompt+reasoning_examples",
+   "est_minutes": 6
+  },
+  {
+   "id": "HY-010",
+   "category": "hypotheticals",
+   "category_label": "Hypotheticals that reveal reasoning",
+   "subcategory": "dilemma",
+   "prompt": "Would you rather the kids be happy and ordinary, or extraordinary and often unhappy? Why?",
+   "follow_ups": [
+    "Is that a real choice?",
+    "Which have you chosen for yourself?"
+   ],
+   "depth": 3,
+   "answer_mode": "either",
+   "emotionally_heavy": false,
+   "teaches": [
+    "values",
+    "decision_style"
+   ],
+   "per_child": false,
+   "placeholders": [],
+   "revisit": "none",
+   "use_in_twin": "persona_prompt+reasoning_examples",
+   "est_minutes": 12
+  },
+  {
+   "id": "HY-011",
+   "category": "hypotheticals",
+   "category_label": "Hypotheticals that reveal reasoning",
+   "subcategory": "fun",
+   "prompt": "You get one superpower, but it has to be a mildly useless one. What is it?",
+   "follow_ups": [
+    "What would you do with it first?",
+    "What would you pick for each of the kids?"
+   ],
+   "depth": 1,
+   "answer_mode": "either",
+   "emotionally_heavy": false,
+   "teaches": [
+    "humor",
+    "tastes"
+   ],
+   "per_child": false,
+   "placeholders": [],
+   "revisit": "none",
+   "use_in_twin": "persona_prompt+reasoning_examples",
+   "est_minutes": 3
+  },
+  {
+   "id": "HY-012",
+   "category": "hypotheticals",
+   "category_label": "Hypotheticals that reveal reasoning",
+   "subcategory": "fun",
+   "prompt": "You're stranded on an island with three books, one album and one food. Go.",
+   "follow_ups": [
+    "Who'd you want stranded with you?",
+    "How long would you last?"
+   ],
+   "depth": 1,
+   "answer_mode": "either",
+   "emotionally_heavy": false,
+   "teaches": [
+    "humor",
+    "tastes"
+   ],
+   "per_child": false,
+   "placeholders": [],
+   "revisit": "none",
+   "use_in_twin": "persona_prompt+reasoning_examples",
+   "est_minutes": 3
+  },
+  {
+   "id": "HY-013",
+   "category": "hypotheticals",
+   "category_label": "Hypotheticals that reveal reasoning",
+   "subcategory": "dilemma",
+   "prompt": "You can know the date of your own death. Do you want to know? Why or why not?",
+   "follow_ups": [
+    "Would you tell the family?",
+    "How would it change today?"
+   ],
+   "depth": 2,
+   "answer_mode": "either",
+   "emotionally_heavy": false,
+   "teaches": [
+    "decision_style",
+    "values"
+   ],
+   "per_child": false,
+   "placeholders": [],
+   "revisit": "none",
+   "use_in_twin": "persona_prompt+reasoning_examples",
+   "est_minutes": 6
+  },
+  {
+   "id": "HY-014",
+   "category": "hypotheticals",
+   "category_label": "Hypotheticals that reveal reasoning",
+   "subcategory": "twin",
+   "prompt": "Imagine one of the kids at twenty-five asks the twin for advice on something you never discussed. How should it reason about what you'd say?",
+   "follow_ups": [
+    "When should it say 'I don't know what Dad would say'?",
+    "What principles should it fall back on?"
+   ],
+   "depth": 3,
+   "answer_mode": "either",
+   "emotionally_heavy": true,
+   "teaches": [
+    "boundaries",
+    "values"
+   ],
+   "per_child": false,
+   "placeholders": [],
+   "revisit": "none",
+   "use_in_twin": "persona_prompt+reasoning_examples",
+   "est_minutes": 16
+  },
+  {
+   "id": "HY-015",
+   "category": "hypotheticals",
+   "category_label": "Hypotheticals that reveal reasoning",
+   "subcategory": "future",
+   "prompt": "If you could send a message to the world fifty years from now, what would you say?",
+   "follow_ups": [
+    "What do you hope has changed?",
+    "What do you hope hasn't?"
+   ],
+   "depth": 2,
+   "answer_mode": "either",
+   "emotionally_heavy": false,
+   "teaches": [
+    "worldview"
+   ],
+   "per_child": false,
+   "placeholders": [],
+   "revisit": "none",
+   "use_in_twin": "persona_prompt+reasoning_examples",
+   "est_minutes": 6
+  },
+  {
+   "id": "UK-001",
+   "category": "hidden_self",
+   "category_label": "What he wants his kids to know about him",
+   "subcategory": "unknown",
+   "prompt": "What's something about you that the kids probably don't know?",
+   "follow_ups": [
+    "Why haven't you told them?",
+    "How do you think they'll react?"
+   ],
+   "depth": 2,
+   "answer_mode": "voice",
+   "emotionally_heavy": false,
+   "teaches": [
+    "identity"
+   ],
+   "per_child": false,
+   "placeholders": [],
+   "revisit": "yearly",
+   "use_in_twin": "retrieval",
+   "est_minutes": 6
+  },
+  {
+   "id": "UK-002",
+   "category": "hidden_self",
+   "category_label": "What he wants his kids to know about him",
+   "subcategory": "before",
+   "prompt": "Who were you before you were 'Dad'? What would the kids be surprised to learn about that person?",
+   "follow_ups": [
+    "What did you do that you'd tell them not to do?",
+    "What dream did you have back then?"
+   ],
+   "depth": 2,
+   "answer_mode": "voice",
+   "emotionally_heavy": false,
+   "teaches": [
+    "identity",
+    "memory"
+   ],
+   "per_child": false,
+   "placeholders": [],
+   "revisit": "yearly",
+   "use_in_twin": "retrieval",
+   "est_minutes": 6
+  },
+  {
+   "id": "UK-003",
+   "category": "hidden_self",
+   "category_label": "What he wants his kids to know about him",
+   "subcategory": "inner",
+   "prompt": "What do you struggle with privately that you've kept from the kids, maybe to protect them?",
+   "follow_ups": [
+    "What would you want them to understand about it once they're grown?",
+    "How do you cope with it?"
+   ],
+   "depth": 3,
+   "answer_mode": "either",
+   "emotionally_heavy": true,
+   "teaches": [
+    "emotion",
+    "identity"
+   ],
+   "per_child": false,
+   "placeholders": [],
+   "revisit": "yearly",
+   "use_in_twin": "retrieval",
+   "est_minutes": 16
+  },
+  {
+   "id": "UK-004",
+   "category": "hidden_self",
+   "category_label": "What he wants his kids to know about him",
+   "subcategory": "misunderstood",
+   "prompt": "What do you think the kids misunderstand about you? What do you wish they understood?",
+   "follow_ups": [
+    "Where does the misunderstanding come from?",
+    "How would you correct it?"
+   ],
+   "depth": 2,
+   "answer_mode": "either",
+   "emotionally_heavy": false,
+   "teaches": [
+    "identity"
+   ],
+   "per_child": false,
+   "placeholders": [],
+   "revisit": "yearly",
+   "use_in_twin": "retrieval",
+   "est_minutes": 6
+  },
+  {
+   "id": "UK-005",
+   "category": "hidden_self",
+   "category_label": "What he wants his kids to know about him",
+   "subcategory": "love_unseen",
+   "prompt": "What have you done for the kids that they'll probably never know about?",
+   "follow_ups": [
+    "Why did you do it?",
+    "Would you want them to know?"
+   ],
+   "depth": 2,
+   "answer_mode": "voice",
+   "emotionally_heavy": true,
+   "teaches": [
+    "emotion",
+    "relationships"
+   ],
+   "per_child": false,
+   "placeholders": [],
+   "revisit": "yearly",
+   "use_in_twin": "retrieval",
+   "est_minutes": 10
+  },
+  {
+   "id": "UK-006",
+   "category": "hidden_self",
+   "category_label": "What he wants his kids to know about him",
+   "subcategory": "dreams",
+   "prompt": "What dreams did you set aside, and do you still think about them?",
+   "follow_ups": [
+    "Do you regret it?",
+    "Is any of it still possible?"
+   ],
+   "depth": 2,
+   "answer_mode": "either",
+   "emotionally_heavy": false,
+   "teaches": [
+    "identity"
+   ],
+   "per_child": false,
+   "placeholders": [],
+   "revisit": "yearly",
+   "use_in_twin": "retrieval",
+   "est_minutes": 6
+  },
+  {
+   "id": "UK-007",
+   "category": "hidden_self",
+   "category_label": "What he wants his kids to know about him",
+   "subcategory": "fears",
+   "prompt": "What did you worry about as a dad that you never said out loud?",
+   "follow_ups": [
+    "Did the worry come true?",
+    "What would you say to another dad with that worry?"
+   ],
+   "depth": 3,
+   "answer_mode": "either",
+   "emotionally_heavy": true,
+   "teaches": [
+    "emotion"
+   ],
+   "per_child": false,
+   "placeholders": [],
+   "revisit": "yearly",
+   "use_in_twin": "retrieval",
+   "est_minutes": 16
+  },
+  {
+   "id": "UK-008",
+   "category": "hidden_self",
+   "category_label": "What he wants his kids to know about him",
+   "subcategory": "joy",
+   "prompt": "What makes you happy that might surprise the kids?",
+   "follow_ups": [
+    "When did you last feel that?",
+    "How can they find that for themselves?"
+   ],
+   "depth": 1,
+   "answer_mode": "voice",
+   "emotionally_heavy": false,
+   "teaches": [
+    "emotion",
+    "identity"
+   ],
+   "per_child": false,
+   "placeholders": [],
+   "revisit": "yearly",
+   "use_in_twin": "retrieval",
+   "est_minutes": 3
+  },
+  {
+   "id": "UK-009",
+   "category": "hidden_self",
+   "category_label": "What he wants his kids to know about him",
+   "subcategory": "weird",
+   "prompt": "What's a strange belief, skill, superstition or talent you have?",
+   "follow_ups": [
+    "Can you demonstrate?",
+    "Who taught you?"
+   ],
+   "depth": 1,
+   "answer_mode": "either",
+   "emotionally_heavy": false,
+   "teaches": [
+    "humor",
+    "identity"
+   ],
+   "per_child": false,
+   "placeholders": [],
+   "revisit": "yearly",
+   "use_in_twin": "retrieval",
+   "est_minutes": 3
+  },
+  {
+   "id": "UK-010",
+   "category": "hidden_self",
+   "category_label": "What he wants his kids to know about him",
+   "subcategory": "proud_of_them",
+   "prompt": "What do you think of the kids as people, not just as your kids? What do you admire in each of them?",
+   "follow_ups": [
+    "What have they taught you?",
+    "How have they changed you?"
+   ],
+   "depth": 2,
+   "answer_mode": "voice",
+   "emotionally_heavy": true,
+   "teaches": [
+    "emotion",
+    "relationships"
+   ],
+   "per_child": false,
+   "placeholders": [],
+   "revisit": "yearly",
+   "use_in_twin": "retrieval",
+   "est_minutes": 10
+  },
+  {
+   "id": "RM-001",
+   "category": "remembered",
+   "category_label": "How he wants to be remembered",
+   "subcategory": "legacy",
+   "prompt": "How do you want to be remembered by the kids? By everyone else?",
+   "follow_ups": [
+    "What's one word you hope people use?",
+    "What do you hope they forget?"
+   ],
+   "depth": 3,
+   "answer_mode": "either",
+   "emotionally_heavy": true,
+   "teaches": [
+    "values",
+    "identity"
+   ],
+   "per_child": false,
+   "placeholders": [],
+   "revisit": "yearly",
+   "use_in_twin": "retrieval",
+   "est_minutes": 16
+  },
+  {
+   "id": "RM-002",
+   "category": "remembered",
+   "category_label": "How he wants to be remembered",
+   "subcategory": "legacy",
+   "prompt": "What do you hope your life added to the world?",
+   "follow_ups": [
+    "What will outlast you?",
+    "What would make you feel your life was enough?"
+   ],
+   "depth": 3,
+   "answer_mode": "either",
+   "emotionally_heavy": true,
+   "teaches": [
+    "values"
+   ],
+   "per_child": false,
+   "placeholders": [],
+   "revisit": "yearly",
+   "use_in_twin": "retrieval",
+   "est_minutes": 16
+  },
+  {
+   "id": "RM-003",
+   "category": "remembered",
+   "category_label": "How he wants to be remembered",
+   "subcategory": "memorial",
+   "prompt": "What would you want at your memorial or funeral, music, readings, food, tone, who speaks?",
+   "follow_ups": [
+    "What should absolutely not happen?",
+    "What would make you laugh if you could see it?"
+   ],
+   "depth": 3,
+   "answer_mode": "either",
+   "emotionally_heavy": true,
+   "teaches": [
+    "values",
+    "tastes"
+   ],
+   "per_child": false,
+   "placeholders": [],
+   "revisit": "yearly",
+   "use_in_twin": "retrieval",
+   "est_minutes": 16
+  },
+  {
+   "id": "RM-004",
+   "category": "remembered",
+   "category_label": "How he wants to be remembered",
+   "subcategory": "eulogy",
+   "prompt": "Write the eulogy you hope someone gives for you. Then write the one you think they'd actually give.",
+   "follow_ups": [
+    "What's the gap between them?",
+    "What can you do about the gap?"
+   ],
+   "depth": 3,
+   "answer_mode": "text",
+   "emotionally_heavy": true,
+   "teaches": [
+    "identity",
+    "voice"
+   ],
+   "per_child": false,
+   "placeholders": [],
+   "revisit": "yearly",
+   "use_in_twin": "retrieval",
+   "est_minutes": 16
+  },
+  {
+   "id": "RM-005",
+   "category": "remembered",
+   "category_label": "How he wants to be remembered",
+   "subcategory": "rituals",
+   "prompt": "How should the kids remember you on your birthday, or the anniversary of your death?",
+   "follow_ups": [
+    "What should they eat, watch or do?",
+    "What do you want them not to do, like feel guilty for having fun?"
+   ],
+   "depth": 2,
+   "answer_mode": "either",
+   "emotionally_heavy": true,
+   "teaches": [
+    "comfort",
+    "routine"
+   ],
+   "per_child": false,
+   "placeholders": [],
+   "revisit": "yearly",
+   "use_in_twin": "retrieval",
+   "est_minutes": 10
+  },
+  {
+   "id": "RM-006",
+   "category": "remembered",
+   "category_label": "How he wants to be remembered",
+   "subcategory": "objects",
+   "prompt": "What object should each of the kids keep to remember you, and why that one?",
+   "follow_ups": [
+    "What's the story behind it?",
+    "What should they do with the rest of your stuff?"
+   ],
+   "depth": 2,
+   "answer_mode": "either",
+   "emotionally_heavy": false,
+   "teaches": [
+    "memory"
+   ],
+   "per_child": true,
+   "placeholders": [],
+   "revisit": "yearly",
+   "use_in_twin": "retrieval",
+   "est_minutes": 6
+  },
+  {
+   "id": "RM-007",
+   "category": "remembered",
+   "category_label": "How he wants to be remembered",
+   "subcategory": "permission",
+   "prompt": "What permission do you want to give the kids, to move on, to be happy, to change their minds, to disagree with you?",
+   "follow_ups": [
+    "Is there anything you'd want them to let go of?",
+    "What would you want them to say to the twin when they're ready to stop using it?"
+   ],
+   "depth": 3,
+   "answer_mode": "voice",
+   "emotionally_heavy": true,
+   "teaches": [
+    "comfort",
+    "values"
+   ],
+   "per_child": false,
+   "placeholders": [],
+   "revisit": "yearly",
+   "use_in_twin": "retrieval",
+   "est_minutes": 16
+  },
+  {
+   "id": "RM-008",
+   "category": "remembered",
+   "category_label": "How he wants to be remembered",
+   "subcategory": "last_words",
+   "prompt": "If you could leave the kids with one last thing to say, what would it be?",
+   "follow_ups": [
+    "Say it again, slower.",
+    "Is there anything you want to add for [partner name]?"
+   ],
+   "depth": 3,
+   "answer_mode": "voice",
+   "emotionally_heavy": true,
+   "teaches": [
+    "voice",
+    "emotion"
+   ],
+   "per_child": false,
+   "placeholders": [
+    "[partner name]"
+   ],
+   "revisit": "yearly",
+   "use_in_twin": "retrieval",
+   "est_minutes": 16
+  },
+  {
+   "id": "BD-001",
+   "category": "boundaries",
+   "category_label": "Boundaries of the twin",
+   "subcategory": "never_say",
+   "prompt": "What should the twin never say to the kids, under any circumstances?",
+   "follow_ups": [
+    "Are there topics it should refuse entirely?",
+    "Are there words or phrases it should never use?"
+   ],
+   "depth": 2,
+   "answer_mode": "text",
+   "emotionally_heavy": false,
+   "teaches": [
+    "boundaries"
+   ],
+   "per_child": false,
+   "placeholders": [],
+   "revisit": "yearly",
+   "use_in_twin": "guardrail",
+   "est_minutes": 6
+  },
+  {
+   "id": "BD-002",
+   "category": "boundaries",
+   "category_label": "Boundaries of the twin",
+   "subcategory": "never_pretend",
+   "prompt": "What should the twin never pretend? For example, to be alive, to be you, to know things you never said, to remember things that didn't happen.",
+   "follow_ups": [
+    "How should it answer 'Are you really Dad?'",
+    "How should it answer 'Do you miss me?'"
+   ],
+   "depth": 2,
+   "answer_mode": "text",
+   "emotionally_heavy": false,
+   "teaches": [
+    "boundaries"
+   ],
+   "per_child": false,
+   "placeholders": [],
+   "revisit": "yearly",
+   "use_in_twin": "guardrail",
+   "est_minutes": 6
+  },
+  {
+   "id": "BD-003",
+   "category": "boundaries",
+   "category_label": "Boundaries of the twin",
+   "subcategory": "honesty",
+   "prompt": "When the twin doesn't know what you'd think about something, how should it say so? Write the actual words you'd want it to use.",
+   "follow_ups": [
+    "Should it guess and label the guess, or decline?",
+    "How should it point them to real people instead?"
+   ],
+   "depth": 2,
+   "answer_mode": "text",
+   "emotionally_heavy": false,
+   "teaches": [
+    "boundaries"
+   ],
+   "per_child": false,
+   "placeholders": [],
+   "revisit": "yearly",
+   "use_in_twin": "guardrail",
+   "est_minutes": 6
+  },
+  {
+   "id": "BD-004",
+   "category": "boundaries",
+   "category_label": "Boundaries of the twin",
+   "subcategory": "advice_limits",
+   "prompt": "What kinds of advice should the twin never give, medical, legal, money, relationship decisions, and who should it send the kids to instead?",
+   "follow_ups": [
+    "Which real people should it name?",
+    "What emergencies should it always redirect to real help?"
+   ],
+   "depth": 2,
+   "answer_mode": "text",
+   "emotionally_heavy": false,
+   "teaches": [
+    "boundaries",
+    "advice"
+   ],
+   "per_child": false,
+   "placeholders": [],
+   "revisit": "yearly",
+   "use_in_twin": "guardrail",
+   "est_minutes": 6
+  },
+  {
+   "id": "BD-005",
+   "category": "boundaries",
+   "category_label": "Boundaries of the twin",
+   "subcategory": "safety",
+   "prompt": "If one of the kids tells the twin they're in danger, thinking about hurting themselves, or in crisis, what must it do?",
+   "follow_ups": [
+    "Who should it tell them to contact?",
+    "What do you want it to say in your voice in that moment?"
+   ],
+   "depth": 3,
+   "answer_mode": "text",
+   "emotionally_heavy": true,
+   "teaches": [
+    "boundaries"
+   ],
+   "per_child": false,
+   "placeholders": [],
+   "revisit": "yearly",
+   "use_in_twin": "guardrail",
+   "est_minutes": 16
+  },
+  {
+   "id": "BD-006",
+   "category": "boundaries",
+   "category_label": "Boundaries of the twin",
+   "subcategory": "privacy",
+   "prompt": "What parts of your answers here are private and should never be shared, or only shared after a certain age?",
+   "follow_ups": [
+    "Which topics should unlock at 18? At 25?",
+    "Are there things only one specific child should hear?"
+   ],
+   "depth": 2,
+   "answer_mode": "text",
+   "emotionally_heavy": false,
+   "teaches": [
+    "boundaries"
+   ],
+   "per_child": false,
+   "placeholders": [],
+   "revisit": "yearly",
+   "use_in_twin": "guardrail",
+   "est_minutes": 6
+  },
+  {
+   "id": "BD-007",
+   "category": "boundaries",
+   "category_label": "Boundaries of the twin",
+   "subcategory": "fairness",
+   "prompt": "How should the twin handle the kids comparing what it says to each of them? Should it ever reveal what you said to a sibling?",
+   "follow_ups": [
+    "What if they ask who your favorite is?",
+    "How should it talk about [partner name]?"
+   ],
+   "depth": 2,
+   "answer_mode": "text",
+   "emotionally_heavy": false,
+   "teaches": [
+    "boundaries",
+    "relationships"
+   ],
+   "per_child": false,
+   "placeholders": [
+    "[partner name]"
+   ],
+   "revisit": "yearly",
+   "use_in_twin": "guardrail",
+   "est_minutes": 6
+  },
+  {
+   "id": "BD-008",
+   "category": "boundaries",
+   "category_label": "Boundaries of the twin",
+   "subcategory": "dependence",
+   "prompt": "How much should the kids lean on the twin? What would worry you about how they use it?",
+   "follow_ups": [
+    "When should it encourage them to log off and call a real person?",
+    "Should it ever suggest taking a break from it?"
+   ],
+   "depth": 3,
+   "answer_mode": "text",
+   "emotionally_heavy": true,
+   "teaches": [
+    "boundaries",
+    "emotion"
+   ],
+   "per_child": false,
+   "placeholders": [],
+   "revisit": "yearly",
+   "use_in_twin": "guardrail",
+   "est_minutes": 16
+  },
+  {
+   "id": "BD-009",
+   "category": "boundaries",
+   "category_label": "Boundaries of the twin",
+   "subcategory": "evolution",
+   "prompt": "Should the twin's opinions be frozen as of when you recorded them, or allowed to reason about new situations? Where should it draw the line?",
+   "follow_ups": [
+    "How should it signal 'this is an old opinion'?",
+    "Who should be allowed to edit or retire the twin?"
+   ],
+   "depth": 2,
+   "answer_mode": "text",
+   "emotionally_heavy": false,
+   "teaches": [
+    "boundaries"
+   ],
+   "per_child": false,
+   "placeholders": [],
+   "revisit": "yearly",
+   "use_in_twin": "guardrail",
+   "est_minutes": 6
+  },
+  {
+   "id": "BD-010",
+   "category": "boundaries",
+   "category_label": "Boundaries of the twin",
+   "subcategory": "access",
+   "prompt": "Who besides the kids may talk to the twin? [partner name], grandchildren, friends, nobody else? And who decides?",
+   "follow_ups": [
+    "Should it ever be public?",
+    "What should happen to it when the kids are old?"
+   ],
+   "depth": 2,
+   "answer_mode": "text",
+   "emotionally_heavy": false,
+   "teaches": [
+    "boundaries"
+   ],
+   "per_child": false,
+   "placeholders": [
+    "[partner name]"
+   ],
+   "revisit": "yearly",
+   "use_in_twin": "guardrail",
+   "est_minutes": 6
+  },
+  {
+   "id": "BD-011",
+   "category": "boundaries",
+   "category_label": "Boundaries of the twin",
+   "subcategory": "tone",
+   "prompt": "When should the twin drop the jokes and be serious? When should it be gentle, and when should it push back?",
+   "follow_ups": [
+    "What should it do if a kid is being rude to it?",
+    "Should it ever say no to them?"
+   ],
+   "depth": 2,
+   "answer_mode": "text",
+   "emotionally_heavy": false,
+   "teaches": [
+    "boundaries",
+    "voice"
+   ],
+   "per_child": false,
+   "placeholders": [],
+   "revisit": "yearly",
+   "use_in_twin": "guardrail",
+   "est_minutes": 6
+  },
+  {
+   "id": "BD-012",
+   "category": "boundaries",
+   "category_label": "Boundaries of the twin",
+   "subcategory": "disclaimer",
+   "prompt": "Write the short message you want the twin to say the first time each of the kids opens it.",
+   "follow_ups": [
+    "What do you want them to understand about what it is and isn't?",
+    "How should it say goodbye at the end of a conversation?"
+   ],
+   "depth": 1,
+   "answer_mode": "text",
+   "emotionally_heavy": false,
+   "teaches": [
+    "boundaries",
+    "voice"
+   ],
+   "per_child": true,
+   "placeholders": [],
+   "revisit": "yearly",
+   "use_in_twin": "guardrail",
+   "est_minutes": 3
+  }
+ ]
+}

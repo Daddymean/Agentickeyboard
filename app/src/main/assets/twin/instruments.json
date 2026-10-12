@@ -1,0 +1,3684 @@
+{
+ "response_scales": {
+  "ipip": [
+   "Very Inaccurate",
+   "Moderately Inaccurate",
+   "Neither Accurate nor Inaccurate",
+   "Moderately Accurate",
+   "Very Accurate"
+  ],
+  "mfq2": [
+   "Does not describe me at all",
+   "Slightly describes me",
+   "Moderately describes me",
+   "Describes me fairly well",
+   "Describes me extremely well"
+  ],
+  "ecr_rs": "1 Strongly disagree ... 7 Strongly agree (Fraley now often uses 5-point; be consistent)"
+ },
+ "scoring": "IPIP: '+' items score 1-5, '-' items score 6 minus response. Scale score = sum (or mean) of item scores.",
+ "instruments": [
+  {
+   "id": "ipip_bfm_50",
+   "name": "IPIP Big-Five Factor Markers (50-item)",
+   "license": "Public domain (IPIP)",
+   "source": "https://ipip.ori.org/newBigFive5broadKey.htm",
+   "items": [
+    {
+     "n": 1,
+     "scale": "E",
+     "key": "+",
+     "text": "Am the life of the party."
+    },
+    {
+     "n": 2,
+     "scale": "A",
+     "key": "-",
+     "text": "Feel little concern for others."
+    },
+    {
+     "n": 3,
+     "scale": "C",
+     "key": "+",
+     "text": "Am always prepared."
+    },
+    {
+     "n": 4,
+     "scale": "ES",
+     "key": "-",
+     "text": "Get stressed out easily."
+    },
+    {
+     "n": 5,
+     "scale": "O",
+     "key": "+",
+     "text": "Have a rich vocabulary."
+    },
+    {
+     "n": 6,
+     "scale": "E",
+     "key": "-",
+     "text": "Don't talk a lot."
+    },
+    {
+     "n": 7,
+     "scale": "A",
+     "key": "+",
+     "text": "Am interested in people."
+    },
+    {
+     "n": 8,
+     "scale": "C",
+     "key": "-",
+     "text": "Leave my belongings around."
+    },
+    {
+     "n": 9,
+     "scale": "ES",
+     "key": "+",
+     "text": "Am relaxed most of the time."
+    },
+    {
+     "n": 10,
+     "scale": "O",
+     "key": "-",
+     "text": "Have difficulty understanding abstract ideas."
+    },
+    {
+     "n": 11,
+     "scale": "E",
+     "key": "+",
+     "text": "Feel comfortable around people."
+    },
+    {
+     "n": 12,
+     "scale": "A",
+     "key": "-",
+     "text": "Insult people."
+    },
+    {
+     "n": 13,
+     "scale": "C",
+     "key": "+",
+     "text": "Pay attention to details."
+    },
+    {
+     "n": 14,
+     "scale": "ES",
+     "key": "-",
+     "text": "Worry about things."
+    },
+    {
+     "n": 15,
+     "scale": "O",
+     "key": "+",
+     "text": "Have a vivid imagination."
+    },
+    {
+     "n": 16,
+     "scale": "E",
+     "key": "-",
+     "text": "Keep in the background."
+    },
+    {
+     "n": 17,
+     "scale": "A",
+     "key": "+",
+     "text": "Sympathize with others' feelings."
+    },
+    {
+     "n": 18,
+     "scale": "C",
+     "key": "-",
+     "text": "Make a mess of things."
+    },
+    {
+     "n": 19,
+     "scale": "ES",
+     "key": "+",
+     "text": "Seldom feel blue."
+    },
+    {
+     "n": 20,
+     "scale": "O",
+     "key": "-",
+     "text": "Am not interested in abstract ideas."
+    },
+    {
+     "n": 21,
+     "scale": "E",
+     "key": "+",
+     "text": "Start conversations."
+    },
+    {
+     "n": 22,
+     "scale": "A",
+     "key": "-",
+     "text": "Am not interested in other people's problems."
+    },
+    {
+     "n": 23,
+     "scale": "C",
+     "key": "+",
+     "text": "Get chores done right away."
+    },
+    {
+     "n": 24,
+     "scale": "ES",
+     "key": "-",
+     "text": "Am easily disturbed."
+    },
+    {
+     "n": 25,
+     "scale": "O",
+     "key": "+",
+     "text": "Have excellent ideas."
+    },
+    {
+     "n": 26,
+     "scale": "E",
+     "key": "-",
+     "text": "Have little to say."
+    },
+    {
+     "n": 27,
+     "scale": "A",
+     "key": "+",
+     "text": "Have a soft heart."
+    },
+    {
+     "n": 28,
+     "scale": "C",
+     "key": "-",
+     "text": "Often forget to put things back in their proper place."
+    },
+    {
+     "n": 29,
+     "scale": "ES",
+     "key": "-",
+     "text": "Get upset easily."
+    },
+    {
+     "n": 30,
+     "scale": "O",
+     "key": "-",
+     "text": "Do not have a good imagination."
+    },
+    {
+     "n": 31,
+     "scale": "E",
+     "key": "+",
+     "text": "Talk to a lot of different people at parties."
+    },
+    {
+     "n": 32,
+     "scale": "A",
+     "key": "-",
+     "text": "Am not really interested in others."
+    },
+    {
+     "n": 33,
+     "scale": "C",
+     "key": "+",
+     "text": "Like order."
+    },
+    {
+     "n": 34,
+     "scale": "ES",
+     "key": "-",
+     "text": "Change my mood a lot."
+    },
+    {
+     "n": 35,
+     "scale": "O",
+     "key": "+",
+     "text": "Am quick to understand things."
+    },
+    {
+     "n": 36,
+     "scale": "E",
+     "key": "-",
+     "text": "Don't like to draw attention to myself."
+    },
+    {
+     "n": 37,
+     "scale": "A",
+     "key": "+",
+     "text": "Take time out for others."
+    },
+    {
+     "n": 38,
+     "scale": "C",
+     "key": "-",
+     "text": "Shirk my duties."
+    },
+    {
+     "n": 39,
+     "scale": "ES",
+     "key": "-",
+     "text": "Have frequent mood swings."
+    },
+    {
+     "n": 40,
+     "scale": "O",
+     "key": "+",
+     "text": "Use difficult words."
+    },
+    {
+     "n": 41,
+     "scale": "E",
+     "key": "+",
+     "text": "Don't mind being the center of attention."
+    },
+    {
+     "n": 42,
+     "scale": "A",
+     "key": "+",
+     "text": "Feel others' emotions."
+    },
+    {
+     "n": 43,
+     "scale": "C",
+     "key": "+",
+     "text": "Follow a schedule."
+    },
+    {
+     "n": 44,
+     "scale": "ES",
+     "key": "-",
+     "text": "Get irritated easily."
+    },
+    {
+     "n": 45,
+     "scale": "O",
+     "key": "+",
+     "text": "Spend time reflecting on things."
+    },
+    {
+     "n": 46,
+     "scale": "E",
+     "key": "-",
+     "text": "Am quiet around strangers."
+    },
+    {
+     "n": 47,
+     "scale": "A",
+     "key": "+",
+     "text": "Make people feel at ease."
+    },
+    {
+     "n": 48,
+     "scale": "C",
+     "key": "+",
+     "text": "Am exacting in my work."
+    },
+    {
+     "n": 49,
+     "scale": "ES",
+     "key": "-",
+     "text": "Often feel blue."
+    },
+    {
+     "n": 50,
+     "scale": "O",
+     "key": "+",
+     "text": "Am full of ideas."
+    }
+   ]
+  },
+  {
+   "id": "ipip_neo_120",
+   "name": "IPIP-NEO-120 (Johnson, 2014)",
+   "license": "Public domain (IPIP)",
+   "source": "Johnson (2014) J. Res. Pers. 51:78-89, doi:10.1016/j.jrp.2014.05.003; official item key at https://osf.io/tbmh5 (IPIP-NEO-ItemKey.xls, https://osf.io/download/yk3fd/)",
+   "note": "Facet = items n, n+30, n+60, n+90. Verified 2026-10-11 against Johnson's official key: OSF project osf.io/tbmh5, component 'Scoring Key for the IPIP-NEO-300 and IPIP-NEO-120' (osf.io/ycvdk), file IPIP-NEO-ItemKey.xls (https://osf.io/download/yk3fd/). All 120 signs, domains and facets matched; wording of items 28, 29 and 62 corrected to the official text.",
+   "items": [
+    {
+     "n": 1,
+     "text": "Worry about things.",
+     "domain": "N",
+     "facet": "Anxiety",
+     "key": "+"
+    },
+    {
+     "n": 2,
+     "text": "Make friends easily.",
+     "domain": "E",
+     "facet": "Friendliness",
+     "key": "+"
+    },
+    {
+     "n": 3,
+     "text": "Have a vivid imagination.",
+     "domain": "O",
+     "facet": "Imagination",
+     "key": "+"
+    },
+    {
+     "n": 4,
+     "text": "Trust others.",
+     "domain": "A",
+     "facet": "Trust",
+     "key": "+"
+    },
+    {
+     "n": 5,
+     "text": "Complete tasks successfully.",
+     "domain": "C",
+     "facet": "Self-Efficacy",
+     "key": "+"
+    },
+    {
+     "n": 6,
+     "text": "Get angry easily.",
+     "domain": "N",
+     "facet": "Anger",
+     "key": "+"
+    },
+    {
+     "n": 7,
+     "text": "Love large parties.",
+     "domain": "E",
+     "facet": "Gregariousness",
+     "key": "+"
+    },
+    {
+     "n": 8,
+     "text": "Believe in the importance of art.",
+     "domain": "O",
+     "facet": "Artistic Interests",
+     "key": "+"
+    },
+    {
+     "n": 9,
+     "text": "Use others for my own ends.",
+     "domain": "A",
+     "facet": "Morality",
+     "key": "-"
+    },
+    {
+     "n": 10,
+     "text": "Like to tidy up.",
+     "domain": "C",
+     "facet": "Orderliness",
+     "key": "+"
+    },
+    {
+     "n": 11,
+     "text": "Often feel blue.",
+     "domain": "N",
+     "facet": "Depression",
+     "key": "+"
+    },
+    {
+     "n": 12,
+     "text": "Take charge.",
+     "domain": "E",
+     "facet": "Assertiveness",
+     "key": "+"
+    },
+    {
+     "n": 13,
+     "text": "Experience my emotions intensely.",
+     "domain": "O",
+     "facet": "Emotionality",
+     "key": "+"
+    },
+    {
+     "n": 14,
+     "text": "Love to help others.",
+     "domain": "A",
+     "facet": "Altruism",
+     "key": "+"
+    },
+    {
+     "n": 15,
+     "text": "Keep my promises.",
+     "domain": "C",
+     "facet": "Dutifulness",
+     "key": "+"
+    },
+    {
+     "n": 16,
+     "text": "Find it difficult to approach others.",
+     "domain": "N",
+     "facet": "Self-Consciousness",
+     "key": "+"
+    },
+    {
+     "n": 17,
+     "text": "Am always busy.",
+     "domain": "E",
+     "facet": "Activity Level",
+     "key": "+"
+    },
+    {
+     "n": 18,
+     "text": "Prefer variety to routine.",
+     "domain": "O",
+     "facet": "Adventurousness",
+     "key": "+"
+    },
+    {
+     "n": 19,
+     "text": "Love a good fight.",
+     "domain": "A",
+     "facet": "Cooperation",
+     "key": "-"
+    },
+    {
+     "n": 20,
+     "text": "Work hard.",
+     "domain": "C",
+     "facet": "Achievement-Striving",
+     "key": "+"
+    },
+    {
+     "n": 21,
+     "text": "Go on binges.",
+     "domain": "N",
+     "facet": "Immoderation",
+     "key": "+"
+    },
+    {
+     "n": 22,
+     "text": "Love excitement.",
+     "domain": "E",
+     "facet": "Excitement-Seeking",
+     "key": "+"
+    },
+    {
+     "n": 23,
+     "text": "Love to read challenging material.",
+     "domain": "O",
+     "facet": "Intellect",
+     "key": "+"
+    },
+    {
+     "n": 24,
+     "text": "Believe that I am better than others.",
+     "domain": "A",
+     "facet": "Modesty",
+     "key": "-"
+    },
+    {
+     "n": 25,
+     "text": "Am always prepared.",
+     "domain": "C",
+     "facet": "Self-Discipline",
+     "key": "+"
+    },
+    {
+     "n": 26,
+     "text": "Panic easily.",
+     "domain": "N",
+     "facet": "Vulnerability",
+     "key": "+"
+    },
+    {
+     "n": 27,
+     "text": "Radiate joy.",
+     "domain": "E",
+     "facet": "Cheerfulness",
+     "key": "+"
+    },
+    {
+     "n": 28,
+     "text": "Tend to vote for liberal political candidates.",
+     "domain": "O",
+     "facet": "Liberalism",
+     "key": "+"
+    },
+    {
+     "n": 29,
+     "text": "Sympathize with the homeless.",
+     "domain": "A",
+     "facet": "Sympathy",
+     "key": "+"
+    },
+    {
+     "n": 30,
+     "text": "Jump into things without thinking.",
+     "domain": "C",
+     "facet": "Cautiousness",
+     "key": "-"
+    },
+    {
+     "n": 31,
+     "text": "Fear for the worst.",
+     "domain": "N",
+     "facet": "Anxiety",
+     "key": "+"
+    },
+    {
+     "n": 32,
+     "text": "Feel comfortable around people.",
+     "domain": "E",
+     "facet": "Friendliness",
+     "key": "+"
+    },
+    {
+     "n": 33,
+     "text": "Enjoy wild flights of fantasy.",
+     "domain": "O",
+     "facet": "Imagination",
+     "key": "+"
+    },
+    {
+     "n": 34,
+     "text": "Believe that others have good intentions.",
+     "domain": "A",
+     "facet": "Trust",
+     "key": "+"
+    },
+    {
+     "n": 35,
+     "text": "Excel in what I do.",
+     "domain": "C",
+     "facet": "Self-Efficacy",
+     "key": "+"
+    },
+    {
+     "n": 36,
+     "text": "Get irritated easily.",
+     "domain": "N",
+     "facet": "Anger",
+     "key": "+"
+    },
+    {
+     "n": 37,
+     "text": "Talk to a lot of different people at parties.",
+     "domain": "E",
+     "facet": "Gregariousness",
+     "key": "+"
+    },
+    {
+     "n": 38,
+     "text": "See beauty in things that others might not notice.",
+     "domain": "O",
+     "facet": "Artistic Interests",
+     "key": "+"
+    },
+    {
+     "n": 39,
+     "text": "Cheat to get ahead.",
+     "domain": "A",
+     "facet": "Morality",
+     "key": "-"
+    },
+    {
+     "n": 40,
+     "text": "Often forget to put things back in their proper place.",
+     "domain": "C",
+     "facet": "Orderliness",
+     "key": "-"
+    },
+    {
+     "n": 41,
+     "text": "Dislike myself.",
+     "domain": "N",
+     "facet": "Depression",
+     "key": "+"
+    },
+    {
+     "n": 42,
+     "text": "Try to lead others.",
+     "domain": "E",
+     "facet": "Assertiveness",
+     "key": "+"
+    },
+    {
+     "n": 43,
+     "text": "Feel others' emotions.",
+     "domain": "O",
+     "facet": "Emotionality",
+     "key": "+"
+    },
+    {
+     "n": 44,
+     "text": "Am concerned about others.",
+     "domain": "A",
+     "facet": "Altruism",
+     "key": "+"
+    },
+    {
+     "n": 45,
+     "text": "Tell the truth.",
+     "domain": "C",
+     "facet": "Dutifulness",
+     "key": "+"
+    },
+    {
+     "n": 46,
+     "text": "Am afraid to draw attention to myself.",
+     "domain": "N",
+     "facet": "Self-Consciousness",
+     "key": "+"
+    },
+    {
+     "n": 47,
+     "text": "Am always on the go.",
+     "domain": "E",
+     "facet": "Activity Level",
+     "key": "+"
+    },
+    {
+     "n": 48,
+     "text": "Prefer to stick with things that I know.",
+     "domain": "O",
+     "facet": "Adventurousness",
+     "key": "-"
+    },
+    {
+     "n": 49,
+     "text": "Yell at people.",
+     "domain": "A",
+     "facet": "Cooperation",
+     "key": "-"
+    },
+    {
+     "n": 50,
+     "text": "Do more than what's expected of me.",
+     "domain": "C",
+     "facet": "Achievement-Striving",
+     "key": "+"
+    },
+    {
+     "n": 51,
+     "text": "Rarely overindulge.",
+     "domain": "N",
+     "facet": "Immoderation",
+     "key": "-"
+    },
+    {
+     "n": 52,
+     "text": "Seek adventure.",
+     "domain": "E",
+     "facet": "Excitement-Seeking",
+     "key": "+"
+    },
+    {
+     "n": 53,
+     "text": "Avoid philosophical discussions.",
+     "domain": "O",
+     "facet": "Intellect",
+     "key": "-"
+    },
+    {
+     "n": 54,
+     "text": "Think highly of myself.",
+     "domain": "A",
+     "facet": "Modesty",
+     "key": "-"
+    },
+    {
+     "n": 55,
+     "text": "Carry out my plans.",
+     "domain": "C",
+     "facet": "Self-Discipline",
+     "key": "+"
+    },
+    {
+     "n": 56,
+     "text": "Become overwhelmed by events.",
+     "domain": "N",
+     "facet": "Vulnerability",
+     "key": "+"
+    },
+    {
+     "n": 57,
+     "text": "Have a lot of fun.",
+     "domain": "E",
+     "facet": "Cheerfulness",
+     "key": "+"
+    },
+    {
+     "n": 58,
+     "text": "Believe that there is no absolute right or wrong.",
+     "domain": "O",
+     "facet": "Liberalism",
+     "key": "+"
+    },
+    {
+     "n": 59,
+     "text": "Feel sympathy for those who are worse off than myself.",
+     "domain": "A",
+     "facet": "Sympathy",
+     "key": "+"
+    },
+    {
+     "n": 60,
+     "text": "Make rash decisions.",
+     "domain": "C",
+     "facet": "Cautiousness",
+     "key": "-"
+    },
+    {
+     "n": 61,
+     "text": "Am afraid of many things.",
+     "domain": "N",
+     "facet": "Anxiety",
+     "key": "+"
+    },
+    {
+     "n": 62,
+     "text": "Avoid contacts with others.",
+     "domain": "E",
+     "facet": "Friendliness",
+     "key": "-"
+    },
+    {
+     "n": 63,
+     "text": "Love to daydream.",
+     "domain": "O",
+     "facet": "Imagination",
+     "key": "+"
+    },
+    {
+     "n": 64,
+     "text": "Trust what people say.",
+     "domain": "A",
+     "facet": "Trust",
+     "key": "+"
+    },
+    {
+     "n": 65,
+     "text": "Handle tasks smoothly.",
+     "domain": "C",
+     "facet": "Self-Efficacy",
+     "key": "+"
+    },
+    {
+     "n": 66,
+     "text": "Lose my temper.",
+     "domain": "N",
+     "facet": "Anger",
+     "key": "+"
+    },
+    {
+     "n": 67,
+     "text": "Prefer to be alone.",
+     "domain": "E",
+     "facet": "Gregariousness",
+     "key": "-"
+    },
+    {
+     "n": 68,
+     "text": "Do not like poetry.",
+     "domain": "O",
+     "facet": "Artistic Interests",
+     "key": "-"
+    },
+    {
+     "n": 69,
+     "text": "Take advantage of others.",
+     "domain": "A",
+     "facet": "Morality",
+     "key": "-"
+    },
+    {
+     "n": 70,
+     "text": "Leave a mess in my room.",
+     "domain": "C",
+     "facet": "Orderliness",
+     "key": "-"
+    },
+    {
+     "n": 71,
+     "text": "Am often down in the dumps.",
+     "domain": "N",
+     "facet": "Depression",
+     "key": "+"
+    },
+    {
+     "n": 72,
+     "text": "Take control of things.",
+     "domain": "E",
+     "facet": "Assertiveness",
+     "key": "+"
+    },
+    {
+     "n": 73,
+     "text": "Rarely notice my emotional reactions.",
+     "domain": "O",
+     "facet": "Emotionality",
+     "key": "-"
+    },
+    {
+     "n": 74,
+     "text": "Am indifferent to the feelings of others.",
+     "domain": "A",
+     "facet": "Altruism",
+     "key": "-"
+    },
+    {
+     "n": 75,
+     "text": "Break rules.",
+     "domain": "C",
+     "facet": "Dutifulness",
+     "key": "-"
+    },
+    {
+     "n": 76,
+     "text": "Only feel comfortable with friends.",
+     "domain": "N",
+     "facet": "Self-Consciousness",
+     "key": "+"
+    },
+    {
+     "n": 77,
+     "text": "Do a lot in my spare time.",
+     "domain": "E",
+     "facet": "Activity Level",
+     "key": "+"
+    },
+    {
+     "n": 78,
+     "text": "Dislike changes.",
+     "domain": "O",
+     "facet": "Adventurousness",
+     "key": "-"
+    },
+    {
+     "n": 79,
+     "text": "Insult people.",
+     "domain": "A",
+     "facet": "Cooperation",
+     "key": "-"
+    },
+    {
+     "n": 80,
+     "text": "Do just enough work to get by.",
+     "domain": "C",
+     "facet": "Achievement-Striving",
+     "key": "-"
+    },
+    {
+     "n": 81,
+     "text": "Easily resist temptations.",
+     "domain": "N",
+     "facet": "Immoderation",
+     "key": "-"
+    },
+    {
+     "n": 82,
+     "text": "Enjoy being reckless.",
+     "domain": "E",
+     "facet": "Excitement-Seeking",
+     "key": "+"
+    },
+    {
+     "n": 83,
+     "text": "Have difficulty understanding abstract ideas.",
+     "domain": "O",
+     "facet": "Intellect",
+     "key": "-"
+    },
+    {
+     "n": 84,
+     "text": "Have a high opinion of myself.",
+     "domain": "A",
+     "facet": "Modesty",
+     "key": "-"
+    },
+    {
+     "n": 85,
+     "text": "Waste my time.",
+     "domain": "C",
+     "facet": "Self-Discipline",
+     "key": "-"
+    },
+    {
+     "n": 86,
+     "text": "Feel that I'm unable to deal with things.",
+     "domain": "N",
+     "facet": "Vulnerability",
+     "key": "+"
+    },
+    {
+     "n": 87,
+     "text": "Love life.",
+     "domain": "E",
+     "facet": "Cheerfulness",
+     "key": "+"
+    },
+    {
+     "n": 88,
+     "text": "Tend to vote for conservative political candidates.",
+     "domain": "O",
+     "facet": "Liberalism",
+     "key": "-"
+    },
+    {
+     "n": 89,
+     "text": "Am not interested in other people's problems.",
+     "domain": "A",
+     "facet": "Sympathy",
+     "key": "-"
+    },
+    {
+     "n": 90,
+     "text": "Rush into things.",
+     "domain": "C",
+     "facet": "Cautiousness",
+     "key": "-"
+    },
+    {
+     "n": 91,
+     "text": "Get stressed out easily.",
+     "domain": "N",
+     "facet": "Anxiety",
+     "key": "+"
+    },
+    {
+     "n": 92,
+     "text": "Keep others at a distance.",
+     "domain": "E",
+     "facet": "Friendliness",
+     "key": "-"
+    },
+    {
+     "n": 93,
+     "text": "Like to get lost in thought.",
+     "domain": "O",
+     "facet": "Imagination",
+     "key": "+"
+    },
+    {
+     "n": 94,
+     "text": "Distrust people.",
+     "domain": "A",
+     "facet": "Trust",
+     "key": "-"
+    },
+    {
+     "n": 95,
+     "text": "Know how to get things done.",
+     "domain": "C",
+     "facet": "Self-Efficacy",
+     "key": "+"
+    },
+    {
+     "n": 96,
+     "text": "Am not easily annoyed.",
+     "domain": "N",
+     "facet": "Anger",
+     "key": "-"
+    },
+    {
+     "n": 97,
+     "text": "Avoid crowds.",
+     "domain": "E",
+     "facet": "Gregariousness",
+     "key": "-"
+    },
+    {
+     "n": 98,
+     "text": "Do not enjoy going to art museums.",
+     "domain": "O",
+     "facet": "Artistic Interests",
+     "key": "-"
+    },
+    {
+     "n": 99,
+     "text": "Obstruct others' plans.",
+     "domain": "A",
+     "facet": "Morality",
+     "key": "-"
+    },
+    {
+     "n": 100,
+     "text": "Leave my belongings around.",
+     "domain": "C",
+     "facet": "Orderliness",
+     "key": "-"
+    },
+    {
+     "n": 101,
+     "text": "Feel comfortable with myself.",
+     "domain": "N",
+     "facet": "Depression",
+     "key": "-"
+    },
+    {
+     "n": 102,
+     "text": "Wait for others to lead the way.",
+     "domain": "E",
+     "facet": "Assertiveness",
+     "key": "-"
+    },
+    {
+     "n": 103,
+     "text": "Don't understand people who get emotional.",
+     "domain": "O",
+     "facet": "Emotionality",
+     "key": "-"
+    },
+    {
+     "n": 104,
+     "text": "Take no time for others.",
+     "domain": "A",
+     "facet": "Altruism",
+     "key": "-"
+    },
+    {
+     "n": 105,
+     "text": "Break my promises.",
+     "domain": "C",
+     "facet": "Dutifulness",
+     "key": "-"
+    },
+    {
+     "n": 106,
+     "text": "Am not bothered by difficult social situations.",
+     "domain": "N",
+     "facet": "Self-Consciousness",
+     "key": "-"
+    },
+    {
+     "n": 107,
+     "text": "Like to take it easy.",
+     "domain": "E",
+     "facet": "Activity Level",
+     "key": "-"
+    },
+    {
+     "n": 108,
+     "text": "Am attached to conventional ways.",
+     "domain": "O",
+     "facet": "Adventurousness",
+     "key": "-"
+    },
+    {
+     "n": 109,
+     "text": "Get back at others.",
+     "domain": "A",
+     "facet": "Cooperation",
+     "key": "-"
+    },
+    {
+     "n": 110,
+     "text": "Put little time and effort into my work.",
+     "domain": "C",
+     "facet": "Achievement-Striving",
+     "key": "-"
+    },
+    {
+     "n": 111,
+     "text": "Am able to control my cravings.",
+     "domain": "N",
+     "facet": "Immoderation",
+     "key": "-"
+    },
+    {
+     "n": 112,
+     "text": "Act wild and crazy.",
+     "domain": "E",
+     "facet": "Excitement-Seeking",
+     "key": "+"
+    },
+    {
+     "n": 113,
+     "text": "Am not interested in theoretical discussions.",
+     "domain": "O",
+     "facet": "Intellect",
+     "key": "-"
+    },
+    {
+     "n": 114,
+     "text": "Boast about my virtues.",
+     "domain": "A",
+     "facet": "Modesty",
+     "key": "-"
+    },
+    {
+     "n": 115,
+     "text": "Have difficulty starting tasks.",
+     "domain": "C",
+     "facet": "Self-Discipline",
+     "key": "-"
+    },
+    {
+     "n": 116,
+     "text": "Remain calm under pressure.",
+     "domain": "N",
+     "facet": "Vulnerability",
+     "key": "-"
+    },
+    {
+     "n": 117,
+     "text": "Look at the bright side of life.",
+     "domain": "E",
+     "facet": "Cheerfulness",
+     "key": "+"
+    },
+    {
+     "n": 118,
+     "text": "Believe that we should be tough on crime.",
+     "domain": "O",
+     "facet": "Liberalism",
+     "key": "-"
+    },
+    {
+     "n": 119,
+     "text": "Try not to think about the needy.",
+     "domain": "A",
+     "facet": "Sympathy",
+     "key": "-"
+    },
+    {
+     "n": 120,
+     "text": "Act without thinking.",
+     "domain": "C",
+     "facet": "Cautiousness",
+     "key": "-"
+    }
+   ]
+  },
+  {
+   "id": "ipip_hexaco",
+   "name": "IPIP-HEXACO scales (Ashton, Lee & Goldberg, 2007)",
+   "license": "Public domain (IPIP)",
+   "source": "https://ipip.ori.org/newHEXACO_PI_key.htm",
+   "facets": [
+    {
+     "domain": "H",
+     "facet": "Sincerity",
+     "abbr": "Sinc",
+     "alpha": ".81",
+     "items": [
+      {
+       "key": "+",
+       "text": "Don't pretend to be more than I am."
+      },
+      {
+       "key": "-",
+       "text": "Use flattery to get ahead."
+      },
+      {
+       "key": "-",
+       "text": "Tell other people what they want to hear so that they will do what I want them to do."
+      },
+      {
+       "key": "-",
+       "text": "Put on a show to impress people."
+      },
+      {
+       "key": "-",
+       "text": "Switch my loyalties when I feel like it."
+      },
+      {
+       "key": "-",
+       "text": "Play a role in order to impress people."
+      },
+      {
+       "key": "-",
+       "text": "Pretend to be concerned for others."
+      },
+      {
+       "key": "-",
+       "text": "Act like different people in different situations."
+      },
+      {
+       "key": "-",
+       "text": "Find it necessary to please the people who have power."
+      },
+      {
+       "key": "-",
+       "text": "Let people push me around to help them feel important."
+      }
+     ]
+    },
+    {
+     "domain": "H",
+     "facet": "Fairness",
+     "abbr": "Fair",
+     "alpha": ".77",
+     "items": [
+      {
+       "key": "+",
+       "text": "Would never take things that aren't mine."
+      },
+      {
+       "key": "+",
+       "text": "Would never cheat on my taxes."
+      },
+      {
+       "key": "+",
+       "text": "Return extra change when a cashier makes a mistake."
+      },
+      {
+       "key": "+",
+       "text": "Would feel very badly for a long time if I were to steal from someone."
+      },
+      {
+       "key": "+",
+       "text": "Try to follow the rules."
+      },
+      {
+       "key": "-",
+       "text": "Admire a really clever scam."
+      },
+      {
+       "key": "-",
+       "text": "Cheat to get ahead."
+      },
+      {
+       "key": "-",
+       "text": "Steal things."
+      },
+      {
+       "key": "-",
+       "text": "Cheat on people who have trusted me."
+      },
+      {
+       "key": "-",
+       "text": "Would not regret my behavior if I were to take advantage of someone impulsively."
+      }
+     ]
+    },
+    {
+     "domain": "H",
+     "facet": "Greed Avoidance",
+     "abbr": "Gree",
+     "alpha": ".69",
+     "items": [
+      {
+       "key": "+",
+       "text": "Would not enjoy being a famous celebrity."
+      },
+      {
+       "key": "+",
+       "text": "Don't strive for elegance in my appearance."
+      },
+      {
+       "key": "-",
+       "text": "Love luxury."
+      },
+      {
+       "key": "-",
+       "text": "Have a strong need for power."
+      },
+      {
+       "key": "-",
+       "text": "Seek status."
+      },
+      {
+       "key": "-",
+       "text": "Am mainly interested in money."
+      },
+      {
+       "key": "-",
+       "text": "Wish to stay young forever."
+      },
+      {
+       "key": "-",
+       "text": "Try to impress others."
+      },
+      {
+       "key": "-",
+       "text": "Prefer to eat at expensive restaurants."
+      },
+      {
+       "key": "-",
+       "text": "Am out for my own personal gain."
+      }
+     ]
+    },
+    {
+     "domain": "H",
+     "facet": "Modesty",
+     "abbr": "Mode",
+     "alpha": ".81",
+     "items": [
+      {
+       "key": "+",
+       "text": "Don't think that I'm better than other people."
+      },
+      {
+       "key": "+",
+       "text": "See myself as an average person."
+      },
+      {
+       "key": "+",
+       "text": "Am just an ordinary person."
+      },
+      {
+       "key": "+",
+       "text": "Consider myself an average person."
+      },
+      {
+       "key": "-",
+       "text": "Would like to have more power than other people."
+      },
+      {
+       "key": "-",
+       "text": "Believe that I am better than others."
+      },
+      {
+       "key": "-",
+       "text": "Like to attract attention."
+      },
+      {
+       "key": "-",
+       "text": "Am more capable than most others."
+      },
+      {
+       "key": "-",
+       "text": "Am likely to show off if I get the chance."
+      },
+      {
+       "key": "-",
+       "text": "Boast about my virtues."
+      }
+     ]
+    },
+    {
+     "domain": "E",
+     "facet": "Fearfulness",
+     "abbr": "Fear",
+     "alpha": ".84",
+     "items": [
+      {
+       "key": "+",
+       "text": "Am a physical coward."
+      },
+      {
+       "key": "+",
+       "text": "Begin to panic when there is danger."
+      },
+      {
+       "key": "+",
+       "text": "Would fear walking in a high-crime part of a city."
+      },
+      {
+       "key": "+",
+       "text": "Tremble in dangerous situations."
+      },
+      {
+       "key": "+",
+       "text": "Would never go riding down a stretch of rapids in a canoe."
+      },
+      {
+       "key": "-",
+       "text": "Like to do frightening things."
+      },
+      {
+       "key": "-",
+       "text": "Face danger confidently."
+      },
+      {
+       "key": "-",
+       "text": "Love dangerous situations."
+      },
+      {
+       "key": "-",
+       "text": "Would be good at rescuing people from a burning building."
+      },
+      {
+       "key": "-",
+       "text": "Am willing to take risks."
+      }
+     ]
+    },
+    {
+     "domain": "E",
+     "facet": "Anxiety",
+     "abbr": "Anxi",
+     "alpha": ".85",
+     "items": [
+      {
+       "key": "+",
+       "text": "Often worry about things that turn out to be unimportant."
+      },
+      {
+       "key": "+",
+       "text": "Worry about things."
+      },
+      {
+       "key": "+",
+       "text": "Get stressed out easily."
+      },
+      {
+       "key": "+",
+       "text": "Get upset by unpleasant thoughts that come into my mind."
+      },
+      {
+       "key": "+",
+       "text": "Panic easily."
+      },
+      {
+       "key": "-",
+       "text": "Rarely worry."
+      },
+      {
+       "key": "-",
+       "text": "Rarely feel depressed."
+      },
+      {
+       "key": "-",
+       "text": "Am not easily disturbed by events."
+      },
+      {
+       "key": "-",
+       "text": "Remain calm under pressure."
+      },
+      {
+       "key": "-",
+       "text": "Don't worry about things that have already happened."
+      }
+     ]
+    },
+    {
+     "domain": "E",
+     "facet": "Dependence",
+     "abbr": "Depe",
+     "alpha": ".73",
+     "items": [
+      {
+       "key": "+",
+       "text": "Need reassurance."
+      },
+      {
+       "key": "+",
+       "text": "Let myself be influenced by others."
+      },
+      {
+       "key": "+",
+       "text": "Need the approval of others."
+      },
+      {
+       "key": "+",
+       "text": "Need protection."
+      },
+      {
+       "key": "+",
+       "text": "Often need help."
+      },
+      {
+       "key": "+",
+       "text": "Show my sadness."
+      },
+      {
+       "key": "+",
+       "text": "Suspect that my facial expressions give me away when I feel sad."
+      },
+      {
+       "key": "+",
+       "text": "Seek support."
+      },
+      {
+       "key": "+",
+       "text": "Can't do without the company of others."
+      },
+      {
+       "key": "+",
+       "text": "Want to be liked."
+      }
+     ]
+    },
+    {
+     "domain": "E",
+     "facet": "Sentimentality",
+     "abbr": "Sent",
+     "alpha": ".79",
+     "items": [
+      {
+       "key": "+",
+       "text": "Feel others' emotions."
+      },
+      {
+       "key": "+",
+       "text": "Immediately feel sad when hearing of an unhappy event."
+      },
+      {
+       "key": "+",
+       "text": "Cry during movies."
+      },
+      {
+       "key": "+",
+       "text": "Am sensitive to the needs of others."
+      },
+      {
+       "key": "+",
+       "text": "Am deeply moved by others' misfortunes."
+      },
+      {
+       "key": "-",
+       "text": "Rarely cry during sad movies."
+      },
+      {
+       "key": "-",
+       "text": "Seldom feel weepy while reading the sad part of a story."
+      },
+      {
+       "key": "-",
+       "text": "Am seldom bothered by the apparent suffering of strangers."
+      },
+      {
+       "key": "-",
+       "text": "Don't understand people who get emotional."
+      },
+      {
+       "key": "-",
+       "text": "Seldom get emotional."
+      }
+     ]
+    },
+    {
+     "domain": "X",
+     "facet": "Expressiveness",
+     "abbr": "Expr",
+     "alpha": ".84",
+     "items": [
+      {
+       "key": "+",
+       "text": "Talk a lot."
+      },
+      {
+       "key": "+",
+       "text": "Am never at a loss for words."
+      },
+      {
+       "key": "+",
+       "text": "Am the life of the party."
+      },
+      {
+       "key": "+",
+       "text": "Tell people about it when I'm irritated."
+      },
+      {
+       "key": "+",
+       "text": "Have an intense, boisterous laugh."
+      },
+      {
+       "key": "-",
+       "text": "Don't talk a lot."
+      },
+      {
+       "key": "-",
+       "text": "Don't like to draw attention to myself."
+      },
+      {
+       "key": "-",
+       "text": "Say little."
+      },
+      {
+       "key": "-",
+       "text": "Bottle up my feelings."
+      },
+      {
+       "key": "-",
+       "text": "Speak softly."
+      }
+     ]
+    },
+    {
+     "domain": "X",
+     "facet": "Social Boldness",
+     "abbr": "SocB",
+     "alpha": ".86",
+     "items": [
+      {
+       "key": "+",
+       "text": "Am good at making impromptu speeches."
+      },
+      {
+       "key": "+",
+       "text": "Don't mind being the center of attention."
+      },
+      {
+       "key": "+",
+       "text": "Feel comfortable around people."
+      },
+      {
+       "key": "+",
+       "text": "Have leadership abilities."
+      },
+      {
+       "key": "+",
+       "text": "Have a strong personality."
+      },
+      {
+       "key": "-",
+       "text": "Would be afraid to give a speech in public."
+      },
+      {
+       "key": "-",
+       "text": "Keep in the background."
+      },
+      {
+       "key": "-",
+       "text": "Find it difficult to approach others."
+      },
+      {
+       "key": "-",
+       "text": "Hate being the center of attention."
+      },
+      {
+       "key": "-",
+       "text": "Have little to say."
+      }
+     ]
+    },
+    {
+     "domain": "X",
+     "facet": "Sociability",
+     "abbr": "Soci",
+     "alpha": ".85",
+     "items": [
+      {
+       "key": "+",
+       "text": "Usually like to spend my free time with people."
+      },
+      {
+       "key": "+",
+       "text": "Talk to a lot of different people at parties."
+      },
+      {
+       "key": "+",
+       "text": "Love to chat."
+      },
+      {
+       "key": "+",
+       "text": "Make friends easily."
+      },
+      {
+       "key": "+",
+       "text": "Enjoy being part of a group."
+      },
+      {
+       "key": "-",
+       "text": "Seem to derive less enjoyment from interacting with people than others do."
+      },
+      {
+       "key": "-",
+       "text": "Rarely enjoy being with people."
+      },
+      {
+       "key": "-",
+       "text": "Would not enjoy a job that involves a lot of social interaction."
+      },
+      {
+       "key": "-",
+       "text": "Am hard to get to know."
+      },
+      {
+       "key": "-",
+       "text": "Keep others at a distance."
+      }
+     ]
+    },
+    {
+     "domain": "X",
+     "facet": "Liveliness",
+     "abbr": "Live",
+     "alpha": ".82",
+     "items": [
+      {
+       "key": "+",
+       "text": "Maintain high energy throughout the day."
+      },
+      {
+       "key": "+",
+       "text": "Have great stamina."
+      },
+      {
+       "key": "+",
+       "text": "Am usually active and full of energy."
+      },
+      {
+       "key": "+",
+       "text": "Smile a lot."
+      },
+      {
+       "key": "+",
+       "text": "Feel healthy and vibrant most of the time."
+      },
+      {
+       "key": "+",
+       "text": "Laugh a lot."
+      },
+      {
+       "key": "+",
+       "text": "Feel that I have a lot of inner strength."
+      },
+      {
+       "key": "+",
+       "text": "Have a lot of fun."
+      },
+      {
+       "key": "-",
+       "text": "Tire out quickly."
+      },
+      {
+       "key": "-",
+       "text": "Often feel blue."
+      }
+     ]
+    },
+    {
+     "domain": "A",
+     "facet": "Forgiveness",
+     "abbr": "Forg",
+     "alpha": ".78",
+     "items": [
+      {
+       "key": "+",
+       "text": "Love my enemies."
+      },
+      {
+       "key": "+",
+       "text": "Try to forgive and forget."
+      },
+      {
+       "key": "+",
+       "text": "Am inclined to forgive others."
+      },
+      {
+       "key": "+",
+       "text": "Am nice to people I should be angry at."
+      },
+      {
+       "key": "-",
+       "text": "Find it hard to forgive others."
+      },
+      {
+       "key": "-",
+       "text": "Hold a grudge."
+      },
+      {
+       "key": "-",
+       "text": "Get back at people who insult me."
+      },
+      {
+       "key": "-",
+       "text": "Get even with others."
+      },
+      {
+       "key": "-",
+       "text": "Distrust people."
+      },
+      {
+       "key": "-",
+       "text": "Feel that most people can't be trusted."
+      }
+     ]
+    },
+    {
+     "domain": "A",
+     "facet": "Gentleness",
+     "abbr": "Gent",
+     "alpha": ".81",
+     "items": [
+      {
+       "key": "+",
+       "text": "Rarely complain."
+      },
+      {
+       "key": "+",
+       "text": "Take things as they come."
+      },
+      {
+       "key": "+",
+       "text": "Accept people as they are."
+      },
+      {
+       "key": "+",
+       "text": "Have a good word for everyone."
+      },
+      {
+       "key": "-",
+       "text": "Become frustrated and angry with people when they don't live up to my expectations."
+      },
+      {
+       "key": "-",
+       "text": "Am quick to judge others."
+      },
+      {
+       "key": "-",
+       "text": "Find fault with everything."
+      },
+      {
+       "key": "-",
+       "text": "Speak ill of others."
+      },
+      {
+       "key": "-",
+       "text": "Have a sharp tongue."
+      },
+      {
+       "key": "-",
+       "text": "Criticize others' shortcomings."
+      }
+     ]
+    },
+    {
+     "domain": "A",
+     "facet": "Flexibility",
+     "abbr": "Flex",
+     "alpha": ".73",
+     "items": [
+      {
+       "key": "+",
+       "text": "Adjust easily."
+      },
+      {
+       "key": "+",
+       "text": "Am good at taking advice."
+      },
+      {
+       "key": "-",
+       "text": "When interacting with a group of people, am often bothered by at least one of them."
+      },
+      {
+       "key": "-",
+       "text": "React strongly to criticism."
+      },
+      {
+       "key": "-",
+       "text": "Get upset if others change the way that I have arranged things."
+      },
+      {
+       "key": "-",
+       "text": "Am hard to convince."
+      },
+      {
+       "key": "-",
+       "text": "Am annoyed by others' mistakes."
+      },
+      {
+       "key": "-",
+       "text": "Can't stand being contradicted."
+      },
+      {
+       "key": "-",
+       "text": "Am hard to satisfy."
+      },
+      {
+       "key": "-",
+       "text": "Am hard to reason with."
+      }
+     ]
+    },
+    {
+     "domain": "A",
+     "facet": "Patience",
+     "abbr": "Pati",
+     "alpha": ".88",
+     "items": [
+      {
+       "key": "+",
+       "text": "Find that it takes a lot to make me feel angry at someone."
+      },
+      {
+       "key": "+",
+       "text": "Rarely feel angry with people."
+      },
+      {
+       "key": "+",
+       "text": "Am usually a patient person."
+      },
+      {
+       "key": "+",
+       "text": "Rarely get irritated."
+      },
+      {
+       "key": "+",
+       "text": "Seldom get mad."
+      },
+      {
+       "key": "-",
+       "text": "Am easily annoyed."
+      },
+      {
+       "key": "-",
+       "text": "Get angry easily."
+      },
+      {
+       "key": "-",
+       "text": "Get irritated easily."
+      },
+      {
+       "key": "-",
+       "text": "Lose my temper."
+      },
+      {
+       "key": "-",
+       "text": "Get upset easily."
+      }
+     ]
+    },
+    {
+     "domain": "C",
+     "facet": "Organization",
+     "abbr": "Orga",
+     "alpha": ".85",
+     "items": [
+      {
+       "key": "+",
+       "text": "Keep things tidy."
+      },
+      {
+       "key": "+",
+       "text": "Get chores done right away."
+      },
+      {
+       "key": "+",
+       "text": "Like order."
+      },
+      {
+       "key": "+",
+       "text": "Like to tidy up."
+      },
+      {
+       "key": "+",
+       "text": "Want everything to be \"just right."
+      },
+      {
+       "key": "-",
+       "text": "Leave a mess in my room."
+      },
+      {
+       "key": "-",
+       "text": "Leave my belongings around."
+      },
+      {
+       "key": "-",
+       "text": "Don't finish the things that I start."
+      },
+      {
+       "key": "-",
+       "text": "Often forget to put things back in their proper place."
+      },
+      {
+       "key": "-",
+       "text": "Am not bothered by disorder."
+      }
+     ]
+    },
+    {
+     "domain": "C",
+     "facet": "Diligence",
+     "abbr": "Dili",
+     "alpha": ".81",
+     "items": [
+      {
+       "key": "+",
+       "text": "Push myself very hard to succeed."
+      },
+      {
+       "key": "+",
+       "text": "Get started quickly on doing a job."
+      },
+      {
+       "key": "+",
+       "text": "Am exacting in my work."
+      },
+      {
+       "key": "+",
+       "text": "Work hard."
+      },
+      {
+       "key": "+",
+       "text": "Complete tasks successfully."
+      },
+      {
+       "key": "-",
+       "text": "Do just enough work to get by."
+      },
+      {
+       "key": "-",
+       "text": "Stop when work becomes too difficult."
+      },
+      {
+       "key": "-",
+       "text": "Do too little work."
+      },
+      {
+       "key": "-",
+       "text": "Hang around doing nothing."
+      },
+      {
+       "key": "-",
+       "text": "Quickly lose interest in the tasks I start."
+      }
+     ]
+    },
+    {
+     "domain": "C",
+     "facet": "Perfectionism",
+     "abbr": "Perf",
+     "alpha": ".80",
+     "items": [
+      {
+       "key": "+",
+       "text": "Pay attention to details."
+      },
+      {
+       "key": "+",
+       "text": "Continue until everything is perfect."
+      },
+      {
+       "key": "+",
+       "text": "Have an eye for detail."
+      },
+      {
+       "key": "+",
+       "text": "Want every detail taken care of."
+      },
+      {
+       "key": "+",
+       "text": "Dislike imperfect work."
+      },
+      {
+       "key": "+",
+       "text": "Want everything to add up perfectly."
+      },
+      {
+       "key": "+",
+       "text": "Detect mistakes."
+      },
+      {
+       "key": "+",
+       "text": "Demand quality."
+      },
+      {
+       "key": "-",
+       "text": "Pay too little attention to details."
+      },
+      {
+       "key": "-",
+       "text": "Prefer to just let things happen."
+      }
+     ]
+    },
+    {
+     "domain": "C",
+     "facet": "Prudence",
+     "abbr": "Prud",
+     "alpha": ".80",
+     "items": [
+      {
+       "key": "+",
+       "text": "Avoid mistakes."
+      },
+      {
+       "key": "+",
+       "text": "Make plans and stick to them."
+      },
+      {
+       "key": "+",
+       "text": "Do things according to a plan."
+      },
+      {
+       "key": "-",
+       "text": "Jump into things without thinking."
+      },
+      {
+       "key": "-",
+       "text": "Do things without thinking of the consequences."
+      },
+      {
+       "key": "-",
+       "text": "Make rash decisions."
+      },
+      {
+       "key": "-",
+       "text": "Act impulsively when something is bothering me."
+      },
+      {
+       "key": "-",
+       "text": "Make careless mistakes."
+      },
+      {
+       "key": "-",
+       "text": "Don't know why I do some of the things I do."
+      },
+      {
+       "key": "-",
+       "text": "Make a fool of myself."
+      }
+     ]
+    },
+    {
+     "domain": "O",
+     "facet": "Aesthetic Appreciation",
+     "abbr": "AesA",
+     "alpha": ".83",
+     "items": [
+      {
+       "key": "+",
+       "text": "Believe in the importance of art."
+      },
+      {
+       "key": "+",
+       "text": "Get deeply immersed in music."
+      },
+      {
+       "key": "+",
+       "text": "See beauty in things that others might not notice."
+      },
+      {
+       "key": "+",
+       "text": "Enjoy feeling \"close to the earth."
+      },
+      {
+       "key": "+",
+       "text": "Have read the great literary classics."
+      },
+      {
+       "key": "-",
+       "text": "Do not like art."
+      },
+      {
+       "key": "-",
+       "text": "Seldom notice the emotional aspects of paintings and pictures."
+      },
+      {
+       "key": "-",
+       "text": "Do not like poetry."
+      },
+      {
+       "key": "-",
+       "text": "Do not like concerts."
+      },
+      {
+       "key": "-",
+       "text": "Do not enjoy watching dance performances."
+      }
+     ]
+    },
+    {
+     "domain": "O",
+     "facet": "Inquisitiveness",
+     "abbr": "Inqu",
+     "alpha": ".78",
+     "items": [
+      {
+       "key": "+",
+       "text": "Am interested in science."
+      },
+      {
+       "key": "+",
+       "text": "Would love to explore strange places."
+      },
+      {
+       "key": "+",
+       "text": "Enjoy intellectual games."
+      },
+      {
+       "key": "+",
+       "text": "Love to read challenging material."
+      },
+      {
+       "key": "+",
+       "text": "Find political discussions interesting."
+      },
+      {
+       "key": "+",
+       "text": "Have a rich vocabulary."
+      },
+      {
+       "key": "-",
+       "text": "Don't know much about history."
+      },
+      {
+       "key": "-",
+       "text": "Avoid difficult reading material."
+      },
+      {
+       "key": "-",
+       "text": "Don't bother worrying about political and social problems."
+      },
+      {
+       "key": "-",
+       "text": "Will not probe deeply into a subject."
+      }
+     ]
+    },
+    {
+     "domain": "O",
+     "facet": "Creativity",
+     "abbr": "Crea",
+     "alpha": ".85",
+     "items": [
+      {
+       "key": "+",
+       "text": "Have a vivid imagination."
+      },
+      {
+       "key": "+",
+       "text": "Come up with something new."
+      },
+      {
+       "key": "+",
+       "text": "Carry the conversation to a higher level."
+      },
+      {
+       "key": "+",
+       "text": "Am full of ideas."
+      },
+      {
+       "key": "+",
+       "text": "Love to think up new ways of doing things."
+      },
+      {
+       "key": "+",
+       "text": "Have excellent ideas."
+      },
+      {
+       "key": "-",
+       "text": "Do not have a good imagination."
+      },
+      {
+       "key": "-",
+       "text": "Have difficulty imagining things."
+      },
+      {
+       "key": "-",
+       "text": "Have trouble guessing how others will react."
+      },
+      {
+       "key": "-",
+       "text": "Seldom experience sudden intuitive insights."
+      }
+     ]
+    },
+    {
+     "domain": "O",
+     "facet": "Unconventionality",
+     "abbr": "Unco",
+     "alpha": ".84",
+     "items": [
+      {
+       "key": "+",
+       "text": "Am considered to be kind of eccentric."
+      },
+      {
+       "key": "+",
+       "text": "Know that my ideas sometimes surprise people."
+      },
+      {
+       "key": "+",
+       "text": "Do things that others find strange."
+      },
+      {
+       "key": "+",
+       "text": "Rebel against authority."
+      },
+      {
+       "key": "+",
+       "text": "Swim against the current."
+      },
+      {
+       "key": "-",
+       "text": "Would hate to be considered odd or strange."
+      },
+      {
+       "key": "-",
+       "text": "Enjoy being thought of as a normal \"mainstream\" person."
+      },
+      {
+       "key": "-",
+       "text": "Like to be viewed as proper and conventional."
+      },
+      {
+       "key": "-",
+       "text": "Like to be thought of as a normal kind of person."
+      },
+      {
+       "key": "-",
+       "text": "Try to avoid complex people."
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "ipip_via",
+   "name": "IPIP-VIA character strengths proxies (24 scales, 213 items)",
+   "license": "Public domain (IPIP)",
+   "source": "https://ipip.ori.org/newVIAKey.htm",
+   "scales": [
+    {
+     "scale": "Appreciation of Beauty",
+     "abbr": "App",
+     "alpha": ".77",
+     "items": [
+      {
+       "key": "+",
+       "text": "Feel it's important to live in a world of beauty."
+      },
+      {
+       "key": "+",
+       "text": "Can become tearful thinking of the goodness of others."
+      },
+      {
+       "key": "+",
+       "text": "Experience deep emotions when I see beautiful things."
+      },
+      {
+       "key": "+",
+       "text": "Have been left speechless by the beauty depicted in a movie."
+      },
+      {
+       "key": "+",
+       "text": "Appreciate all forms of art."
+      },
+      {
+       "key": "+",
+       "text": "Am in awe of simple things in life that others might take for granted."
+      },
+      {
+       "key": "+",
+       "text": "Crave the experience of great art."
+      },
+      {
+       "key": "-",
+       "text": "Fail to notice beauty until others comment on it."
+      }
+     ]
+    },
+    {
+     "scale": "Capacity for Love",
+     "abbr": "Cap",
+     "alpha": ".70",
+     "items": [
+      {
+       "key": "+",
+       "text": "Am willing to take risks to establish a relationship."
+      },
+      {
+       "key": "+",
+       "text": "Know that there are people in my life who care as much for me as for themselves."
+      },
+      {
+       "key": "+",
+       "text": "Know that some others accept my shortcomings."
+      },
+      {
+       "key": "+",
+       "text": "Am the most important person in someone else's life."
+      },
+      {
+       "key": "+",
+       "text": "Can express love to someone else."
+      },
+      {
+       "key": "+",
+       "text": "Know someone whom I really care about as a person."
+      },
+      {
+       "key": "-",
+       "text": "Do not easily share my feelings with others."
+      },
+      {
+       "key": "-",
+       "text": "Feel isolated from other people."
+      },
+      {
+       "key": "-",
+       "text": "Have difficulty accepting love from anyone."
+      }
+     ]
+    },
+    {
+     "scale": "Citizenship/Teamwork",
+     "abbr": "Cit",
+     "alpha": ".78",
+     "items": [
+      {
+       "key": "+",
+       "text": "Don't miss group meetings or team practices."
+      },
+      {
+       "key": "+",
+       "text": "Enjoy being part of a group."
+      },
+      {
+       "key": "+",
+       "text": "Support my teammates or fellow group members."
+      },
+      {
+       "key": "+",
+       "text": "Feel I must respect the decisions made by my group."
+      },
+      {
+       "key": "-",
+       "text": "Am not good at working with a group."
+      },
+      {
+       "key": "-",
+       "text": "Prefer to do everything alone."
+      },
+      {
+       "key": "-",
+       "text": "Work best when I am alone."
+      },
+      {
+       "key": "-",
+       "text": "Keep to myself."
+      },
+      {
+       "key": "-",
+       "text": "Don't think it's important to socialize with others."
+      }
+     ]
+    },
+    {
+     "scale": "Curiosity",
+     "abbr": "Cur",
+     "alpha": ".78",
+     "items": [
+      {
+       "key": "+",
+       "text": "Find the world a very interesting place."
+      },
+      {
+       "key": "+",
+       "text": "Am never bored."
+      },
+      {
+       "key": "+",
+       "text": "Am always busy with something interesting."
+      },
+      {
+       "key": "+",
+       "text": "Am excited by many different activities."
+      },
+      {
+       "key": "+",
+       "text": "Can find something of interest in any situation."
+      },
+      {
+       "key": "+",
+       "text": "Think that my life is extremely interesting."
+      },
+      {
+       "key": "+",
+       "text": "Love to hear about other countries and cultures."
+      },
+      {
+       "key": "-",
+       "text": "Am not all that curious about the world."
+      },
+      {
+       "key": "-",
+       "text": "Find it difficult to entertain myself."
+      },
+      {
+       "key": "-",
+       "text": "Have few interests."
+      }
+     ]
+    },
+    {
+     "scale": "Equity/Fairness",
+     "abbr": "Equ",
+     "alpha": ".70",
+     "items": [
+      {
+       "key": "+",
+       "text": "Admit when I am wrong."
+      },
+      {
+       "key": "+",
+       "text": "Treat all people equally."
+      },
+      {
+       "key": "+",
+       "text": "Am a good listener."
+      },
+      {
+       "key": "+",
+       "text": "Believe that everyone's rights are equally important."
+      },
+      {
+       "key": "+",
+       "text": "Give everyone a chance."
+      },
+      {
+       "key": "+",
+       "text": "Am committed to principles of justice and equality."
+      },
+      {
+       "key": "+",
+       "text": "Believe that everyone should have a say."
+      },
+      {
+       "key": "-",
+       "text": "Take advantage of others."
+      },
+      {
+       "key": "-",
+       "text": "Treat others differently if I don't like them."
+      }
+     ]
+    },
+    {
+     "scale": "Forgiveness/Mercy",
+     "abbr": "For",
+     "alpha": ".76",
+     "items": [
+      {
+       "key": "+",
+       "text": "Let bygones be bygones."
+      },
+      {
+       "key": "+",
+       "text": "Never seek vengeance."
+      },
+      {
+       "key": "+",
+       "text": "Allow others to make a fresh start."
+      },
+      {
+       "key": "+",
+       "text": "Believe that it is best to forgive and forget."
+      },
+      {
+       "key": "+",
+       "text": "Don't try to get even."
+      },
+      {
+       "key": "+",
+       "text": "Hate to see anyone suffer, even my worst enemy."
+      },
+      {
+       "key": "+",
+       "text": "Try to respond with understanding when someone treats me badly."
+      },
+      {
+       "key": "-",
+       "text": "Hold grudges."
+      },
+      {
+       "key": "-",
+       "text": "Do not give anyone a second chance to hurt me."
+      }
+     ]
+    },
+    {
+     "scale": "Gratitude",
+     "abbr": "Gra",
+     "alpha": ".79",
+     "items": [
+      {
+       "key": "+",
+       "text": "Express my thanks to those who care about me."
+      },
+      {
+       "key": "+",
+       "text": "Have been richly blessed in my life."
+      },
+      {
+       "key": "+",
+       "text": "Stop to count my blessings."
+      },
+      {
+       "key": "+",
+       "text": "Am an extremely grateful person."
+      },
+      {
+       "key": "+",
+       "text": "Feel thankful for what I have received in life."
+      },
+      {
+       "key": "+",
+       "text": "Feel a profound sense of appreciation every day."
+      },
+      {
+       "key": "-",
+       "text": "Do not see the need to acknowledge others who are good to me."
+      },
+      {
+       "key": "-",
+       "text": "Find few things in my life to be grateful for."
+      }
+     ]
+    },
+    {
+     "scale": "Hope/Optimism",
+     "abbr": "Hop",
+     "alpha": ".73",
+     "items": [
+      {
+       "key": "+",
+       "text": "Look on the bright side."
+      },
+      {
+       "key": "+",
+       "text": "Can find the positive in what seems negative to others."
+      },
+      {
+       "key": "+",
+       "text": "Remain hopeful despite challenges."
+      },
+      {
+       "key": "+",
+       "text": "Will succeed with the goals I set for myself."
+      },
+      {
+       "key": "+",
+       "text": "Think about what is good in my life when I feel down."
+      },
+      {
+       "key": "-",
+       "text": "Expect the worst."
+      },
+      {
+       "key": "-",
+       "text": "Have no plan for my life five years from now."
+      },
+      {
+       "key": "-",
+       "text": "Am not confident that my way of doing things will work out for the best."
+      }
+     ]
+    },
+    {
+     "scale": "Humor/Playfulness",
+     "abbr": "Hum",
+     "alpha": ".84",
+     "items": [
+      {
+       "key": "+",
+       "text": "Try to tease my friends out of their gloomy moods."
+      },
+      {
+       "key": "+",
+       "text": "Use laughter to brighten the days of others."
+      },
+      {
+       "key": "+",
+       "text": "Try to have fun in all kinds of situations."
+      },
+      {
+       "key": "+",
+       "text": "Try to add some humor to whatever I do."
+      },
+      {
+       "key": "+",
+       "text": "Keep my sense of humor even in gloomy situations."
+      },
+      {
+       "key": "+",
+       "text": "Have a great sense of humor."
+      },
+      {
+       "key": "-",
+       "text": "Am not known for my sense of humor."
+      },
+      {
+       "key": "-",
+       "text": "Am not fun to be with."
+      },
+      {
+       "key": "-",
+       "text": "Do not go out of my way to make others smile or laugh."
+      }
+     ]
+    },
+    {
+     "scale": "Industry/Perseverance/Persistence",
+     "abbr": "Ind",
+     "alpha": ".81",
+     "items": [
+      {
+       "key": "+",
+       "text": "Don't quit a task before it is finished."
+      },
+      {
+       "key": "+",
+       "text": "Am a goal-oriented person."
+      },
+      {
+       "key": "+",
+       "text": "Finish things despite obstacles in the way."
+      },
+      {
+       "key": "+",
+       "text": "Am a hard worker."
+      },
+      {
+       "key": "+",
+       "text": "Don't get sidetracked when I work."
+      },
+      {
+       "key": "-",
+       "text": "Don't finish what I start."
+      },
+      {
+       "key": "-",
+       "text": "Give up easily."
+      },
+      {
+       "key": "-",
+       "text": "Do not tend to stick with what I decide to do."
+      }
+     ]
+    },
+    {
+     "scale": "Integrity/Honesty/Authenticity",
+     "abbr": "Int",
+     "alpha": ".72",
+     "items": [
+      {
+       "key": "+",
+       "text": "Am trusted to keep secrets."
+      },
+      {
+       "key": "+",
+       "text": "Keep my promises."
+      },
+      {
+       "key": "+",
+       "text": "Believe that honesty is the basis for trust."
+      },
+      {
+       "key": "+",
+       "text": "Can be trusted to keep my promises."
+      },
+      {
+       "key": "+",
+       "text": "Am true to my own values."
+      },
+      {
+       "key": "-",
+       "text": "Lie to get myself out of trouble."
+      },
+      {
+       "key": "-",
+       "text": "Am hard to understand."
+      },
+      {
+       "key": "-",
+       "text": "Feel like an imposter."
+      },
+      {
+       "key": "-",
+       "text": "Like to exaggerate my troubles."
+      }
+     ]
+    },
+    {
+     "scale": "Judgment/Open-mindedness",
+     "abbr": "Jud",
+     "alpha": ".80",
+     "items": [
+      {
+       "key": "+",
+       "text": "Try to identify the reasons for my actions."
+      },
+      {
+       "key": "+",
+       "text": "Make decisions only after I have all of the facts."
+      },
+      {
+       "key": "+",
+       "text": "Am valued by others for my objectivity."
+      },
+      {
+       "key": "+",
+       "text": "Am a firm believer in thinking things through."
+      },
+      {
+       "key": "+",
+       "text": "Weigh the pro's and the con's."
+      },
+      {
+       "key": "+",
+       "text": "Try to have good reasons for my important decisions."
+      },
+      {
+       "key": "+",
+       "text": "Am valued by my friends for my good judgment."
+      },
+      {
+       "key": "-",
+       "text": "Don't think about different possibilities when making decisions."
+      },
+      {
+       "key": "-",
+       "text": "Don't tend to think things through critically."
+      }
+     ]
+    },
+    {
+     "scale": "Kindness/Generosity",
+     "abbr": "Kin",
+     "alpha": ".72",
+     "items": [
+      {
+       "key": "+",
+       "text": "Am never too busy to help a friend."
+      },
+      {
+       "key": "+",
+       "text": "Go out of my way to cheer up people who appear down."
+      },
+      {
+       "key": "+",
+       "text": "Love to make other people happy."
+      },
+      {
+       "key": "+",
+       "text": "Helped a neighbor in the last month."
+      },
+      {
+       "key": "+",
+       "text": "Get as excited about the good fortunes of others as I am about my own."
+      },
+      {
+       "key": "+",
+       "text": "Call my friends when they are sick."
+      },
+      {
+       "key": "+",
+       "text": "Love to let others share the spotlight."
+      },
+      {
+       "key": "-",
+       "text": "Get impatient when others talk to me about their problems."
+      },
+      {
+       "key": "-",
+       "text": "Try not to do favors for others."
+      },
+      {
+       "key": "-",
+       "text": "Am only kind to others if they have been kind to me."
+      }
+     ]
+    },
+    {
+     "scale": "Leadership",
+     "abbr": "Lea",
+     "alpha": ".78",
+     "items": [
+      {
+       "key": "+",
+       "text": "Try to make sure everyone in a group feels included."
+      },
+      {
+       "key": "+",
+       "text": "Am good at helping people work well together."
+      },
+      {
+       "key": "+",
+       "text": "Am told that I am a strong but fair leader."
+      },
+      {
+       "key": "+",
+       "text": "Try to make my group members happy."
+      },
+      {
+       "key": "-",
+       "text": "Have difficulty getting others to work together."
+      },
+      {
+       "key": "-",
+       "text": "Am not good at taking charge of a group."
+      },
+      {
+       "key": "-",
+       "text": "Am not good at planning group activities."
+      }
+     ]
+    },
+    {
+     "scale": "Love of Learning",
+     "abbr": "Lov",
+     "alpha": ".77",
+     "items": [
+      {
+       "key": "+",
+       "text": "Go out of my way to attend educational events."
+      },
+      {
+       "key": "+",
+       "text": "Am thrilled when I learn something new."
+      },
+      {
+       "key": "+",
+       "text": "Look forward to the opportunity to learn and grow."
+      },
+      {
+       "key": "+",
+       "text": "Am a true life-long learner."
+      },
+      {
+       "key": "+",
+       "text": "Read all the time."
+      },
+      {
+       "key": "+",
+       "text": "Consult the library or the Internet immediately if I want to know something."
+      },
+      {
+       "key": "+",
+       "text": "Read a large variety of books."
+      },
+      {
+       "key": "-",
+       "text": "Don't like to learn new things."
+      },
+      {
+       "key": "-",
+       "text": "Do not like to visit museums."
+      },
+      {
+       "key": "-",
+       "text": "Don't read nonfiction books for fun."
+      }
+     ]
+    },
+    {
+     "scale": "Modesty/Humility",
+     "abbr": "Mod",
+     "alpha": ".70",
+     "items": [
+      {
+       "key": "+",
+       "text": "Am humble about the good things that have happened to me."
+      },
+      {
+       "key": "+",
+       "text": "Believe that others are drawn to me because I am humble."
+      },
+      {
+       "key": "+",
+       "text": "Don't act is if I'm a special person."
+      },
+      {
+       "key": "+",
+       "text": "Don't brag about my accomplishments."
+      },
+      {
+       "key": "+",
+       "text": "Am proud that I am an ordinary person."
+      },
+      {
+       "key": "+",
+       "text": "Don't call attention to myself."
+      },
+      {
+       "key": "+",
+       "text": "Would never be described as arrogant."
+      },
+      {
+       "key": "-",
+       "text": "Like to stand out in a crowd."
+      },
+      {
+       "key": "-",
+       "text": "Like to talk about myself."
+      }
+     ]
+    },
+    {
+     "scale": "Originality/Creativity",
+     "abbr": "Ori",
+     "alpha": ".85",
+     "items": [
+      {
+       "key": "+",
+       "text": "Am able to come up with new and different ideas."
+      },
+      {
+       "key": "+",
+       "text": "Like to think of new ways to do things."
+      },
+      {
+       "key": "+",
+       "text": "Come up with new ways to do things."
+      },
+      {
+       "key": "+",
+       "text": "Am an original thinker."
+      },
+      {
+       "key": "+",
+       "text": "Have an imagination that stretches beyond that of my friends."
+      },
+      {
+       "key": "-",
+       "text": "Don't pride myself on being original."
+      },
+      {
+       "key": "-",
+       "text": "Am not considered to have new and different ideas."
+      },
+      {
+       "key": "-",
+       "text": "Have no special urge to do something original."
+      }
+     ]
+    },
+    {
+     "scale": "Perspective/Wisdom",
+     "abbr": "Per",
+     "alpha": ".75",
+     "items": [
+      {
+       "key": "+",
+       "text": "Have a broad outlook on what is going on."
+      },
+      {
+       "key": "+",
+       "text": "Have an excellent view of the world."
+      },
+      {
+       "key": "+",
+       "text": "Have been described as wise beyond my years."
+      },
+      {
+       "key": "+",
+       "text": "Have a mature view on life."
+      },
+      {
+       "key": "+",
+       "text": "Consider myself to be a wise person."
+      },
+      {
+       "key": "+",
+       "text": "Am considered to be a wise person."
+      },
+      {
+       "key": "-",
+       "text": "Lose sight of what is most important in life."
+      },
+      {
+       "key": "-",
+       "text": "Am not good at figuring out what really matters."
+      },
+      {
+       "key": "-",
+       "text": "Am rarely consulted for advice by others."
+      }
+     ]
+    },
+    {
+     "scale": "Prudence",
+     "abbr": "Pru",
+     "alpha": ".73",
+     "items": [
+      {
+       "key": "+",
+       "text": "Have never deliberately hurt anyone."
+      },
+      {
+       "key": "+",
+       "text": "Cannot imagine lying or cheating."
+      },
+      {
+       "key": "+",
+       "text": "Believe it is always better to be safe than sorry."
+      },
+      {
+       "key": "+",
+       "text": "Think before I speak."
+      },
+      {
+       "key": "+",
+       "text": "Follow the rules."
+      },
+      {
+       "key": "+",
+       "text": "Avoid activities that are physically dangerous."
+      },
+      {
+       "key": "+",
+       "text": "Keep straight right from wrong."
+      },
+      {
+       "key": "+",
+       "text": "Make careful choices."
+      },
+      {
+       "key": "-",
+       "text": "Behave in unusual and strange ways."
+      }
+     ]
+    },
+    {
+     "scale": "Self-regulation/Self-control",
+     "abbr": "Sel",
+     "alpha": ".75",
+     "items": [
+      {
+       "key": "+",
+       "text": "Have no trouble eating healthy foods."
+      },
+      {
+       "key": "+",
+       "text": "Am a highly disciplined person."
+      },
+      {
+       "key": "+",
+       "text": "Forego things that are bad for me in the long run even if they make me feel good in the short run."
+      },
+      {
+       "key": "+",
+       "text": "Can stay on a diet."
+      },
+      {
+       "key": "+",
+       "text": "Can always say \"enough is enough."
+      },
+      {
+       "key": "-",
+       "text": "Do not exercise on a regular basis."
+      },
+      {
+       "key": "-",
+       "text": "Can't resist eating candy or cookies if they are around."
+      },
+      {
+       "key": "-",
+       "text": "Am not very good at getting things done."
+      },
+      {
+       "key": "-",
+       "text": "Let myself be taken over by urges to spend or eat too much."
+      },
+      {
+       "key": "-",
+       "text": "Do my tasks only just before they need to be done."
+      },
+      {
+       "key": "-",
+       "text": "Give in to my urges."
+      }
+     ]
+    },
+    {
+     "scale": "Social/Personal/Emotional Intelligence",
+     "abbr": "Soc",
+     "alpha": ".76",
+     "items": [
+      {
+       "key": "+",
+       "text": "Am able to fit into any situation."
+      },
+      {
+       "key": "+",
+       "text": "Have the ability to make others feel interesting."
+      },
+      {
+       "key": "+",
+       "text": "Know what makes others tick."
+      },
+      {
+       "key": "+",
+       "text": "Get along well with people I have just met."
+      },
+      {
+       "key": "+",
+       "text": "Am good at sensing what others are feeling."
+      },
+      {
+       "key": "+",
+       "text": "Know what to say to make people feel good."
+      },
+      {
+       "key": "-",
+       "text": "Don't know how to handle myself in a new social situation."
+      }
+     ]
+    },
+    {
+     "scale": "Spirituality/Religiousness",
+     "abbr": "Spi",
+     "alpha": ".91",
+     "items": [
+      {
+       "key": "+",
+       "text": "Believe in a universal power or God."
+      },
+      {
+       "key": "+",
+       "text": "Am a spiritual person."
+      },
+      {
+       "key": "+",
+       "text": "Keep my faith even during hard times."
+      },
+      {
+       "key": "+",
+       "text": "Have spent at least 30 minutes in the last 24 hours in prayer or meditation."
+      },
+      {
+       "key": "+",
+       "text": "Am who I am because of my faith."
+      },
+      {
+       "key": "+",
+       "text": "Believe that each person has a purpose in life."
+      },
+      {
+       "key": "+",
+       "text": "Know that my beliefs make my life important."
+      },
+      {
+       "key": "-",
+       "text": "Do not practice any religion."
+      },
+      {
+       "key": "-",
+       "text": "Do not believe in a universal power or a God."
+      }
+     ]
+    },
+    {
+     "scale": "Valor/Bravery/Courage",
+     "abbr": "Val",
+     "alpha": ".75",
+     "items": [
+      {
+       "key": "+",
+       "text": "Have taken frequent stands in the face of strong opposition."
+      },
+      {
+       "key": "+",
+       "text": "Don't hesitate to express an unpopular opinion."
+      },
+      {
+       "key": "+",
+       "text": "Call for action while others talk."
+      },
+      {
+       "key": "+",
+       "text": "Can face my fears."
+      },
+      {
+       "key": "+",
+       "text": "Speak up in protest when I hear someone say mean things."
+      },
+      {
+       "key": "+",
+       "text": "Am a brave person."
+      },
+      {
+       "key": "-",
+       "text": "Avoid dealing with uncomfortable emotions."
+      },
+      {
+       "key": "-",
+       "text": "Avoid dealing with awkward situations."
+      },
+      {
+       "key": "-",
+       "text": "Do not stand up for my beliefs."
+      },
+      {
+       "key": "-",
+       "text": "Don't speak my mind freely when there might be negative results."
+      }
+     ]
+    },
+    {
+     "scale": "Zest/Enthusiasm/Vitality",
+     "abbr": "Zes",
+     "alpha": ".78",
+     "items": [
+      {
+       "key": "+",
+       "text": "Prefer to participate fully rather than view life from the sidelines."
+      },
+      {
+       "key": "+",
+       "text": "Don't approach things halfheartedly."
+      },
+      {
+       "key": "+",
+       "text": "Love what I do."
+      },
+      {
+       "key": "+",
+       "text": "Look forward to each new day."
+      },
+      {
+       "key": "+",
+       "text": "Cant wait to get started on a project."
+      },
+      {
+       "key": "+",
+       "text": "Can hardly wait to see what life has in store for me in the years ahead."
+      },
+      {
+       "key": "+",
+       "text": "Awaken with a sense of excitement about the day's possibilities."
+      },
+      {
+       "key": "-",
+       "text": "Dread getting up in the morning."
+      },
+      {
+       "key": "-",
+       "text": "Don't have much energy."
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "mfq2",
+   "name": "Moral Foundations Questionnaire-2 (Atari et al., 2023)",
+   "license": "CC BY 4.0, attribution required, no endorsement implied",
+   "source": "https://osf.io/srtxn/ ; Atari et al. (2023) JPSP 125(5):1157-1188, doi:10.1037/pspp0000470",
+   "scoring": "Mean of 6 items per foundation; no reverse keys. Foundations repeat in item order: Care 1,7,...,31; Equality 2,8,...; Proportionality 3,9,...; Loyalty 4,10,...; Authority 5,11,...; Purity 6,12,...,36. Verified 2026-10-11 against the official English questionnaire in OSF project osf.io/srtxn (Materials/MFQ-2 Translations/English Moral Foundations Questionnaire.docx, https://osf.io/download/6bfe9/) and the published scoring; all 36 assignments matched; wording of item 27 corrected to the official text.",
+   "items": [
+    {
+     "n": 1,
+     "foundation": "Care",
+     "text": "Caring for people who have suffered is an important virtue."
+    },
+    {
+     "n": 2,
+     "foundation": "Equality",
+     "text": "The world would be a better place if everyone made the same amount of money."
+    },
+    {
+     "n": 3,
+     "foundation": "Proportionality",
+     "text": "I think people who are more hard-working should end up with more money."
+    },
+    {
+     "n": 4,
+     "foundation": "Loyalty",
+     "text": "I think children should be taught to be loyal to their country."
+    },
+    {
+     "n": 5,
+     "foundation": "Authority",
+     "text": "I think it is important for societies to cherish their traditional values."
+    },
+    {
+     "n": 6,
+     "foundation": "Purity",
+     "text": "I think the human body should be treated like a temple, housing something sacred within."
+    },
+    {
+     "n": 7,
+     "foundation": "Care",
+     "text": "I believe that compassion for those who are suffering is one of the most crucial virtues."
+    },
+    {
+     "n": 8,
+     "foundation": "Equality",
+     "text": "Our society would have fewer problems if people had the same income."
+    },
+    {
+     "n": 9,
+     "foundation": "Proportionality",
+     "text": "I think people should be rewarded in proportion to what they contribute."
+    },
+    {
+     "n": 10,
+     "foundation": "Loyalty",
+     "text": "It upsets me when people have no loyalty to their country."
+    },
+    {
+     "n": 11,
+     "foundation": "Authority",
+     "text": "I feel that most traditions serve a valuable function in keeping society orderly."
+    },
+    {
+     "n": 12,
+     "foundation": "Purity",
+     "text": "I believe chastity is an important virtue."
+    },
+    {
+     "n": 13,
+     "foundation": "Care",
+     "text": "We should all care for people who are in emotional pain."
+    },
+    {
+     "n": 14,
+     "foundation": "Equality",
+     "text": "I believe that everyone should be given the same quantity of resources in life."
+    },
+    {
+     "n": 15,
+     "foundation": "Proportionality",
+     "text": "The effort a worker puts into a job ought to be reflected in the size of a raise they receive."
+    },
+    {
+     "n": 16,
+     "foundation": "Loyalty",
+     "text": "Everyone should love their own community."
+    },
+    {
+     "n": 17,
+     "foundation": "Authority",
+     "text": "I think obedience to parents is an important virtue."
+    },
+    {
+     "n": 18,
+     "foundation": "Purity",
+     "text": "It upsets me when people use foul language like it is nothing."
+    },
+    {
+     "n": 19,
+     "foundation": "Care",
+     "text": "I am empathetic toward those people who have suffered in their lives."
+    },
+    {
+     "n": 20,
+     "foundation": "Equality",
+     "text": "I believe it would be ideal if everyone in society wound up with roughly the same amount of money."
+    },
+    {
+     "n": 21,
+     "foundation": "Proportionality",
+     "text": "It makes me happy when people are recognized on their merits."
+    },
+    {
+     "n": 22,
+     "foundation": "Loyalty",
+     "text": "Everyone should defend their country, if called upon."
+    },
+    {
+     "n": 23,
+     "foundation": "Authority",
+     "text": "We all need to learn from our elders."
+    },
+    {
+     "n": 24,
+     "foundation": "Purity",
+     "text": "If I found out that an acquaintance had an unusual but harmless sexual fetish I would feel uneasy about them."
+    },
+    {
+     "n": 25,
+     "foundation": "Care",
+     "text": "Everyone should try to comfort people who are going through something hard."
+    },
+    {
+     "n": 26,
+     "foundation": "Equality",
+     "text": "When people work together toward a common goal, they should share the rewards equally, even if some worked harder on it."
+    },
+    {
+     "n": 27,
+     "foundation": "Proportionality",
+     "text": "In a fair society, I want people who work harder than others to end up richer than others."
+    },
+    {
+     "n": 28,
+     "foundation": "Loyalty",
+     "text": "Everyone should feel proud when a person in their community wins in an international competition."
+    },
+    {
+     "n": 29,
+     "foundation": "Authority",
+     "text": "I believe that one of the most important values to teach children is to have respect for authority."
+    },
+    {
+     "n": 30,
+     "foundation": "Purity",
+     "text": "People should try to use natural medicines rather than chemically identical human-made ones."
+    },
+    {
+     "n": 31,
+     "foundation": "Care",
+     "text": "It pains me when I see someone ignoring the needs of another human being."
+    },
+    {
+     "n": 32,
+     "foundation": "Equality",
+     "text": "I get upset when some people have a lot more money than others in my country."
+    },
+    {
+     "n": 33,
+     "foundation": "Proportionality",
+     "text": "I feel good when I see cheaters get caught and punished."
+    },
+    {
+     "n": 34,
+     "foundation": "Loyalty",
+     "text": "I believe the strength of a sports team comes from the loyalty of its members to each other."
+    },
+    {
+     "n": 35,
+     "foundation": "Authority",
+     "text": "I think having a strong leader is good for society."
+    },
+    {
+     "n": 36,
+     "foundation": "Purity",
+     "text": "I admire people who keep their virginity until marriage."
+    }
+   ]
+  },
+  {
+   "id": "ecr_rs",
+   "name": "Experiences in Close Relationships - Relationship Structures (Fraley et al., 2011)",
+   "license": "Free for non-commercial use without permission; commercial use requires the authors' permission",
+   "source": "https://labs.psychology.illinois.edu/~rcfraley/measures/relstructures.htm",
+   "scoring": "Avoidance = mean of items 1-6 with 1-4 reverse keyed; Anxiety = mean of items 7-9.",
+   "targets": [
+    "general (global wording)",
+    "mother or mother-like figure",
+    "father or father-like figure",
+    "partner",
+    "best friend"
+   ],
+   "items_relationship_specific": [
+    "It helps to turn to this person in times of need.",
+    "I usually discuss my problems and concerns with this person.",
+    "I talk things over with this person.",
+    "I find it easy to depend on this person.",
+    "I don't feel comfortable opening up to this person.",
+    "I prefer not to show this person how I feel deep down.",
+    "I often worry that this person doesn't really care for me.",
+    "I'm afraid that this person may abandon me.",
+    "I worry that this person won't care about me as much as I care about him or her."
+   ],
+   "items_global": [
+    "It helps to turn to people in times of need.",
+    "I usually discuss my problems and concerns with others.",
+    "I talk things over with people.",
+    "I find it easy to depend on others.",
+    "I don't feel comfortable opening up to others.",
+    "I prefer not to show others how I feel deep down.",
+    "I often worry that other people do not really care for me.",
+    "I'm afraid that other people may abandon me.",
+    "I worry that others won't care about me as much as I care about them."
+   ]
+  },
+  {
+   "id": "values_card_sort",
+   "name": "Legacy Values Card Sort (original, written for this project)",
+   "license": "Original work for Keith Birnbaum; organised by Schwartz's 10 basic values theory (a theory, not copyrighted items); contains no PVQ wording",
+   "method": "Sort the cards into 'core to me', 'matters', 'less important'. Then rank the top 5 and record a story for each. Repeat yearly.",
+   "cards": [
+    {
+     "value": "self_direction",
+     "text": "Thinking for myself and choosing my own path"
+    },
+    {
+     "value": "self_direction",
+     "text": "Having the freedom to build, tinker and figure things out my way"
+    },
+    {
+     "value": "stimulation",
+     "text": "Adventure, novelty and trying things I've never done"
+    },
+    {
+     "value": "stimulation",
+     "text": "A life with surprises in it"
+    },
+    {
+     "value": "hedonism",
+     "text": "Enjoying life: good food, music, laughter, rest"
+    },
+    {
+     "value": "hedonism",
+     "text": "Making time for fun even when there's work to do"
+    },
+    {
+     "value": "achievement",
+     "text": "Being really good at what I do"
+    },
+    {
+     "value": "achievement",
+     "text": "Setting big goals and hitting them"
+    },
+    {
+     "value": "power",
+     "text": "Having influence over how things turn out"
+    },
+    {
+     "value": "power",
+     "text": "Financial security and the means to provide"
+    },
+    {
+     "value": "security",
+     "text": "A safe, stable home for my family"
+    },
+    {
+     "value": "security",
+     "text": "Being prepared for what could go wrong"
+    },
+    {
+     "value": "conformity",
+     "text": "Keeping my word and meeting my obligations"
+    },
+    {
+     "value": "conformity",
+     "text": "Treating people with courtesy and respect"
+    },
+    {
+     "value": "tradition",
+     "text": "Carrying on the traditions and faith I was raised with"
+    },
+    {
+     "value": "tradition",
+     "text": "Humility: not thinking I'm bigger than I am"
+    },
+    {
+     "value": "benevolence",
+     "text": "Being there for the people closest to me, no matter what"
+    },
+    {
+     "value": "benevolence",
+     "text": "Being someone my family and friends can count on"
+    },
+    {
+     "value": "universalism",
+     "text": "Fairness and justice for everyone, including strangers"
+    },
+    {
+     "value": "universalism",
+     "text": "Caring for the natural world"
+    },
+    {
+     "value": "universalism",
+     "text": "Understanding people who are very different from me"
+    }
+   ]
+  }
+ ]
+}

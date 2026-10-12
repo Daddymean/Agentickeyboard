@@ -16,6 +16,7 @@ import io.github.daddymean.agentickeyboard.twin.TwinLearning
 import io.github.daddymean.agentickeyboard.twin.TwinPreferences
 import io.github.daddymean.agentickeyboard.twin.TwinStoragePolicy
 import io.github.daddymean.agentickeyboard.twin.TwinStyleStats
+import io.github.daddymean.agentickeyboard.twin.TwinVault
 import io.github.daddymean.agentickeyboard.util.KeyboardSettings
 import io.github.daddymean.agentickeyboard.util.SafeLog
 import kotlinx.coroutines.CoroutineScope
@@ -53,6 +54,10 @@ class TwinActivity : Activity() {
         }
         layout.addView(TextView(this).apply { textSize = 22f; text = "Legacy twin" })
         layout.addView(TextView(this).apply { textSize = 15f; text = PRIVACY_NOTICE })
+        layout.addView(Button(this).apply {
+            text = "Journal & interview"
+            setOnClickListener { startActivity(android.content.Intent(this@TwinActivity, JournalActivity::class.java)) }
+        })
         layout.addView(switch("Learn for my twin", prefs.isEnabled) { _, on -> prefs.isEnabled = on; refresh() })
         layout.addView(switch("Pause twin learning", prefs.isPaused) { _, on -> prefs.isPaused = on; refresh() })
         status = TextView(this).apply { textSize = 15f; setPadding(0, pad / 2, 0, pad / 2) }
@@ -155,12 +160,13 @@ class TwinActivity : Activity() {
         AlertDialog.Builder(this)
             .setTitle("Delete all twin data?")
             .setMessage(
-                "This deletes every stored message and destroys the encryption key on this phone. " +
+                "This deletes every stored message, every journal answer, recording and result, and destroys " +
+                    "the encryption key on this phone. " +
                     "It cannot be undone. Learning stays on unless you turn it off."
             )
             .setPositiveButton("Delete everything") { _, _ ->
                 scope.launch {
-                    runCatching { TwinLearning.onWorker { TwinLearning.store(this@TwinActivity).deleteAll() } }
+                    runCatching { TwinLearning.onWorker { TwinVault.deleteAll(this@TwinActivity) } }
                         .onFailure { SafeLog.w(TAG, "Twin delete-all failed", it) }
                     refresh()
                 }

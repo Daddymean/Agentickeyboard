@@ -3,6 +3,9 @@
     xmlns:tools="http://schemas.android.com/tools">
 
     <uses-permission android:name="android.permission.INTERNET" />
+    <!-- KEYBOARD-025: voice answers in the legacy-twin journal. Requested only on the
+         first Record tap, after an explanation; used only while the journal is open. -->
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
 
     <application
         android:name=".AgenticKeyboardApplication"
@@ -34,6 +37,12 @@
             android:name=".TwinActivity"
             android:exported="false"
             android:label="Legacy twin"
+            android:theme="@style/Theme.MyApplication" />
+        <activity
+            android:name=".JournalActivity"
+            android:exported="false"
+            android:label="Journal &amp; interview"
+            android:windowSoftInputMode="adjustResize"
             android:theme="@style/Theme.MyApplication" />
         <activity
             android:name=".ClipboardHistoryActivity"
