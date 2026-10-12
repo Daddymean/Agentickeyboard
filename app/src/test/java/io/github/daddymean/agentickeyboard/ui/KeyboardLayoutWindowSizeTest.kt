@@ -5,6 +5,8 @@ import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.getUnclippedBoundsInRoot
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
+import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.performClick
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.height
@@ -36,7 +38,7 @@ class KeyboardLayoutWindowSizeTest {
 
     @get:Rule val composeTestRule = createComposeRule()
 
-    private fun showKeyboard(numberRow: Boolean = false) {
+    private fun showKeyboard(numberRow: Boolean = false, aiTools: Boolean = false) {
         // The keyboard holds animations and Room-backed flows that keep scheduling
         // frames, so an auto-advancing clock never reports idle. Drive it manually:
         // these tests assert on layout, not on animation.
@@ -44,6 +46,7 @@ class KeyboardLayoutWindowSizeTest {
         val context = ApplicationProvider.getApplicationContext<Context>()
         val viewModel = KeyboardViewModel(KeyboardRepository(AppDatabase.getDatabase(context)))
         viewModel.setNumberRowEnabled(numberRow)
+        viewModel.setAiToolsExpanded(aiTools)
         composeTestRule.setContent {
             MyApplicationTheme {
                 // Mirrors how AgenticKeyboardService wraps the IME view tree.
@@ -69,11 +72,27 @@ class KeyboardLayoutWindowSizeTest {
         composeTestRule.onNodeWithTag("key_q").assertIsDisplayed()
         composeTestRule.onNodeWithTag("key_space").assertIsDisplayed()
         composeTestRule.onNodeWithTag("key_comma").assertIsDisplayed()
+        val space = composeTestRule.onNodeWithTag("key_space").getUnclippedBoundsInRoot()
+        val comma = composeTestRule.onNodeWithTag("key_comma").getUnclippedBoundsInRoot()
+        val period = composeTestRule.onNodeWithTag("key_period").getUnclippedBoundsInRoot()
+        assertTrue("comma belongs immediately left of space", comma.right <= space.left)
+        assertTrue("period belongs right of space", space.right <= period.left)
+        assertTrue("space should occupy at least 28% of the phone width", space.width.value >= 411f * .28f)
         val key = composeTestRule.onNodeWithTag("key_q").getUnclippedBoundsInRoot()
         assertCloseTo(44.dp, key.height, "portrait key height")
         // Ten keys plus the nine gaps between them.
         val rowWidth = key.width.value * 10 + 4f * 9
         assertTrue("row of 10 keys is ${rowWidth}dp wide in a 411dp window", rowWidth <= 411f)
+    }
+
+    @Test
+    @Config(sdk = [35], qualifiers = "w411dp-h891dp-port")
+    fun `calibration starts directly from the expanded tools`() {
+        showKeyboard(aiTools = true)
+        composeTestRule.onNodeWithTag("action_calibrate_touch").performClick()
+        composeTestRule.mainClock.advanceTimeBy(300)
+        composeTestRule.onNodeWithText("Tap Q · 1/78").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Cancel calibration").assertIsDisplayed()
     }
 
     @Test

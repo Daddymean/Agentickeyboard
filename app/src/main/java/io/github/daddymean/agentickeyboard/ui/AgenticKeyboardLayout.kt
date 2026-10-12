@@ -1441,6 +1441,21 @@ fun AgenticKeyboardLayout(
                         modifier = Modifier.testTag("action_grammar")
                     )
 
+                    if (!isLearningPaused) {
+                        AiActionButton(
+                            label = "Calibrate touch",
+                            icon = "🎯",
+                            onClick = {
+                                buzz(HapticFeedbackType.TextHandleMove)
+                                trainingProfile = TouchCalibration()
+                                trainingStep = 0
+                                isNumberMode = false
+                                viewModel.setAiToolsExpanded(false)
+                            },
+                            modifier = Modifier.testTag("action_calibrate_touch")
+                        )
+                    }
+
                     // Selection is the precondition for every action in this row,
                     // so its entry point lives here rather than behind a gesture.
                     if (!inPlaygroundMode) {
@@ -1640,7 +1655,7 @@ fun AgenticKeyboardLayout(
                 horizontalArrangement = Arrangement.spacedBy(6.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                ClipActionChip(if (trainingStep == null) "Train touch" else "Cancel training") {
+                ClipActionChip(if (trainingStep == null) "Calibrate touch" else "Cancel calibration") {
                     if (trainingStep == null) {
                         trainingProfile = TouchCalibration()
                         trainingStep = 0
@@ -1941,6 +1956,7 @@ fun AgenticKeyboardLayout(
         }
 
 
+        // Compact utility keys leave the remaining width to the spacebar.
         // Row 4: bottom command bar
         Row(
             modifier = Modifier
@@ -1958,7 +1974,7 @@ fun AgenticKeyboardLayout(
                 },
                 isSpecial = true,
                 modifier = Modifier
-                    .width(metrics.extraWideKeyWidth)
+                    .width(metrics.mediumKeyWidth)
                     .testTag("key_mode")
             )
 
@@ -1974,7 +1990,7 @@ fun AgenticKeyboardLayout(
                 },
                 isSpecial = true,
                 modifier = Modifier
-                    .width(metrics.mediumKeyWidth)
+                    .width(metrics.smallKeyWidth)
                     .testTag("key_privacy_toggle")
             )
 
@@ -1993,10 +2009,20 @@ fun AgenticKeyboardLayout(
                 },
                 isSpecial = true,
                 modifier = Modifier
-                    .width(metrics.mediumKeyWidth)
+                    .width(metrics.smallKeyWidth)
                     .testTag("key_mic")
             )
 
+            Spacer(modifier = Modifier.width(metrics.keyGap))
+
+            KeyButton(
+                text = ",",
+                onClick = {
+                    buzz(HapticFeedbackType.TextHandleMove)
+                    onKeyPress(",")
+                },
+                modifier = Modifier.width(metrics.smallKeyWidth).testTag("key_comma")
+            )
             Spacer(modifier = Modifier.width(metrics.keyGap))
 
             // Space Key (smart: expands shortcuts, applies learned auto-corrections,
@@ -2013,16 +2039,6 @@ fun AgenticKeyboardLayout(
                     .testTag("key_space")
             )
 
-            Spacer(modifier = Modifier.width(metrics.keyGap))
-
-            KeyButton(
-                text = ",",
-                onClick = {
-                    buzz(HapticFeedbackType.TextHandleMove)
-                    onKeyPress(",")
-                },
-                modifier = Modifier.width(metrics.smallKeyWidth).testTag("key_comma")
-            )
             Spacer(modifier = Modifier.width(metrics.keyGap))
 
             // Period key with punctuation variants on long-press
@@ -2053,7 +2069,7 @@ fun AgenticKeyboardLayout(
                 },
                 isSpecial = true,
                 modifier = Modifier
-                    .width(metrics.extraWideKeyWidth)
+                    .width(metrics.mediumKeyWidth)
                     .testTag("key_enter")
             )
         }
