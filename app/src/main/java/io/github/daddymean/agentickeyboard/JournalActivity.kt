@@ -7,6 +7,7 @@ import android.content.pm.PackageManager
 import android.media.MediaDataSource
 import android.media.MediaPlayer
 import android.os.Bundle
+import android.window.OnBackInvokedDispatcher
 import android.text.InputType
 import android.text.format.DateFormat
 import android.view.View
@@ -89,6 +90,7 @@ class JournalActivity : Activity() {
         transcriber = OnDeviceTranscriber(this)
         root = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(pad, pad, pad, pad) }
         setContentView(ScrollView(this).apply { addView(root) })
+        onBackInvokedDispatcher.registerOnBackInvokedCallback(OnBackInvokedDispatcher.PRIORITY_DEFAULT) { onBack() }
         scope.launch {
             runCatching {
                 val bankJson = assets.open(ASSET_BANK).bufferedReader().use { it.readText() }
@@ -117,9 +119,9 @@ class JournalActivity : Activity() {
         super.onDestroy()
     }
 
-    @Deprecated("Deprecated in Java")
-    override fun onBackPressed() {
-        if (root.tag == "home") @Suppress("DEPRECATION") super.onBackPressed() else {
+    /** Back (button or gesture) returns to the journal home first, stopping any take. */
+    private fun onBack() {
+        if (root.tag == "home") finish() else {
             if (recorder.isRecording) onStopRecording?.invoke()
             scope.launch { home() }
         }
