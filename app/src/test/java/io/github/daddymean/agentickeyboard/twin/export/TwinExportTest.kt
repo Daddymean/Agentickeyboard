@@ -121,7 +121,8 @@ class TwinExportTest {
     fun archiveHoldsOnlyCiphertext() {
         val (archive, _) = export()
         val a = String(archive, Charsets.ISO_8859_1)
-        for (n in listOf("ZebraMarmalade", "OtterLantern", "lake", "manifest", "fLaC", "PK\u0003\u0004", "LS-001", "Ava")) {
+        // Needles of 6+ bytes: a ~1.3 MB random ciphertext contains any given 3-byte string by chance.
+        for (n in listOf("ZebraMarmalade", "OtterLantern", "see you at", "manifest", "fLaC\u0000", "PK\u0003\u0004\u0014\u0000", "LS-001", "messages.jsonl")) {
             assertFalse("archive contains $n", a.contains(n))
         }
         assertEquals("AKTX", a.substring(0, 4))
