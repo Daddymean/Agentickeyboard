@@ -58,6 +58,10 @@ class TwinActivity : Activity() {
             text = "Journal & interview"
             setOnClickListener { startActivity(android.content.Intent(this@TwinActivity, JournalActivity::class.java)) }
         })
+        layout.addView(Button(this).apply {
+            text = "Encrypted export (stays on this phone)"
+            setOnClickListener { startActivity(android.content.Intent(this@TwinActivity, TwinExportActivity::class.java)) }
+        })
         layout.addView(switch("Learn for my twin", prefs.isEnabled) { _, on -> prefs.isEnabled = on; refresh() })
         layout.addView(switch("Pause twin learning", prefs.isPaused) { _, on -> prefs.isPaused = on; refresh() })
         status = TextView(this).apply { textSize = 15f; setPadding(0, pad / 2, 0, pad / 2) }
@@ -217,7 +221,8 @@ class TwinActivity : Activity() {
                 "backed up, not transferred to a new phone and never sent to the cloud. You can view every saved entry " +
                 "here, delete single entries, or delete everything, which also destroys the key. You can also turn it " +
                 "off or pause it.\n\n" +
-                "Exports (a later version, as is the dead-man hand-off) are scrubbed again, more strictly, before " +
-                "anything leaves the phone."
+                "Encrypted export: only when you start it. It writes one passphrase-encrypted file to a folder on this " +
+                "phone, scrubbed again more strictly first; nothing is uploaded. Copying it off the phone is up to you, " +
+                "and delete-all doesn't reach copies you made. (The dead-man hand-off is a later version.)"
     }
 }

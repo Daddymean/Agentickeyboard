@@ -39,6 +39,11 @@
             android:label="Legacy twin"
             android:theme="@style/Theme.MyApplication" />
         <activity
+            android:name=".TwinExportActivity"
+            android:exported="false"
+            android:label="Encrypted export"
+            android:theme="@style/Theme.MyApplication" />
+        <activity
             android:name=".JournalActivity"
             android:exported="false"
             android:label="Journal &amp; interview"
