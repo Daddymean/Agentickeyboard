@@ -842,9 +842,11 @@ class KeyboardViewModel(
         return AutoFix.fix(
             typed,
             textBefore,
-            LocalSpelling.shared,
-            personalAutoFixGuard(),
-            tapsFor = { core -> if (learning) TapTrail.offsetsFor(core) else null }
+            AutoFix.Context(
+                spelling = LocalSpelling.shared,
+                personalWords = personalAutoFixGuard(),
+                tapsFor = { core -> if (learning) TapTrail.offsetsFor(core) else null }
+            )
         )
     }
 
