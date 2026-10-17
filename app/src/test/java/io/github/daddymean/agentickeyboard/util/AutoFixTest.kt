@@ -34,7 +34,7 @@ class AutoFixTest {
         sensitive: Boolean = false
     ): String? = WordCommitResolver.resolve(
         word, emptyList(), rules, paused, { TextExpansion.ExpandedText(it) }, sensitive,
-        autoFix = { AutoFix.fix(it, before, spelling, personal) }
+        autoFix = { AutoFix.fix(it, before, AutoFix.Context(spelling, personal)) }
     )?.replacement
 
     @Test
@@ -48,7 +48,7 @@ class AutoFixTest {
         assertEquals("the", space("teh"))
         assertEquals("don't", space("dont"))
         val fix = WordCommitResolver.resolve("realy", emptyList(), emptyList(), false, { TextExpansion.ExpandedText(it) },
-            autoFix = { AutoFix.fix(it, "", spelling) })
+            autoFix = { AutoFix.fix(it, "", AutoFix.Context(spelling)) })
         assertEquals(WordReplacement("really", fromLearnedRule = false, fromAutoFix = true), fix)
     }
 
@@ -70,7 +70,7 @@ class AutoFixTest {
         assertNull("sensitive", space("realy", sensitive = true))
         assertNull("no clear winner", space("wich"))
         // Nothing fires before the real dictionary has loaded.
-        assertNull(AutoFix.fix("realy", "", LocalSpelling(listOf("really", "real"))))
+        assertNull(AutoFix.fix("realy", "", AutoFix.Context(LocalSpelling(listOf("really", "real")))))
     }
 
     @Test
