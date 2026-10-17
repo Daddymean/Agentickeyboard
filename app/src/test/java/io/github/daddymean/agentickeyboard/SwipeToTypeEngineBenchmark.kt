@@ -63,13 +63,5 @@ class SwipeToTypeEngineBenchmark {
         }
 
         samples.sort()
-        fun percentile(p: Double) = samples[((samples.size - 1) * p).toInt()] / 1_000_000.0
-        println(
-            "swipe decode over ${samples.size} calls: " +
-                "p50 ${"%.2f".format(percentile(0.50))} ms, " +
-                "p95 ${"%.2f".format(percentile(0.95))} ms, " +
-                "max ${"%.2f".format(samples.last() / 1_000_000.0)} ms"
-        )
-        println("interpolated path lengths: " + gestures.map { SwipeToTypeEngine.interpolatePath(it).size })
     }
 }
