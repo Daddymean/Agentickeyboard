@@ -7,7 +7,7 @@ import io.github.daddymean.agentickeyboard.util.OnDeviceAiStatus
 import io.github.daddymean.agentickeyboard.util.OnDeviceTone
 import io.github.daddymean.agentickeyboard.util.ToneMatch
 import io.github.daddymean.agentickeyboard.util.ReplyIntents
-import io.github.daddymean.agentickeyboard.util.SafeLog
+import android.util.Log
 import io.github.daddymean.agentickeyboard.util.WritingQualityMeter
 import com.squareup.moshi.Moshi
 import kotlinx.coroutines.CancellationException
@@ -109,7 +109,7 @@ object GeminiManager {
         } catch (e: kotlinx.coroutines.CancellationException) {
             throw e
         } catch (e: Exception) {
-            SafeLog.e(TAG, "Error in fixGrammar", e)
+            Log.e(TAG, "Error in fixGrammar: ${e.message}")
             offlineGrammarFix(text)
         }
     }
@@ -146,7 +146,7 @@ object GeminiManager {
                 offlineReplies(contextMessage, personalizationContext, intent)
             }
         } catch (e: Exception) {
-            SafeLog.e(TAG, "Error in suggestReplies", e)
+            Log.e(TAG, "Error in suggestReplies: ${e.message}")
             offlineReplies(contextMessage, personalizationContext, intent)
         }
     }
@@ -172,7 +172,7 @@ object GeminiManager {
             if (cacheResponse && result != null) textCache.put(cacheKey, result)
             result ?: offlineSummary(text)
         } catch (e: Exception) {
-            SafeLog.e(TAG, "Error in summarizeMessage", e)
+            Log.e(TAG, "Error in summarizeMessage: ${e.message}")
             offlineSummary(text)
         }
     }
@@ -202,7 +202,7 @@ object GeminiManager {
             if (cacheResponse && result != null) textCache.put(cacheKey, result)
             result ?: "[Translation Failed] $text"
         } catch (e: Exception) {
-            SafeLog.e(TAG, "Error in translateText", e)
+            Log.e(TAG, "Error in translateText: ${e.message}")
             "[Translation Error] $text"
         }
     }
@@ -232,7 +232,7 @@ object GeminiManager {
             if (result != null) textCache.put(cacheKey, result)
             result ?: offlineRewrite(text, targetTone)
         } catch (e: Exception) {
-            SafeLog.e(TAG, "Error in rewriteWithTone", e)
+            Log.e(TAG, "Error in rewriteWithTone: ${e.message}")
             offlineRewrite(text, targetTone)
         }
     }
@@ -263,7 +263,7 @@ object GeminiManager {
             if (result != null) textCache.put(cacheKey, result)
             result ?: offlineCompose(instruction, targetTone, personalizationContext, preserveVoice)
         } catch (e: Exception) {
-            SafeLog.e(TAG, "Error in composeMessage", e)
+            Log.e(TAG, "Error in composeMessage: ${e.message}")
             offlineCompose(instruction, targetTone, personalizationContext, preserveVoice)
         }
     }
@@ -287,7 +287,7 @@ object GeminiManager {
             if (cacheResponse && result != null) textCache.put(cacheKey, result)
             result ?: "[Explanation failed]"
         } catch (e: Exception) {
-            SafeLog.e(TAG, "Error in explainText", e)
+            Log.e(TAG, "Error in explainText: ${e.message}")
             "[Explanation error] ${e.localizedMessage}"
         }
     }
@@ -317,7 +317,7 @@ object GeminiManager {
             if (result != null) textCache.put(cacheKey, result)
             result ?: offlineContinue(text, personalizationContext, preserveVoice)
         } catch (e: Exception) {
-            SafeLog.e(TAG, "Error in continueText", e)
+            Log.e(TAG, "Error in continueText: ${e.message}")
             offlineContinue(text, personalizationContext, preserveVoice)
         }
     }
@@ -355,7 +355,7 @@ object GeminiManager {
                 offlineTone(text, personalizationContext)
             }
         } catch (e: Exception) {
-            SafeLog.e(TAG, "Error in analyzeTone", e)
+            Log.e(TAG, "Error in analyzeTone: ${e.message}")
             offlineTone(text, personalizationContext)
         }
     }
@@ -403,7 +403,7 @@ object GeminiManager {
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
-            SafeLog.e(TAG, "Error in matchTone", e)
+            Log.e(TAG, "Error in matchTone: ${e.message}")
             offlineMatchTone(request)
         }
     }
