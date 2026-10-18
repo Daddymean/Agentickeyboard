@@ -38,3 +38,7 @@ The format is documented in `decrypt_twin_export.py` and `PassphraseArchive.kt`:
 - **Encryption**: AES-256-GCM in 1 MiB chunks.
 - **IV**: an 8-byte random prefix followed by the chunk index.
 - **Associated data**: the header, the chunk index and the final flag.
+
+## Dead-man release archives
+
+A release archive (header kdf 2) is opened with `open_twin_release.py` and two share cards, not with a passphrase. See [RELEASE.md](RELEASE.md).

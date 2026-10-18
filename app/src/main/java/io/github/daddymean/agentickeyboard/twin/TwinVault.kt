@@ -1,6 +1,7 @@
 package io.github.daddymean.agentickeyboard.twin
 
 import android.content.Context
+import io.github.daddymean.agentickeyboard.twin.deadman.DeadManStore
 import io.github.daddymean.agentickeyboard.twin.journal.JournalStore
 
 /**
@@ -17,13 +18,22 @@ object TwinVault {
             journal ?: JournalStore(context, JournalStore.dir(context), KeystoreTwinCipher()).also { journal = it }
         }
 
-    /** Deletes every journal record and recording, every twin entry, and the key. Call on the twin worker. */
+    @Volatile private var deadMan: DeadManStore? = null
+
+    /** KEYBOARD-027: the dead-man state, sealed with the same Keystore key. */
+    fun deadMan(context: Context): DeadManStore =
+        deadMan ?: synchronized(this) {
+            deadMan ?: DeadManStore(DeadManStore.file(context), KeystoreTwinCipher()).also { deadMan = it }
+        }
+
+    /** Deletes every journal record and recording, the dead-man state, every twin entry, and the key. Call on the twin worker. */
     fun deleteAll(context: Context) {
-        deleteAll(journal(context), TwinLearning.store(context))
+        deleteAll(journal(context), TwinLearning.store(context), deadMan(context))
     }
 
-    internal fun deleteAll(journal: JournalStore, store: TwinStore) {
+    internal fun deleteAll(journal: JournalStore, store: TwinStore, deadMan: DeadManStore? = null) {
         journal.deleteAll()
+        deadMan?.delete()
         store.deleteAll() // also destroys the shared Keystore key
     }
 }
