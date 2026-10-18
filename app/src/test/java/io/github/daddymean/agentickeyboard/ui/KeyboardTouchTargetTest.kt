@@ -9,6 +9,9 @@ import androidx.compose.ui.test.isRoot
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performTouchInput
+import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.assertDoesNotExist
 import androidx.lifecycle.ViewModelStore
 import androidx.lifecycle.viewModelScope
 import androidx.room.Room
@@ -69,6 +72,7 @@ class KeyboardTouchTargetTest {
         viewModelStore.put("keyboard", viewModel)
         viewModelJob = viewModel.viewModelScope.coroutineContext[Job]
         viewModel.onEditorStarted("com.example.app", "App", InputType.TYPE_CLASS_TEXT, 0)
+        viewModel.setSwipeEnabled(false)
         composeTestRule.setContent {
             MyApplicationTheme {
                 ProvideKeyboardMetrics(keyHeightScale = keyHeightScale) {
@@ -121,6 +125,38 @@ class KeyboardTouchTargetTest {
         val s = keys['s']!!
         val gap = tapAt((a.r + s.l) / 2, a.cy)
         assertTrue("gap a|s typed '$gap'", gap == "a" || gap == "s")
+    }
+
+    @Test
+    fun `sliding a typing finger with swipe disabled does not start command gestures`() {
+        showKeyboard(1.15f)
+        val key = composeTestRule.onNodeWithTag("key_q")
+        val before = key.getUnclippedBoundsInRoot()
+        val density = composeTestRule.density.density
+        key.performTouchInput {
+            down(center)
+            moveBy(Offset(0f, 20f * density))
+            moveBy(Offset(0f, 20f * density))
+        }
+        composeTestRule.waitForIdle()
+        try {
+            composeTestRule.onNodeWithText("Drawing Gesture Trail...").assertDoesNotExist()
+            assertEquals("keys must not jump under a held finger", before, key.getUnclippedBoundsInRoot())
+        } finally {
+            key.performTouchInput { up() }
+        }
+        // A cancelled slide must not prevent the next ordinary tap.
+        assertEquals("q", tapAt(keys['q']!!.cx, keys['q']!!.cy))
+    }
+
+    @Test
+    fun `transient feedback does not move the letter keys`() {
+        showKeyboard(1.15f)
+        val key = composeTestRule.onNodeWithTag("key_q")
+        val before = key.getUnclippedBoundsInRoot()
+        composeTestRule.onNodeWithTag("key_privacy_toggle").performClick()
+        composeTestRule.waitForIdle()
+        assertEquals("feedback must not resize the keyboard", before, key.getUnclippedBoundsInRoot())
     }
 
     @Test
