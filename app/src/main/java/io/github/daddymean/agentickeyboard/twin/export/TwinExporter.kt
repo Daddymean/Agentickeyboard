@@ -46,6 +46,18 @@ class TwinExporter(private val twin: TwinStore?, private val journal: JournalSto
 
     fun export(out: OutputStream, passphrase: CharArray, nowMillis: Long, iterations: Int = PassphraseArchive.ITERATIONS): ExportSummary {
         val normalized = normalize(passphrase)
+        try {
+            return write(PassphraseArchive.Writer(out, normalized, iterations), nowMillis)
+        } finally {
+            normalized.fill('\u0000')
+        }
+    }
+
+    /** KEYBOARD-027: the same contents under a data key (the dead-man release archive). */
+    fun exportRelease(out: OutputStream, params: PassphraseArchive.Params, nowMillis: Long): ExportSummary =
+        write(PassphraseArchive.Writer(out, params), nowMillis)
+
+    private fun write(writer: PassphraseArchive.Writer, nowMillis: Long): ExportSummary {
         val files = JSONObject()
         var messages = 0
         var dropped = 0
@@ -53,8 +65,8 @@ class TwinExporter(private val twin: TwinStore?, private val journal: JournalSto
         var redacted = 0
         var recordings = 0
         var unreadable = 0
-        try {
-            PassphraseArchive.Writer(out, normalized, iterations).use { enc ->
+        run {
+            writer.use { enc ->
                 val zip = ZipOutputStream(NonClosing(enc))
                 fun entry(name: String, write: (OutputStream) -> Unit) {
                     zip.putNextEntry(ZipEntry(name).apply { time = nowMillis })
@@ -108,8 +120,6 @@ class TwinExporter(private val twin: TwinStore?, private val journal: JournalSto
                 zip.closeEntry()
                 zip.finish()
             }
-        } finally {
-            normalized.fill('\u0000')
         }
         return ExportSummary(messages, dropped, records, redacted, recordings, unreadable)
     }
@@ -170,9 +180,20 @@ class TwinExporter(private val twin: TwinStore?, private val journal: JournalSto
         fun verify(input: InputStream, passphrase: CharArray): JSONObject {
             val p = normalize(passphrase)
             try {
+                return verifyStream(PassphraseArchive.Reader(input, p))
+            } finally {
+                p.fill('\u0000')
+            }
+        }
+
+        /** KEYBOARD-027: verifies a release archive with its data key. */
+        fun verifyRelease(input: InputStream, dataKey: ByteArray): JSONObject =
+            verifyStream(PassphraseArchive.Reader(input, dataKey))
+
+        private fun verifyStream(reader: PassphraseArchive.Reader): JSONObject {
+            run {
                 val seen = HashMap<String, Pair<String, Long>>()
                 var manifest: JSONObject? = null
-                val reader = PassphraseArchive.Reader(input, p)
                 ZipInputStream(reader).use { zip ->
                     while (true) {
                         val e = zip.nextEntry ?: break
@@ -201,8 +222,6 @@ class TwinExporter(private val twin: TwinStore?, private val journal: JournalSto
                     require(f.getString("sha256") == v.first && f.getLong("bytes") == v.second) { "hash mismatch: $name" }
                 }
                 return m
-            } finally {
-                p.fill('\u0000')
             }
         }
     }

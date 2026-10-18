@@ -62,6 +62,10 @@ class TwinActivity : Activity() {
             text = "Encrypted export (stays on this phone)"
             setOnClickListener { startActivity(android.content.Intent(this@TwinActivity, TwinExportActivity::class.java)) }
         })
+        layout.addView(Button(this).apply {
+            text = "Dead-man switch (Google trigger, key holders)"
+            setOnClickListener { startActivity(android.content.Intent(this@TwinActivity, DeadManActivity::class.java)) }
+        })
         layout.addView(switch("Learn for my twin", prefs.isEnabled) { _, on -> prefs.isEnabled = on; refresh() })
         layout.addView(switch("Pause twin learning", prefs.isPaused) { _, on -> prefs.isPaused = on; refresh() })
         status = TextView(this).apply { textSize = 15f; setPadding(0, pad / 2, 0, pad / 2) }
@@ -164,7 +168,8 @@ class TwinActivity : Activity() {
         AlertDialog.Builder(this)
             .setTitle("Delete all twin data?")
             .setMessage(
-                "This deletes every stored message, every journal answer, recording and result, and destroys " +
+                "This deletes every stored message, every journal answer, recording and result, the dead-man " +
+                    "switch set-up, and destroys " +
                     "the encryption key on this phone. " +
                     "It cannot be undone. Learning stays on unless you turn it off."
             )
