@@ -20,6 +20,3 @@ local.properties
 
 __pycache__/
 *.pyc
-build/
-context-app/build/
-app/build/
