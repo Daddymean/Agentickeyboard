@@ -130,7 +130,8 @@ def main(argv=None):
     ap.add_argument("out_dir", nargs="?")
     ap.add_argument("--card", action="append", default=[], help="share card file or text (give two)")
     ap.add_argument("--verify-only", action="store_true")
-    args = ap.parse_args(argv)
+    # Intermixed, so out_dir may follow the --card options on every Python 3 version.
+    args = ap.parse_intermixed_args(argv)
     if not args.verify_only and not args.out_dir:
         ap.error("out_dir is required unless --verify-only")
     try:
