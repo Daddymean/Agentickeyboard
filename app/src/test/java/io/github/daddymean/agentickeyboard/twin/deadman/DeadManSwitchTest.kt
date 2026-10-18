@@ -29,7 +29,7 @@ class DeadManSwitchTest {
         assertEquals(1, k.getInt("epoch"))
         assertEquals(listOf("Guardian 1", "Guardian 2", "Guardian 3"), r.cards.map { it.first.label })
         assertEquals((1..6).map { "Kid $it" }, (0 until 6).map { k.getJSONArray("recipients").getString(it) })
-        assertEquals("2027-04-17", k.getJSONObject("policy").getString("release_from"))
+        assertEquals("2027-04-17", k.getJSONObject("policy").getString("not_before"))
         // The key file holds no usable secret: no DEK, no KEK, no share bytes.
         val text = k.toString()
         assertFalse(text.contains(hex(r.state.dataKey)))
@@ -97,12 +97,62 @@ class DeadManSwitchTest {
         assertEquals(CheckInStage.OVERDUE, DeadManSwitch.status(s, LocalDate.of(2027, 4, 17)).stage)
         val later = DeadManSwitch.checkIn(s, LocalDate.of(2027, 3, 20))
         assertEquals(CheckInStage.OK, DeadManSwitch.status(later, LocalDate.of(2027, 4, 17)).stage)
-        assertEquals("2027-09-20", later.keyFile.getJSONObject("policy").getString("release_from"))
+        assertEquals("2027-09-20", later.keyFile.getJSONObject("policy").getString("not_before"))
         // Month ends: 31 Aug + 6 months = 28/29 Feb.
         assertEquals(LocalDate.of(2027, 2, 28), DeadManSwitch.releaseFrom(LocalDate.of(2026, 8, 31)))
         // Check-in keeps the keys.
         assertEquals(s.setId, later.setId)
         assertArrayEquals(s.dataKey, later.dataKey)
+    }
+
+    @Test
+    fun googleTriggerIsASignalAndHolderChangesNeedItConfirmedAgain() {
+        val s = DeadManSwitch.create(DeadManSwitch.GUARDIANS, today).state
+        assertEquals(IamStage.NOT_CONFIRMED, DeadManSwitch.status(s, today).iamStage)
+        val p0 = s.keyFile.getJSONObject("policy")
+        assertEquals("google-inactive-account-manager", p0.getJSONObject("trigger").getString("primary"))
+        assertEquals(6, p0.getJSONObject("trigger").getInt("inactive_months"))
+        assertTrue(p0.getJSONObject("trigger").getBoolean("signal_only"))
+        assertTrue(p0.getJSONObject("trigger").isNull("keith_confirmed_plan_on"))
+        assertTrue(p0.getString("fallback").contains("suspended"))
+
+        val c = DeadManSwitch.confirmIam(s, today)
+        val st = DeadManSwitch.status(c, today)
+        assertEquals(IamStage.OK, st.iamStage)
+        assertEquals(LocalDate.of(2027, 10, 17), st.iamReviewDue)
+        assertEquals(IamStage.REVIEW_DUE, DeadManSwitch.status(c, LocalDate.of(2027, 10, 17)).iamStage)
+        assertEquals(today.toString(), c.keyFile.getJSONObject("policy").getJSONObject("trigger").getString("keith_confirmed_plan_on"))
+        // Confirming touches no key material, and check-in keeps the confirmation.
+        assertEquals(s.setId, c.setId)
+        assertArrayEquals(s.dataKey, c.dataKey)
+        assertEquals(today, DeadManSwitch.checkIn(c, today.plusDays(3)).iamConfirmedOn)
+
+        // Reissuing with the same holders keeps it; a new holder needs adding as a Google contact.
+        assertEquals(today, DeadManSwitch.replaceHolder(c, 1, "Guardian 1", null, today).state.iamConfirmedOn)
+        val kid = DeadManSwitch.replaceHolder(c, 1, "Kid 1", LocalDate.of(2000, 1, 1), today).state
+        assertEquals(null, kid.iamConfirmedOn)
+        assertEquals(IamStage.NOT_CONFIRMED, DeadManSwitch.status(kid, today).iamStage)
+        assertTrue(kid.keyFile.getJSONObject("policy").getJSONObject("trigger").isNull("keith_confirmed_plan_on"))
+
+        // Older saved state (before the Google trigger) still loads.
+        val old = s.toJson().also { it.remove("iam_confirmed_on") }
+        assertEquals(null, DeadManState.fromJson(old).iamConfirmedOn)
+        assertEquals(c, DeadManState.fromJson(JSONObject(c.toJson().toString())))
+    }
+
+    @Test
+    fun googleMessageAndCardsCarryNoSecret() {
+        val r = DeadManSwitch.create(DeadManSwitch.GUARDIANS, today)
+        val msg = DeadManSwitch.IAM_SUBJECT + "\n" + DeadManSwitch.IAM_MESSAGE
+        assertFalse(msg.contains("AKDM1"))
+        assertFalse(Regex("[0-9a-fA-F]{16,}").containsMatchIn(msg))
+        assertFalse(Regex("https?://").containsMatchIn(msg))
+        assertFalse(msg.contains(r.state.setId, ignoreCase = true))
+        for (word in listOf("passphrase:", ".aktx", ".json")) assertFalse(msg.contains(word))
+        assertTrue(msg.contains("not a key"))
+        // The guardian card text explains the signal, the checks and the cross-check.
+        val card = io.github.daddymean.agentickeyboard.DeadManActivity.cardText("Guardian 1", r.cards[0].second.encode(), 1)
+        for (k in listOf("google.com", "signed-by", "other holders", "only a signal", "not_before")) assertTrue(k, card.contains(k))
     }
 
     @Test

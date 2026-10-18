@@ -63,7 +63,7 @@ class TwinActivity : Activity() {
             setOnClickListener { startActivity(android.content.Intent(this@TwinActivity, TwinExportActivity::class.java)) }
         })
         layout.addView(Button(this).apply {
-            text = "Dead-man switch (check in, key holders)"
+            text = "Dead-man switch (Google trigger, key holders)"
             setOnClickListener { startActivity(android.content.Intent(this@TwinActivity, DeadManActivity::class.java)) }
         })
         layout.addView(switch("Learn for my twin", prefs.isEnabled) { _, on -> prefs.isEnabled = on; refresh() })
