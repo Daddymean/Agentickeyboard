@@ -485,130 +485,130 @@ fun AgenticKeyboardLayout(
     ) {
     CompositionLocalProvider(LocalKeyPressOrder provides keyPressOrder) {
     val keyboardColors = LocalKeyboardColors.current
+    // Command gestures belong only to the explicit guide pad, never the typing surface.
+    // A root drag detector consumes normal thumb drift even with Swipe-to-Type off.
+    val commandGestureModifier = Modifier.pointerInput(Unit) {
+        detectDragGestures(
+            onDragStart = {
+                dragX = 0f
+                dragY = 0f
+                dragPreview = null
+            },
+            onDragCancel = {
+                dragX = 0f
+                dragY = 0f
+                dragPreview = null
+            },
+            onDragEnd = {
+                val deltaX = dragX
+                val deltaY = dragY
+                dragX = 0f
+                dragY = 0f
+                dragPreview = null
+
+                if (abs(deltaX) > 100 && abs(deltaY) > 100) {
+                    if (deltaX > 0 && deltaY < 0) {
+                        // Up-Right -> Translate
+                        buzz(HapticFeedbackType.LongPress)
+                        gestureAlert = "Gesture Triggered: Translating! 🌐"
+                        viewModel.translateText(aiSourceText())
+                    } else if (deltaX < 0 && deltaY < 0) {
+                        // Up-Left -> Summarize
+                        buzz(HapticFeedbackType.LongPress)
+                        gestureAlert = "Gesture Triggered: Summarizing! 🔍"
+                        viewModel.summarizeMessage(aiSourceText())
+                    } else if (deltaX < 0 && deltaY > 0) {
+                        // Down-Left -> Analyze Tone
+                        buzz(HapticFeedbackType.LongPress)
+                        gestureAlert = "Gesture Triggered: Analyzing Tone! 🎭"
+                        viewModel.analyzeTone(aiSourceText())
+                    } else {
+                        // Down-Right -> Expand Templates
+                        buzz(HapticFeedbackType.LongPress)
+                        val text = currentText()
+                        val expanded = viewModel.tryExpandAbbreviation(text)
+                        if (expanded.text != text) {
+                            viewModel.recordShortcutExpansionStat()
+                            replaceActiveText(expanded.text, expanded.cursorOffset)
+                            val undoable = viewModel.peekPendingAiUndo()
+                                ?.let { it.cursorOffset == null || it.editorUndo != null } == true
+                            gestureAlert = if (undoable) "Template Expanded! ⚡ (⌫ undoes)" else "Template Expanded! ⚡"
+                        } else {
+                            gestureAlert = "No abbreviations found to expand. ⚡"
+                        }
+                    }
+                } else if (abs(deltaX) > abs(deltaY) && abs(deltaX) > 120) {
+                    if (deltaX > 0) {
+                        gestureAlert = "Gesture: Space"
+                        onKeyPress(" ")
+                    } else {
+                        gestureAlert = "Gesture: Backspace"
+                        onDelete()
+                    }
+                } else if (abs(deltaY) > abs(deltaX) && abs(deltaY) > 120) {
+                    if (deltaY < 0) {
+                        gestureAlert = "Gesture: Show AI Actions"
+                        viewModel.setAiToolsExpanded(true)
+                    } else {
+                        gestureAlert = "Gesture: Hide AI Actions"
+                        viewModel.setAiToolsExpanded(false)
+                    }
+                }
+            },
+            onDrag = { change, dragAmount ->
+                change.consume()
+                dragX += dragAmount.x
+                dragY += dragAmount.y
+
+                val dx = dragX
+                val dy = dragY
+                dragPreview = when {
+                    abs(dx) > 100 && abs(dy) > 100 -> {
+                        when {
+                            dx > 0 && dy < 0 -> "🌐 Release to Translate (Up-Right)"
+                            dx < 0 && dy < 0 -> "🔍 Release to Summarize (Up-Left)"
+                            dx < 0 && dy > 0 -> "🎭 Release to Analyze Tone (Down-Left)"
+                            else -> "⚡ Release to Expand Custom Shortcut (Down-Right)"
+                        }
+                    }
+                    abs(dx) > abs(dy) && abs(dx) > 120 -> {
+                        if (dx > 0) "␠ Release for Space (Right)" else "⌫ Release to Backspace (Left)"
+                    }
+                    abs(dy) > abs(dx) && abs(dy) > 120 -> {
+                        if (dy < 0) "💡 Release to Show AI Panel (Up)" else "❌ Release to Collapse (Down)"
+                    }
+                    else -> "Drawing Gesture Trail..."
+                }
+            }
+        )
+    }
     Column(
         modifier = modifier
             .fillMaxWidth()
             .background(keyboardColors.background)
             .padding(bottom = metrics.bottomPadding + navigationBarInset)
-            .pointerInput(Unit) {
-                detectDragGestures(
-                    onDragEnd = {
-                        val deltaX = dragX
-                        val deltaY = dragY
-                        dragX = 0f
-                        dragY = 0f
-                        dragPreview = null
-
-                        if (abs(deltaX) > 100 && abs(deltaY) > 100) {
-                            if (deltaX > 0 && deltaY < 0) {
-                                // Up-Right -> Translate
-                                buzz(HapticFeedbackType.LongPress)
-                                gestureAlert = "Gesture Triggered: Translating! 🌐"
-                                viewModel.translateText(aiSourceText())
-                            } else if (deltaX < 0 && deltaY < 0) {
-                                // Up-Left -> Summarize
-                                buzz(HapticFeedbackType.LongPress)
-                                gestureAlert = "Gesture Triggered: Summarizing! 🔍"
-                                viewModel.summarizeMessage(aiSourceText())
-                            } else if (deltaX < 0 && deltaY > 0) {
-                                // Down-Left -> Analyze Tone
-                                buzz(HapticFeedbackType.LongPress)
-                                gestureAlert = "Gesture Triggered: Analyzing Tone! 🎭"
-                                viewModel.analyzeTone(aiSourceText())
-                            } else {
-                                // Down-Right -> Expand Templates
-                                buzz(HapticFeedbackType.LongPress)
-                                val text = currentText()
-                                val expanded = viewModel.tryExpandAbbreviation(text)
-                                if (expanded.text != text) {
-                                    viewModel.recordShortcutExpansionStat()
-                                    replaceActiveText(expanded.text, expanded.cursorOffset)
-                                    val undoable = viewModel.peekPendingAiUndo()
-                                        ?.let { it.cursorOffset == null || it.editorUndo != null } == true
-                                    gestureAlert = if (undoable) "Template Expanded! ⚡ (⌫ undoes)" else "Template Expanded! ⚡"
-                                } else {
-                                    gestureAlert = "No abbreviations found to expand. ⚡"
-                                }
-                            }
-                        } else if (abs(deltaX) > abs(deltaY) && abs(deltaX) > 120) {
-                            if (deltaX > 0) {
-                                gestureAlert = "Gesture: Space"
-                                onKeyPress(" ")
-                            } else {
-                                gestureAlert = "Gesture: Backspace"
-                                onDelete()
-                            }
-                        } else if (abs(deltaY) > abs(deltaX) && abs(deltaY) > 120) {
-                            if (deltaY < 0) {
-                                gestureAlert = "Gesture: Show AI Actions"
-                                viewModel.setAiToolsExpanded(true)
-                            } else {
-                                gestureAlert = "Gesture: Hide AI Actions"
-                                viewModel.setAiToolsExpanded(false)
-                            }
-                        }
-                    },
-                    onDrag = { change, dragAmount ->
-                        change.consume()
-                        dragX += dragAmount.x
-                        dragY += dragAmount.y
-
-                        val dx = dragX
-                        val dy = dragY
-                        dragPreview = when {
-                            abs(dx) > 100 && abs(dy) > 100 -> {
-                                when {
-                                    dx > 0 && dy < 0 -> "🌐 Release to Translate (Up-Right)"
-                                    dx < 0 && dy < 0 -> "🔍 Release to Summarize (Up-Left)"
-                                    dx < 0 && dy > 0 -> "🎭 Release to Analyze Tone (Down-Left)"
-                                    else -> "⚡ Release to Expand Custom Shortcut (Down-Right)"
-                                }
-                            }
-                            abs(dx) > abs(dy) && abs(dx) > 120 -> {
-                                if (dx > 0) "␠ Release for Space (Right)" else "⌫ Release to Backspace (Left)"
-                            }
-                            abs(dy) > abs(dx) && abs(dy) > 120 -> {
-                                if (dy < 0) "💡 Release to Show AI Panel (Up)" else "❌ Release to Collapse (Down)"
-                            }
-                            else -> "Drawing Gesture Trail..."
-                        }
-                    }
-                )
-            }
     ) {
-        // --- LIVE GESTURE DRAWING TRAIL / PREVIEW OVERLAY ---
-        if (dragPreview != null) {
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .background(keyboardColors.accent)
-                    .padding(vertical = 4.dp),
-                contentAlignment = Alignment.Center
-            ) {
+        // Keep transient feedback in a fixed slot: inserting/removing a row moves
+        // every key while the user's next finger may already be down.
+        Box(
+            modifier = Modifier.fillMaxWidth().height(20.dp).testTag("typing_feedback"),
+            contentAlignment = Alignment.Center
+        ) {
+            gestureAlert?.let { message ->
                 Text(
-                    text = dragPreview!!,
-                    color = keyboardColors.onAccent,
-                    fontSize = 12.sp,
-                    fontWeight = FontWeight.Bold
+                    text = message,
+                    color = keyboardColors.keyActive,
+                    fontSize = 11.sp,
+                    textAlign = TextAlign.Center,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
                 )
             }
         }
-        // --- GESTURE INDICATOR ALERT OR TONE NOTIFICATION ---
-        if (gestureAlert != null) {
-            Text(
-                text = gestureAlert ?: "",
-                color = keyboardColors.keyActive,
-                fontSize = 11.sp,
-                textAlign = TextAlign.Center,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(vertical = 2.dp)
-            )
-            // auto-dismiss gesture alert quickly
-            androidx.compose.runtime.LaunchedEffect(gestureAlert) {
-                delay(1500)
-                gestureAlert = null
-            }
+        androidx.compose.runtime.LaunchedEffect(gestureAlert) {
+            val message = gestureAlert ?: return@LaunchedEffect
+            delay(1500)
+            if (gestureAlert == message) gestureAlert = null
         }
 
         // --- AI RESULTS & INTERACTIVE SHELF BAR ---
@@ -1346,6 +1346,25 @@ fun AgenticKeyboardLayout(
                                 modifier = Modifier.size(16.dp)
                             )
                         }
+                    }
+                    Spacer(modifier = Modifier.height(6.dp))
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(72.dp)
+                            .background(keyboardColors.shelf, RoundedCornerShape(8.dp))
+                            .then(commandGestureModifier)
+                            .testTag("command_gesture_pad"),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = dragPreview ?: "Draw command gestures here, away from the keys",
+                            color = keyboardColors.accent,
+                            fontSize = 12.sp,
+                            textAlign = TextAlign.Center,
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis
+                        )
                     }
                     Spacer(modifier = Modifier.height(6.dp))
                     Row(
