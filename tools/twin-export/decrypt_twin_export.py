@@ -144,6 +144,63 @@ def safe_extract(zf, out_dir):
     zf.extractall(root)
 
 
+def _date(ms):
+    import datetime
+    return datetime.datetime.fromtimestamp(ms / 1000, datetime.timezone.utc).strftime("%Y-%m-%d")
+
+
+def render_memories(root):
+    """KEYBOARD-032: writes readable memory/memories.md and memory/core.md next to the JSON.
+
+    Every memory keeps its citation (m:<id>) and its source link, the journal record id
+    and field, which is checked against journal/records.jsonl in the same archive.
+    """
+    mem_dir = os.path.join(root, "memory")
+    mem_path = os.path.join(mem_dir, "memories.jsonl")
+    core_path = os.path.join(mem_dir, "core.json")
+    if not os.path.isdir(mem_dir):
+        return
+    records = set()
+    rec_path = os.path.join(root, "journal", "records.jsonl")
+    if os.path.exists(rec_path):
+        with open(rec_path, encoding="utf-8") as f:
+            records = {json.loads(line)["id"] for line in f if line.strip()}
+    if os.path.exists(mem_path):
+        out = ["# Approved memories", "",
+               "Each memory was approved by Keith. Its citation is `m:<id>`; its source is the journal record named below "
+               "(see journal/records.jsonl).", ""]
+        with open(mem_path, encoding="utf-8") as f:
+            for line in f:
+                if not line.strip():
+                    continue
+                m = json.loads(line)
+                src = m["source"]
+                rid = src["journal_record_id"]
+                out.append("## [%s] %s" % (m["cite"], _date(src["at"])))
+                if src.get("prompt"):
+                    out.append("*Question:* %s  " % src["prompt"])
+                if src.get("child"):
+                    out.append("*For:* %s  " % src["child"])
+                out.append("")
+                out.append("> " + m["text"].replace("\n", "\n> "))
+                out.append("")
+                where = "journal record #%d, field `%s`" % (rid, src["field"])
+                out.append("Source: " + where + ("" if rid in records else " (record not in this archive)"))
+                if m.get("edited") and src.get("original_text"):
+                    out.append("Edited by Keith. Original answer: " + src["original_text"])
+                out.append("")
+        with open(os.path.join(mem_dir, "memories.md"), "w", encoding="utf-8") as f:
+            f.write("\n".join(out))
+    if os.path.exists(core_path):
+        with open(core_path, encoding="utf-8") as f:
+            core = json.load(f)
+        out = ["# Core memories", "", "Written by Keith himself (not scrubbed; checked for passwords and keys).", ""]
+        for b in core.get("blocks", []):
+            out += ["## %s [%s]" % (b["title"], b["cite"]), "", b["value"], ""]
+        with open(os.path.join(mem_dir, "core.md"), "w", encoding="utf-8") as f:
+            f.write("\n".join(out))
+
+
 def unpack(archive_path, out_dir, verify_only, passphrase=None, data_key=None):
     """Decrypts, verifies and (unless verify_only) unpacks. Returns (chunks, manifest)."""
     tmp_parent = out_dir if out_dir else None
@@ -159,6 +216,7 @@ def unpack(archive_path, out_dir, verify_only, passphrase=None, data_key=None):
                 staging = os.path.join(tmp, "unpacked")
                 os.makedirs(staging)
                 safe_extract(zf, staging)
+                render_memories(staging)
                 for name in os.listdir(staging):
                     dest = os.path.join(out_dir, name)
                     if os.path.exists(dest):
@@ -174,6 +232,9 @@ def report(chunks, manifest, out_dir):
     print("    %(messages)d messages (%(messages_dropped)d dropped by the scrubber), "
           "%(journal_records)d journal records (%(fields_redacted)d fields redacted), "
           "%(recordings)d recordings" % c)
+    if "memories" in c:
+        print("    %d approved memories (%d dropped by the scrubber), %d core memories (%d withheld)" % (
+            c["memories"], c.get("memories_dropped", 0), c.get("core_blocks", 0), c.get("core_blocks_withheld", 0)))
     if out_dir:
         print("    unpacked into " + os.path.abspath(out_dir))
 
