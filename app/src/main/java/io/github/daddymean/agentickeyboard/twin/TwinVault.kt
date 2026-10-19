@@ -3,6 +3,8 @@ package io.github.daddymean.agentickeyboard.twin
 import android.content.Context
 import io.github.daddymean.agentickeyboard.twin.deadman.DeadManStore
 import io.github.daddymean.agentickeyboard.twin.journal.JournalStore
+import io.github.daddymean.agentickeyboard.twin.memory.LegacyVault
+import io.github.daddymean.agentickeyboard.twin.memory.MemoryStore
 
 /**
  * KEYBOARD-025: everything the legacy twin keeps on this phone, for delete-all.
@@ -26,13 +28,30 @@ object TwinVault {
             deadMan ?: DeadManStore(DeadManStore.file(context), KeystoreTwinCipher()).also { deadMan = it }
         }
 
-    /** Deletes every journal record and recording, the dead-man state, every twin entry, and the key. Call on the twin worker. */
-    fun deleteAll(context: Context) {
-        deleteAll(journal(context), TwinLearning.store(context), deadMan(context))
+    @Volatile private var memory: MemoryStore? = null
+
+    /** KEYBOARD-030: the approval-gated legacy vault and core blocks, sealed with the same key. */
+    fun memory(context: Context): MemoryStore =
+        memory ?: synchronized(this) {
+            memory ?: MemoryStore(MemoryStore.file(context), KeystoreTwinCipher()).also { memory = it }
+        }
+
+    /** Deletes one journal record, its recordings, and every memory derived from it. Call on the twin worker. */
+    fun deleteJournalRecord(context: Context, id: Long): Boolean = deleteJournalRecord(journal(context), memory(context), id)
+
+    internal fun deleteJournalRecord(journal: JournalStore, memory: MemoryStore, id: Long): Boolean {
+        memory.update { LegacyVault.forgetRecord(it, id) }
+        return journal.delete(id)
     }
 
-    internal fun deleteAll(journal: JournalStore, store: TwinStore, deadMan: DeadManStore? = null) {
+    /** Deletes every journal record and recording, the memories, the dead-man state, every twin entry, and the key. Call on the twin worker. */
+    fun deleteAll(context: Context) {
+        deleteAll(journal(context), TwinLearning.store(context), deadMan(context), memory(context))
+    }
+
+    internal fun deleteAll(journal: JournalStore, store: TwinStore, deadMan: DeadManStore? = null, memory: MemoryStore? = null) {
         journal.deleteAll()
+        memory?.delete()
         deadMan?.delete()
         store.deleteAll() // also destroys the shared Keystore key
     }
