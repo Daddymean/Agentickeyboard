@@ -59,6 +59,10 @@ class TwinActivity : Activity() {
             setOnClickListener { startActivity(android.content.Intent(this@TwinActivity, JournalActivity::class.java)) }
         })
         layout.addView(Button(this).apply {
+            text = "Memories & ask the twin (approve, core blocks, cited answers)"
+            setOnClickListener { startActivity(android.content.Intent(this@TwinActivity, TwinMemoryActivity::class.java)) }
+        })
+        layout.addView(Button(this).apply {
             text = "Encrypted export (stays on this phone)"
             setOnClickListener { startActivity(android.content.Intent(this@TwinActivity, TwinExportActivity::class.java)) }
         })
@@ -168,7 +172,7 @@ class TwinActivity : Activity() {
         AlertDialog.Builder(this)
             .setTitle("Delete all twin data?")
             .setMessage(
-                "This deletes every stored message, every journal answer, recording and result, the dead-man " +
+                "This deletes every stored message, every journal answer, recording and result, the approved memories and core blocks, the dead-man " +
                     "switch set-up, and destroys " +
                     "the encryption key on this phone. " +
                     "It cannot be undone. Learning stays on unless you turn it off."

@@ -39,6 +39,11 @@
             android:label="Legacy twin"
             android:theme="@style/Theme.MyApplication" />
         <activity
+            android:name=".TwinMemoryActivity"
+            android:exported="false"
+            android:label="Twin memories"
+            android:theme="@style/Theme.MyApplication" />
+        <activity
             android:name=".DeadManActivity"
             android:exported="false"
             android:label="Dead-man switch"

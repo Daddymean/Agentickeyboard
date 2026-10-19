@@ -438,7 +438,7 @@ class JournalActivity : Activity() {
             audio.forEachIndexed { i, id -> actions += "Play ${i + 1}" to { play(id) } }
             actions += "Delete" to {
                 AlertDialog.Builder(this).setMessage("Delete this answer and its recordings?")
-                    .setPositiveButton("Delete") { _, _ -> scope.launch { TwinLearning.onWorker { store.delete(r.id) }; answersScreen() } }
+                    .setPositiveButton("Delete") { _, _ -> scope.launch { TwinLearning.onWorker { TwinVault.deleteJournalRecord(this@JournalActivity, r.id) }; answersScreen() } }
                     .setNegativeButton("Cancel", null).show()
             }
             row(*actions.toTypedArray())
