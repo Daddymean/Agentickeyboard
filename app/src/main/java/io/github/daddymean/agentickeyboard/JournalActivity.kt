@@ -11,6 +11,7 @@ import android.window.OnBackInvokedDispatcher
 import android.text.InputType
 import android.text.format.DateFormat
 import android.view.View
+import android.view.inputmethod.EditorInfo
 import android.view.WindowManager
 import android.widget.ArrayAdapter
 import android.widget.Button
@@ -529,6 +530,10 @@ class JournalActivity : Activity() {
         this.hint = hint
         minLines = lines
         inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_MULTI_LINE or InputType.TYPE_TEXT_FLAG_CAP_SENTENCES
+        // KEYBOARD-028: journal text is twin data. This flag makes any keyboard (ours included) treat the
+        // field as sensitive: no learning or history, no cloud AI, and no "Save note" to the context service
+        // (whose opt-in sync leaves the phone).
+        imeOptions = imeOptions or EditorInfo.IME_FLAG_NO_PERSONALIZED_LEARNING
         root.addView(this)
     }
     private fun button(label: String, onClick: () -> Unit) =

@@ -9,6 +9,7 @@ import android.os.Bundle
 import android.provider.DocumentsContract
 import android.text.InputType
 import android.view.WindowManager
+import android.view.inputmethod.EditorInfo
 import android.widget.Button
 import android.widget.EditText
 import android.widget.LinearLayout
@@ -180,7 +181,10 @@ class DeadManActivity : Activity() {
     }
 
     private fun askBirth(s: DeadManState, x: Int, label: String) {
-        val field = EditText(this).apply { hint = "YYYY-MM-DD"; inputType = InputType.TYPE_CLASS_DATETIME or InputType.TYPE_DATETIME_VARIATION_DATE }
+        val field = EditText(this).apply {
+            hint = "YYYY-MM-DD"; inputType = InputType.TYPE_CLASS_DATETIME or InputType.TYPE_DATETIME_VARIATION_DATE
+            imeOptions = EditorInfo.IME_FLAG_NO_PERSONALIZED_LEARNING // KEYBOARD-028: twin screen, never learned or sent
+        }
         AlertDialog.Builder(this)
             .setTitle("$label's date of birth")
             .setMessage("Used only to check that $label is 18. It isn't stored.")
