@@ -1,6 +1,7 @@
 package io.github.daddymean.agentickeyboard.twin
 
 import android.content.Context
+import io.github.daddymean.agentickeyboard.twin.capsule.CapsuleStore
 import io.github.daddymean.agentickeyboard.twin.consent.ConsentStore
 import io.github.daddymean.agentickeyboard.twin.deadman.DeadManStore
 import io.github.daddymean.agentickeyboard.twin.journal.JournalStore
@@ -45,6 +46,14 @@ object TwinVault {
             consent ?: ConsentStore(ConsentStore.file(context), KeystoreTwinCipher()).also { consent = it }
         }
 
+    @Volatile private var capsules: CapsuleStore? = null
+
+    /** KEYBOARD-036: Keith's milestone time capsules, each sealed with the same key. */
+    fun capsules(context: Context): CapsuleStore =
+        capsules ?: synchronized(this) {
+            capsules ?: CapsuleStore(CapsuleStore.dir(context), KeystoreTwinCipher()).also { capsules = it }
+        }
+
     /** Deletes one journal record, its recordings, and every memory derived from it. Call on the twin worker. */
     fun deleteJournalRecord(context: Context, id: Long): Boolean = deleteJournalRecord(journal(context), memory(context), id)
 
@@ -53,13 +62,14 @@ object TwinVault {
         return journal.delete(id)
     }
 
-    /** Deletes every journal record and recording, the memories, the consent record, the dead-man state, every twin entry, and the key. Call on the twin worker. */
+    /** Deletes every journal record and recording, the memories, the consent record, the time capsules, the dead-man state, every twin entry, and the key. Call on the twin worker. */
     fun deleteAll(context: Context) {
-        deleteAll(journal(context), TwinLearning.store(context), deadMan(context), memory(context), consent(context))
+        deleteAll(journal(context), TwinLearning.store(context), deadMan(context), memory(context), consent(context), capsules(context))
     }
 
-    internal fun deleteAll(journal: JournalStore, store: TwinStore, deadMan: DeadManStore? = null, memory: MemoryStore? = null, consent: ConsentStore? = null) {
+    internal fun deleteAll(journal: JournalStore, store: TwinStore, deadMan: DeadManStore? = null, memory: MemoryStore? = null, consent: ConsentStore? = null, capsules: CapsuleStore? = null) {
         journal.deleteAll()
+        capsules?.deleteAll()
         memory?.delete()
         consent?.delete()
         deadMan?.delete()

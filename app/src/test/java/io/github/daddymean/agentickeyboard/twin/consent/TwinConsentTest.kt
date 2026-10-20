@@ -27,20 +27,56 @@ class TwinConsentTest {
         s = TwinConsent.optIn(s, "Kid 1", adult = true, guardianPresent = false, now = 1)
         s = TwinConsent.optIn(s, "Kid 2", adult = false, guardianPresent = true, now = 2)
         assertThrows(IllegalArgumentException::class.java) { TwinConsent.optIn(s, "Kid 3", adult = false, guardianPresent = false, now = 3) }
-        assertTrue(TwinConsent.mayAsk(s, "Kid 1") && TwinConsent.mayAsk(s, "Kid 2"))
+        assertTrue(TwinConsent.mayAsk(s, "Kid 1"))
+        // KEYBOARD-036: Kid 2 is supervised, so a guardian must be present for each session.
+        assertFalse(TwinConsent.mayAsk(s, "Kid 2"))
+        assertTrue(TwinConsent.mayAsk(s, "Kid 2", "Guardian 3"))
+        assertFalse(TwinConsent.mayAsk(s, "Kid 2", "Kid 1"))
         assertFalse(TwinConsent.mayAsk(s, "Kid 3"))
         assertFalse(TwinConsent.mayAsk(s, "Guardian 1"))
         assertTrue(s.of("Kid 2").guardianPresent)
 
         s = TwinConsent.pause(s, "Kid 1", 10)
         assertFalse(TwinConsent.mayAsk(s, "Kid 1"))
-        assertTrue(TwinConsent.mayAsk(s, "Kid 2")) // only Kid 1 changed
+        assertTrue(TwinConsent.mayAsk(s, "Kid 2", "Guardian 1")) // only Kid 1 changed
         s = TwinConsent.resume(s, "Kid 1", 11)
         assertTrue(TwinConsent.mayAsk(s, "Kid 1"))
 
         s = TwinConsent.decline(s, "Kid 4", 12)
         assertFalse(TwinConsent.mayAsk(s, "Kid 4"))
         assertEquals(listOf("Kid 1", "Kid 2", "Kid 1", "Kid 1", "Kid 4"), s.log.map { it.kid })
+    }
+
+    @Test
+    fun supervisedModeForMinors() {
+        var s = TwinConsent.optIn(ConsentState(), "Kid 4", adult = false, guardianPresent = true, now = 1)
+        assertTrue(TwinConsent.needsGuardian(s, "Kid 4"))
+        // A guardian can pause it; then only a guardian can resume it.
+        assertThrows(IllegalArgumentException::class.java) { TwinConsent.guardianPause(s, "Kid 4", "Kid 1", 2) }
+        s = TwinConsent.guardianPause(s, "Kid 4", "Guardian 2", 2)
+        assertFalse(TwinConsent.mayAsk(s, "Kid 4", "Guardian 2"))
+        assertEquals("Guardian 2", s.of("Kid 4").pausedBy)
+        assertThrows(IllegalArgumentException::class.java) { TwinConsent.resume(s, "Kid 4", 3) }
+        s = TwinConsent.resume(s, "Kid 4", 3, "Guardian 1")
+        assertTrue(TwinConsent.mayAsk(s, "Kid 4", "Guardian 1"))
+        // The kid's own pause keeps supervision (it used to drop it).
+        s = TwinConsent.resume(TwinConsent.pause(s, "Kid 4", 4), "Kid 4", 5)
+        assertTrue(s.of("Kid 4").supervised)
+        // The kid can still retire it themselves.
+        assertEquals(Status.RETIRED, TwinConsent.retire(s, "Kid 4", 6).of("Kid 4").status)
+        // A guardian can't pause an adult's twin.
+        val adult = TwinConsent.optIn(ConsentState(), "Kid 1", adult = true, guardianPresent = false, now = 1)
+        assertThrows(IllegalArgumentException::class.java) { TwinConsent.guardianPause(adult, "Kid 1", "Guardian 1", 2) }
+        // At 18, the kid ends supervision; the birth date is checked, not stored.
+        val today = java.time.LocalDate.of(2026, 10, 19)
+        assertThrows(IllegalArgumentException::class.java) { TwinConsent.becomeAdult(s, "Kid 4", java.time.LocalDate.of(2010, 1, 1), today, 7) }
+        s = TwinConsent.becomeAdult(s, "Kid 4", java.time.LocalDate.of(2008, 10, 19), today, 7)
+        assertTrue(TwinConsent.mayAsk(s, "Kid 4"))
+        assertEquals("turned 18: supervision ended", s.log.last().note)
+        val back = TwinConsent.fromJson(org.json.JSONObject(TwinConsent.toJson(s).toString()))
+        assertEquals(s, back)
+        // The guardian is named in the log.
+        assertTrue(back.log.any { it.by == "Guardian 2" && it.status == Status.PAUSED })
     }
 
     @Test
