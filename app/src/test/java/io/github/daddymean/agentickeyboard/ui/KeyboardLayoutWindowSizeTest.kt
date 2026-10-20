@@ -7,7 +7,6 @@ import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
-import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.height
@@ -112,7 +111,7 @@ class KeyboardLayoutWindowSizeTest {
     @Config(sdk = [35], qualifiers = "w780dp-h360dp-land")
     fun `gesture guide leaves the compact typing controls reachable`() {
         showKeyboard(aiTools = true)
-        composeTestRule.onNodeWithTag("toggle_gesture_guide").performScrollTo().performClick()
+        composeTestRule.onNodeWithTag("toggle_gesture_guide").performClick()
         composeTestRule.mainClock.advanceTimeBy(300)
         composeTestRule.onNodeWithTag("command_gesture_pad").assertExists()
         composeTestRule.onNodeWithTag("key_q").assertIsDisplayed()
