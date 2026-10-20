@@ -11,7 +11,7 @@ Keith's decisions (2026-10-17, trigger revised 2026-10-18):
 
 | Piece | What it is | Who keeps it |
 |---|---|---|
-| `twin-release-<date>.aktx` | The twin: scrubbed messages, journal and recordings, encrypted with a random 256-bit **data key**. | Wherever Keith puts it by hand. We recommend at least two copies, e.g. a USB drive with the executor and one with the kids' guardian. |
+| `twin-release-<date>.aktx` | The twin: scrubbed messages, journal and recordings, plus approved memories and core memories (KEYBOARD-032; see README), encrypted with a random 256-bit **data key**. | Wherever Keith puts it by hand. We recommend at least two copies, e.g. a USB drive with the executor and one with the kids' guardian. |
 | `twin-release-key-set<N>.json` | The data key, **wrapped** (AES-256-GCM) by a key-encryption key for holder set N, plus the policy and holder labels. It contains no secret that is usable alone. | **Next to the archive.** Replace it whenever the holders change; see below. |
 | Share card (`AKDM1-…`) | One Shamir share of set N's key-encryption key. | Each holder keeps **only their own** card: printed, written down, or in their password manager. |
 
