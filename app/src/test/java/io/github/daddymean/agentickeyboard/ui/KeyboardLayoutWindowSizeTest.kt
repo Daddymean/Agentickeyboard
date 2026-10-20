@@ -123,9 +123,16 @@ class KeyboardLayoutWindowSizeTest {
         composeTestRule.onNodeWithTag("key_enter").assertIsDisplayed()
         assertTrue("guide must leave space within the 360dp window", bottom <= 360.dp)
         // The pad's upward command must replace the guide with tools, not stack them.
-        composeTestRule.onNodeWithTag("command_gesture_pad").performTouchInput {
-            down(center)
-            moveBy(Offset(0f, -160f))
+        val pad = composeTestRule.onNodeWithTag("command_gesture_pad")
+        pad.performTouchInput {
+            // Keep every event inside the root: this path is y150 -> 80 -> 10px.
+            down(center + Offset(0f, 4f))
+            moveBy(Offset(0f, -70f))
+        }
+        composeTestRule.mainClock.advanceTimeByFrame()
+        composeTestRule.onNodeWithText("Drawing Gesture Trail...").assertExists()
+        pad.performTouchInput {
+            moveBy(Offset(0f, -70f))
             up()
         }
         composeTestRule.mainClock.advanceTimeBy(300)
