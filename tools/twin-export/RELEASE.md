@@ -127,3 +127,13 @@ The script checks, in order:
 - that the key file belongs to this archive.
 
 It then recombines the key (Shamir over GF(2^8), the same as the app), unwraps the data key, and decrypts and verifies every chunk and every SHA-256 in `manifest.json`. Contents and layout are as in [README.md](README.md). If a kid is still a minor at release, their guardian opens it for them.
+
+## Use rules (KEYBOARD-033)
+
+These come from Hollanek & Nowaczyk-Basińska, *Griefbots, Deadbots, Postmortem Avatars* (Philosophy & Technology, 2024). They also travel inside the release key file (`policy.use_rules`), and `open_twin_release.py` prints them.
+
+- **Each kid's own choice.** Kid 1–6 each decide whether to use the twin, and each can pause or retire it for themselves. On the phone, the twin answers a kid only after that kid opts in. Under 18, a guardian must be present. A retired twin can come back only after 30 days, and only if the kid types BRING BACK.
+- **Always an AI.** Every answer starts with "AI twin built from Dad's own words. This is not Dad." Anything built from this archive must keep that label.
+- **No public platforms.** Do not post the twin, its answers, its voice or this archive anywhere public, and do not upload them to an online AI or "griefbot" service. The phone app has no share, copy or notification path: the screen is FLAG_SECURE, the answer text can't be selected, and a guard test enforces this.
+- **No decisions.** The twin refuses new decisions about money, inheritance or legal matters, and permission for them. It points to Keith's real documents and the guardians.
+- **Never pushes.** No notifications, no reminders, and nothing is sent by itself.

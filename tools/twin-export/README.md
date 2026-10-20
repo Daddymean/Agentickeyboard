@@ -45,3 +45,13 @@ The format is documented in `decrypt_twin_export.py` and `PassphraseArchive.kt`:
 ## Dead-man release archives
 
 A release archive (header kdf 2) is opened with `open_twin_release.py` and two share cards, not with a passphrase. See [RELEASE.md](RELEASE.md).
+
+## Use rules (KEYBOARD-033)
+
+These come from Hollanek & Nowaczyk-Basińska, *Griefbots, Deadbots, Postmortem Avatars* (Philosophy & Technology, 2024). They also travel inside the release key file (`policy.use_rules`), and `open_twin_release.py` prints them.
+
+- **Each kid's own choice.** Kid 1–6 each decide whether to use the twin, and each can pause or retire it for themselves. On the phone, the twin answers a kid only after that kid opts in. Under 18, a guardian must be present. A retired twin can come back only after 30 days, and only if the kid types BRING BACK.
+- **Always an AI.** Every answer starts with "AI twin built from Dad's own words. This is not Dad." Anything built from this archive must keep that label.
+- **No public platforms.** Do not post the twin, its answers, its voice or this archive anywhere public, and do not upload them to an online AI or "griefbot" service. The phone app has no share, copy or notification path: the screen is FLAG_SECURE, the answer text can't be selected, and a guard test enforces this.
+- **No decisions.** The twin refuses new decisions about money, inheritance or legal matters, and permission for them. It points to Keith's real documents and the guardians.
+- **Never pushes.** No notifications, no reminders, and nothing is sent by itself.

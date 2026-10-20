@@ -214,6 +214,7 @@ object DeadManSwitch {
     }
 
     private fun policy(lastCheckIn: LocalDate, iamConfirmedOn: LocalDate?) = JSONObject()
+        .put("use_rules", JSONArray(io.github.daddymean.agentickeyboard.twin.consent.TwinUseRules.RULES))
         .put("rule", "Start when Google's Inactive Account Manager emails the key holders that Keith's Google account " +
             "has been inactive for $IAM_INACTIVE_MONTHS months. The email is only a signal, never a key. Each holder checks " +
             "it is genuine, then the holders confirm with each other by phone or in person and try to reach Keith. " +

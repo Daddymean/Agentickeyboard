@@ -1,6 +1,7 @@
 package io.github.daddymean.agentickeyboard.twin
 
 import android.content.Context
+import io.github.daddymean.agentickeyboard.twin.consent.ConsentStore
 import io.github.daddymean.agentickeyboard.twin.deadman.DeadManStore
 import io.github.daddymean.agentickeyboard.twin.journal.JournalStore
 import io.github.daddymean.agentickeyboard.twin.memory.LegacyVault
@@ -36,6 +37,14 @@ object TwinVault {
             memory ?: MemoryStore(MemoryStore.file(context), KeystoreTwinCipher()).also { memory = it }
         }
 
+    @Volatile private var consent: ConsentStore? = null
+
+    /** KEYBOARD-033: each kid's opt-in, pause and retirement, sealed with the same key. */
+    fun consent(context: Context): ConsentStore =
+        consent ?: synchronized(this) {
+            consent ?: ConsentStore(ConsentStore.file(context), KeystoreTwinCipher()).also { consent = it }
+        }
+
     /** Deletes one journal record, its recordings, and every memory derived from it. Call on the twin worker. */
     fun deleteJournalRecord(context: Context, id: Long): Boolean = deleteJournalRecord(journal(context), memory(context), id)
 
@@ -44,14 +53,15 @@ object TwinVault {
         return journal.delete(id)
     }
 
-    /** Deletes every journal record and recording, the memories, the dead-man state, every twin entry, and the key. Call on the twin worker. */
+    /** Deletes every journal record and recording, the memories, the consent record, the dead-man state, every twin entry, and the key. Call on the twin worker. */
     fun deleteAll(context: Context) {
-        deleteAll(journal(context), TwinLearning.store(context), deadMan(context), memory(context))
+        deleteAll(journal(context), TwinLearning.store(context), deadMan(context), memory(context), consent(context))
     }
 
-    internal fun deleteAll(journal: JournalStore, store: TwinStore, deadMan: DeadManStore? = null, memory: MemoryStore? = null) {
+    internal fun deleteAll(journal: JournalStore, store: TwinStore, deadMan: DeadManStore? = null, memory: MemoryStore? = null, consent: ConsentStore? = null) {
         journal.deleteAll()
         memory?.delete()
+        consent?.delete()
         deadMan?.delete()
         store.deleteAll() // also destroys the shared Keystore key
     }
