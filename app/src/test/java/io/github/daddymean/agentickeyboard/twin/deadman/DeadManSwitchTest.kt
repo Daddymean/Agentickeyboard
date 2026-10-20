@@ -13,7 +13,7 @@ import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 import java.time.LocalDate
 
-/** KEYBOARD-027 rows 1–3 and 5, and the KEYBOARD-036 fixes (org.json needs Robolectric). */
+/** KEYBOARD-027 rows 1–3 and 5, and the KEYBOARD-039 fixes (org.json needs Robolectric). */
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [35])
 class DeadManSwitchTest {
@@ -156,7 +156,7 @@ class DeadManSwitchTest {
         for (k in listOf("google.com", "signed-by", "other holders", "only a signal", "not_before")) assertTrue(k, card.contains(k))
     }
 
-    // ---- KEYBOARD-036 -------------------------------------------------------------------
+    // ---- KEYBOARD-039 -------------------------------------------------------------------
 
     @Test
     fun everyArchiveGetsAFreshKeySoOldHoldersCantOpenLaterArchives() {
@@ -192,7 +192,7 @@ class DeadManSwitchTest {
         var s = DeadManSwitch.create(DeadManSwitch.GUARDIANS, today).state
         s = DeadManSwitch.replaceHolder(s, 1, "Kid 1", LocalDate.of(2000, 1, 1), today).state
         s = DeadManSwitch.confirmIam(s, today)
-        // Before KEYBOARD-036 the screen reissued through replaceHolder with no birth date and crashed.
+        // Before KEYBOARD-039 the screen reissued through replaceHolder with no birth date and crashed.
         fails { DeadManSwitch.replaceHolder(s, 1, "Kid 1", null, today) }
         val r = DeadManSwitch.reissue(s, today)
         assertEquals(listOf("Kid 1", "Guardian 2", "Guardian 3"), r.state.holders.map { it.label })
@@ -216,7 +216,7 @@ class DeadManSwitchTest {
     }
 
     @Test
-    fun stateSavedBeforeKeyboard036LoadsAndAsksForNewCards() {
+    fun stateSavedBeforeKeyboard039LoadsAndAsksForNewCards() {
         val s = DeadManSwitch.create(DeadManSwitch.GUARDIANS, today).state
         assertFalse(s.needsNewCards)
         val v1 = s.toJson().put("v", 1).also { it.remove("kek") }

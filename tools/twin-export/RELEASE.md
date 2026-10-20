@@ -11,7 +11,7 @@ Keith's decisions (2026-10-17, trigger revised 2026-10-18):
 
 | Piece | What it is | Who keeps it |
 |---|---|---|
-| `twin-release-<date>.aktx` | The twin: scrubbed messages, journal and recordings, plus approved memories and core memories (KEYBOARD-032; see README), encrypted with its own random 256-bit **data key**: every saved archive gets a new one (KEYBOARD-036). | Wherever Keith puts it by hand. We recommend at least two copies, e.g. a USB drive with the executor and one with the kids' guardian. |
+| `twin-release-<date>.aktx` | The twin: scrubbed messages, journal and recordings, plus approved memories and core memories (KEYBOARD-032; see README), encrypted with its own random 256-bit **data key**: every saved archive gets a new one (KEYBOARD-039). | Wherever Keith puts it by hand. We recommend at least two copies, e.g. a USB drive with the executor and one with the kids' guardian. |
 | `twin-release-<date>-key-set<N>.json` | That archive's data key, **wrapped** (AES-256-GCM) by the key-encryption key for holder set N, plus the policy and holder labels. It contains no secret that is usable alone. | **Next to the archive.** Replace it whenever the holders change; see below. |
 | Share card (`AKDM1-…`) | One Shamir share of set N's key-encryption key. | Each holder keeps **only their own** card: printed, written down, or in their password manager. |
 
@@ -107,9 +107,9 @@ The 2-of-3 threshold is the real protection. The email only says when to start.
 3. Give all three holders their new card, and ask them to destroy their old card. **Update the IAM contacts**: add the new holder and remove the old one. Then confirm the Google trigger again in the app.
 4. **Replace the key file next to every copy of the latest archive** with `twin-release-key-set<N+1>.json`, and destroy the old key files. Better still, save a new archive (it gets a new data key) and replace the old archive and key file everywhere.
 
-Why step 4 matters: old cards cannot open the new key file, and they can never open an archive saved after the change, because each archive has its own data key (KEYBOARD-036). However, an old key file together with two old cards still opens the archive it was made for. Full revocation therefore means replacing old archives with a new one, or at least destroying the old key files.
+Why step 4 matters: old cards cannot open the new key file, and they can never open an archive saved after the change, because each archive has its own data key (KEYBOARD-039). However, an old key file together with two old cards still opens the archive it was made for. Full revocation therefore means replacing old archives with a new one, or at least destroying the old key files.
 
-**Reissue all share cards** does the same thing with unchanged labels, for when a card is lost. It needs no date of birth, so it also works once kids hold keys. Phones set up before KEYBOARD-036 must reissue once before saving another archive.
+**Reissue all share cards** does the same thing with unchanged labels, for when a card is lost. It needs no date of birth, so it also works once kids hold keys. Phones set up before KEYBOARD-039 must reissue once before saving another archive.
 
 ## Opening it (two holders, on a computer)
 

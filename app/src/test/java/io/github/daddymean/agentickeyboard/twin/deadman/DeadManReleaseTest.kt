@@ -132,7 +132,7 @@ class DeadManReleaseTest {
             assertEquals(2, run("--verify-only", arc.path, key2.path, "--card", oldCards[0].path, "--card", newCards[1].path).first)
             // The documented residual: an old key file with old cards still opens (old key files must be destroyed).
             assertEquals(0, run("--verify-only", arc.path, key1.path, "--card", oldCards[0].path, "--card", oldCards[2].path).first)
-            // KEYBOARD-036: the next archive has its own key. New cards open it; the old key file and
+            // KEYBOARD-039: the next archive has its own key. New cards open it; the old key file and
             // old cards don't, even with the archive id rewritten.
             val next = DeadManSwitch.newArchive(second.state)
             val arc3 = File(tmp, "twin-release-next.aktx").apply { writeBytes(archive(next)) }

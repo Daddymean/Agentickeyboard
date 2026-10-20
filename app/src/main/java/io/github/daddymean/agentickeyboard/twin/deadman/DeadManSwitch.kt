@@ -16,7 +16,7 @@ data class Holder(val x: Int, val label: String)
  * ([DeadManStore]). It holds the current set's key-encryption key (KEK) and the data key
  * (DEK) of the latest release archive, but never a share. The phone already holds the
  * plaintext twin, so keeping the KEK here exposes nothing new; it lets every archive get
- * a fresh DEK under the current cards (KEYBOARD-036).
+ * a fresh DEK under the current cards (KEYBOARD-039).
  */
 data class DeadManState(
     val dataKey: ByteArray,
@@ -29,7 +29,7 @@ data class DeadManState(
     /** When Keith last confirmed his Google Inactive Account Manager plan; null if never or holders changed since. */
     val iamConfirmedOn: LocalDate? = null,
     /**
-     * The current set's KEK. Null only for state saved before KEYBOARD-036, which kept no
+     * The current set's KEK. Null only for state saved before KEYBOARD-039, which kept no
      * KEK: such a set must be reissued before another archive can be saved.
      */
     val kek: ByteArray? = null
@@ -65,7 +65,7 @@ data class DeadManState(
 
 /**
  * The result of creating or re-keying holders. Nothing is committed yet: the screen shows
- * the cards, and [state] is saved only after [DeadManSwitch.cardsConfirmed] (KEYBOARD-036).
+ * the cards, and [state] is saved only after [DeadManSwitch.cardsConfirmed] (KEYBOARD-039).
  */
 class Rekey(val state: DeadManState, val cards: List<Pair<Holder, ShareCard>>)
 
@@ -91,7 +91,7 @@ data class CheckInStatus(
  * 20:00 PT).
  *
  * - **Keys.** Each release archive is encrypted with its own random 256-bit data key
- *   (DEK), made fresh by [newArchive] (KEYBOARD-036). For each key-holder set ("epoch") a
+ *   (DEK), made fresh by [newArchive] (KEYBOARD-039). For each key-holder set ("epoch") a
  *   key-encryption key (KEK) wraps the DEK (AES-256-GCM, bound to the archive id, epoch
  *   and set id) and is split **2-of-3** with [Shamir] into one [ShareCard] per holder.
  *   The wrapped DEK and the policy go in the **release key file**. The phone keeps the KEK
@@ -139,7 +139,7 @@ object DeadManSwitch {
     }
 
     /**
-     * New cards for the same holders, for a lost card or to finish the KEYBOARD-036 update.
+     * New cards for the same holders, for a lost card or to finish the KEYBOARD-039 update.
      * No age check: the holders were already approved. The IAM confirmation is kept.
      */
     fun reissue(state: DeadManState, today: LocalDate, random: SecureRandom = SecureRandom()): Rekey =

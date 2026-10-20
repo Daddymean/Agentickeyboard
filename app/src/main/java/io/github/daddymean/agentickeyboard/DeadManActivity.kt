@@ -47,7 +47,7 @@ class DeadManActivity : Activity() {
     /**
      * A new holder set waiting for Keith to confirm its cards; only in memory. Nothing is
      * saved until he does, so if the screen closes first the current set stays in force
-     * (KEYBOARD-036).
+     * (KEYBOARD-039).
      */
     private var pendingCards: Rekey? = null
     private val pad by lazy { (20 * resources.displayMetrics.density).toInt() }
@@ -270,7 +270,7 @@ class DeadManActivity : Activity() {
                             "Saved the key file and ${r.cards.size} cards. Hand each card to its holder, then delete the card files." to null
                         }
                         else -> {
-                            // KEYBOARD-036: every archive gets its own data key, wrapped under the current set's KEK.
+                            // KEYBOARD-039: every archive gets its own data key, wrapped under the current set's KEK.
                             val next = DeadManSwitch.newArchive(s!!)
                             val archive = write(dir, "twin-release-$stamp${TwinExporter.FILE_EXTENSION}", "application/octet-stream") {
                                 TwinExporter(TwinLearning.store(this@DeadManActivity), TwinVault.journal(this@DeadManActivity), TwinVault.memory(this@DeadManActivity))
