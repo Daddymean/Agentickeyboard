@@ -2,7 +2,6 @@ package io.github.daddymean.agentickeyboard.ui
 
 import android.view.inputmethod.InputConnection
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.Canvas
@@ -27,6 +26,7 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
@@ -623,18 +623,11 @@ fun AgenticKeyboardLayout(
             grammarCorrection, summary, translation, rewrite, composeResult, continuation
         ) { mutableStateOf(false) }
 
-        Box(
+        StableAiShelf(
+            expanded = resultExpanded,
             modifier = Modifier
-                .fillMaxWidth()
-                .then(
-                    if (resultExpanded || voiceMatch != null) Modifier.heightIn(min = metrics.shelfHeight)
-                    else if (hasAiResult || isLoading) Modifier.height(metrics.shelfHeight)
-                    else Modifier.height(metrics.toolbarHeight)
-                )
-                .animateContentSize()
                 .background(keyboardColors.shelf)
-                .padding(horizontal = 8.dp, vertical = if (resultExpanded || voiceMatch != null) 8.dp else 0.dp),
-            contentAlignment = Alignment.CenterStart
+                .padding(horizontal = 8.dp, vertical = if (resultExpanded) 8.dp else 0.dp)
         ) {
             if (isLoading) {
                 Row(
@@ -1151,12 +1144,23 @@ fun AgenticKeyboardLayout(
                             }
                         }
                     }
-                    voiceMatch?.let { match ->
+                    voiceMatch?.takeIf { resultExpanded }?.let { match ->
                         Spacer(modifier = Modifier.height(4.dp))
                         VoiceMatchBadge(match)
                     }
                     }
                     if (hasAiResult) {
+                        IconButton(
+                            onClick = { resultExpanded = !resultExpanded },
+                            modifier = Modifier.size(28.dp).testTag("expand_result")
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.KeyboardArrowDown,
+                                contentDescription = if (resultExpanded) "Collapse AI result" else "Expand AI result",
+                                tint = keyboardColors.textMuted,
+                                modifier = Modifier.size(16.dp)
+                            )
+                        }
                         IconButton(
                             onClick = {
                                 buzz(HapticFeedbackType.TextHandleMove)
@@ -1186,7 +1190,7 @@ fun AgenticKeyboardLayout(
         val hasRefinableResult = grammarCorrection != null || summary != null || translation != null ||
             rewrite != null || composeResult != null || continuation != null
         AnimatedVisibility(
-            visible = hasRefinableResult && !isLoading,
+            visible = resultExpanded && hasRefinableResult && !isLoading,
             enter = fadeIn(),
             exit = fadeOut()
         ) {
@@ -1321,7 +1325,10 @@ fun AgenticKeyboardLayout(
                 shape = RoundedCornerShape(12.dp)
             ) {
                 Column(
-                    modifier = Modifier.padding(12.dp),
+                    modifier = Modifier
+                        .heightIn(max = if (metrics.isCompact) 100.dp else 240.dp)
+                        .verticalScroll(rememberScrollState())
+                        .padding(12.dp),
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
                     Row(
@@ -1631,8 +1638,11 @@ fun AgenticKeyboardLayout(
                     Text(if (isSwipeToTypeEnabled) "✍️" else "⌨️", fontSize = 15.sp)
                 }
                 IconButton(
-                    onClick = { showGestureGuide = !showGestureGuide },
-                    modifier = Modifier.size(32.dp)
+                    onClick = {
+                        showGestureGuide = !showGestureGuide
+                        if (showGestureGuide) viewModel.setAiToolsExpanded(false)
+                    },
+                    modifier = Modifier.size(32.dp).testTag("toggle_gesture_guide")
                 ) {
                     Text("❓", fontSize = 14.sp)
                 }
