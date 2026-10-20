@@ -1,6 +1,7 @@
 package io.github.daddymean.agentickeyboard.ui
 
 import android.content.Context
+import android.view.ViewConfiguration
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.getUnclippedBoundsInRoot
@@ -124,18 +125,33 @@ class KeyboardLayoutWindowSizeTest {
         assertTrue("guide must leave space within the 360dp window", bottom <= 360.dp)
         // The pad's upward command must replace the guide with tools, not stack them.
         val pad = composeTestRule.onNodeWithTag("command_gesture_pad")
+        val slop = ViewConfiguration.get(ApplicationProvider.getApplicationContext<Context>()).scaledTouchSlop
+        fun previewDescription() = runCatching {
+            pad.fetchSemanticsNode().children.joinToString { it.config.toString() }
+        }.getOrDefault("pad removed")
         pad.performTouchInput {
-            // Keep every event inside the root: this path is y150 -> 80 -> 10px.
-            down(center + Offset(0f, 4f))
+            // Keep every event inside the root, with margin beyond touch slop.
+            down(center + Offset(0f, 12f))
             moveBy(Offset(0f, -70f))
         }
         composeTestRule.mainClock.advanceTimeByFrame()
         composeTestRule.onNodeWithText("Drawing Gesture Trail...").assertExists()
         pad.performTouchInput {
-            moveBy(Offset(0f, -70f))
+            moveBy(Offset(0f, -80f))
+        }
+        composeTestRule.mainClock.advanceTimeByFrame()
+        composeTestRule.onNodeWithText("💡 Release to Show AI Panel (Up)").assertExists(
+            "After second move: slop=$slop; ${previewDescription()}"
+        )
+        pad.performTouchInput {
             up()
         }
-        composeTestRule.mainClock.advanceTimeBy(300)
+        composeTestRule.mainClock.advanceTimeByFrame()
+        composeTestRule.onNodeWithText("Gesture: Show AI Actions").assertExists(
+            "After release: slop=$slop; ${previewDescription()}"
+        )
+        composeTestRule.mainClock.advanceTimeBy(500)
+        composeTestRule.mainClock.advanceTimeByFrame()
         composeTestRule.onNodeWithTag("command_gesture_pad").assertDoesNotExist()
         composeTestRule.onNodeWithTag("toggle_gesture_guide").assertIsDisplayed()
         composeTestRule.onNodeWithTag("key_space").assertIsDisplayed()
