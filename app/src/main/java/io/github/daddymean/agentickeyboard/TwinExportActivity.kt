@@ -132,7 +132,7 @@ class TwinExportActivity : Activity() {
         scope.launch {
             val result = runCatching {
                 TwinLearning.onWorker {
-                    val exporter = TwinExporter(TwinLearning.store(this@TwinExportActivity), TwinVault.journal(this@TwinExportActivity))
+                    val exporter = TwinExporter(TwinLearning.store(this@TwinExportActivity), TwinVault.journal(this@TwinExportActivity), TwinVault.memory(this@TwinExportActivity))
                     val summary = contentResolver.openOutputStream(uri, "wt")!!.use { exporter.export(it, passphrase, System.currentTimeMillis()) }
                     contentResolver.openInputStream(uri)!!.use { TwinExporter.verify(it, passphrase) }
                     summary
@@ -147,6 +147,10 @@ class TwinExportActivity : Activity() {
                     append("${s.journalRecords} journal records (${s.fieldsRedacted} fields redacted), ")
                     append("${s.recordings} recordings")
                     if (s.recordingsUnreadable > 0) append(" (${s.recordingsUnreadable} could not be opened and were skipped)")
+                    append(", ${s.memories} approved memories")
+                    if (s.memoriesDropped > 0) append(" (${s.memoriesDropped} left out by the scrubber)")
+                    append(", ${s.coreBlocks} core memories")
+                    if (s.coreBlocksWithheld > 0) append(" (${s.coreBlocksWithheld} withheld: they looked like they held a password or key)")
                     append(".\n\nCopy the file to your training computer yourself, then decrypt it there with ")
                     append("tools/twin-export/decrypt_twin_export.py. Without the passphrase it can't be opened.")
                 }

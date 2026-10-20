@@ -19,6 +19,7 @@ import io.github.daddymean.agentickeyboard.db.AppDatabase
 import io.github.daddymean.agentickeyboard.db.KeyboardRepository
 import io.github.daddymean.agentickeyboard.ui.theme.MyApplicationTheme
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.flow.MutableStateFlow
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -66,7 +67,7 @@ class KeyboardTouchTargetTest {
 
     private lateinit var keys: Map<Char, Box>
 
-    private fun showKeyboard(keyHeightScale: Float) {
+    private fun showKeyboard(keyHeightScale: Float): KeyboardViewModel {
         val viewModel = KeyboardViewModel(KeyboardRepository(db))
         viewModelStore.put("keyboard", viewModel)
         viewModelJob = viewModel.viewModelScope.coroutineContext[Job]
@@ -84,6 +85,45 @@ class KeyboardTouchTargetTest {
             val d = composeTestRule.onNodeWithTag("key_$c").getUnclippedBoundsInRoot()
             Box(d.left.value, d.top.value, d.right.value, d.bottom.value)
         }
+        return viewModel
+    }
+
+    @Suppress("UNCHECKED_CAST")
+    private fun publishPanel(viewModel: KeyboardViewModel, state: AiPanelState) {
+        // Drive the real collected state without a network request or production test API.
+        val field = KeyboardViewModel::class.java.getDeclaredField("_aiPanelState")
+        field.isAccessible = true
+        composeTestRule.runOnIdle {
+            (field.get(viewModel) as MutableStateFlow<AiPanelState>).value = state
+        }
+        composeTestRule.mainClock.advanceTimeBy(300)
+        composeTestRule.waitForIdle()
+    }
+
+    @Test
+    fun `AI loading results and dismissal keep letter targets fixed`() {
+        val viewModel = showKeyboard(1.15f)
+        val key = composeTestRule.onNodeWithTag("key_q")
+        val before = key.getUnclippedBoundsInRoot()
+        for (state in listOf(
+            AiPanelState.Loading,
+            AiPanelState.Summary("A short result", "Original synthetic test text"),
+            AiPanelState.Idle
+        )) {
+            publishPanel(viewModel, state)
+            assertEquals("$state must not move keys", before, key.getUnclippedBoundsInRoot())
+        }
+        assertEquals("q", tapAt(keys['q']!!.cx, keys['q']!!.cy))
+    }
+
+    @Test
+    fun `result details and refinement require explicit expansion`() {
+        val viewModel = showKeyboard(1.15f)
+        publishPanel(viewModel, AiPanelState.Summary("A short result", "Original synthetic test text"))
+        composeTestRule.onNodeWithTag("iterate_chips").assertDoesNotExist()
+        composeTestRule.onNodeWithTag("expand_result").performClick()
+        composeTestRule.mainClock.advanceTimeBy(300)
+        composeTestRule.onNodeWithTag("iterate_chips").assertExists()
     }
 
     /** Taps at ([xDp], [yDp]) in root coordinates; returns what was typed, lower-cased. */

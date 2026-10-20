@@ -1,0 +1,861 @@
+{
+ "schema_version": 1,
+ "title": "Weekly legacy interview (KEYBOARD-034)",
+ "attribution": "Questions written for this app, inspired by the themes of StoryCorps Great Questions (storycorps.org/participate/great-questions). StoryCorps does not openly license its list and its Terms of Use bar copying it, so no StoryCorps question is reproduced here. StoryCorps does not endorse this app.",
+ "session_size": {
+  "min": 6,
+  "max": 8
+ },
+ "items": [
+  {
+   "id": "LI-001",
+   "category": "growing_up",
+   "category_label": "Growing up",
+   "prompt": "Pick one ordinary afternoon from when you were about ten. Where were you, who was around, and what were you up to?",
+   "follow_ups": [
+    "Can you tell me more about that?",
+    "How did that change you?"
+   ],
+   "depth": 2,
+   "answer_mode": "either",
+   "emotionally_heavy": false,
+   "per_child": false,
+   "placeholders": [],
+   "revisit": "none",
+   "est_minutes": 5
+  },
+  {
+   "id": "LI-002",
+   "category": "growing_up",
+   "category_label": "Growing up",
+   "prompt": "What got you into trouble as a kid, and how did the grown-ups handle it?",
+   "follow_ups": [
+    "Can you tell me more about that?",
+    "How did that change you?"
+   ],
+   "depth": 2,
+   "answer_mode": "either",
+   "emotionally_heavy": false,
+   "per_child": false,
+   "placeholders": [],
+   "revisit": "none",
+   "est_minutes": 5
+  },
+  {
+   "id": "LI-003",
+   "category": "growing_up",
+   "category_label": "Growing up",
+   "prompt": "Which smell or song takes you straight back to being a teenager?",
+   "follow_ups": [
+    "Can you tell me more about that?",
+    "How did that change you?"
+   ],
+   "depth": 2,
+   "answer_mode": "either",
+   "emotionally_heavy": false,
+   "per_child": false,
+   "placeholders": [],
+   "revisit": "none",
+   "est_minutes": 5
+  },
+  {
+   "id": "LI-004",
+   "category": "growing_up",
+   "category_label": "Growing up",
+   "prompt": "Picture yourself at fifteen. How close is the life you have now to the one that kid imagined?",
+   "follow_ups": [
+    "Can you tell me more about that?",
+    "How did that change you?"
+   ],
+   "depth": 2,
+   "answer_mode": "either",
+   "emotionally_heavy": false,
+   "per_child": false,
+   "placeholders": [],
+   "revisit": "none",
+   "est_minutes": 5
+  },
+  {
+   "id": "LI-005",
+   "category": "family_roots",
+   "category_label": "Where our family comes from",
+   "prompt": "What do you know about where our family lived before you, and how did we end up here?",
+   "follow_ups": [
+    "Can you tell me more about that?",
+    "How did that change you?"
+   ],
+   "depth": 2,
+   "answer_mode": "either",
+   "emotionally_heavy": false,
+   "per_child": false,
+   "placeholders": [],
+   "revisit": "none",
+   "est_minutes": 5
+  },
+  {
+   "id": "LI-006",
+   "category": "family_roots",
+   "category_label": "Where our family comes from",
+   "prompt": "Which relative's story do you wish more of us knew? Tell it the way you heard it.",
+   "follow_ups": [
+    "Can you tell me more about that?",
+    "How did that change you?"
+   ],
+   "depth": 2,
+   "answer_mode": "either",
+   "emotionally_heavy": false,
+   "per_child": false,
+   "placeholders": [],
+   "revisit": "none",
+   "est_minutes": 5
+  },
+  {
+   "id": "LI-007",
+   "category": "family_roots",
+   "category_label": "Where our family comes from",
+   "prompt": "What traditions came down to you, and which ones did you decide to keep or drop?",
+   "follow_ups": [
+    "Can you tell me more about that?",
+    "How did that change you?"
+   ],
+   "depth": 2,
+   "answer_mode": "either",
+   "emotionally_heavy": false,
+   "per_child": false,
+   "placeholders": [],
+   "revisit": "none",
+   "est_minutes": 5
+  },
+  {
+   "id": "LI-008",
+   "category": "family_roots",
+   "category_label": "Where our family comes from",
+   "prompt": "What foods taste like family to you, and who made them?",
+   "follow_ups": [
+    "Can you tell me more about that?",
+    "How did that change you?"
+   ],
+   "depth": 2,
+   "answer_mode": "either",
+   "emotionally_heavy": false,
+   "per_child": false,
+   "placeholders": [],
+   "revisit": "none",
+   "est_minutes": 5
+  },
+  {
+   "id": "LI-009",
+   "category": "parents",
+   "category_label": "My parents",
+   "prompt": "Describe your mother in three words, then tell me the story behind one of them.",
+   "follow_ups": [
+    "Can you tell me more about that?",
+    "How did that change you?"
+   ],
+   "depth": 2,
+   "answer_mode": "either",
+   "emotionally_heavy": false,
+   "per_child": false,
+   "placeholders": [],
+   "revisit": "none",
+   "est_minutes": 5
+  },
+  {
+   "id": "LI-010",
+   "category": "parents",
+   "category_label": "My parents",
+   "prompt": "Describe your father in three words, then tell me the story behind one of them.",
+   "follow_ups": [
+    "Can you tell me more about that?",
+    "How did that change you?"
+   ],
+   "depth": 2,
+   "answer_mode": "either",
+   "emotionally_heavy": false,
+   "per_child": false,
+   "placeholders": [],
+   "revisit": "none",
+   "est_minutes": 5
+  },
+  {
+   "id": "LI-011",
+   "category": "parents",
+   "category_label": "My parents",
+   "prompt": "Which of your parents' habits did you end up copying on purpose?",
+   "follow_ups": [
+    "Can you tell me more about that?",
+    "How did that change you?"
+   ],
+   "depth": 2,
+   "answer_mode": "either",
+   "emotionally_heavy": false,
+   "per_child": false,
+   "placeholders": [],
+   "revisit": "none",
+   "est_minutes": 5
+  },
+  {
+   "id": "LI-012",
+   "category": "parents",
+   "category_label": "My parents",
+   "prompt": "Where did you set out to do things differently from your parents, and how did that go?",
+   "follow_ups": [
+    "Can you tell me more about that?",
+    "How did that change you?"
+   ],
+   "depth": 2,
+   "answer_mode": "either",
+   "emotionally_heavy": false,
+   "per_child": false,
+   "placeholders": [],
+   "revisit": "none",
+   "est_minutes": 5
+  },
+  {
+   "id": "LI-013",
+   "category": "school",
+   "category_label": "School and teachers",
+   "prompt": "Name a teacher or coach who changed how you saw yourself. What exactly did they do?",
+   "follow_ups": [
+    "Can you tell me more about that?",
+    "How did that change you?"
+   ],
+   "depth": 2,
+   "answer_mode": "either",
+   "emotionally_heavy": false,
+   "per_child": false,
+   "placeholders": [],
+   "revisit": "none",
+   "est_minutes": 5
+  },
+  {
+   "id": "LI-014",
+   "category": "school",
+   "category_label": "School and teachers",
+   "prompt": "What subject or skill came hard to you, and what did that teach you?",
+   "follow_ups": [
+    "Can you tell me more about that?",
+    "How did that change you?"
+   ],
+   "depth": 2,
+   "answer_mode": "either",
+   "emotionally_heavy": false,
+   "per_child": false,
+   "placeholders": [],
+   "revisit": "none",
+   "est_minutes": 5
+  },
+  {
+   "id": "LI-015",
+   "category": "school",
+   "category_label": "School and teachers",
+   "prompt": "What did you learn outside a classroom that mattered more than anything inside one?",
+   "follow_ups": [
+    "Can you tell me more about that?",
+    "How did that change you?"
+   ],
+   "depth": 2,
+   "answer_mode": "either",
+   "emotionally_heavy": false,
+   "per_child": false,
+   "placeholders": [],
+   "revisit": "none",
+   "est_minutes": 5
+  },
+  {
+   "id": "LI-016",
+   "category": "love",
+   "category_label": "Love and partnership",
+   "prompt": "How did you know a relationship was worth fighting for?",
+   "follow_ups": [
+    "Can you tell me more about that?",
+    "How did that change you?"
+   ],
+   "depth": 2,
+   "answer_mode": "either",
+   "emotionally_heavy": false,
+   "per_child": false,
+   "placeholders": [],
+   "revisit": "none",
+   "est_minutes": 5
+  },
+  {
+   "id": "LI-017",
+   "category": "love",
+   "category_label": "Love and partnership",
+   "prompt": "What's one small habit that keeps love going through ordinary weeks?",
+   "follow_ups": [
+    "Can you tell me more about that?",
+    "How did that change you?"
+   ],
+   "depth": 2,
+   "answer_mode": "either",
+   "emotionally_heavy": false,
+   "per_child": false,
+   "placeholders": [],
+   "revisit": "none",
+   "est_minutes": 5
+  },
+  {
+   "id": "LI-018",
+   "category": "love",
+   "category_label": "Love and partnership",
+   "prompt": "Tell me about a time you and your partner disagreed and found your way back.",
+   "follow_ups": [
+    "Can you tell me more about that?",
+    "How did that change you?"
+   ],
+   "depth": 2,
+   "answer_mode": "either",
+   "emotionally_heavy": false,
+   "per_child": false,
+   "placeholders": [],
+   "revisit": "none",
+   "est_minutes": 5
+  },
+  {
+   "id": "LI-019",
+   "category": "love",
+   "category_label": "Love and partnership",
+   "prompt": "What would you want your kids to look for in someone they share a life with?",
+   "follow_ups": [
+    "Can you tell me more about that?",
+    "How did that change you?"
+   ],
+   "depth": 2,
+   "answer_mode": "either",
+   "emotionally_heavy": false,
+   "per_child": false,
+   "placeholders": [],
+   "revisit": "none",
+   "est_minutes": 5
+  },
+  {
+   "id": "LI-020",
+   "category": "raising_kids",
+   "category_label": "Raising you",
+   "prompt": "What went through your head the first time you held each of your kids?",
+   "follow_ups": [
+    "Can you tell me more about that?",
+    "How did that change you?"
+   ],
+   "depth": 2,
+   "answer_mode": "either",
+   "emotionally_heavy": false,
+   "per_child": false,
+   "placeholders": [],
+   "revisit": "none",
+   "est_minutes": 5
+  },
+  {
+   "id": "LI-021",
+   "category": "raising_kids",
+   "category_label": "Raising you",
+   "prompt": "What scared you most about being a dad, and what surprised you?",
+   "follow_ups": [
+    "Can you tell me more about that?",
+    "How did that change you?"
+   ],
+   "depth": 2,
+   "answer_mode": "either",
+   "emotionally_heavy": false,
+   "per_child": false,
+   "placeholders": [],
+   "revisit": "none",
+   "est_minutes": 5
+  },
+  {
+   "id": "LI-022",
+   "category": "raising_kids",
+   "category_label": "Raising you",
+   "prompt": "Which parenting decision are you proudest of, and which would you redo?",
+   "follow_ups": [
+    "Can you tell me more about that?",
+    "How did that change you?"
+   ],
+   "depth": 2,
+   "answer_mode": "either",
+   "emotionally_heavy": false,
+   "per_child": false,
+   "placeholders": [],
+   "revisit": "none",
+   "est_minutes": 5
+  },
+  {
+   "id": "LI-023",
+   "category": "raising_kids",
+   "category_label": "Raising you",
+   "prompt": "Is there a moment with one of us kids you replay in your head? Tell it.",
+   "follow_ups": [
+    "Can you tell me more about that?",
+    "How did that change you?"
+   ],
+   "depth": 2,
+   "answer_mode": "either",
+   "emotionally_heavy": false,
+   "per_child": false,
+   "placeholders": [],
+   "revisit": "none",
+   "est_minutes": 5
+  },
+  {
+   "id": "LI-024",
+   "category": "work",
+   "category_label": "Work",
+   "prompt": "How did you land in the work you do, and was it the plan?",
+   "follow_ups": [
+    "Can you tell me more about that?",
+    "How did that change you?"
+   ],
+   "depth": 2,
+   "answer_mode": "either",
+   "emotionally_heavy": false,
+   "per_child": false,
+   "placeholders": [],
+   "revisit": "none",
+   "est_minutes": 5
+  },
+  {
+   "id": "LI-025",
+   "category": "work",
+   "category_label": "Work",
+   "prompt": "What's the best piece of advice anyone gave you about working?",
+   "follow_ups": [
+    "Can you tell me more about that?",
+    "How did that change you?"
+   ],
+   "depth": 2,
+   "answer_mode": "either",
+   "emotionally_heavy": false,
+   "per_child": false,
+   "placeholders": [],
+   "revisit": "none",
+   "est_minutes": 5
+  },
+  {
+   "id": "LI-026",
+   "category": "work",
+   "category_label": "Work",
+   "prompt": "Tell me about a day at work you'll never forget, good or bad.",
+   "follow_ups": [
+    "Can you tell me more about that?",
+    "How did that change you?"
+   ],
+   "depth": 2,
+   "answer_mode": "either",
+   "emotionally_heavy": false,
+   "per_child": false,
+   "placeholders": [],
+   "revisit": "none",
+   "est_minutes": 5
+  },
+  {
+   "id": "LI-027",
+   "category": "work",
+   "category_label": "Work",
+   "prompt": "What do you hope people who worked with you say about you when you're not in the room?",
+   "follow_ups": [
+    "Can you tell me more about that?",
+    "How did that change you?"
+   ],
+   "depth": 2,
+   "answer_mode": "either",
+   "emotionally_heavy": false,
+   "per_child": false,
+   "placeholders": [],
+   "revisit": "none",
+   "est_minutes": 5
+  },
+  {
+   "id": "LI-028",
+   "category": "friends",
+   "category_label": "Friends",
+   "prompt": "Who's the friend you've known longest, and why has it lasted?",
+   "follow_ups": [
+    "Can you tell me more about that?",
+    "How did that change you?"
+   ],
+   "depth": 2,
+   "answer_mode": "either",
+   "emotionally_heavy": false,
+   "per_child": false,
+   "placeholders": [],
+   "revisit": "none",
+   "est_minutes": 5
+  },
+  {
+   "id": "LI-029",
+   "category": "friends",
+   "category_label": "Friends",
+   "prompt": "Tell me about an adventure, or a mess, you got into with a friend.",
+   "follow_ups": [
+    "Can you tell me more about that?",
+    "How did that change you?"
+   ],
+   "depth": 2,
+   "answer_mode": "either",
+   "emotionally_heavy": false,
+   "per_child": false,
+   "placeholders": [],
+   "revisit": "none",
+   "est_minutes": 5
+  },
+  {
+   "id": "LI-030",
+   "category": "friends",
+   "category_label": "Friends",
+   "prompt": "What makes someone a real friend, in your book?",
+   "follow_ups": [
+    "Can you tell me more about that?",
+    "How did that change you?"
+   ],
+   "depth": 2,
+   "answer_mode": "either",
+   "emotionally_heavy": false,
+   "per_child": false,
+   "placeholders": [],
+   "revisit": "none",
+   "est_minutes": 5
+  },
+  {
+   "id": "LI-031",
+   "category": "beliefs",
+   "category_label": "Faith and values",
+   "prompt": "What do you believe in most firmly, and where did that belief come from?",
+   "follow_ups": [
+    "Can you tell me more about that?",
+    "How did that change you?"
+   ],
+   "depth": 2,
+   "answer_mode": "either",
+   "emotionally_heavy": false,
+   "per_child": false,
+   "placeholders": [],
+   "revisit": "none",
+   "est_minutes": 5
+  },
+  {
+   "id": "LI-032",
+   "category": "beliefs",
+   "category_label": "Faith and values",
+   "prompt": "When have your values cost you something, and was it worth it?",
+   "follow_ups": [
+    "Can you tell me more about that?",
+    "How did that change you?"
+   ],
+   "depth": 2,
+   "answer_mode": "either",
+   "emotionally_heavy": false,
+   "per_child": false,
+   "placeholders": [],
+   "revisit": "none",
+   "est_minutes": 5
+  },
+  {
+   "id": "LI-033",
+   "category": "beliefs",
+   "category_label": "Faith and values",
+   "prompt": "What gives you peace when things are hard?",
+   "follow_ups": [
+    "Can you tell me more about that?",
+    "How did that change you?"
+   ],
+   "depth": 2,
+   "answer_mode": "either",
+   "emotionally_heavy": false,
+   "per_child": false,
+   "placeholders": [],
+   "revisit": "none",
+   "est_minutes": 5
+  },
+  {
+   "id": "LI-034",
+   "category": "beliefs",
+   "category_label": "Faith and values",
+   "prompt": "Which of your beliefs has changed the most over the years?",
+   "follow_ups": [
+    "Can you tell me more about that?",
+    "How did that change you?"
+   ],
+   "depth": 2,
+   "answer_mode": "either",
+   "emotionally_heavy": false,
+   "per_child": false,
+   "placeholders": [],
+   "revisit": "none",
+   "est_minutes": 5
+  },
+  {
+   "id": "LI-035",
+   "category": "hard_times",
+   "category_label": "Hard times",
+   "prompt": "What's the hardest stretch you've lived through, and what got you through it?",
+   "follow_ups": [
+    "Can you tell me more about that?",
+    "How did that change you?"
+   ],
+   "depth": 3,
+   "answer_mode": "either",
+   "emotionally_heavy": true,
+   "per_child": false,
+   "placeholders": [],
+   "revisit": "none",
+   "est_minutes": 5
+  },
+  {
+   "id": "LI-036",
+   "category": "hard_times",
+   "category_label": "Hard times",
+   "prompt": "When did you have to ask for help, and how did that feel?",
+   "follow_ups": [
+    "Can you tell me more about that?",
+    "How did that change you?"
+   ],
+   "depth": 3,
+   "answer_mode": "either",
+   "emotionally_heavy": true,
+   "per_child": false,
+   "placeholders": [],
+   "revisit": "none",
+   "est_minutes": 5
+  },
+  {
+   "id": "LI-037",
+   "category": "hard_times",
+   "category_label": "Hard times",
+   "prompt": "If one of us is going through something awful, what do you want us to remember?",
+   "follow_ups": [
+    "Can you tell me more about that?",
+    "How did that change you?"
+   ],
+   "depth": 3,
+   "answer_mode": "either",
+   "emotionally_heavy": true,
+   "per_child": false,
+   "placeholders": [],
+   "revisit": "none",
+   "est_minutes": 5
+  },
+  {
+   "id": "LI-038",
+   "category": "fairness",
+   "category_label": "Fairness and standing up",
+   "prompt": "When did you see something unfair and decide to step in, or wish you had?",
+   "follow_ups": [
+    "Can you tell me more about that?",
+    "How did that change you?"
+   ],
+   "depth": 2,
+   "answer_mode": "either",
+   "emotionally_heavy": false,
+   "per_child": false,
+   "placeholders": [],
+   "revisit": "none",
+   "est_minutes": 5
+  },
+  {
+   "id": "LI-039",
+   "category": "fairness",
+   "category_label": "Fairness and standing up",
+   "prompt": "Who taught you how to treat people, and what did they model?",
+   "follow_ups": [
+    "Can you tell me more about that?",
+    "How did that change you?"
+   ],
+   "depth": 2,
+   "answer_mode": "either",
+   "emotionally_heavy": false,
+   "per_child": false,
+   "placeholders": [],
+   "revisit": "none",
+   "est_minutes": 5
+  },
+  {
+   "id": "LI-040",
+   "category": "fairness",
+   "category_label": "Fairness and standing up",
+   "prompt": "What change in the world have you seen in your lifetime that gives you hope?",
+   "follow_ups": [
+    "Can you tell me more about that?",
+    "How did that change you?"
+   ],
+   "depth": 2,
+   "answer_mode": "either",
+   "emotionally_heavy": false,
+   "per_child": false,
+   "placeholders": [],
+   "revisit": "none",
+   "est_minutes": 5
+  },
+  {
+   "id": "LI-041",
+   "category": "service",
+   "category_label": "Service",
+   "prompt": "Have you ever served something bigger than yourself, in uniform or out of it? What did it ask of you?",
+   "follow_ups": [
+    "Can you tell me more about that?",
+    "How did that change you?"
+   ],
+   "depth": 2,
+   "answer_mode": "either",
+   "emotionally_heavy": false,
+   "per_child": false,
+   "placeholders": [],
+   "revisit": "none",
+   "est_minutes": 5
+  },
+  {
+   "id": "LI-042",
+   "category": "service",
+   "category_label": "Service",
+   "prompt": "Who do you think of as a quiet hero, and why?",
+   "follow_ups": [
+    "Can you tell me more about that?",
+    "How did that change you?"
+   ],
+   "depth": 2,
+   "answer_mode": "either",
+   "emotionally_heavy": false,
+   "per_child": false,
+   "placeholders": [],
+   "revisit": "none",
+   "est_minutes": 5
+  },
+  {
+   "id": "LI-043",
+   "category": "remembering",
+   "category_label": "Remembering people",
+   "prompt": "Who have you lost that you still talk to in your head? Tell me about them.",
+   "follow_ups": [
+    "Can you tell me more about that?",
+    "How did that change you?"
+   ],
+   "depth": 3,
+   "answer_mode": "either",
+   "emotionally_heavy": true,
+   "per_child": false,
+   "placeholders": [],
+   "revisit": "none",
+   "est_minutes": 5
+  },
+  {
+   "id": "LI-044",
+   "category": "remembering",
+   "category_label": "Remembering people",
+   "prompt": "What's a story about someone gone that you want the grandkids to hear?",
+   "follow_ups": [
+    "Can you tell me more about that?",
+    "How did that change you?"
+   ],
+   "depth": 3,
+   "answer_mode": "either",
+   "emotionally_heavy": true,
+   "per_child": false,
+   "placeholders": [],
+   "revisit": "none",
+   "est_minutes": 5
+  },
+  {
+   "id": "LI-045",
+   "category": "remembering",
+   "category_label": "Remembering people",
+   "prompt": "How do you want us to remember you on an ordinary day, not a big one?",
+   "follow_ups": [
+    "Can you tell me more about that?",
+    "How did that change you?"
+   ],
+   "depth": 3,
+   "answer_mode": "either",
+   "emotionally_heavy": true,
+   "per_child": false,
+   "placeholders": [],
+   "revisit": "none",
+   "est_minutes": 5
+  },
+  {
+   "id": "LI-046",
+   "category": "looking_back",
+   "category_label": "Looking back",
+   "prompt": "What are you most grateful for right now, today?",
+   "follow_ups": [
+    "Can you tell me more about that?",
+    "How did that change you?"
+   ],
+   "depth": 2,
+   "answer_mode": "either",
+   "emotionally_heavy": false,
+   "per_child": false,
+   "placeholders": [],
+   "revisit": "none",
+   "est_minutes": 5
+  },
+  {
+   "id": "LI-047",
+   "category": "looking_back",
+   "category_label": "Looking back",
+   "prompt": "What lesson took you far too long to learn, and how would you explain it to someone who's twenty-five?",
+   "follow_ups": [
+    "Can you tell me more about that?",
+    "How did that change you?"
+   ],
+   "depth": 2,
+   "answer_mode": "either",
+   "emotionally_heavy": false,
+   "per_child": false,
+   "placeholders": [],
+   "revisit": "none",
+   "est_minutes": 5
+  },
+  {
+   "id": "LI-048",
+   "category": "looking_back",
+   "category_label": "Looking back",
+   "prompt": "Is there something you've been meaning to tell us? This is a good place for it.",
+   "follow_ups": [
+    "Can you tell me more about that?",
+    "How did that change you?"
+   ],
+   "depth": 2,
+   "answer_mode": "either",
+   "emotionally_heavy": false,
+   "per_child": false,
+   "placeholders": [],
+   "revisit": "none",
+   "est_minutes": 5
+  },
+  {
+   "id": "LI-049",
+   "category": "looking_back",
+   "category_label": "Looking back",
+   "prompt": "If your life were a book, what would the chapter titles be so far?",
+   "follow_ups": [
+    "Can you tell me more about that?",
+    "How did that change you?"
+   ],
+   "depth": 2,
+   "answer_mode": "either",
+   "emotionally_heavy": false,
+   "per_child": false,
+   "placeholders": [],
+   "revisit": "none",
+   "est_minutes": 5
+  },
+  {
+   "id": "LI-050",
+   "category": "looking_back",
+   "category_label": "Looking back",
+   "prompt": "What makes you laugh every single time?",
+   "follow_ups": [
+    "Can you tell me more about that?",
+    "How did that change you?"
+   ],
+   "depth": 2,
+   "answer_mode": "either",
+   "emotionally_heavy": false,
+   "per_child": false,
+   "placeholders": [],
+   "revisit": "none",
+   "est_minutes": 5
+  }
+ ]
+}

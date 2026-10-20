@@ -11,6 +11,7 @@ import android.window.OnBackInvokedDispatcher
 import android.text.InputType
 import android.text.format.DateFormat
 import android.view.View
+import android.view.inputmethod.EditorInfo
 import android.view.WindowManager
 import android.widget.ArrayAdapter
 import android.widget.Button
@@ -30,6 +31,7 @@ import io.github.daddymean.agentickeyboard.twin.journal.Instrument
 import io.github.daddymean.agentickeyboard.twin.journal.Instruments
 import io.github.daddymean.agentickeyboard.twin.journal.JournalHistory
 import io.github.daddymean.agentickeyboard.twin.journal.JournalKinds
+import io.github.daddymean.agentickeyboard.twin.journal.LegacyInterview
 import io.github.daddymean.agentickeyboard.twin.journal.JournalRecord
 import io.github.daddymean.agentickeyboard.twin.journal.JournalRecorder
 import io.github.daddymean.agentickeyboard.twin.journal.JournalScheduler
@@ -71,6 +73,7 @@ class JournalActivity : Activity() {
     private lateinit var recorder: JournalRecorder
     private lateinit var transcriber: OnDeviceTranscriber
     private var bank: List<Prompt> = emptyList()
+    private var interviewBank: List<Prompt> = emptyList()
     private var instruments: List<Instrument> = emptyList()
     private var cards: List<ValueCard> = emptyList()
     private var sessions: List<VoiceSession> = emptyList()
@@ -97,6 +100,7 @@ class JournalActivity : Activity() {
                 val instJson = assets.open(ASSET_INSTRUMENTS).bufferedReader().use { it.readText() }
                 val scripts = assets.open(ASSET_SCRIPTS).bufferedReader().use { it.readText() }
                 bank = QuestionBank.parse(bankJson)
+                interviewBank = QuestionBank.parse(assets.open(LegacyInterview.ASSET).bufferedReader().use { it.readText() })
                 instruments = Instruments.parse(instJson)
                 cards = Instruments.valueCards(instJson)
                 sessions = VoiceScripts.parse(scripts)
@@ -157,6 +161,12 @@ class JournalActivity : Activity() {
         val today = LocalDate.now()
         val plan = JournalScheduler.plan(bank, JournalHistory.state(records, bank, today), today, LocalTime.now().hour)
         showPlan(plan)
+        heading("This week")
+        val session = LegacyInterview.savedSession(records, LegacyInterview.weekOf(today))
+        val done = session?.promptIds?.count { it in LegacyInterview.answeredIds(records) } ?: 0
+        button(if (session == null) "Weekly legacy interview" else "Weekly legacy interview ($done of ${session.promptIds.size} answered)") { scope.launch { interviewScreen() } }
+        val waiting = LegacyInterview.kidQuestions(records).count { !it.answered }
+        button("Kids' questions for you ($waiting waiting)") { kidQuestionsScreen() }
         heading("More")
         button("Personality & values") { instrumentsScreen() }
         button("Voice scripts") { voiceScriptsScreen() }
@@ -181,7 +191,7 @@ class JournalActivity : Activity() {
     }
 
     /** Answer a prompt (or a follow-up when [followUpIndex] > 0) by text and/or voice. */
-    private fun answerScreen(p: PromptInstance, parentText: String?, followUpIndex: Int) {
+    private fun answerScreen(p: PromptInstance, parentText: String?, followUpIndex: Int, onDone: () -> Unit = { scope.launch { home() } }) {
         clear("answer")
         val question = if (followUpIndex == 0) p.text else p.prompt.followUps[followUpIndex - 1]
         title(if (followUpIndex == 0) "Your answer" else "Tell me more")
@@ -208,23 +218,23 @@ class JournalActivity : Activity() {
                     val words = (answer.text.toString() + " " + transcript.text.toString()).split(Regex("\\s+")).count { it.isNotBlank() }
                     val voiceMs = takes.sumOf { it.second }
                     val maxFollowUps = if (words > 150 || voiceMs > 90_000) 2 else 1
-                    if (followUpIndex < maxFollowUps && followUpIndex < p.prompt.followUps.size) offerFollowUp(p, followUpIndex + 1)
-                    else scope.launch { home() }
+                    if (followUpIndex < maxFollowUps && followUpIndex < p.prompt.followUps.size) offerFollowUp(p, followUpIndex + 1, onDone)
+                    else onDone()
                 }
             },
             "Cancel" to {
                 if (recorder.isRecording) onStopRecording?.invoke()
-                scope.launch { TwinLearning.onWorker { takes.forEach { store.deleteAudio(it.first) } }; home() }
+                scope.launch { TwinLearning.onWorker { takes.forEach { store.deleteAudio(it.first) } }; onDone() }
             }
         )
     }
 
-    private fun offerFollowUp(p: PromptInstance, index: Int) {
+    private fun offerFollowUp(p: PromptInstance, index: Int, onDone: () -> Unit) {
         AlertDialog.Builder(this)
             .setTitle("Saved. Tell me more?")
             .setMessage(p.prompt.followUps[index - 1])
-            .setPositiveButton("Yes") { _, _ -> answerScreen(p, null, index) }
-            .setNegativeButton("Not now") { _, _ -> scope.launch { home() } }
+            .setPositiveButton("Yes") { _, _ -> answerScreen(p, null, index, onDone) }
+            .setNegativeButton("Not now") { _, _ -> onDone() }
             .show()
     }
 
@@ -438,7 +448,7 @@ class JournalActivity : Activity() {
             audio.forEachIndexed { i, id -> actions += "Play ${i + 1}" to { play(id) } }
             actions += "Delete" to {
                 AlertDialog.Builder(this).setMessage("Delete this answer and its recordings?")
-                    .setPositiveButton("Delete") { _, _ -> scope.launch { TwinLearning.onWorker { store.delete(r.id) }; answersScreen() } }
+                    .setPositiveButton("Delete") { _, _ -> scope.launch { TwinLearning.onWorker { TwinVault.deleteJournalRecord(this@JournalActivity, r.id) }; answersScreen() } }
                     .setNegativeButton("Cancel", null).show()
             }
             row(*actions.toTypedArray())
@@ -518,6 +528,75 @@ class JournalActivity : Activity() {
         text("Delete everything from the Legacy twin screen: it removes the journal, every recording and the typed-message store, and destroys the key.", 12f)
     }
 
+    // ---- KEYBOARD-034: weekly legacy interview and the kids' questions -------------------
+
+    private suspend fun interviewScreen() {
+        reload()
+        val week = LegacyInterview.weekOf(LocalDate.now())
+        var session = LegacyInterview.savedSession(records, week)
+        if (session == null) {
+            val planned = LegacyInterview.plan(interviewBank, records, LocalDate.now())
+            runCatching { TwinLearning.onWorker { store.add(JournalKinds.EVENT, LegacyInterview.sessionEvent(planned), System.currentTimeMillis()) } }
+                .onFailure { SafeLog.w(TAG, "Interview session was not stored", it) }
+            reload()
+            session = planned
+        }
+        clear("interview")
+        title("Weekly legacy interview")
+        text("Week of $week. ${session.promptIds.size} questions; answer any of them, in any order, by typing or recording. " +
+            "Your kids' own questions come first. Questions written for this app, inspired by StoryCorps Great Questions " +
+            "(storycorps.org).", 14f)
+        val answered = LegacyInterview.answeredIds(records)
+        val kidQs = LegacyInterview.kidQuestions(records).associateBy { it.promptId }
+        for (id in session.promptIds) {
+            val prompt = kidQs[id]?.let(LegacyInterview::prompt) ?: interviewBank.firstOrNull { it.id == id }
+            if (prompt == null) { text("(A question that was withdrawn.)", 13f); continue }
+            val child = kidQs[id]?.kid
+            text(prompt.categoryLabel + if (id in answered) " · answered" else "", 12f)
+            text(prompt.text, 17f)
+            if (id !in answered) button("Answer") {
+                answerScreen(PromptInstance(prompt, child, prompt.text, false, PromptInstance.Slot.EVENING), null, 0) { scope.launch { interviewScreen() } }
+            }
+        }
+        button("Back") { scope.launch { home() } }
+    }
+
+    private fun kidQuestionsScreen() {
+        clear("kidq")
+        title("Kids' questions")
+        text("Kids: ask Dad anything. Your question stays encrypted on this phone, goes into his next weekly interview, " +
+            "and you can withdraw it until he answers. His answer joins his journal like any other.", 14f)
+        var kid: String? = null
+        val picker = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
+        val who = TextView(this).apply { text = "Who's asking?" }
+        root.addView(who)
+        val grid = android.widget.HorizontalScrollView(this).apply { addView(picker) }
+        for (k in LegacyInterview.KIDS) picker.addView(Button(this).apply { text = k; setOnClickListener { kid = k; who.text = "Asking as $k" } })
+        root.addView(grid)
+        val q = edit("Your question for Dad", 3)
+        button("Add to Dad's interview") {
+            val body = runCatching { LegacyInterview.newKidQuestion(records, kid ?: "", q.text.toString()) }
+                .getOrElse { toast(it.message ?: "Couldn't add."); return@button }
+            add(JournalKinds.EVENT, body) { toast("Added. Dad will see it in his next weekly interview."); kidQuestionsScreen() }
+        }
+        heading("Waiting")
+        val all = LegacyInterview.kidQuestions(records)
+        if (all.none { !it.answered }) text("No questions waiting.", 14f)
+        for (kq in all.filter { !it.answered }) {
+            text("${kq.kid} · ${LegacyInterview.date(kq.askedAtMillis)}", 12f)
+            text(kq.text, 15f)
+            button("Withdraw") {
+                AlertDialog.Builder(this).setMessage("Withdraw this question? It is deleted from the phone.")
+                    .setPositiveButton("Withdraw") { _, _ ->
+                        scope.launch { TwinLearning.onWorker { TwinVault.deleteJournalRecord(this@JournalActivity, kq.recordId) }; reload(); kidQuestionsScreen() }
+                    }.setNegativeButton("Cancel", null).show()
+            }
+        }
+        val done = all.count { it.answered }
+        if (done > 0) text("$done answered. Dad's answers are under \"Your answers\".", 13f)
+        button("Back") { scope.launch { home() } }
+    }
+
     // ---- view helpers -----------------------------------------------------------------
 
     private fun clear(tag: String) { root.removeAllViews(); root.tag = tag }
@@ -529,6 +608,10 @@ class JournalActivity : Activity() {
         this.hint = hint
         minLines = lines
         inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_MULTI_LINE or InputType.TYPE_TEXT_FLAG_CAP_SENTENCES
+        // KEYBOARD-028: journal text is twin data. This flag makes any keyboard (ours included) treat the
+        // field as sensitive: no learning or history, no cloud AI, and no "Save note" to the context service
+        // (whose opt-in sync leaves the phone).
+        imeOptions = imeOptions or EditorInfo.IME_FLAG_NO_PERSONALIZED_LEARNING
         root.addView(this)
     }
     private fun button(label: String, onClick: () -> Unit) =

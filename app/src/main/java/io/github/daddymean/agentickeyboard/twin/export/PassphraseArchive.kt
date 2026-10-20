@@ -20,11 +20,13 @@ import javax.crypto.spec.SecretKeySpec
  *
  * Format v1 (all integers big-endian):
  * ```
- * header  = "AKTX" | version u8 (1) | kdf u8 (1 = PBKDF2-HMAC-SHA256)
- *         | iterations u32 | salt (16) | nonce prefix (8)
+ * header  = "AKTX" | version u8 (1) | kdf u8 (1 = PBKDF2-HMAC-SHA256, 2 = data key)
+ *         | iterations u32 | salt (16; the archive id when kdf = 2) | nonce prefix (8)
  * chunk   = final u8 (0|1) | length u32 | AES-256-GCM ciphertext+tag
  * ```
- * Key = PBKDF2-HMAC-SHA256(passphrase as UTF-8, salt, iterations, 32 bytes).
+ * Key = PBKDF2-HMAC-SHA256(passphrase as UTF-8, salt, iterations, 32 bytes) for kdf 1;
+ * for kdf 2 (KEYBOARD-027) it is a random 32-byte data key, recovered off the device
+ * from the release key file and two holders' share cards.
  * Chunk i (from 0) holds up to [CHUNK_BYTES] of plaintext; its 12-byte IV is the nonce
  * prefix followed by i as u32, and its associated data is the whole header followed by
  * i as u32 and the final flag. A changed header, a wrong passphrase, or a tampered,
@@ -35,6 +37,7 @@ object PassphraseArchive {
     val MAGIC = "AKTX".toByteArray(Charsets.US_ASCII)
     const val VERSION = 1
     const val KDF_PBKDF2_SHA256 = 1
+    const val KDF_DATA_KEY = 2
     /** OWASP's 2023 recommendation for PBKDF2-HMAC-SHA256. */
     const val ITERATIONS = 600_000
     const val CHUNK_BYTES = 1 shl 20
@@ -61,28 +64,56 @@ object PassphraseArchive {
     internal fun aad(header: ByteArray, index: Int, final: Boolean): ByteArray =
         ByteBuffer.allocate(header.size + 5).put(header).putInt(index).put(if (final) 1 else 0).array()
 
+    /** Header fields and key for one archive. */
+    class Params internal constructor(internal val header: ByteArray, internal val prefix: ByteArray, internal val key: SecretKeySpec)
+
+    private fun header(kdf: Int, iterations: Int, salt: ByteArray, prefix: ByteArray): ByteArray =
+        ByteBuffer.allocate(HEADER).put(MAGIC).put(VERSION.toByte()).put(kdf.toByte())
+            .putInt(iterations).put(salt).put(prefix).array()
+
+    internal fun passphraseParams(passphrase: CharArray, iterations: Int, random: SecureRandom): Params {
+        require(passphrase.size >= MIN_PASSPHRASE) { "passphrase too short" }
+        require(iterations >= 100_000) { "too few iterations" }
+        val salt = ByteArray(SALT).also(random::nextBytes)
+        val prefix = ByteArray(PREFIX).also(random::nextBytes)
+        return Params(header(KDF_PBKDF2_SHA256, iterations, salt, prefix), prefix, deriveKey(passphrase, salt, iterations))
+    }
+
+    /**
+     * KEYBOARD-027: an archive under a random data key (the dead-man release archive).
+     * Header kdf = [KDF_DATA_KEY], iterations = 0, and the salt field carries the 16-byte
+     * archive id, which the wrapped key is bound to.
+     */
+    fun dataKeyParams(dataKey: ByteArray, archiveId: ByteArray, random: SecureRandom = SecureRandom()): Params {
+        require(dataKey.size == 32 && archiveId.size == SALT) { "bad data key or archive id" }
+        val prefix = ByteArray(PREFIX).also(random::nextBytes)
+        return Params(header(KDF_DATA_KEY, 0, archiveId, prefix), prefix, SecretKeySpec(dataKey.copyOf(), "AES"))
+    }
+
+    /** Reads the archive id of a data-key archive without decrypting it. */
+    fun archiveId(input: InputStream): ByteArray {
+        val h = ByteArray(HEADER).also { DataInputStream(input).readFully(it) }
+        require(h.copyOfRange(0, 4).contentEquals(MAGIC) && h[5].toInt() == KDF_DATA_KEY) { "not a release archive" }
+        return h.copyOfRange(10, 10 + SALT)
+    }
+
     /** Streams plaintext into an encrypted archive; [close] writes the final chunk. */
-    class Writer(
-        output: OutputStream,
-        passphrase: CharArray,
-        iterations: Int = ITERATIONS,
-        random: SecureRandom = SecureRandom()
-    ) : OutputStream() {
-        private val out = output
-        private val prefix = ByteArray(PREFIX).also(random::nextBytes)
-        private val header: ByteArray
-        private val key: SecretKeySpec
+    class Writer(private val out: OutputStream, params: Params) : OutputStream() {
+        constructor(
+            output: OutputStream,
+            passphrase: CharArray,
+            iterations: Int = ITERATIONS,
+            random: SecureRandom = SecureRandom()
+        ) : this(output, passphraseParams(passphrase, iterations, random))
+
+        private val prefix = params.prefix
+        private val header = params.header
+        private val key = params.key
         private val buffer = ByteArrayOutputStream(CHUNK_BYTES)
         private var index = 0
         private var closed = false
 
         init {
-            require(passphrase.size >= MIN_PASSPHRASE) { "passphrase too short" }
-            require(iterations >= 100_000) { "too few iterations" }
-            val salt = ByteArray(SALT).also(random::nextBytes)
-            header = ByteBuffer.allocate(HEADER).put(MAGIC).put(VERSION.toByte()).put(KDF_PBKDF2_SHA256.toByte())
-                .putInt(iterations).put(salt).put(prefix).array()
-            key = deriveKey(passphrase, salt, iterations)
             out.write(header)
         }
 
@@ -128,7 +159,20 @@ object PassphraseArchive {
     }
 
     /** Decrypts an archive as a stream; throws on any integrity failure, including truncation. */
-    class Reader(input: InputStream, passphrase: CharArray) : InputStream() {
+    class Reader(input: InputStream, keyFor: (kdf: Int, iterations: Int, salt: ByteArray) -> SecretKeySpec) : InputStream() {
+        /** A passphrase archive (slice 3). */
+        constructor(input: InputStream, passphrase: CharArray) : this(input, { kdf, iterations, salt ->
+            require(kdf == KDF_PBKDF2_SHA256) { "this archive is not passphrase-protected" }
+            require(iterations in 100_000..10_000_000) { "bad iteration count" }
+            deriveKey(passphrase, salt, iterations)
+        })
+
+        /** A data-key archive (KEYBOARD-027 release archive). */
+        constructor(input: InputStream, dataKey: ByteArray) : this(input, { kdf, _, _ ->
+            require(kdf == KDF_DATA_KEY) { "this archive is not a release archive" }
+            SecretKeySpec(dataKey.copyOf(), "AES")
+        })
+
         private val inp = DataInputStream(input)
         private val header = ByteArray(HEADER)
         private val prefix: ByteArray
@@ -144,12 +188,12 @@ object PassphraseArchive {
             val magic = ByteArray(4).also { h.get(it) }
             require(magic.contentEquals(MAGIC)) { "not a twin export" }
             require(h.get().toInt() == VERSION) { "unsupported version" }
-            require(h.get().toInt() == KDF_PBKDF2_SHA256) { "unsupported key derivation" }
+            val kdf = h.get().toInt()
+            require(kdf == KDF_PBKDF2_SHA256 || kdf == KDF_DATA_KEY) { "unsupported key derivation" }
             val iterations = h.int
-            require(iterations in 100_000..10_000_000) { "bad iteration count" }
             val salt = ByteArray(SALT).also { h.get(it) }
             prefix = ByteArray(PREFIX).also { h.get(it) }
-            key = deriveKey(passphrase, salt, iterations)
+            key = keyFor(kdf, iterations, salt)
         }
 
         private fun next(): Boolean {

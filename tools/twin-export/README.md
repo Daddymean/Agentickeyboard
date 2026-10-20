@@ -29,6 +29,9 @@ python3 decrypt_twin_export.py twin-export-20261012-1730.aktx twin-data/
 | `twin/messages.jsonl` | Typed messages, `{"at": ms, "package": "...", "text": "..."}`. The text has passed `TwinExportScrubber`: messages with credentials are left out, and identifiers and numbers are replaced with `[ID]` or `[NUM]`. |
 | `journal/records.jsonl` | Journal records `{"id", "at", "kind", "body"}` (answers, transcripts, follow-ups, instrument responses, card sorts, voice-script takes, settings). Free text is scrubbed. A field the scrubber rejects is removed and named in `body._redacted`. |
 | `audio/<id>.flac` | Saved recordings, bit-exact: lossless FLAC, 48 kHz mono, 16- or 24-bit. They are referenced from `body.audio[].file`. |
+| `memory/memories.jsonl` | KEYBOARD-032: **approved** vault memories only (pending and rejected ones are never exported). Each is `{"cite": "m:<id>", "id", "text", "edited", "approved_at", "source": {"journal_record_id", "field", "prompt", "child", "at", "original_text"}}`. `source.journal_record_id` is the `id` of the cited record in `journal/records.jsonl`. Text, original answer, question and child label are scrubbed like the journal; a memory the scrubber rejects is left out and counted. |
+| `memory/core.json` | KEYBOARD-032: Keith's core memories ("Who I am", "About my kids"), `{"scrubbed": false, "checked_for_secrets": true, "blocks": [{"cite": "core:<label>", "label", "title", "value", "updated_at"}]}`. Keith writes these on purpose for the kids, so names, years and places are **not** blanked. A block holding a token, private key or credential mention is withheld and counted in `manifest.json` instead. |
+| `memory/memories.md`, `memory/core.md` | Written by the decrypt tools when unpacking (not in the archive or the manifest): the same memories as readable Markdown, each with its citation and source (journal record id and field, question and date). Both `decrypt_twin_export.py` and `open_twin_release.py` write them. |
 | `manifest.json` | Format, creation time, counts, and the SHA-256 and size of every file. |
 
 ## Format
@@ -38,3 +41,17 @@ The format is documented in `decrypt_twin_export.py` and `PassphraseArchive.kt`:
 - **Encryption**: AES-256-GCM in 1 MiB chunks.
 - **IV**: an 8-byte random prefix followed by the chunk index.
 - **Associated data**: the header, the chunk index and the final flag.
+
+## Dead-man release archives
+
+A release archive (header kdf 2) is opened with `open_twin_release.py` and two share cards, not with a passphrase. See [RELEASE.md](RELEASE.md).
+
+## Use rules (KEYBOARD-033)
+
+These come from Hollanek & Nowaczyk-Basińska, *Griefbots, Deadbots, Postmortem Avatars* (Philosophy & Technology, 2024). They also travel inside the release key file (`policy.use_rules`), and `open_twin_release.py` prints them.
+
+- **Each kid's own choice.** Kid 1–6 each decide whether to use the twin, and each can pause or retire it for themselves. On the phone, the twin answers a kid only after that kid opts in. Under 18, a guardian must be present. A retired twin can come back only after 30 days, and only if the kid types BRING BACK.
+- **Always an AI.** Every answer starts with "AI twin built from Dad's own words. This is not Dad." Anything built from this archive must keep that label.
+- **No public platforms.** Do not post the twin, its answers, its voice or this archive anywhere public, and do not upload them to an online AI or "griefbot" service. The phone app has no share, copy or notification path: the screen is FLAG_SECURE, the answer text can't be selected, and a guard test enforces this.
+- **No decisions.** The twin refuses new decisions about money, inheritance or legal matters, and permission for them. It points to Keith's real documents and the guardians.
+- **Never pushes.** No notifications, no reminders, and nothing is sent by itself.
