@@ -548,6 +548,7 @@ fun AgenticKeyboardLayout(
                 } else if (abs(deltaY) > abs(deltaX) && abs(deltaY) > 120) {
                     if (deltaY < 0) {
                         gestureAlert = "Gesture: Show AI Actions"
+                        showGestureGuide = false
                         viewModel.setAiToolsExpanded(true)
                     } else {
                         gestureAlert = "Gesture: Hide AI Actions"

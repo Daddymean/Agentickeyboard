@@ -1,12 +1,14 @@
 package io.github.daddymean.agentickeyboard.ui
 
 import android.content.Context
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.getUnclippedBoundsInRoot
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.height
@@ -120,6 +122,17 @@ class KeyboardLayoutWindowSizeTest {
         val bottom = composeTestRule.onNodeWithTag("key_space").getUnclippedBoundsInRoot().bottom
         composeTestRule.onNodeWithTag("key_enter").assertIsDisplayed()
         assertTrue("guide must leave space within the 360dp window", bottom <= 360.dp)
+        // The pad's upward command must replace the guide with tools, not stack them.
+        composeTestRule.onNodeWithTag("command_gesture_pad").performTouchInput {
+            down(center)
+            moveBy(Offset(0f, -160f))
+            up()
+        }
+        composeTestRule.mainClock.advanceTimeBy(300)
+        composeTestRule.onNodeWithTag("command_gesture_pad").assertDoesNotExist()
+        composeTestRule.onNodeWithTag("toggle_gesture_guide").assertIsDisplayed()
+        composeTestRule.onNodeWithTag("key_space").assertIsDisplayed()
+        composeTestRule.onNodeWithTag("key_enter").assertIsDisplayed()
     }
 
     @Test
