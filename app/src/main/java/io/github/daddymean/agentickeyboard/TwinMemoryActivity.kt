@@ -15,6 +15,10 @@ import android.widget.TextView
 import android.widget.Toast
 import io.github.daddymean.agentickeyboard.twin.TwinLearning
 import io.github.daddymean.agentickeyboard.twin.TwinVault
+import io.github.daddymean.agentickeyboard.twin.consent.ConsentState
+import io.github.daddymean.agentickeyboard.twin.consent.Status
+import io.github.daddymean.agentickeyboard.twin.consent.TwinConsent
+import io.github.daddymean.agentickeyboard.twin.consent.TwinUseRules
 import io.github.daddymean.agentickeyboard.twin.memory.Candidate
 import io.github.daddymean.agentickeyboard.twin.memory.CitedReply
 import io.github.daddymean.agentickeyboard.twin.memory.LegacyVault
@@ -36,6 +40,9 @@ import java.util.Date
  * - **Core blocks**: "Who I am" and "About my kids", always in the twin's context.
  * - **Vault**: the approved memories, searchable on the device (FTS4, in memory).
  * - **Ask the twin**: answers that quote approved memories, each with its source.
+ * - KEYBOARD-033: each kid opts in, pauses or retires the twin for themselves; every
+ *   answer carries the AI label; there is no copy, share or notification path.
+ * - KEYBOARD-035: no decisions on money, inheritance or legal matters.
  * Everything is on this phone; there is no network code. Every text field opts out of
  * keyboard learning.
  */
@@ -43,6 +50,7 @@ class TwinMemoryActivity : Activity() {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
     private lateinit var root: LinearLayout
     private var state = VaultState()
+    private var consent = ConsentState()
     private var index: MemoryIndex? = null
     private val pad by lazy { (20 * resources.displayMetrics.density).toInt() }
 
@@ -65,6 +73,8 @@ class TwinMemoryActivity : Activity() {
         val loaded = runCatching { TwinLearning.onWorker { TwinVault.memory(this).load() } }
             .onFailure { SafeLog.w(TAG, "Memory vault unreadable", it) }.getOrNull() ?: VaultState()
         setState(loaded)
+        consent = runCatching { TwinLearning.onWorker { TwinVault.consent(this).load() } }
+            .onFailure { SafeLog.w(TAG, "Consent record unreadable", it) }.getOrNull() ?: ConsentState()
     }
 
     private suspend fun setState(s: VaultState) {
@@ -92,7 +102,8 @@ class TwinMemoryActivity : Activity() {
             button("Review journal answers (${pending.size} waiting)") { review() }
             button("Core memories: Who I am, About my kids") { core() }
             button("Approved memories (${state.memories.size})") { vault("") }
-            button("Ask the twin") { ask() }
+            button("Ask the twin") { whoIsAsking() }
+            button("Kids: turn the twin on, pause or retire it") { consentHome() }
         }
     }
 
@@ -169,27 +180,111 @@ class TwinMemoryActivity : Activity() {
         button("Back") { home() }
     }
 
-    private fun ask() {
+    /** KEYBOARD-033: answers go only to Keith (preview) or a kid who opted in. */
+    private fun whoIsAsking() {
+        clear()
+        title("Who is asking?")
+        text(TwinUseRules.LABEL, 15f)
+        button("Keith (preview what the twin says)") { ask("Keith (preview)") }
+        for (kid in TwinConsent.KIDS) {
+            val c = consent.of(kid)
+            if (TwinConsent.mayAsk(consent, kid)) button(kid) { ask(kid) }
+            else text("$kid: ${statusText(c.status)}", 14f)
+        }
+        text("A kid who hasn't turned the twin on can do that under \"Kids: turn the twin on, pause or retire it\". " +
+            "Nobody is ever asked or reminded.", 13f)
+        button("Back") { home() }
+    }
+
+    private fun statusText(s: Status) = when (s) {
+        Status.NOT_ASKED -> "not turned on"
+        Status.OPTED_IN -> "on"
+        Status.DECLINED -> "said no"
+        Status.PAUSED -> "paused"
+        Status.RETIRED -> "retired"
+    }
+
+    private fun consentHome() {
+        clear()
+        title("Your choice")
+        text("Each of you decides for yourself whether to talk to Dad's AI twin, and you can pause it or retire it for " +
+            "yourself at any time. Your choice changes nothing for anyone else. The twin never sends notifications.\n\n" +
+            TwinUseRules.RULES.joinToString("\n") { "• $it" }, 14f)
+        for (kid in TwinConsent.KIDS) {
+            val c = consent.of(kid)
+            text("$kid: ${statusText(c.status)}" + if (c.sinceMillis > 0) " since ${date(c.sinceMillis)}" else "", 16f)
+            val now = System.currentTimeMillis()
+            when (c.status) {
+                Status.NOT_ASKED, Status.DECLINED -> row(
+                    "I want to turn it on" to { optIn(kid) },
+                    "No thanks" to { consentChange { TwinConsent.decline(it, kid, now) } },
+                    "Retire it for me" to { confirm("Retire Dad's twin for $kid? You can bring it back only after ${TwinConsent.RETIRE_COOLING_OFF_DAYS} days.") { consentChange { TwinConsent.retire(it, kid, now) } } }
+                )
+                Status.OPTED_IN -> row(
+                    "Pause" to { consentChange { TwinConsent.pause(it, kid, now) } },
+                    "Retire it for me" to { confirm("Retire Dad's twin for $kid? You can bring it back only after ${TwinConsent.RETIRE_COOLING_OFF_DAYS} days.") { consentChange { TwinConsent.retire(it, kid, now) } } }
+                )
+                Status.PAUSED -> row(
+                    "Resume" to { consentChange { TwinConsent.resume(it, kid, now) } },
+                    "Retire it for me" to { confirm("Retire Dad's twin for $kid?") { consentChange { TwinConsent.retire(it, kid, now) } } }
+                )
+                Status.RETIRED -> if (TwinConsent.canBringBack(consent, kid, now)) button("Bring it back…") { bringBack(kid) }
+            }
+        }
+        button("Back") { home() }
+    }
+
+    private fun optIn(kid: String) {
+        AlertDialog.Builder(this).setTitle("$kid: turn on Dad's twin?")
+            .setMessage("${TwinUseRules.LABEL} It answers only with things Dad wrote, and shows where each came from. " +
+                "Are you 18 or older? If not, a guardian needs to be with you.")
+            .setPositiveButton("I'm 18 or older") { _, _ -> consentChange { TwinConsent.optIn(it, kid, adult = true, guardianPresent = false, now = System.currentTimeMillis()) } }
+            .setNeutralButton("Under 18, a guardian is with me") { _, _ -> consentChange { TwinConsent.optIn(it, kid, adult = false, guardianPresent = true, now = System.currentTimeMillis()) } }
+            .setNegativeButton("Cancel", null).show()
+    }
+
+    private fun bringBack(kid: String) {
+        val f = field("Type ${TwinConsent.BRING_BACK}", 1)
+        AlertDialog.Builder(this).setTitle("Bring the twin back for $kid?").setView(f)
+            .setPositiveButton("Continue") { _, _ -> consentChange { TwinConsent.bringBack(it, kid, f.text.toString(), System.currentTimeMillis()) } }
+            .setNegativeButton("Cancel", null).show()
+    }
+
+    private fun consentChange(f: (ConsentState) -> ConsentState) {
+        scope.launch {
+            runCatching { TwinLearning.onWorker { TwinVault.consent(this@TwinMemoryActivity).update(f) } }
+                .onSuccess { consent = it }.onFailure { toast(it.message ?: "Couldn't save.") }
+            consentHome()
+        }
+    }
+
+    private fun ask(who: String) {
         clear()
         title("Ask the twin")
-        text("Answers come only from memories you approved and your core memories, quoted with their source. " +
+        text(TwinUseRules.LABEL, 16f)
+        text("Asking as $who. " +"Answers come only from memories you approved and your core memories, quoted with their source. " +
             "If nothing matches, the twin says so.", 14f)
         val q = field("Ask a question", 2).apply { root.addView(this) }
         val out = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
         button("Ask") {
             val idx = index ?: return@button
+            if (who != "Keith (preview)" && !TwinConsent.mayAsk(consent, who)) { whoIsAsking(); return@button }
             scope.launch {
                 val reply = TwinLearning.onWorker { TwinAnswerer.answer(q.text.toString(), state, idx) }
                 show(out, reply)
             }
         }
         root.addView(out)
-        button("Back") { home() }
+        button("Back") { whoIsAsking() }
     }
 
     private fun show(out: LinearLayout, reply: CitedReply) {
         out.removeAllViews()
-        out.addView(TextView(this).apply { textSize = 16f; text = reply.render(); setPadding(0, pad / 2, 0, pad / 2) })
+        // Plain text, not selectable, no links: nothing to copy out or post (KEYBOARD-033, OWASP LLM05).
+        out.addView(TextView(this).apply {
+            textSize = 16f; text = reply.render(); setPadding(0, pad / 2, 0, pad / 2)
+            setTextIsSelectable(false); isLongClickable = false; autoLinkMask = 0; linksClickable = false
+        })
         reply.citations.forEachIndexed { i, c ->
             out.addView(Button(this).apply {
                 text = "[${i + 1}] ${c.label}"

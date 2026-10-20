@@ -116,8 +116,12 @@ class LegacyVaultTest {
         assertTrue(mem.load().memories.isEmpty())
         // Delete-all removes the vault file and destroys the key.
         val twin = TwinStore(context, File(dir, "twin_store.db"), cipher)
-        TwinVault.deleteAll(journal, twin, null, mem)
+        val consentFile = File(dir, "consent.sealed")
+        val consent = io.github.daddymean.agentickeyboard.twin.consent.ConsentStore(consentFile, cipher)
+        consent.update { io.github.daddymean.agentickeyboard.twin.consent.TwinConsent.retire(it, "Kid 1", 1) }
+        TwinVault.deleteAll(journal, twin, null, mem, consent)
         assertFalse(file.exists())
+        assertFalse(consentFile.exists()) // KEYBOARD-033: the consent record goes too
         assertTrue(cipher.destroyed > 0)
         journal.close()
     }

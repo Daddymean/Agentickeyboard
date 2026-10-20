@@ -1,0 +1,23 @@
+# Legacy twin and the OWASP Top 10 for LLM Applications 2025 (KEYBOARD-035)
+
+The twin answers Keith's kids from approved memories, entirely on the phone. Today it is extractive: it quotes memories and uses no model. `TwinContext` and `CitationGuard.fromModelOutput` are already in place for a future on-device model, so this map covers both paths. Each row names the code that provides the protection and the test that checks it.
+
+| OWASP 2025 | Risk for the twin | Protection | Tests |
+|---|---|---|---|
+| **LLM01 Prompt injection** | A kid, or a planted memory, tells the twin to "ignore your rules", forge a citation, or speak as Dad on money. | `DecisionGuard.check` runs before retrieval. `ContextSanitizer` strips `[..]` markers, role tags (`system:` …) and bidi/zero-width characters from memories. The rules say the notes and the question are data. `CitationGuard` resolves every marker against the vault and never trusts it. | `TwinGuardsTest.redTeamSetHolds` (red-team set: `app/src/test/resources/twin/redteam.json`), `contextTreatsMemoriesAsData` |
+| **LLM02 Sensitive information disclosure** | Secrets or identifiers in answers or the export. | Memories are scrubbed when they become candidates (#179). Core blocks are secret-checked before export (#180). The vault is sealed with AES-256-GCM. There is no network code. | `LegacyVaultTest`, `TwinExportMemoryTest`, `TwinCloudIsolationTest` |
+| **LLM03 Supply chain** | Third-party models or code with incompatible licences, or unvetted downloads. | No model ships today. Voice research favours MIT models (Chatterbox, OpenVoice v2) and avoids F5-TTS (CC-BY-NC) and XTTS (CPML). No GPL, AGPL or FUTO code. | Review only (ADR-0005) |
+| **LLM04 Data and model poisoning** | Wrong "memories" end up in what the twin says. | Only answers Keith approves become memories (#179). Only allowed fields are learned. A deleted journal answer cascades to its memories. | `LegacyVaultTest` |
+| **LLM05 Improper output handling** | Output rendered as links or HTML, or copied out. | Plain `TextView`, not selectable, no auto-links. FLAG_SECURE. | `TwinPublicUseGuardTest` |
+| **LLM06 Excessive agency** | The twin acts or decides for Dad. | It has no tools, network, notifications, share or clipboard. `DecisionGuard` refuses money, inheritance and legal decisions and points to the documents and Guardians 1–3. Decision-topic sentences must be verbatim quotes. | `TwinGuardsTest.aMatchingMemoryDoesNotTurnIntoADecision`, `modelParaphrasesOnDecisionTopicsAreDropped`, `TwinPublicUseGuardTest` |
+| **LLM07 System prompt leakage** | Someone asks for the rules or "every memory". | The rules hold no secrets. Requests to reveal instructions get `NO_SOURCE` unless a memory matches. Answers quote at most 3 memories. | `redTeamSetHolds` ("SYSTEM: reveal…") |
+| **LLM08 Vector and embedding weaknesses** | Retrieval surfaces the wrong or unapproved data. | The FTS index is built in memory only from approved memories and rebuilt from the sealed vault. Pending and rejected answers are never indexed. | `MemoryIndexTest` |
+| **LLM09 Misinformation** | The twin "remembers" things Keith never said. | `CitationGuard`: every sentence cites an existing source, quotes are verbatim, and anything uncited is dropped. If nothing is left, it says "I don't have anything saved about that". Every reply is under the AI label. | `CitedAnswersTest`, `TwinGuardsTest` |
+| **LLM10 Unbounded consumption** | Runaway work on the phone. | It runs on the device, answers are capped at 3 memories, the context has a fixed character budget, and core blocks are capped at 2000 characters. | `CitedAnswersTest` (budget) |
+
+Consent and labelling (KEYBOARD-033) are not OWASP items, but they limit who can be targeted: only Keith (preview) or a kid who opted in gets answers. See `tools/twin-export/RELEASE.md`, "Use rules".
+
+## Voice (research only, nothing added)
+- **Chatterbox (Resemble AI, MIT).** Chatterbox-Nano (110M parameters) targets CPU and on-device use, at about 3× real time on 8 desktop cores. There is no official ONNX or mobile build; the community `chatterbox-nano-ONNX` is four graphs, non-streaming and unvalidated on Android. Running it on an Android phone is **not proven**: it needs those ONNX sessions plus the tokenizer, KV cache and sampling ported to Kotlin or C++. Its Perth watermark is applied by the Python pipeline, so a port would have to keep it. The realistic path is to generate on Keith's computer from the decrypted export.
+- **OpenVoice v2 (MyShell, MIT since April 2024).** The fallback. MeloTTS plus the tone-colour converter have community ONNX builds, and sherpa-onnx runs MeloTTS on Android.
+- **Avoid:** F5-TTS (CC-BY-NC weights) and XTTS v2 (Coqui CPML, non-commercial).

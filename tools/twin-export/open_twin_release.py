@@ -148,6 +148,11 @@ def main(argv=None):
         print("FAILED: %s" % e, file=sys.stderr)
         return 2
     print("Key holders' cards accepted (set %d: %s)." % (key_file["epoch"], ", ".join(h["label"] for h in key_file["holders"])))
+    rules = key_file.get("policy", {}).get("use_rules") or []
+    if rules:
+        print("Use rules from Keith (KEYBOARD-033):")
+        for r in rules:
+            print("  - " + r)
     report(chunks, manifest, None if args.verify_only else args.out_dir)
     return 0
 
