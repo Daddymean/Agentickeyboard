@@ -27,6 +27,10 @@ import android.widget.Toast
 import io.github.daddymean.agentickeyboard.twin.TwinLearning
 import io.github.daddymean.agentickeyboard.twin.TwinVault
 import io.github.daddymean.agentickeyboard.twin.journal.DailyPlan
+import io.github.daddymean.agentickeyboard.twin.journal.InkModelGate
+import io.github.daddymean.agentickeyboard.twin.journal.InkRecognizer
+import io.github.daddymean.agentickeyboard.twin.journal.InkStrokes
+import io.github.daddymean.agentickeyboard.twin.journal.InkView
 import io.github.daddymean.agentickeyboard.twin.journal.Instrument
 import io.github.daddymean.agentickeyboard.twin.journal.Instruments
 import io.github.daddymean.agentickeyboard.twin.journal.JournalHistory
@@ -197,6 +201,7 @@ class JournalActivity : Activity() {
         title(if (followUpIndex == 0) "Your answer" else "Tell me more")
         text(question, 17f)
         if (followUpIndex == 0 && p.prompt.followUps.isNotEmpty()) text("If it helps: " + p.prompt.followUps.joinToString(" · "), 13f)
+        if (followUpIndex == 0) button("Write it by hand instead") { handwritingScreen(p, question) }
         val answer = edit("Type your answer (or record below)", lines = 6)
         val takes = ArrayList<Pair<String, Long>>()
         val transcript = edit("Transcript of your recording (optional)", lines = 4)
@@ -526,6 +531,11 @@ class JournalActivity : Activity() {
             "Back" to { scope.launch { home() } }
         )
         text("Delete everything from the Legacy twin screen: it removes the journal, every recording and the typed-message store, and destroys the key.", 12f)
+        if (InkModelGate.approved(records)) {
+            button("Handwriting recognition: remove the model and turn it off") {
+                InkRecognizer(true).delete { add(JournalKinds.EVENT, InkModelGate.approval(false)) { toast("Removed. Handwriting is still saved; you type what it says.") } }
+            }
+        }
     }
 
     // ---- KEYBOARD-034: weekly legacy interview and the kids' questions -------------------
@@ -595,6 +605,55 @@ class JournalActivity : Activity() {
         val done = all.count { it.answered }
         if (done > 0) text("$done answered. Dad's answers are under \"Your answers\".", 13f)
         button("Back") { scope.launch { home() } }
+    }
+
+    // ---- KEYBOARD-037: handwriting -----------------------------------------------------
+
+    private fun handwritingScreen(p: PromptInstance, question: String) {
+        clear("handwriting")
+        title("Write it by hand")
+        text(question, 17f)
+        text("Write with your finger or a stylus. Your handwriting itself is saved, encrypted on this phone, along with " +
+            "what it says.", 13f)
+        val view = InkView(this, (320 * resources.displayMetrics.density).toInt())
+        root.addView(view)
+        val said = edit("What it says (you can correct it)", lines = 3)
+        var source: String? = null
+        val approved = InkModelGate.approved(records)
+        val recognizer = InkRecognizer(approved)
+        row(
+            "Clear" to { view.clear() },
+            "Read my handwriting" to {
+                if (view.ink.isEmpty) { toast("Write something first."); return@to }
+                if (!approved) { approveInkModel { handwritingScreen(p, question) }; return@to }
+                recognizer.isDownloaded { ready ->
+                    if (!ready) {
+                        toast("Downloading the handwriting model once (Wi-Fi)…")
+                        recognizer.download { err -> if (err != null) toast("Download didn't finish: ${err.message}") else toast("Ready. Tap again.") }
+                    } else recognizer.recognize(view.ink) { t, err ->
+                        if (t != null) { said.setText(t); source = InkRecognizer.NAME } else toast("Couldn't read it: ${err?.message}")
+                    }
+                }
+            }
+        )
+        row(
+            "Save" to {
+                val body = runCatching {
+                    InkStrokes.answerBody(p.prompt.id, p.child, question, p.prompt.category, view.ink, said.text.toString(),
+                        source?.takeIf { said.text.isNotBlank() }?.let { "$it, checked by Keith" })
+                }.getOrElse { toast(it.message ?: "Couldn't save."); return@to }
+                add(JournalKinds.ANSWER, body) { scope.launch { home() } }
+            },
+            "Cancel" to { scope.launch { home() } }
+        )
+    }
+
+    /** The one-time, Keith-approved model download (KEYBOARD-037). */
+    private fun approveInkModel(then: () -> Unit) {
+        AlertDialog.Builder(this).setTitle("Handwriting recognition")
+            .setMessage(InkModelGate.DISCLOSURE)
+            .setPositiveButton("Allow the one-time download") { _, _ -> add(JournalKinds.EVENT, InkModelGate.approval(true)) { then() } }
+            .setNegativeButton("Not now", null).show()
     }
 
     // ---- view helpers -----------------------------------------------------------------

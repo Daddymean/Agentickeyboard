@@ -228,7 +228,7 @@ class TwinExporter(private val twin: TwinStore?, private val journal: JournalSto
         const val FILE_EXTENSION = ".aktx"
 
         /** Body keys that hold identifiers, not prose: never scrubbed (and never user text). */
-        val STRUCTURAL = setOf("kind", "promptId", "key", "file", "instrumentId", "type", "category", "slot", "v", "value", "startDate", "heavyPausedUntil")
+        val STRUCTURAL = setOf("kind", "promptId", "key", "file", "instrumentId", "type", "category", "slot", "v", "value", "startDate", "heavyPausedUntil", "ink_png")
 
         /** The passphrase as NFC, so the same words typed on another keyboard derive the same key. */
         fun normalize(p: CharArray): CharArray = Normalizer.normalize(String(p), Normalizer.Form.NFC).toCharArray()
