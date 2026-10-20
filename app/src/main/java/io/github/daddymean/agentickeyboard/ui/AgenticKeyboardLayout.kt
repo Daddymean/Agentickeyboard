@@ -619,9 +619,14 @@ fun AgenticKeyboardLayout(
 
         // Tap a result's text to expand the shelf and read the full output
         // (plus the original it replaces) before applying. Resets per result.
-        var resultExpanded by remember(
-            grammarCorrection, summary, translation, rewrite, composeResult, continuation
-        ) { mutableStateOf(false) }
+        var resultExpanded by remember(aiPanelState) { mutableStateOf(false) }
+        fun toggleResultDetails() {
+            resultExpanded = !resultExpanded
+            if (resultExpanded) {
+                showGestureGuide = false
+                viewModel.setAiToolsExpanded(false)
+            }
+        }
 
         StableAiShelf(
             expanded = resultExpanded,
@@ -685,7 +690,7 @@ fun AgenticKeyboardLayout(
                                 labelColor = keyboardColors.success,
                                 result = correction.corrected,
                                 expanded = resultExpanded,
-                                onToggle = { resultExpanded = !resultExpanded },
+                                onToggle = { toggleResultDetails() },
                                 original = correction.original,
                                 modifier = Modifier.weight(1f)
                             )
@@ -782,7 +787,7 @@ fun AgenticKeyboardLayout(
                                 labelColor = keyboardColors.labelSummary,
                                 result = summary!!,
                                 expanded = resultExpanded,
-                                onToggle = { resultExpanded = !resultExpanded },
+                                onToggle = { toggleResultDetails() },
                                 original = aiResultSource,
                                 modifier = Modifier.weight(1f)
                             )
@@ -811,7 +816,7 @@ fun AgenticKeyboardLayout(
                                 labelColor = keyboardColors.labelTranslate,
                                 result = translation!!,
                                 expanded = resultExpanded,
-                                onToggle = { resultExpanded = !resultExpanded },
+                                onToggle = { toggleResultDetails() },
                                 original = aiResultSource,
                                 modifier = Modifier.weight(1f)
                             )
@@ -840,7 +845,7 @@ fun AgenticKeyboardLayout(
                                 labelColor = keyboardColors.labelRewrite,
                                 result = rewrite!!,
                                 expanded = resultExpanded,
-                                onToggle = { resultExpanded = !resultExpanded },
+                                onToggle = { toggleResultDetails() },
                                 original = aiResultSource,
                                 modifier = Modifier.weight(1f)
                             )
@@ -870,7 +875,7 @@ fun AgenticKeyboardLayout(
                                 labelColor = keyboardColors.labelCompose,
                                 result = composeResult!!,
                                 expanded = resultExpanded,
-                                onToggle = { resultExpanded = !resultExpanded },
+                                onToggle = { toggleResultDetails() },
                                 modifier = Modifier.weight(1f)
                             )
                             Button(
@@ -899,7 +904,7 @@ fun AgenticKeyboardLayout(
                                 labelColor = keyboardColors.labelContinue,
                                 result = continuation!!,
                                 expanded = resultExpanded,
-                                onToggle = { resultExpanded = !resultExpanded },
+                                onToggle = { toggleResultDetails() },
                                 modifier = Modifier.weight(1f)
                             )
                             Button(
@@ -1151,7 +1156,7 @@ fun AgenticKeyboardLayout(
                     }
                     if (hasAiResult) {
                         IconButton(
-                            onClick = { resultExpanded = !resultExpanded },
+                            onClick = { toggleResultDetails() },
                             modifier = Modifier.size(28.dp).testTag("expand_result")
                         ) {
                             Icon(

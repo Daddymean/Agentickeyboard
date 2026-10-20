@@ -10,6 +10,8 @@ import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollTo
+import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.onNodeWithText
 import androidx.lifecycle.ViewModelStore
 import androidx.lifecycle.viewModelScope
@@ -124,6 +126,22 @@ class KeyboardTouchTargetTest {
         composeTestRule.onNodeWithTag("expand_result").performClick()
         composeTestRule.mainClock.advanceTimeBy(300)
         composeTestRule.onNodeWithTag("iterate_chips").assertExists()
+    }
+
+    @Test
+    @Config(sdk = [35], qualifiers = "w780dp-h360dp-land")
+    fun `expanded long results scroll without hiding compact typing controls`() {
+        val viewModel = showKeyboard(1.15f)
+        publishPanel(viewModel, AiPanelState.Summary(
+            "Synthetic result text. ".repeat(100), "Synthetic original text. ".repeat(100)
+        ))
+        composeTestRule.onNodeWithTag("expand_result").performClick()
+        composeTestRule.mainClock.advanceTimeBy(300)
+        composeTestRule.onNodeWithTag("key_space").assertIsDisplayed()
+        composeTestRule.onNodeWithTag("key_enter").assertIsDisplayed()
+        assertTrue(composeTestRule.onNodeWithTag("key_space")
+            .getUnclippedBoundsInRoot().bottom.value <= 360f)
+        composeTestRule.onNodeWithText("Was:", substring = true).performScrollTo().assertIsDisplayed()
     }
 
     /** Taps at ([xDp], [yDp]) in root coordinates; returns what was typed, lower-cased. */
