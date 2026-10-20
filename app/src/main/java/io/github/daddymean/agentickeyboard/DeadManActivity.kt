@@ -44,7 +44,11 @@ class DeadManActivity : Activity() {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
     private lateinit var root: LinearLayout
     private var state: DeadManState? = null
-    /** Cards waiting to be saved; only in memory, cleared when the screen closes. */
+    /**
+     * A new holder set waiting for Keith to confirm its cards; only in memory. Nothing is
+     * saved until he does, so if the screen closes first the current set stays in force
+     * (KEYBOARD-036).
+     */
     private var pendingCards: Rekey? = null
     private val pad by lazy { (20 * resources.displayMetrics.density).toInt() }
 
@@ -84,13 +88,17 @@ class DeadManActivity : Activity() {
             button("Set up key holders (Guardian 1, 2 and 3)") {
                 scope.launch {
                     val r = TwinLearning.onWorker { DeadManSwitch.create(DeadManSwitch.GUARDIANS, LocalDate.now()) }
-                    save(r.state)
                     cardsScreen(r)
                 }
             }
             return
         }
         val st = DeadManSwitch.status(s, LocalDate.now())
+        if (s.needsNewCards) {
+            text("Action needed: this app now gives every release archive its own key, so that people who held a key " +
+                "before a holder change can't open later archives. Reissue the share cards once to switch over; saving " +
+                "a new archive is off until then. Your existing archive and cards keep working.", 16f)
+        }
         text("Trigger: Google Inactive Account Manager. " + when (st.iamStage) {
             IamStage.NOT_CONFIRMED -> "Not confirmed for the current key holders. Set it up so Google emails them after " +
                 "${DeadManSwitch.IAM_INACTIVE_MONTHS} months of inactivity."
@@ -117,14 +125,12 @@ class DeadManActivity : Activity() {
             confirm("This makes new cards for all three holders. Old cards and old key files stop matching; " +
                 "give everyone their new card and replace the key file next to the archive.") {
                 scope.launch {
-                    val r = TwinLearning.onWorker {
-                        DeadManSwitch.replaceHolder(s, 1, s.holders.first { it.x == 1 }.label, null, LocalDate.now())
-                    }
-                    save(r.state); cardsScreen(r)
+                    runCatching { TwinLearning.onWorker { DeadManSwitch.reissue(s, LocalDate.now()) } }
+                        .onSuccess { cardsScreen(it) }.onFailure { toast(it.message ?: "Couldn't reissue the cards.") }
                 }
             }
         }
-        button("Save the release archive and key file to this phone…") { pickFolder(REQUEST_ARCHIVE) }
+        if (!s.needsNewCards) button("Save a new release archive and its key file to this phone…") { pickFolder(REQUEST_ARCHIVE) }
     }
 
     private fun iamScreen(s: DeadManState) {
@@ -150,7 +156,8 @@ class DeadManActivity : Activity() {
         title("Share cards (set ${r.state.epoch})")
         text("Give each holder only their own card: print it or write it down. Any ${DeadManSwitch.THRESHOLD} cards plus the " +
             "key file open the archive, so never keep two cards together. These cards are shown once and are not stored " +
-            "on this phone.", 14f)
+            "on this phone. Nothing changes until you confirm below; if you leave this screen first, the current cards " +
+            "stay in force.", 14f)
         for ((h, card) in r.cards) {
             text(h.label, 16f)
             root.addView(TextView(this).apply { textSize = 14f; typeface = Typeface.MONOSPACE; text = card.encode(); setTextIsSelectable(false) })
@@ -160,7 +167,30 @@ class DeadManActivity : Activity() {
                 "the old one), then confirm the Google trigger again.", 14f)
         }
         button("Save the cards and the key file to a folder on this phone…") { pickFolder(REQUEST_CARDS) }
-        button("Done (forget the cards)") { pendingCards = null; home() }
+        text("To confirm you have copied every card, type the last 8 characters of each one (after its last dash):", 14f)
+        val checks = r.cards.map { (h, _) ->
+            EditText(this).apply {
+                hint = "${h.label}: last 8 characters"
+                inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS
+                imeOptions = EditorInfo.IME_FLAG_NO_PERSONALIZED_LEARNING // KEYBOARD-028: twin screen, never learned or sent
+            }.also(root::addView)
+        }
+        button("Confirm: I have every card (start using this set)") {
+            if (!DeadManSwitch.cardsConfirmed(r, checks.map { it.text.toString() })) {
+                toast("A check doesn't match its card. Copy the card again and retype it.")
+                return@button
+            }
+            scope.launch {
+                runCatching { save(r.state) }
+                    .onSuccess { pendingCards = null; toast("Set ${r.state.epoch} is now in use."); home() }
+                    .onFailure { SafeLog.w(TAG, "Dead-man save failed", it); toast("Couldn't save the new set; the current cards stay in force.") }
+            }
+        }
+        button("Cancel (keep the current cards)") {
+            pendingCards = null
+            toast("Nothing changed. Delete any card or key files you saved for this set.")
+            home()
+        }
     }
 
     private fun replaceScreen(s: DeadManState) {
@@ -199,7 +229,7 @@ class DeadManActivity : Activity() {
     private fun rekey(s: DeadManState, x: Int, label: String, birth: LocalDate?) {
         scope.launch {
             val r = runCatching { TwinLearning.onWorker { DeadManSwitch.replaceHolder(s, x, label, birth, LocalDate.now()) } }
-            r.onSuccess { save(it.state); cardsScreen(it) }.onFailure { toast(it.message ?: "Couldn't change holders.") }
+            r.onSuccess { cardsScreen(it) }.onFailure { toast(it.message ?: "Couldn't change holders.") }
         }
     }
 
@@ -219,10 +249,11 @@ class DeadManActivity : Activity() {
             toast("Choose a folder on this phone; cloud locations are refused.")
             return
         }
-        val s = state ?: return
+        val s = state
+        if (requestCode == REQUEST_ARCHIVE && (s == null || s.needsNewCards)) return
         scope.launch {
             val result = runCatching {
-                TwinLearning.onWorker {
+                TwinLearning.onWorker<Pair<String, DeadManState?>> {
                     val dir = DocumentsContract.buildDocumentUriUsingTree(tree, DocumentsContract.getTreeDocumentId(tree))
                     val stamp = LocalDate.now().toString()
                     when (requestCode) {
@@ -236,23 +267,27 @@ class DeadManActivity : Activity() {
                                     it.write(cardText(h.label, card.encode(), r.state.epoch).toByteArray())
                                 }
                             }
-                            "Saved the key file and ${r.cards.size} cards. Hand each card to its holder, then delete the card files."
+                            "Saved the key file and ${r.cards.size} cards. Hand each card to its holder, then delete the card files." to null
                         }
                         else -> {
+                            // KEYBOARD-036: every archive gets its own data key, wrapped under the current set's KEK.
+                            val next = DeadManSwitch.newArchive(s!!)
                             val archive = write(dir, "twin-release-$stamp${TwinExporter.FILE_EXTENSION}", "application/octet-stream") {
                                 TwinExporter(TwinLearning.store(this@DeadManActivity), TwinVault.journal(this@DeadManActivity), TwinVault.memory(this@DeadManActivity))
-                                    .exportRelease(it, PassphraseArchive.dataKeyParams(s.dataKey, s.archiveId), System.currentTimeMillis())
+                                    .exportRelease(it, PassphraseArchive.dataKeyParams(next.dataKey, next.archiveId), System.currentTimeMillis())
                             }
-                            contentResolver.openInputStream(archive)!!.use { TwinExporter.verifyRelease(it, s.dataKey) }
-                            write(dir, "twin-release-key-set${s.epoch}.json", "application/json") {
-                                it.write(s.keyFile.toString(2).toByteArray())
+                            contentResolver.openInputStream(archive)!!.use { TwinExporter.verifyRelease(it, next.dataKey) }
+                            write(dir, "twin-release-$stamp-key-set${next.epoch}.json", "application/json") {
+                                it.write(next.keyFile.toString(2).toByteArray())
                             }
-                            "Saved and verified the release archive and its key file (set ${s.epoch})."
+                            ("Saved and verified the release archive and its key file (set ${next.epoch}). Replace older " +
+                                "archives and their key files with these.") to next
                         }
                     }
                 }
             }
-            result.onSuccess { toast(it) }.onFailure { SafeLog.w(TAG, "Dead-man save failed", it); toast("Saving failed; nothing was sent anywhere.") }
+            result.mapCatching { (message, next) -> next?.let { save(it) }; message }
+                .onSuccess { toast(it) }.onFailure { SafeLog.w(TAG, "Dead-man save failed", it); toast("Saving failed; nothing was sent anywhere.") }
         }
     }
 

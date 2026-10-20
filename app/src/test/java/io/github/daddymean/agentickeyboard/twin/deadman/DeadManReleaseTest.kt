@@ -87,7 +87,7 @@ class DeadManReleaseTest {
         val s = DeadManSwitch.create(DeadManSwitch.GUARDIANS, today).state
         store.save(s)
         val raw = String(File(dir, "deadman.sealed").readBytes(), Charsets.ISO_8859_1)
-        for (n in listOf(hex(s.dataKey), "Guardian", s.setId, "dek", "release")) assertFalse(n, raw.contains(n))
+        for (n in listOf(hex(s.dataKey), hex(s.kek!!), "Guardian", s.setId, "dek", "kek", "release")) assertFalse(n, raw.contains(n))
         assertEquals(s, store.load())
         TwinVault.deleteAll(journal, twin, store)
         assertFalse(File(dir, "deadman.sealed").exists())
@@ -132,6 +132,17 @@ class DeadManReleaseTest {
             assertEquals(2, run("--verify-only", arc.path, key2.path, "--card", oldCards[0].path, "--card", newCards[1].path).first)
             // The documented residual: an old key file with old cards still opens (old key files must be destroyed).
             assertEquals(0, run("--verify-only", arc.path, key1.path, "--card", oldCards[0].path, "--card", oldCards[2].path).first)
+            // KEYBOARD-036: the next archive has its own key. New cards open it; the old key file and
+            // old cards don't, even with the archive id rewritten.
+            val next = DeadManSwitch.newArchive(second.state)
+            val arc3 = File(tmp, "twin-release-next.aktx").apply { writeBytes(archive(next)) }
+            val key3 = File(tmp, "key-next.json").apply { writeText(next.keyFile.toString(2)) }
+            assertEquals(0, run("--verify-only", arc3.path, key3.path, "--card", newCards[0].path, "--card", newCards[1].path).first)
+            val key1Pointed = File(tmp, "key-set1-pointed.json").apply {
+                writeText(JSONObject(first.state.keyFile.toString()).put("archive_id", hex(next.archiveId)).toString(2))
+            }
+            assertEquals(2, run("--verify-only", arc3.path, key1.path, "--card", oldCards[0].path, "--card", oldCards[2].path).first)
+            assertEquals(2, run("--verify-only", arc3.path, key1Pointed.path, "--card", oldCards[0].path, "--card", oldCards[2].path).first)
             // Wrong archive for the key file.
             val other = DeadManSwitch.create(DeadManSwitch.GUARDIANS, today)
             val arc2 = File(tmp, "other.aktx").apply { writeBytes(archive(other.state)) }

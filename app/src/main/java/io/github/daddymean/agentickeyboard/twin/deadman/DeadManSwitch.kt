@@ -13,7 +13,10 @@ data class Holder(val x: Int, val label: String)
 
 /**
  * The phone's dead-man state, kept only sealed under the twin's Keystore key
- * ([DeadManStore]). It holds the archive's data key (DEK) but never a KEK or a share.
+ * ([DeadManStore]). It holds the current set's key-encryption key (KEK) and the data key
+ * (DEK) of the latest release archive, but never a share. The phone already holds the
+ * plaintext twin, so keeping the KEK here exposes nothing new; it lets every archive get
+ * a fresh DEK under the current cards (KEYBOARD-036).
  */
 data class DeadManState(
     val dataKey: ByteArray,
@@ -24,10 +27,18 @@ data class DeadManState(
     val lastCheckIn: LocalDate,
     val keyFile: JSONObject,
     /** When Keith last confirmed his Google Inactive Account Manager plan; null if never or holders changed since. */
-    val iamConfirmedOn: LocalDate? = null
+    val iamConfirmedOn: LocalDate? = null,
+    /**
+     * The current set's KEK. Null only for state saved before KEYBOARD-036, which kept no
+     * KEK: such a set must be reissued before another archive can be saved.
+     */
+    val kek: ByteArray? = null
 ) {
+    /** True when the cards must be reissued before a new archive can be saved. */
+    val needsNewCards: Boolean get() = kek == null
+
     fun toJson(): JSONObject = JSONObject()
-        .put("v", 1)
+        .put("v", 2)
         .put("dek", hex(dataKey))
         .put("archive_id", hex(archiveId))
         .put("epoch", epoch)
@@ -36,6 +47,7 @@ data class DeadManState(
         .put("last_check_in", lastCheckIn.toString())
         .put("key_file", keyFile)
         .also { o -> iamConfirmedOn?.let { o.put("iam_confirmed_on", it.toString()) } }
+        .also { o -> kek?.let { o.put("kek", hex(it)) } }
 
     override fun equals(other: Any?) = other is DeadManState && toJson().toString() == other.toJson().toString()
     override fun hashCode() = toJson().toString().hashCode()
@@ -45,12 +57,16 @@ data class DeadManState(
             unhex(o.getString("dek")), unhex(o.getString("archive_id")), o.getInt("epoch"), o.getString("set_id"),
             o.getJSONArray("holders").let { a -> (0 until a.length()).map { Holder(a.getJSONObject(it).getInt("x"), a.getJSONObject(it).getString("label")) } },
             LocalDate.parse(o.getString("last_check_in")), o.getJSONObject("key_file"),
-            o.optString("iam_confirmed_on", "").takeIf { it.isNotEmpty() }?.let(LocalDate::parse)
+            o.optString("iam_confirmed_on", "").takeIf { it.isNotEmpty() }?.let(LocalDate::parse),
+            o.optString("kek", "").takeIf { it.isNotEmpty() }?.let(::unhex)
         )
     }
 }
 
-/** The result of creating or re-keying holders: show the cards once, save the key file. */
+/**
+ * The result of creating or re-keying holders. Nothing is committed yet: the screen shows
+ * the cards, and [state] is saved only after [DeadManSwitch.cardsConfirmed] (KEYBOARD-036).
+ */
 class Rekey(val state: DeadManState, val cards: List<Pair<Holder, ShareCard>>)
 
 /** The fallback ("no contact for 6 months") date as of the last in-app check-in. */
@@ -74,14 +90,18 @@ data class CheckInStatus(
  * KEYBOARD-027: the dead-man switch for access to the twin (Keith, relayed 2026-10-17
  * 20:00 PT).
  *
- * - **Keys.** The release archive is encrypted with a random 256-bit data key (DEK). For
- *   each key-holder set ("epoch") a fresh key-encryption key (KEK) wraps the DEK
- *   (AES-256-GCM, bound to the archive id, epoch and set id) and is split **2-of-3** with
- *   [Shamir] into one [ShareCard] per holder. The wrapped DEK and the policy go in the
- *   **release key file**; the KEK and the shares are never stored.
- * - **Holder changes** make a new KEK, wrap and cards, so the archive is never
- *   re-encrypted. Old cards can't open the new key file. (An old key file still opens
- *   with old cards, so old key files must be destroyed; see tools/twin-export/RELEASE.md.)
+ * - **Keys.** Each release archive is encrypted with its own random 256-bit data key
+ *   (DEK), made fresh by [newArchive] (KEYBOARD-036). For each key-holder set ("epoch") a
+ *   key-encryption key (KEK) wraps the DEK (AES-256-GCM, bound to the archive id, epoch
+ *   and set id) and is split **2-of-3** with [Shamir] into one [ShareCard] per holder.
+ *   The wrapped DEK and the policy go in the **release key file**. The phone keeps the KEK
+ *   sealed; the shares are never stored.
+ * - **Holder changes** make a new KEK and cards, and re-wrap the latest archive's DEK, so
+ *   that archive is never re-encrypted. Old cards can't open the new key file, and they
+ *   can't open any archive saved after the change, because each has a new DEK. (An old
+ *   key file still opens its own archive with old cards; see tools/twin-export/RELEASE.md.)
+ * - **Commit.** A new set takes effect only once Keith shows the cards were copied
+ *   ([cardsConfirmed]), so losing them on screen never leaves a set nobody holds.
  * - **Holders** are Guardian 1–3 at first. Kid 1–6 can replace a guardian once 18.
  * - **Recipients** are Kid 1–6.
  * - **Trigger (Keith, relayed 2026-10-18 08:17 PT).** Google's Inactive Account Manager
@@ -117,6 +137,38 @@ object DeadManSwitch {
         val archiveId = ByteArray(16).also(random::nextBytes)
         return rekey(dek, archiveId, 0, labels, today, random)
     }
+
+    /**
+     * New cards for the same holders, for a lost card or to finish the KEYBOARD-036 update.
+     * No age check: the holders were already approved. The IAM confirmation is kept.
+     */
+    fun reissue(state: DeadManState, today: LocalDate, random: SecureRandom = SecureRandom()): Rekey =
+        rekey(state.dataKey, state.archiveId, state.epoch, state.holders.sortedBy { it.x }.map { it.label }, today, random,
+            state.lastCheckIn, state.iamConfirmedOn)
+
+    /**
+     * A fresh DEK and archive id for the next release archive, wrapped under the current
+     * set's KEK, so cards from an earlier set can never open it. Save the returned state
+     * only after the archive is written and verified.
+     */
+    fun newArchive(state: DeadManState, random: SecureRandom = SecureRandom()): DeadManState {
+        val kek = requireNotNull(state.kek) { "reissue the share cards first" }
+        val dek = ByteArray(32).also(random::nextBytes)
+        val archiveId = ByteArray(16).also(random::nextBytes)
+        val k = JSONObject(state.keyFile.toString())
+            .put("archive_id", hex(archiveId))
+            .put("wrap", wrap(kek, dek, archiveId, state.epoch, state.setId, random))
+        return state.copy(dataKey = dek, archiveId = archiveId, keyFile = k)
+    }
+
+    /**
+     * True when [typed] holds each card's check (the 8 characters after its last dash), in
+     * card order. Typing them back shows the cards were copied before the set is saved.
+     */
+    fun cardsConfirmed(r: Rekey, typed: List<String>): Boolean =
+        typed.size == r.cards.size && r.cards.zip(typed).all { (c, t) ->
+            t.filterNot { it.isWhitespace() }.equals(c.second.encode().substringAfterLast('-'), ignoreCase = true)
+        }
 
     /**
      * Replaces one holder. A kid may take a slot only on or after their 18th birthday;
@@ -188,11 +240,6 @@ object DeadManSwitch {
         val setId = hex(ByteArray(8).also(random::nextBytes))
         val kek = ByteArray(32).also(random::nextBytes)
         try {
-            val iv = ByteArray(12).also(random::nextBytes)
-            val c = Cipher.getInstance("AES/GCM/NoPadding")
-            c.init(Cipher.ENCRYPT_MODE, SecretKeySpec(kek, "AES"), GCMParameterSpec(128, iv))
-            c.updateAAD(wrapAad(hex(archiveId), epoch, setId))
-            val wrapped = c.doFinal(dek)
             val holders = labels.mapIndexed { i, l -> Holder(i + 1, l) }
             val keyFile = JSONObject()
                 .put("format", KEY_FILE_FORMAT)
@@ -203,14 +250,22 @@ object DeadManSwitch {
                 .put("holders", JSONArray(holders.map { JSONObject().put("x", it.x).put("label", it.label) }))
                 .put("recipients", JSONArray(KIDS))
                 .put("policy", policy(lastCheckIn, iamConfirmedOn))
-                .put("wrap", JSONObject().put("alg", "AES-256-GCM").put("iv", hex(iv)).put("ciphertext", hex(wrapped)))
+                .put("wrap", wrap(kek, dek, archiveId, epoch, setId, random))
                 .put("created", today.toString())
             val shares = Shamir.split(kek, HOLDERS, THRESHOLD, random)
             val cards = holders.map { h -> h to ShareCard(setId, epoch, THRESHOLD, HOLDERS, shares.single { it.x == h.x }) }
-            return Rekey(DeadManState(dek.copyOf(), archiveId.copyOf(), epoch, setId, holders, lastCheckIn, keyFile, iamConfirmedOn), cards)
+            return Rekey(DeadManState(dek.copyOf(), archiveId.copyOf(), epoch, setId, holders, lastCheckIn, keyFile, iamConfirmedOn, kek.copyOf()), cards)
         } finally {
             kek.fill(0)
         }
+    }
+
+    private fun wrap(kek: ByteArray, dek: ByteArray, archiveId: ByteArray, epoch: Int, setId: String, random: SecureRandom): JSONObject {
+        val iv = ByteArray(12).also(random::nextBytes)
+        val c = Cipher.getInstance("AES/GCM/NoPadding")
+        c.init(Cipher.ENCRYPT_MODE, SecretKeySpec(kek, "AES"), GCMParameterSpec(128, iv))
+        c.updateAAD(wrapAad(hex(archiveId), epoch, setId))
+        return JSONObject().put("alg", "AES-256-GCM").put("iv", hex(iv)).put("ciphertext", hex(c.doFinal(dek)))
     }
 
     private fun policy(lastCheckIn: LocalDate, iamConfirmedOn: LocalDate?) = JSONObject()

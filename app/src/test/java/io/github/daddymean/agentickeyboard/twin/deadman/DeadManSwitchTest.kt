@@ -5,6 +5,7 @@ import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotEquals
+import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -12,7 +13,7 @@ import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 import java.time.LocalDate
 
-/** KEYBOARD-027 rows 1–3 and 5 (org.json needs Robolectric). */
+/** KEYBOARD-027 rows 1–3 and 5, and the KEYBOARD-036 fixes (org.json needs Robolectric). */
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [35])
 class DeadManSwitchTest {
@@ -155,10 +156,86 @@ class DeadManSwitchTest {
         for (k in listOf("google.com", "signed-by", "other holders", "only a signal", "not_before")) assertTrue(k, card.contains(k))
     }
 
+    // ---- KEYBOARD-036 -------------------------------------------------------------------
+
+    @Test
+    fun everyArchiveGetsAFreshKeySoOldHoldersCantOpenLaterArchives() {
+        val first = DeadManSwitch.create(DeadManSwitch.GUARDIANS, today)
+        val a1 = DeadManSwitch.newArchive(first.state)
+        assertFalse(a1.dataKey.contentEquals(first.state.dataKey))
+        assertFalse(a1.archiveId.contentEquals(first.state.archiveId))
+        assertEquals(first.state.setId, a1.setId)
+        val oldCards = first.cards.map { it.second }
+        assertArrayEquals(a1.dataKey, DeadManSwitch.unwrap(a1.keyFile, oldCards.take(2)))
+        // Replace a holder: the latest archive (a1) stays openable with the new cards, unchanged.
+        val second = DeadManSwitch.replaceHolder(a1, 2, "Kid 1", LocalDate.of(2000, 1, 1), today)
+        assertArrayEquals(a1.dataKey, second.state.dataKey)
+        val newCards = second.cards.map { it.second }
+        assertArrayEquals(a1.dataKey, DeadManSwitch.unwrap(second.state.keyFile, listOf(newCards[0], newCards[2])))
+        // The next archive gets a new key. Old cards with the old key file yield only a1's key,
+        // and pointing the old key file at the new archive id breaks its wrap.
+        val a2 = DeadManSwitch.newArchive(second.state)
+        assertArrayEquals(a2.dataKey, DeadManSwitch.unwrap(a2.keyFile, newCards.drop(1)))
+        for (i in 0..2) for (j in i + 1..2) {
+            assertFalse(a2.dataKey.contentEquals(DeadManSwitch.unwrap(a1.keyFile, listOf(oldCards[i], oldCards[j]))))
+            fails { DeadManSwitch.unwrap(a2.keyFile, listOf(oldCards[i], oldCards[j])) }
+        }
+        val pointed = JSONObject(a1.keyFile.toString()).put("archive_id", hex(a2.archiveId))
+        fails { DeadManSwitch.unwrap(pointed, oldCards.take(2)) }
+        // A new archive keeps the policy and the holders.
+        assertEquals(second.state.keyFile.getJSONObject("policy").toString(), a2.keyFile.getJSONObject("policy").toString())
+        assertEquals(second.state.holders, a2.holders)
+    }
+
+    @Test
+    fun reissueWorksWhenKidsHoldKeysAndKeepsTheGoogleConfirmation() {
+        var s = DeadManSwitch.create(DeadManSwitch.GUARDIANS, today).state
+        s = DeadManSwitch.replaceHolder(s, 1, "Kid 1", LocalDate.of(2000, 1, 1), today).state
+        s = DeadManSwitch.confirmIam(s, today)
+        // Before KEYBOARD-036 the screen reissued through replaceHolder with no birth date and crashed.
+        fails { DeadManSwitch.replaceHolder(s, 1, "Kid 1", null, today) }
+        val r = DeadManSwitch.reissue(s, today)
+        assertEquals(listOf("Kid 1", "Guardian 2", "Guardian 3"), r.state.holders.map { it.label })
+        assertEquals(s.epoch + 1, r.state.epoch)
+        assertEquals(today, r.state.iamConfirmedOn)
+        assertArrayEquals(s.dataKey, DeadManSwitch.unwrap(r.state.keyFile, r.cards.map { it.second }.take(2)))
+        assertFalse(r.state.kek!!.contentEquals(s.kek!!))
+    }
+
+    @Test
+    fun aNewSetIsUsedOnlyAfterEveryCardIsConfirmed() {
+        val r = DeadManSwitch.create(DeadManSwitch.GUARDIANS, today)
+        val checks = r.cards.map { it.second.encode().substringAfterLast('-') }
+        assertEquals(8, checks[0].length)
+        assertTrue(DeadManSwitch.cardsConfirmed(r, checks))
+        assertTrue(DeadManSwitch.cardsConfirmed(r, checks.map { " " + it.lowercase().chunked(4).joinToString(" ") }))
+        assertFalse(DeadManSwitch.cardsConfirmed(r, checks.take(2)))
+        assertFalse(DeadManSwitch.cardsConfirmed(r, checks.reversed()))
+        assertFalse(DeadManSwitch.cardsConfirmed(r, listOf(checks[0], checks[1], "00000000")))
+        assertFalse(DeadManSwitch.cardsConfirmed(r, listOf("", "", "")))
+    }
+
+    @Test
+    fun stateSavedBeforeKeyboard036LoadsAndAsksForNewCards() {
+        val s = DeadManSwitch.create(DeadManSwitch.GUARDIANS, today).state
+        assertFalse(s.needsNewCards)
+        val v1 = s.toJson().put("v", 1).also { it.remove("kek") }
+        val old = DeadManState.fromJson(v1)
+        assertTrue(old.needsNewCards)
+        assertArrayEquals(s.dataKey, old.dataKey)
+        fails { DeadManSwitch.newArchive(old) }
+        // Reissuing switches it over; the existing archive's key is re-wrapped, not changed.
+        val r = DeadManSwitch.reissue(old, today)
+        assertFalse(r.state.needsNewCards)
+        assertArrayEquals(s.dataKey, r.state.dataKey)
+        assertNotNull(DeadManSwitch.newArchive(r.state))
+    }
+
     @Test
     fun stateRoundTrips() {
         val s = DeadManSwitch.create(DeadManSwitch.GUARDIANS, today).state
         assertEquals(s, DeadManState.fromJson(JSONObject(s.toJson().toString())))
         assertFalse(s.toJson().toString().contains("AKDM1"))
+        assertArrayEquals(s.kek, DeadManState.fromJson(JSONObject(s.toJson().toString())).kek)
     }
 }

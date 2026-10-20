@@ -11,11 +11,11 @@ Keith's decisions (2026-10-17, trigger revised 2026-10-18):
 
 | Piece | What it is | Who keeps it |
 |---|---|---|
-| `twin-release-<date>.aktx` | The twin: scrubbed messages, journal and recordings, plus approved memories and core memories (KEYBOARD-032; see README), encrypted with a random 256-bit **data key**. | Wherever Keith puts it by hand. We recommend at least two copies, e.g. a USB drive with the executor and one with the kids' guardian. |
-| `twin-release-key-set<N>.json` | The data key, **wrapped** (AES-256-GCM) by a key-encryption key for holder set N, plus the policy and holder labels. It contains no secret that is usable alone. | **Next to the archive.** Replace it whenever the holders change; see below. |
+| `twin-release-<date>.aktx` | The twin: scrubbed messages, journal and recordings, plus approved memories and core memories (KEYBOARD-032; see README), encrypted with its own random 256-bit **data key**: every saved archive gets a new one (KEYBOARD-036). | Wherever Keith puts it by hand. We recommend at least two copies, e.g. a USB drive with the executor and one with the kids' guardian. |
+| `twin-release-<date>-key-set<N>.json` | That archive's data key, **wrapped** (AES-256-GCM) by the key-encryption key for holder set N, plus the policy and holder labels. It contains no secret that is usable alone. | **Next to the archive.** Replace it whenever the holders change; see below. |
 | Share card (`AKDM1-…`) | One Shamir share of set N's key-encryption key. | Each holder keeps **only their own** card: printed, written down, or in their password manager. |
 
-The phone keeps only the data key, sealed under the twin's Android Keystore key, so it can re-key and write new archives. It never stores the key-encryption key or the cards: they are shown once, and you may save them to a folder on the phone. Hand them out, then delete the card files.
+The phone keeps the current set's key-encryption key and the latest archive's data key, sealed under the twin's Android Keystore key, so it can re-key and give every new archive a fresh data key. That exposes nothing new: the phone already holds the twin itself. It never stores the cards: they are shown once, and you may save them to a folder on the phone. **A new set takes effect only after you confirm it** by typing the last 8 characters of each card, so leaving the cards screen early keeps the current cards in force. Hand the cards out, then delete the card files.
 
 ## The trigger: Google Inactive Account Manager (Keith, 2026-10-18)
 
@@ -103,13 +103,13 @@ The 2-of-3 threshold is the real protection. The email only says when to start.
 ## Changing a key holder (for example Kid 1 turns 18)
 
 1. On the phone: Dead-man switch → **Replace a key holder** → choose the guardian → choose **Kid N** and enter Kid N's date of birth. It is checked (18 or older) and not stored.
-2. The phone makes a **new set** (N+1): a new key-encryption key, a new wrap of the same data key, and **three new cards**. The archive is not re-encrypted.
+2. The phone makes a **new set** (N+1): a new key-encryption key, a new wrap of the latest archive's data key, and **three new cards**. That archive is not re-encrypted. Type the last 8 characters of each card to confirm; until you do, set N stays in force.
 3. Give all three holders their new card, and ask them to destroy their old card. **Update the IAM contacts**: add the new holder and remove the old one. Then confirm the Google trigger again in the app.
-4. **Replace the key file next to every archive copy** with `twin-release-key-set<N+1>.json`, and destroy the old key files.
+4. **Replace the key file next to every copy of the latest archive** with `twin-release-key-set<N+1>.json`, and destroy the old key files. Better still, save a new archive (it gets a new data key) and replace the old archive and key file everywhere.
 
-Why step 4 matters: old cards cannot open the new key file. However, an old key file together with two old cards still opens the archive, because the data key is unchanged. Revocation therefore depends on old key files being destroyed.
+Why step 4 matters: old cards cannot open the new key file, and they can never open an archive saved after the change, because each archive has its own data key (KEYBOARD-036). However, an old key file together with two old cards still opens the archive it was made for. Full revocation therefore means replacing old archives with a new one, or at least destroying the old key files.
 
-**Reissue all share cards** does the same thing with unchanged labels, for when a card is lost.
+**Reissue all share cards** does the same thing with unchanged labels, for when a card is lost. It needs no date of birth, so it also works once kids hold keys. Phones set up before KEYBOARD-036 must reissue once before saving another archive.
 
 ## Opening it (two holders, on a computer)
 
