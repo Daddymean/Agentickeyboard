@@ -133,19 +133,11 @@ class TwinCapsuleActivity : Activity() {
         }
     }
 
+    /** The microphone is only ever requested from the Journal, after its rationale (KEYBOARD-025 guard). */
     private fun withMic(action: () -> Unit) {
         if (checkSelfPermission(Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) { action(); return }
-        pending = action
-        AlertDialog.Builder(this).setMessage(JournalActivity.MIC_RATIONALE)
-            .setPositiveButton("Continue") { _, _ -> requestPermissions(arrayOf(Manifest.permission.RECORD_AUDIO), REQ_MIC) }
-            .setNegativeButton("Not now", null).show()
-    }
-    private var pending: (() -> Unit)? = null
-
-    override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
-        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
-        if (requestCode == REQ_MIC && grantResults.firstOrNull() == PackageManager.PERMISSION_GRANTED) pending?.invoke()
-        pending = null
+        AlertDialog.Builder(this).setMessage("Voice takes use the microphone permission you grant in the Journal. Open the Journal, record once there, then come back. Text capsules work without it.")
+            .setPositiveButton("OK", null).show()
     }
 
     private fun text(t: String, size: Float) = TextView(this).apply { textSize = size; text = t; setPadding(0, pad / 4, 0, pad / 4) }.also(root::addView)
@@ -168,7 +160,6 @@ class TwinCapsuleActivity : Activity() {
 
     companion object {
         private const val TAG = "TwinCapsules"
-        private const val REQ_MIC = 36
         const val NOTICE =
             "Messages you record now for one of the kids, to open at a milestone: a date such as their 18th birthday, or an " +
                 "event such as graduation or a wedding. They're encrypted on this phone. In the release archive each one is " +
