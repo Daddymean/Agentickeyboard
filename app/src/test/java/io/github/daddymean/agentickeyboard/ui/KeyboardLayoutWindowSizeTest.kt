@@ -1,12 +1,15 @@
 package io.github.daddymean.agentickeyboard.ui
 
 import android.content.Context
+import android.view.ViewConfiguration
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.getUnclippedBoundsInRoot
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.height
@@ -105,6 +108,54 @@ class KeyboardLayoutWindowSizeTest {
         // than a landscape window, so the bottom row fell off the screen.
         composeTestRule.onNodeWithTag("key_space").assertIsDisplayed()
         composeTestRule.onNodeWithTag("key_comma").assertIsDisplayed()
+    }
+
+    @Test
+    @Config(sdk = [35], qualifiers = "w780dp-h360dp-land")
+    fun `gesture guide leaves the compact typing controls reachable`() {
+        showKeyboard(aiTools = true)
+        composeTestRule.onNodeWithTag("toggle_gesture_guide").performClick()
+        composeTestRule.mainClock.advanceTimeBy(300)
+        composeTestRule.onNodeWithTag("command_gesture_pad").assertExists()
+        composeTestRule.onNodeWithTag("key_q").assertIsDisplayed()
+        composeTestRule.onNodeWithTag("key_space").assertIsDisplayed()
+        composeTestRule.onNodeWithTag("key_comma").assertIsDisplayed()
+        val bottom = composeTestRule.onNodeWithTag("key_space").getUnclippedBoundsInRoot().bottom
+        composeTestRule.onNodeWithTag("key_enter").assertIsDisplayed()
+        assertTrue("guide must leave space within the 360dp window", bottom <= 360.dp)
+        // The pad's upward command must replace the guide with tools, not stack them.
+        val pad = composeTestRule.onNodeWithTag("command_gesture_pad")
+        val slop = ViewConfiguration.get(ApplicationProvider.getApplicationContext<Context>()).scaledTouchSlop
+        fun previewDescription() = runCatching {
+            pad.fetchSemanticsNode().children.joinToString { it.config.toString() }
+        }.getOrDefault("pad removed")
+        pad.performTouchInput {
+            // Keep every event inside the root, with margin beyond touch slop.
+            down(center + Offset(0f, 12f))
+            moveBy(Offset(0f, -70f))
+        }
+        composeTestRule.mainClock.advanceTimeByFrame()
+        composeTestRule.onNodeWithText("Drawing Gesture Trail...").assertExists()
+        pad.performTouchInput {
+            moveBy(Offset(0f, -80f))
+        }
+        composeTestRule.mainClock.advanceTimeByFrame()
+        composeTestRule.onNodeWithText("💡 Release to Show AI Panel (Up)").assertExists(
+            "After second move: slop=$slop; ${previewDescription()}"
+        )
+        pad.performTouchInput {
+            up()
+        }
+        composeTestRule.mainClock.advanceTimeByFrame()
+        composeTestRule.onNodeWithText("Gesture: Show AI Actions").assertExists(
+            "After release: slop=$slop; ${previewDescription()}"
+        )
+        composeTestRule.mainClock.advanceTimeBy(500)
+        composeTestRule.mainClock.advanceTimeByFrame()
+        composeTestRule.onNodeWithTag("command_gesture_pad").assertDoesNotExist()
+        composeTestRule.onNodeWithTag("toggle_gesture_guide").assertIsDisplayed()
+        composeTestRule.onNodeWithTag("key_space").assertIsDisplayed()
+        composeTestRule.onNodeWithTag("key_enter").assertIsDisplayed()
     }
 
     @Test
