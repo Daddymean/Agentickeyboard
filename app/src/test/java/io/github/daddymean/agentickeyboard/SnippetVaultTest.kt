@@ -19,6 +19,14 @@ import org.junit.Test
 class SnippetVaultTest {
 
     @Test
+    fun parseRecall_returnsNullForEmptyOrInvalidPrefix() {
+        assertNull(SnippetVaultSearch.parseRecall(""))
+        assertNull(SnippetVaultSearch.parseRecall("   "))
+        assertNull(SnippetVaultSearch.parseRecall("v invoice"))
+        assertNull(SnippetVaultSearch.parseRecall("find return policy"))
+    }
+
+    @Test
     fun parseRecall_acceptsOnlyDedicatedLeadingCommands() {
         val vault = SnippetVaultSearch.parseRecall("   /v invoice balance ")
         assertEquals(SnippetRecallCommand.VAULT, vault?.command)
