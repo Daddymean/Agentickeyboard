@@ -25,6 +25,7 @@ The plaintext is a ZIP: twin/messages.jsonl, journal/records.jsonl,
 audio/<id>.flac and manifest.json.
 """
 import argparse
+import base64
 import getpass
 import hashlib
 import json
@@ -201,6 +202,26 @@ def render_memories(root):
             f.write("\n".join(out))
 
 
+def render_handwriting(root):
+    """KEYBOARD-037: writes journal/handwriting/<record id>.png for each handwritten answer."""
+    path = os.path.join(root, "journal", "records.jsonl")
+    if not os.path.exists(path):
+        return
+    out = os.path.join(root, "journal", "handwriting")
+    with open(path, encoding="utf-8") as f:
+        for line in f:
+            r = json.loads(line)
+            png = r.get("body", {}).get("ink_png")
+            if not png:
+                continue
+            data = base64.b64decode(png)
+            if not data.startswith(b"\x89PNG"):
+                continue
+            os.makedirs(out, exist_ok=True)
+            with open(os.path.join(out, "%d.png" % int(r["id"])), "wb") as g:
+                g.write(data)
+
+
 def render_capsules(root):
     """KEYBOARD-036: in Keith's own export, writes capsules/<id>.md for each readable capsule.
 
@@ -243,6 +264,7 @@ def unpack(archive_path, out_dir, verify_only, passphrase=None, data_key=None):
                 os.makedirs(staging)
                 safe_extract(zf, staging)
                 render_memories(staging)
+                render_handwriting(staging)
                 render_capsules(staging)
                 for name in os.listdir(staging):
                     dest = os.path.join(out_dir, name)
