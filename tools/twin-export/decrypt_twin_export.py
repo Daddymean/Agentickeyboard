@@ -25,6 +25,7 @@ The plaintext is a ZIP: twin/messages.jsonl, journal/records.jsonl,
 audio/<id>.flac and manifest.json.
 """
 import argparse
+import base64
 import getpass
 import hashlib
 import json
@@ -201,6 +202,52 @@ def render_memories(root):
             f.write("\n".join(out))
 
 
+def render_handwriting(root):
+    """KEYBOARD-037: writes journal/handwriting/<record id>.png for each handwritten answer."""
+    path = os.path.join(root, "journal", "records.jsonl")
+    if not os.path.exists(path):
+        return
+    out = os.path.join(root, "journal", "handwriting")
+    with open(path, encoding="utf-8") as f:
+        for line in f:
+            r = json.loads(line)
+            png = r.get("body", {}).get("ink_png")
+            if not png:
+                continue
+            data = base64.b64decode(png)
+            if not data.startswith(b"\x89PNG"):
+                continue
+            os.makedirs(out, exist_ok=True)
+            with open(os.path.join(out, "%d.png" % int(r["id"])), "wb") as g:
+                g.write(data)
+
+
+def render_capsules(root):
+    """KEYBOARD-036: in Keith's own export, writes capsules/<id>.md for each readable capsule.
+
+    Release archives hold sealed capsules instead. They stay sealed here; open one with
+    open_time_capsule.py and two key holders' cards.
+    """
+    d = os.path.join(root, "capsules")
+    if not os.path.isdir(d):
+        return
+    for name in sorted(os.listdir(d)):
+        if not name.endswith(".json"):
+            continue
+        with open(os.path.join(d, name), encoding="utf-8") as f:
+            c = json.load(f)
+        if "sealed" in c:
+            continue
+        u = c["unlock"]
+        when = u.get("date") or "event: %s" % u.get("event")
+        lines = ["# %s (for %s)" % (c["title"], c["kid"]), "", "Opens: %s. A message for the kids, not training data." % when, "", c.get("text", "")]
+        for a in c.get("audio", []):
+            lines.append("")
+            lines.append("Recording: %s (%d s)" % (a["file"], a.get("ms", 0) // 1000))
+        with open(os.path.join(d, name[:-5] + ".md"), "w", encoding="utf-8") as f:
+            f.write("\n".join(lines) + "\n")
+
+
 def unpack(archive_path, out_dir, verify_only, passphrase=None, data_key=None):
     """Decrypts, verifies and (unless verify_only) unpacks. Returns (chunks, manifest)."""
     tmp_parent = out_dir if out_dir else None
@@ -217,6 +264,8 @@ def unpack(archive_path, out_dir, verify_only, passphrase=None, data_key=None):
                 os.makedirs(staging)
                 safe_extract(zf, staging)
                 render_memories(staging)
+                render_handwriting(staging)
+                render_capsules(staging)
                 for name in os.listdir(staging):
                     dest = os.path.join(out_dir, name)
                     if os.path.exists(dest):
@@ -235,6 +284,11 @@ def report(chunks, manifest, out_dir):
     if "memories" in c:
         print("    %d approved memories (%d dropped by the scrubber), %d core memories (%d withheld)" % (
             c["memories"], c.get("memories_dropped", 0), c.get("core_blocks", 0), c.get("core_blocks_withheld", 0)))
+    if c.get("capsules"):
+        if c.get("capsules_sealed"):
+            print("    %d time capsules, still sealed: open each with open_time_capsule.py and two key holders' cards" % c["capsules"])
+        else:
+            print("    %d time capsules (messages for the kids, not training data): capsules/*.md" % c["capsules"])
     if out_dir:
         print("    unpacked into " + os.path.abspath(out_dir))
 

@@ -138,6 +138,9 @@ dependencies {
   // genai-prompt pulls genai-common beta3; pin it so the beta1 task
   // libraries above resolve against the same (compatible) common version.
   implementation(libs.mlkit.genai.common)
+  // KEYBOARD-037: handwriting recognition on the device. Its model (~20 MB) is downloaded from Google once,
+  // only after Keith approves it in the journal; see docs/twin-handwriting.md.
+  implementation(libs.mlkit.digital.ink)
   implementation(libs.moshi.core)
   implementation(libs.okhttp)
   // implementation(libs.play.services.location)

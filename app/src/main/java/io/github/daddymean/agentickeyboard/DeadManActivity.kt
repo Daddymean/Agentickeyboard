@@ -275,8 +275,8 @@ class DeadManActivity : Activity() {
                             // KEYBOARD-039: every archive gets its own data key, wrapped under the current set's KEK.
                             val next = controller.prepareArchive()
                             val archive = write(dir, "twin-release-$stamp${TwinExporter.FILE_EXTENSION}", "application/octet-stream") {
-                                TwinExporter(TwinLearning.store(this@DeadManActivity), TwinVault.journal(this@DeadManActivity), TwinVault.memory(this@DeadManActivity))
-                                    .exportRelease(it, PassphraseArchive.dataKeyParams(next.dataKey, next.archiveId), System.currentTimeMillis())
+                                TwinExporter(TwinLearning.store(this@DeadManActivity), TwinVault.journal(this@DeadManActivity), TwinVault.memory(this@DeadManActivity), TwinVault.capsules(this@DeadManActivity))
+                                    .exportRelease(it, PassphraseArchive.dataKeyParams(next.dataKey, next.archiveId), System.currentTimeMillis(), next.dataKey, next.archiveId)
                             }
                             contentResolver.openInputStream(archive)!!.use { TwinExporter.verifyRelease(it, next.dataKey) }
                             write(dir, "twin-release-$stamp-key-set${next.epoch}.json", "application/json") {

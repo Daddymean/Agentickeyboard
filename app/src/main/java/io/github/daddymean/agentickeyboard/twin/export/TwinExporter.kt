@@ -2,6 +2,8 @@ package io.github.daddymean.agentickeyboard.twin.export
 
 import io.github.daddymean.agentickeyboard.twin.TwinExportScrubber
 import io.github.daddymean.agentickeyboard.twin.TwinStore
+import io.github.daddymean.agentickeyboard.twin.capsule.CapsuleStore
+import io.github.daddymean.agentickeyboard.twin.capsule.TimeCapsules
 import io.github.daddymean.agentickeyboard.twin.CredentialMentions
 import io.github.daddymean.agentickeyboard.twin.journal.JournalStore
 import io.github.daddymean.agentickeyboard.twin.memory.MemoryStore
@@ -30,7 +32,9 @@ data class ExportSummary(
     val memories: Int = 0,
     val memoriesDropped: Int = 0,
     val coreBlocks: Int = 0,
-    val coreBlocksWithheld: Int = 0
+    val coreBlocksWithheld: Int = 0,
+    val capsules: Int = 0,
+    val capsulesSealed: Boolean = false
 )
 
 /**
@@ -54,12 +58,19 @@ data class ExportSummary(
  *   citation `core:<label>`. Keith writes them deliberately for the kids, so identifiers
  *   (names, years, places) are **not** blanked. They are still checked for secrets: a
  *   block holding a token, private key or credential mention is withheld and counted;
+ * - KEYBOARD-036: `capsules/<id>.json`: Keith's milestone time capsules. In Keith's own
+ *   export they are readable (`text`, plus `capsules/<id>/<name>.flac`) and marked as messages
+ *   for the kids, not training data. In the **release** archive, each one is sealed under its
+ *   own capsule key ([TimeCapsules.sealForRelease]), so opening the release does not open them.
  * - `manifest.json` (last): format, creation time, counts, and the SHA-256 and size of
  *   every other file, so the decrypt script can verify the contents.
  * Nothing is written to disk in plaintext: the ZIP streams straight into the encryption.
  * Takes that were never saved to an answer are not exported.
  */
-class TwinExporter(private val twin: TwinStore?, private val journal: JournalStore?, private val memory: MemoryStore? = null) {
+class TwinExporter(
+    private val twin: TwinStore?, private val journal: JournalStore?, private val memory: MemoryStore? = null,
+    private val capsules: CapsuleStore? = null
+) {
 
     fun export(out: OutputStream, passphrase: CharArray, nowMillis: Long, iterations: Int = PassphraseArchive.ITERATIONS): ExportSummary {
         val normalized = normalize(passphrase)
@@ -71,10 +82,11 @@ class TwinExporter(private val twin: TwinStore?, private val journal: JournalSto
     }
 
     /** KEYBOARD-027: the same contents under a data key (the dead-man release archive). */
-    fun exportRelease(out: OutputStream, params: PassphraseArchive.Params, nowMillis: Long): ExportSummary =
-        write(PassphraseArchive.Writer(out, params), nowMillis)
+    fun exportRelease(out: OutputStream, params: PassphraseArchive.Params, nowMillis: Long, dataKey: ByteArray? = null, archiveId: ByteArray? = null): ExportSummary =
+        write(PassphraseArchive.Writer(out, params), nowMillis, if (dataKey != null && archiveId != null) dataKey to archiveId else null, release = true)
 
-    private fun write(writer: PassphraseArchive.Writer, nowMillis: Long): ExportSummary {
+    private fun write(writer: PassphraseArchive.Writer, nowMillis: Long, releaseKey: Pair<ByteArray, ByteArray>? = null, release: Boolean = false): ExportSummary {
+        var capsuleCount = 0
         val files = JSONObject()
         var messages = 0
         var dropped = 0
@@ -160,6 +172,21 @@ class TwinExporter(private val twin: TwinStore?, private val journal: JournalSto
                     }
                 }
 
+                // KEYBOARD-036: time capsules. A release without its key can't seal them, so leaves them out.
+                if (capsules != null && (!release || releaseKey != null)) {
+                    for (c in capsules.all()) {
+                        if (releaseKey != null) {
+                            entry("$CAPSULES_DIR${c.id}.json") { it.write(TimeCapsules.sealForRelease(c, releaseKey.first, releaseKey.second).toString(2).toByteArray(Charsets.UTF_8)) }
+                        } else {
+                            val meta = c.publicJson().put("text", c.text).put("for_kids_not_training", true)
+                                .put("audio", JSONArray(c.audio.map { a -> JSONObject().put("file", "$CAPSULES_DIR${c.id}/${a.name}.flac").put("ms", a.ms) }))
+                            entry("$CAPSULES_DIR${c.id}.json") { it.write(meta.toString(2).toByteArray(Charsets.UTF_8)) }
+                            for (a in c.audio) entry("$CAPSULES_DIR${c.id}/${a.name}.flac") { it.write(a.flac) }
+                        }
+                        capsuleCount++
+                    }
+                }
+
                 val manifest = JSONObject()
                     .put("format", FORMAT)
                     .put("created_at_ms", nowMillis)
@@ -168,7 +195,8 @@ class TwinExporter(private val twin: TwinStore?, private val journal: JournalSto
                         .put("journal_records", records).put("fields_redacted", redacted)
                         .put("recordings", recordings).put("recordings_unreadable", unreadable)
                         .put("memories", memories).put("memories_dropped", memoriesDropped)
-                        .put("core_blocks", coreBlocks).put("core_blocks_withheld", coreWithheld))
+                        .put("core_blocks", coreBlocks).put("core_blocks_withheld", coreWithheld)
+                        .put("capsules", capsuleCount).put("capsules_sealed", releaseKey != null))
                     .put("files", files)
                 zip.putNextEntry(ZipEntry(MANIFEST).apply { time = nowMillis })
                 zip.write(manifest.toString(2).toByteArray(Charsets.UTF_8))
@@ -176,7 +204,7 @@ class TwinExporter(private val twin: TwinStore?, private val journal: JournalSto
                 zip.finish()
             }
         }
-        return ExportSummary(messages, dropped, records, redacted, recordings, unreadable, memories, memoriesDropped, coreBlocks, coreWithheld)
+        return ExportSummary(messages, dropped, records, redacted, recordings, unreadable, memories, memoriesDropped, coreBlocks, coreWithheld, capsuleCount, releaseKey != null)
     }
 
     /** Scrubs free text recursively; structural fields (ids, keys, numbers) are kept as they are. */
@@ -220,6 +248,7 @@ class TwinExporter(private val twin: TwinStore?, private val journal: JournalSto
         const val MANIFEST = "manifest.json"
         const val MEMORIES = "memory/memories.jsonl"
         const val CORE = "memory/core.json"
+        const val CAPSULES_DIR = "capsules/"
 
         /** Core memories aren't identifier-scrubbed, but never carry a secret out (KEYBOARD-032). */
         fun coreIsSafe(text: String): Boolean =
@@ -228,7 +257,7 @@ class TwinExporter(private val twin: TwinStore?, private val journal: JournalSto
         const val FILE_EXTENSION = ".aktx"
 
         /** Body keys that hold identifiers, not prose: never scrubbed (and never user text). */
-        val STRUCTURAL = setOf("kind", "promptId", "key", "file", "instrumentId", "type", "category", "slot", "v", "value", "startDate", "heavyPausedUntil")
+        val STRUCTURAL = setOf("kind", "promptId", "key", "file", "instrumentId", "type", "category", "slot", "v", "value", "startDate", "heavyPausedUntil", "ink_png")
 
         /** The passphrase as NFC, so the same words typed on another keyboard derive the same key. */
         fun normalize(p: CharArray): CharArray = Normalizer.normalize(String(p), Normalizer.Form.NFC).toCharArray()

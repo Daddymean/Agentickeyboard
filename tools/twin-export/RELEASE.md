@@ -137,3 +137,30 @@ These come from Hollanek & Nowaczyk-Basińska, *Griefbots, Deadbots, Postmortem 
 - **No public platforms.** Do not post the twin, its answers, its voice or this archive anywhere public, and do not upload them to an online AI or "griefbot" service. The phone app has no share, copy or notification path: the screen is FLAG_SECURE, the answer text can't be selected, and a guard test enforces this.
 - **No decisions.** The twin refuses new decisions about money, inheritance or legal matters, and permission for them. It points to Keith's real documents and the guardians.
 - **Never pushes.** No notifications, no reminders, and nothing is sent by itself.
+
+## Time capsules (KEYBOARD-036)
+
+Keith records sealed messages (text and FLAC recordings) for one kid, to open at a milestone. The milestone is either a **date**, such as an 18th birthday (enter the birth date and the app works out the day), or an **event** two key holders confirm: graduation, wedding, first child, leaving home.
+
+- **On the phone**, each capsule is a separate file sealed with the twin key. Delete-all removes them.
+- **In the release archive**, each capsule is `capsules/<id>.json`. Only the kid, the title and the opening rule are readable. The message and recordings are sealed with AES-256-GCM under that capsule's own key, `HKDF-SHA256(DEK, salt = archive id, info = "akdm-capsule-v1|<archive id>|<capsule id>")`. The kid label is bound in as associated data.
+- **Opening the release** with `open_twin_release.py` leaves every capsule sealed.
+- **Opening a capsule**, when its time comes: two holders run, together
+
+      python3 open_time_capsule.py twin-data/capsules/<id>.json twin-release-key-setN.json \
+          --card card-a.txt --card card-b.txt [--confirm "Guardian 1" --confirm "Guardian 2"] opened/
+
+  The script checks the date, or for an event that two different current holders confirm it. It then opens that one capsule into `opened/<id>/message.md` plus its `.flac` files.
+- **Nothing is re-encrypted.** Adding a capsule, opening one, or replacing a holder (new cards for the same DEK) never re-encrypts the archive or the other capsules. A capsule recorded after the last release file only reaches the kids in the next release file Keith makes.
+- **Limit.** The date or event rule is enforced by the script and by the holders' word, not by cryptography. Holders who combine their cards could open a capsule early, just as they hold the release itself. A cryptographic time-lock (drand) remains an option for Keith.
+- In Keith's own passphrase export, capsules are readable (`capsules/<id>.json`, `capsules/<id>.md`, recordings). They are marked `for_kids_not_training` and should be left out of any training.
+
+## Supervised mode for minors (KEYBOARD-036)
+
+A kid under 18 can turn the twin on only with a guardian present (KEYBOARD-033). They are then in **supervised mode**:
+
+- **Each session.** Every session needs one of Guardian 1–3 to name themselves as present.
+- **Guardian pause.** Any guardian can pause the twin for that kid, and only a guardian can resume it. Each change is logged with the guardian's name.
+- **The kid still decides.** The kid can still pause it or retire it themselves at any time.
+- **At 18.** The kid, and only the kid, ends supervised mode by entering their date of birth. It is checked and not stored.
+- **Limit.** The phone can't verify who is holding it, so supervision is a recorded agreement, not an access control.

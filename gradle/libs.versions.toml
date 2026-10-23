@@ -37,6 +37,7 @@ robolectric = "4.16.1"
 mlkitGenai = "1.0.0-beta1"
 mlkitGenaiPrompt = "1.0.0-beta2"
 mlkitGenaiCommon = "1.0.0-beta3"
+mlkitDigitalInk = "19.0.0"
 concurrentFuturesKtx = "1.3.0"
 roborazzi = "1.59.0"
 secretsGradlePlugin = "2.0.1"
@@ -92,6 +93,7 @@ mlkit-genai-rewriting = { group = "com.google.mlkit", name = "genai-rewriting", 
 mlkit-genai-summarization = { group = "com.google.mlkit", name = "genai-summarization", version.ref = "mlkitGenai" }
 mlkit-genai-prompt = { group = "com.google.mlkit", name = "genai-prompt", version.ref = "mlkitGenaiPrompt" }
 mlkit-genai-common = { group = "com.google.mlkit", name = "genai-common", version.ref = "mlkitGenaiCommon" }
+mlkit-digital-ink = { group = "com.google.mlkit", name = "digital-ink-recognition", version.ref = "mlkitDigitalInk" }
 androidx-concurrent-futures-ktx = { group = "androidx.concurrent", name = "concurrent-futures-ktx", version.ref = "concurrentFuturesKtx" }
 roborazzi = { group = "io.github.takahirom.roborazzi", name = "roborazzi", version.ref = "roborazzi" }
 roborazzi-compose = { group = "io.github.takahirom.roborazzi", name = "roborazzi-compose", version.ref = "roborazzi" }
