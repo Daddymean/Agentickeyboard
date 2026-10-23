@@ -63,6 +63,10 @@ class TwinActivity : Activity() {
             setOnClickListener { startActivity(android.content.Intent(this@TwinActivity, TwinMemoryActivity::class.java)) }
         })
         layout.addView(Button(this).apply {
+            text = "Time capsules (sealed messages for milestones)"
+            setOnClickListener { startActivity(android.content.Intent(this@TwinActivity, TwinCapsuleActivity::class.java)) }
+        })
+        layout.addView(Button(this).apply {
             text = "Encrypted export (stays on this phone)"
             setOnClickListener { startActivity(android.content.Intent(this@TwinActivity, TwinExportActivity::class.java)) }
         })

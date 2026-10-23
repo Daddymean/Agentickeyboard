@@ -34,6 +34,8 @@ python3 decrypt_twin_export.py twin-export-20261012-1730.aktx twin-data/
 | `memory/memories.md`, `memory/core.md` | Written by the decrypt tools when unpacking (not in the archive or the manifest): the same memories as readable Markdown, each with its citation and source (journal record id and field, question and date). Both `decrypt_twin_export.py` and `open_twin_release.py` write them. |
 | `manifest.json` | Format, creation time, counts, and the SHA-256 and size of every file. |
 
+- `capsules/<id>.json` (+ `capsules/<id>.md`, `capsules/<id>/<take>.flac`): Keith's time capsules, readable in his own export and marked `for_kids_not_training`. In a release archive they are sealed: see RELEASE.md, "Time capsules", and `open_time_capsule.py`.
+
 ## Format
 
 The format is documented in `decrypt_twin_export.py` and `PassphraseArchive.kt`:
