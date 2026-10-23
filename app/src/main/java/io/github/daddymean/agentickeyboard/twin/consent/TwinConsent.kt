@@ -25,9 +25,19 @@ import java.io.File
  */
 enum class Status { NOT_ASKED, OPTED_IN, DECLINED, PAUSED, RETIRED }
 
-data class ConsentEvent(val kid: String, val status: Status, val atMillis: Long, val guardianPresent: Boolean = false)
+data class ConsentEvent(val kid: String, val status: Status, val atMillis: Long, val guardianPresent: Boolean = false, val by: String? = null, val note: String? = null)
 
-data class KidConsent(val kid: String, val status: Status = Status.NOT_ASKED, val sinceMillis: Long = 0, val guardianPresent: Boolean = false)
+/**
+ * [guardianPresent] true means the kid opted in under 18 and is in **supervised mode**
+ * (KEYBOARD-036): every session needs a guardian present, and a guardian can pause it.
+ * [pausedBy] names the guardian who paused, or is null when the kid paused it themselves.
+ */
+data class KidConsent(
+    val kid: String, val status: Status = Status.NOT_ASKED, val sinceMillis: Long = 0, val guardianPresent: Boolean = false,
+    val pausedBy: String? = null
+) {
+    val supervised: Boolean get() = guardianPresent && status != Status.RETIRED
+}
 
 data class ConsentState(val kids: Map<String, KidConsent> = emptyMap(), val log: List<ConsentEvent> = emptyList()) {
     fun of(kid: String): KidConsent = kids[kid] ?: KidConsent(kid)
@@ -39,8 +49,36 @@ object TwinConsent {
     const val RETIRE_COOLING_OFF_DAYS = 30L
     private const val DAY_MS = 86_400_000L
 
-    /** Only an opted-in kid gets answers. */
-    fun mayAsk(state: ConsentState, kid: String): Boolean = kid in KIDS && state.of(kid).status == Status.OPTED_IN
+    val GUARDIANS: List<String> = DeadManSwitch.GUARDIANS
+
+    /**
+     * Only an opted-in kid gets answers. A kid in supervised mode also needs [guardian], the
+     * guardian who confirmed they are present for this session (KEYBOARD-036).
+     */
+    fun mayAsk(state: ConsentState, kid: String, guardian: String? = null): Boolean {
+        val c = state.of(kid)
+        return kid in KIDS && c.status == Status.OPTED_IN && (!c.supervised || guardian in GUARDIANS)
+    }
+
+    fun needsGuardian(state: ConsentState, kid: String): Boolean = state.of(kid).supervised
+
+    /** KEYBOARD-036: a guardian pauses a supervised kid's twin. Only a guardian can then resume it. */
+    fun guardianPause(state: ConsentState, kid: String, guardian: String, now: Long): ConsentState {
+        require(guardian in GUARDIANS) { "Pick which guardian you are." }
+        require(state.of(kid).supervised && state.of(kid).status == Status.OPTED_IN) { "A guardian can pause only a supervised twin that is on." }
+        return set(state, kid, Status.PAUSED, now, guardian = true, by = guardian, pausedBy = guardian)
+    }
+
+    /**
+     * KEYBOARD-036: at 18 the kid, and only the kid, moves out of supervised mode by confirming
+     * their age. The birth date is checked here and not stored, as with key holders.
+     */
+    fun becomeAdult(state: ConsentState, kid: String, birthDate: java.time.LocalDate, today: java.time.LocalDate, now: Long): ConsentState {
+        val c = state.of(kid)
+        require(c.supervised) { "Not in supervised mode." }
+        require(DeadManSwitch.isAdult(birthDate, today)) { "Supervised mode ends on ${DeadManSwitch.adultFrom(birthDate)}." }
+        return ConsentState(state.kids + (kid to c.copy(guardianPresent = false)), state.log + ConsentEvent(kid, c.status, now, false, kid, "turned 18: supervision ended"))
+    }
 
     /**
      * The kid's own decision. [adult] false needs [guardianPresent] true: until Keith decides
@@ -63,12 +101,15 @@ object TwinConsent {
 
     fun pause(state: ConsentState, kid: String, now: Long): ConsentState {
         require(state.of(kid).status == Status.OPTED_IN) { "Only an active twin can be paused." }
-        return set(state, kid, Status.PAUSED, now)
+        // Keeps supervised mode (KEYBOARD-036 fix: pausing used to drop it).
+        return set(state, kid, Status.PAUSED, now, state.of(kid).guardianPresent)
     }
 
-    fun resume(state: ConsentState, kid: String, now: Long): ConsentState {
-        require(state.of(kid).status == Status.PAUSED) { "Not paused." }
-        return set(state, kid, Status.OPTED_IN, now, state.of(kid).guardianPresent)
+    fun resume(state: ConsentState, kid: String, now: Long, guardian: String? = null): ConsentState {
+        val c = state.of(kid)
+        require(c.status == Status.PAUSED) { "Not paused." }
+        require(c.pausedBy == null || guardian in GUARDIANS) { "${c.pausedBy} paused this; a guardian needs to resume it." }
+        return set(state, kid, Status.OPTED_IN, now, c.guardianPresent, by = guardian ?: kid)
     }
 
     /** Retire the twin for [kid] only. Allowed from any state, including never having opted in. */
@@ -90,27 +131,30 @@ object TwinConsent {
         return set(state, kid, Status.NOT_ASKED, now)
     }
 
-    private fun set(state: ConsentState, kid: String, status: Status, now: Long, guardian: Boolean = false) = ConsentState(
-        state.kids + (kid to KidConsent(kid, status, now, guardian)),
-        state.log + ConsentEvent(kid, status, now, guardian)
+    private fun set(state: ConsentState, kid: String, status: Status, now: Long, guardian: Boolean = false, by: String? = null, pausedBy: String? = null) = ConsentState(
+        state.kids + (kid to KidConsent(kid, status, now, guardian, pausedBy)),
+        state.log + ConsentEvent(kid, status, now, guardian, by ?: kid)
     )
 
     fun toJson(s: ConsentState): JSONObject = JSONObject()
         .put("version", 1)
-        .put("kids", JSONArray(s.kids.values.map { JSONObject().put("kid", it.kid).put("status", it.status.name).put("since", it.sinceMillis).put("guardian", it.guardianPresent) }))
-        .put("log", JSONArray(s.log.map { JSONObject().put("kid", it.kid).put("status", it.status.name).put("at", it.atMillis).put("guardian", it.guardianPresent) }))
+        .put("kids", JSONArray(s.kids.values.map { JSONObject().put("kid", it.kid).put("status", it.status.name).put("since", it.sinceMillis).put("guardian", it.guardianPresent).put("paused_by", it.pausedBy ?: JSONObject.NULL) }))
+        .put("log", JSONArray(s.log.map { JSONObject().put("kid", it.kid).put("status", it.status.name).put("at", it.atMillis).put("guardian", it.guardianPresent)
+            .put("by", it.by ?: JSONObject.NULL).put("note", it.note ?: JSONObject.NULL) }))
 
     fun fromJson(o: JSONObject): ConsentState {
         fun <T> arr(name: String, f: (JSONObject) -> T): List<T> {
             val a = o.optJSONArray(name) ?: return emptyList()
             return (0 until a.length()).mapNotNull { i -> runCatching { f(a.getJSONObject(i)) }.getOrNull() }
         }
-        val kids = arr("kids") { KidConsent(it.getString("kid"), Status.valueOf(it.getString("status")), it.optLong("since"), it.optBoolean("guardian")) }
+        val kids = arr("kids") { KidConsent(it.getString("kid"), Status.valueOf(it.getString("status")), it.optLong("since"), it.optBoolean("guardian"), it.str("paused_by")) }
             .filter { it.kid in KIDS }.associateBy { it.kid }
-        val log = arr("log") { ConsentEvent(it.getString("kid"), Status.valueOf(it.getString("status")), it.optLong("at"), it.optBoolean("guardian")) }
+        val log = arr("log") { ConsentEvent(it.getString("kid"), Status.valueOf(it.getString("status")), it.optLong("at"), it.optBoolean("guardian"), it.str("by"), it.str("note")) }
         return ConsentState(kids, log)
     }
 }
+
+private fun JSONObject.str(k: String): String? = if (isNull(k)) null else optString(k).takeIf { it.isNotEmpty() }
 
 /** `noBackupFilesDir/twin/consent.sealed`, sealed with the twin key (AAD `consent-v1`). Delete-all removes it. */
 class ConsentStore(private val file: File, private val cipher: TwinCipher) {

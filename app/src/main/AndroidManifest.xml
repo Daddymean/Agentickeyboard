@@ -44,6 +44,11 @@
             android:label="Twin memories"
             android:theme="@style/Theme.MyApplication" />
         <activity
+            android:name=".TwinCapsuleActivity"
+            android:exported="false"
+            android:label="Time capsules"
+            android:theme="@style/Theme.MyApplication" />
+        <activity
             android:name=".DeadManActivity"
             android:exported="false"
             android:label="Dead-man switch"

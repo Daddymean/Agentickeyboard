@@ -240,8 +240,8 @@ class DeadManActivity : Activity() {
                         }
                         else -> {
                             val archive = write(dir, "twin-release-$stamp${TwinExporter.FILE_EXTENSION}", "application/octet-stream") {
-                                TwinExporter(TwinLearning.store(this@DeadManActivity), TwinVault.journal(this@DeadManActivity), TwinVault.memory(this@DeadManActivity))
-                                    .exportRelease(it, PassphraseArchive.dataKeyParams(s.dataKey, s.archiveId), System.currentTimeMillis())
+                                TwinExporter(TwinLearning.store(this@DeadManActivity), TwinVault.journal(this@DeadManActivity), TwinVault.memory(this@DeadManActivity), TwinVault.capsules(this@DeadManActivity))
+                                    .exportRelease(it, PassphraseArchive.dataKeyParams(s.dataKey, s.archiveId), System.currentTimeMillis(), s.dataKey, s.archiveId)
                             }
                             contentResolver.openInputStream(archive)!!.use { TwinExporter.verifyRelease(it, s.dataKey) }
                             write(dir, "twin-release-key-set${s.epoch}.json", "application/json") {

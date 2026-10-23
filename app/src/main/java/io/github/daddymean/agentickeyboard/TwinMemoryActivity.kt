@@ -185,11 +185,14 @@ class TwinMemoryActivity : Activity() {
         clear()
         title("Who is asking?")
         text(TwinUseRules.LABEL, 15f)
-        button("Keith (preview what the twin says)") { ask("Keith (preview)") }
+        button("Keith (preview what the twin says)") { ask("Keith (preview)", null) }
         for (kid in TwinConsent.KIDS) {
             val c = consent.of(kid)
-            if (TwinConsent.mayAsk(consent, kid)) button(kid) { ask(kid) }
-            else text("$kid: ${statusText(c.status)}", 14f)
+            when {
+                TwinConsent.mayAsk(consent, kid) -> button(kid) { ask(kid, null) }
+                c.status == Status.OPTED_IN && c.supervised -> button("$kid (with a guardian)") { pickGuardian("Which guardian is with $kid?") { g -> ask(kid, g) } }
+                else -> text("$kid: ${statusText(c.status)}", 14f)
+            }
         }
         text("A kid who hasn't turned the twin on can do that under \"Kids: turn the twin on, pause or retire it\". " +
             "Nobody is ever asked or reminded.", 13f)
@@ -212,7 +215,8 @@ class TwinMemoryActivity : Activity() {
             TwinUseRules.RULES.joinToString("\n") { "• $it" }, 14f)
         for (kid in TwinConsent.KIDS) {
             val c = consent.of(kid)
-            text("$kid: ${statusText(c.status)}" + if (c.sinceMillis > 0) " since ${date(c.sinceMillis)}" else "", 16f)
+            text("$kid: ${statusText(c.status)}" + (if (c.sinceMillis > 0) " since ${date(c.sinceMillis)}" else "") +
+                (if (c.supervised) " · supervised (under 18)" else "") + (c.pausedBy?.let { " · paused by $it" } ?: ""), 16f)
             val now = System.currentTimeMillis()
             when (c.status) {
                 Status.NOT_ASKED, Status.DECLINED -> row(
@@ -222,10 +226,17 @@ class TwinMemoryActivity : Activity() {
                 )
                 Status.OPTED_IN -> row(
                     "Pause" to { consentChange { TwinConsent.pause(it, kid, now) } },
+                    *(if (c.supervised) arrayOf(
+                        "Guardian: pause" to { pickGuardian("Which guardian is pausing it?") { g -> consentChange { TwinConsent.guardianPause(it, kid, g, now) } } },
+                        "I'm 18 now" to { turned18(kid) }
+                    ) else emptyArray()),
                     "Retire it for me" to { confirm("Retire Dad's twin for $kid? You can bring it back only after ${TwinConsent.RETIRE_COOLING_OFF_DAYS} days.") { consentChange { TwinConsent.retire(it, kid, now) } } }
                 )
                 Status.PAUSED -> row(
-                    "Resume" to { consentChange { TwinConsent.resume(it, kid, now) } },
+                    "Resume" to {
+                        if (c.pausedBy != null) pickGuardian("A guardian paused this. Which guardian is resuming it?") { g -> consentChange { TwinConsent.resume(it, kid, now, g) } }
+                        else consentChange { TwinConsent.resume(it, kid, now) }
+                    },
                     "Retire it for me" to { confirm("Retire Dad's twin for $kid?") { consentChange { TwinConsent.retire(it, kid, now) } } }
                 )
                 Status.RETIRED -> if (TwinConsent.canBringBack(consent, kid, now)) button("Bring it back…") { bringBack(kid) }
@@ -243,6 +254,22 @@ class TwinMemoryActivity : Activity() {
             .setNegativeButton("Cancel", null).show()
     }
 
+    /** KEYBOARD-036: a guardian names themselves. The phone can't verify this; the log records who. */
+    private fun pickGuardian(title: String, then: (String) -> Unit) {
+        val names = TwinConsent.GUARDIANS.toTypedArray()
+        AlertDialog.Builder(this).setTitle(title).setItems(names) { _, i -> then(names[i]) }.setNegativeButton("Cancel", null).show()
+    }
+
+    private fun turned18(kid: String) {
+        val f = field("Your date of birth, YYYY-MM-DD (checked, not saved)", 1)
+        AlertDialog.Builder(this).setTitle("$kid: end supervised mode?").setView(f)
+            .setPositiveButton("Continue") { _, _ ->
+                val birth = runCatching { java.time.LocalDate.parse(f.text.toString().trim()) }.getOrNull()
+                if (birth == null) toast("Use YYYY-MM-DD.")
+                else consentChange { TwinConsent.becomeAdult(it, kid, birth, java.time.LocalDate.now(), System.currentTimeMillis()) }
+            }.setNegativeButton("Cancel", null).show()
+    }
+
     private fun bringBack(kid: String) {
         val f = field("Type ${TwinConsent.BRING_BACK}", 1)
         AlertDialog.Builder(this).setTitle("Bring the twin back for $kid?").setView(f)
@@ -258,17 +285,18 @@ class TwinMemoryActivity : Activity() {
         }
     }
 
-    private fun ask(who: String) {
+    /** [guardian]: who confirmed they're present, for a kid in supervised mode (KEYBOARD-036). */
+    private fun ask(who: String, guardian: String?) {
         clear()
         title("Ask the twin")
         text(TwinUseRules.LABEL, 16f)
-        text("Asking as $who. " +"Answers come only from memories you approved and your core memories, quoted with their source. " +
+        text("Asking as $who" + (guardian?.let { ", with $it" } ?: "") + ". Answers come only from memories you approved and your core memories, quoted with their source. " +
             "If nothing matches, the twin says so.", 14f)
         val q = field("Ask a question", 2).apply { root.addView(this) }
         val out = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
         button("Ask") {
             val idx = index ?: return@button
-            if (who != "Keith (preview)" && !TwinConsent.mayAsk(consent, who)) { whoIsAsking(); return@button }
+            if (who != "Keith (preview)" && !TwinConsent.mayAsk(consent, who, guardian)) { whoIsAsking(); return@button }
             scope.launch {
                 val reply = TwinLearning.onWorker { TwinAnswerer.answer(q.text.toString(), state, idx) }
                 show(out, reply)
@@ -314,7 +342,7 @@ class TwinMemoryActivity : Activity() {
     private fun row(vararg buttons: Pair<String, () -> Unit>) {
         val r = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
         buttons.forEach { (label, f) -> r.addView(Button(this).apply { text = label; setOnClickListener { f() } }) }
-        root.addView(r)
+        root.addView(android.widget.HorizontalScrollView(this).apply { addView(r) })
     }
     /** Twin text: never learned by any keyboard, no cloud AI, no "Save note" (KEYBOARD-028). */
     private fun field(hint: String, lines: Int) = EditText(this).apply {
