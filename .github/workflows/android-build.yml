@@ -7,6 +7,9 @@ on:
     branches: [main, master]
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 jobs:
   build:
     name: Build debug APK and run unit tests
@@ -172,3 +175,30 @@ jobs:
             core/build/reports/lint-results-debug.*
             context-app/build/reports/lint-results-debug.*
           if-no-files-found: ignore
+
+  # One short pass/fail line per commit so agents read a status instead of full logs
+  # (Nexus ADR-0007). Uses only the built-in GITHUB_TOKEN; no new secrets. A Slack
+  # post would need a bot token, so it is intentionally not done here.
+  summary:
+    name: Commit summary
+    needs: build
+    if: always()
+    runs-on: ubuntu-latest
+    permissions:
+      statuses: write
+    steps:
+      - name: Write step summary and commit status
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RESULT: ${{ needs.build.result }}
+          SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          if [ "$RESULT" = "success" ]; then state=success; icon="✅ PASS"; else state=failure; icon="❌ FAIL ($RESULT)"; fi
+          echo "### $icon · Android build \`${SHA:0:7}\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "Build, unit tests, screenshots and lint: $RESULT. [Run]($RUN_URL)" >> "$GITHUB_STEP_SUMMARY"
+          # Fork PRs get a read-only token; the summary above still works.
+          gh api "repos/${{ github.repository }}/statuses/$SHA" \
+            -f state="$state" -f context="ci/summary" \
+            -f description="Android build: $RESULT" -f target_url="$RUN_URL" \
+            || echo "::notice::commit status not posted (read-only token)"
