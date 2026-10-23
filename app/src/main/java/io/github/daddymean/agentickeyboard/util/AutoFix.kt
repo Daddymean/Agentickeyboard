@@ -34,16 +34,23 @@ object AutoFix {
     private val BLOCKED = setOf('@', '#', '/', ':', '_', '.', '-', '\\', '=', '&', '+', '%', '$', '*', '~', '|', '<', '>')
 
     /**
+     * Parameters that inform the auto-fix decision.
+     */
+    data class Context(
+        val spelling: LocalSpelling,
+        val personalWords: Set<String> = emptySet(),
+        val tapsFor: ((String) -> List<TapOffset>?)? = null,
+        val margin: Double = MARGIN
+    )
+
+    /**
      * What [word] (as typed, possibly with punctuation) should become on space, or
      * null to leave it. [before] is the text before the word.
      */
     fun fix(
         word: String,
         before: String,
-        spelling: LocalSpelling,
-        personalWords: Set<String> = emptySet(),
-        tapsFor: ((String) -> List<TapOffset>?)? = null,
-        margin: Double = MARGIN
+        context: Context
     ): String? {
         val (withLead, trailing) = LearnedRuleFilter.splitTrailingPunctuation(word)
         val lead = withLead.takeWhile { it in LEADING }
@@ -54,8 +61,8 @@ object AutoFix {
         val capitalised = core[0].isUpperCase()
         if (capitalised && isMidSentence(before + lead)) return null
         val lower = core.lowercase()
-        if (lower in personalWords || spelling.isKnownWord(lower)) return null
-        val fixed = spelling.autoFixCandidate(lower, tapsFor?.invoke(core), margin) ?: return null
+        if (lower in context.personalWords || context.spelling.isKnownWord(lower)) return null
+        val fixed = context.spelling.autoFixCandidate(lower, context.tapsFor?.invoke(core), context.margin) ?: return null
         val cased = if (capitalised) fixed.replaceFirstChar { it.uppercase() } else fixed
         return lead + cased + trailing
     }
