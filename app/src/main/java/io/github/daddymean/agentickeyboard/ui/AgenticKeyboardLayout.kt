@@ -2,7 +2,6 @@ package io.github.daddymean.agentickeyboard.ui
 
 import android.view.inputmethod.InputConnection
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.Canvas
@@ -27,6 +26,7 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
@@ -485,130 +485,131 @@ fun AgenticKeyboardLayout(
     ) {
     CompositionLocalProvider(LocalKeyPressOrder provides keyPressOrder) {
     val keyboardColors = LocalKeyboardColors.current
+    // Command gestures belong only to the explicit guide pad, never the typing surface.
+    // A root drag detector consumes normal thumb drift even with Swipe-to-Type off.
+    val commandGestureModifier = Modifier.pointerInput(Unit) {
+        detectDragGestures(
+            onDragStart = {
+                dragX = 0f
+                dragY = 0f
+                dragPreview = null
+            },
+            onDragCancel = {
+                dragX = 0f
+                dragY = 0f
+                dragPreview = null
+            },
+            onDragEnd = {
+                val deltaX = dragX
+                val deltaY = dragY
+                dragX = 0f
+                dragY = 0f
+                dragPreview = null
+
+                if (abs(deltaX) > 100 && abs(deltaY) > 100) {
+                    if (deltaX > 0 && deltaY < 0) {
+                        // Up-Right -> Translate
+                        buzz(HapticFeedbackType.LongPress)
+                        gestureAlert = "Gesture Triggered: Translating! 🌐"
+                        viewModel.translateText(aiSourceText())
+                    } else if (deltaX < 0 && deltaY < 0) {
+                        // Up-Left -> Summarize
+                        buzz(HapticFeedbackType.LongPress)
+                        gestureAlert = "Gesture Triggered: Summarizing! 🔍"
+                        viewModel.summarizeMessage(aiSourceText())
+                    } else if (deltaX < 0 && deltaY > 0) {
+                        // Down-Left -> Analyze Tone
+                        buzz(HapticFeedbackType.LongPress)
+                        gestureAlert = "Gesture Triggered: Analyzing Tone! 🎭"
+                        viewModel.analyzeTone(aiSourceText())
+                    } else {
+                        // Down-Right -> Expand Templates
+                        buzz(HapticFeedbackType.LongPress)
+                        val text = currentText()
+                        val expanded = viewModel.tryExpandAbbreviation(text)
+                        if (expanded.text != text) {
+                            viewModel.recordShortcutExpansionStat()
+                            replaceActiveText(expanded.text, expanded.cursorOffset)
+                            val undoable = viewModel.peekPendingAiUndo()
+                                ?.let { it.cursorOffset == null || it.editorUndo != null } == true
+                            gestureAlert = if (undoable) "Template Expanded! ⚡ (⌫ undoes)" else "Template Expanded! ⚡"
+                        } else {
+                            gestureAlert = "No abbreviations found to expand. ⚡"
+                        }
+                    }
+                } else if (abs(deltaX) > abs(deltaY) && abs(deltaX) > 120) {
+                    if (deltaX > 0) {
+                        gestureAlert = "Gesture: Space"
+                        onKeyPress(" ")
+                    } else {
+                        gestureAlert = "Gesture: Backspace"
+                        onDelete()
+                    }
+                } else if (abs(deltaY) > abs(deltaX) && abs(deltaY) > 120) {
+                    if (deltaY < 0) {
+                        gestureAlert = "Gesture: Show AI Actions"
+                        showGestureGuide = false
+                        viewModel.setAiToolsExpanded(true)
+                    } else {
+                        gestureAlert = "Gesture: Hide AI Actions"
+                        viewModel.setAiToolsExpanded(false)
+                    }
+                }
+            },
+            onDrag = { change, dragAmount ->
+                change.consume()
+                dragX += dragAmount.x
+                dragY += dragAmount.y
+
+                val dx = dragX
+                val dy = dragY
+                dragPreview = when {
+                    abs(dx) > 100 && abs(dy) > 100 -> {
+                        when {
+                            dx > 0 && dy < 0 -> "🌐 Release to Translate (Up-Right)"
+                            dx < 0 && dy < 0 -> "🔍 Release to Summarize (Up-Left)"
+                            dx < 0 && dy > 0 -> "🎭 Release to Analyze Tone (Down-Left)"
+                            else -> "⚡ Release to Expand Custom Shortcut (Down-Right)"
+                        }
+                    }
+                    abs(dx) > abs(dy) && abs(dx) > 120 -> {
+                        if (dx > 0) "␠ Release for Space (Right)" else "⌫ Release to Backspace (Left)"
+                    }
+                    abs(dy) > abs(dx) && abs(dy) > 120 -> {
+                        if (dy < 0) "💡 Release to Show AI Panel (Up)" else "❌ Release to Collapse (Down)"
+                    }
+                    else -> "Drawing Gesture Trail..."
+                }
+            }
+        )
+    }
     Column(
         modifier = modifier
             .fillMaxWidth()
             .background(keyboardColors.background)
             .padding(bottom = metrics.bottomPadding + navigationBarInset)
-            .pointerInput(Unit) {
-                detectDragGestures(
-                    onDragEnd = {
-                        val deltaX = dragX
-                        val deltaY = dragY
-                        dragX = 0f
-                        dragY = 0f
-                        dragPreview = null
-
-                        if (abs(deltaX) > 100 && abs(deltaY) > 100) {
-                            if (deltaX > 0 && deltaY < 0) {
-                                // Up-Right -> Translate
-                                buzz(HapticFeedbackType.LongPress)
-                                gestureAlert = "Gesture Triggered: Translating! 🌐"
-                                viewModel.translateText(aiSourceText())
-                            } else if (deltaX < 0 && deltaY < 0) {
-                                // Up-Left -> Summarize
-                                buzz(HapticFeedbackType.LongPress)
-                                gestureAlert = "Gesture Triggered: Summarizing! 🔍"
-                                viewModel.summarizeMessage(aiSourceText())
-                            } else if (deltaX < 0 && deltaY > 0) {
-                                // Down-Left -> Analyze Tone
-                                buzz(HapticFeedbackType.LongPress)
-                                gestureAlert = "Gesture Triggered: Analyzing Tone! 🎭"
-                                viewModel.analyzeTone(aiSourceText())
-                            } else {
-                                // Down-Right -> Expand Templates
-                                buzz(HapticFeedbackType.LongPress)
-                                val text = currentText()
-                                val expanded = viewModel.tryExpandAbbreviation(text)
-                                if (expanded.text != text) {
-                                    viewModel.recordShortcutExpansionStat()
-                                    replaceActiveText(expanded.text, expanded.cursorOffset)
-                                    val undoable = viewModel.peekPendingAiUndo()
-                                        ?.let { it.cursorOffset == null || it.editorUndo != null } == true
-                                    gestureAlert = if (undoable) "Template Expanded! ⚡ (⌫ undoes)" else "Template Expanded! ⚡"
-                                } else {
-                                    gestureAlert = "No abbreviations found to expand. ⚡"
-                                }
-                            }
-                        } else if (abs(deltaX) > abs(deltaY) && abs(deltaX) > 120) {
-                            if (deltaX > 0) {
-                                gestureAlert = "Gesture: Space"
-                                onKeyPress(" ")
-                            } else {
-                                gestureAlert = "Gesture: Backspace"
-                                onDelete()
-                            }
-                        } else if (abs(deltaY) > abs(deltaX) && abs(deltaY) > 120) {
-                            if (deltaY < 0) {
-                                gestureAlert = "Gesture: Show AI Actions"
-                                viewModel.setAiToolsExpanded(true)
-                            } else {
-                                gestureAlert = "Gesture: Hide AI Actions"
-                                viewModel.setAiToolsExpanded(false)
-                            }
-                        }
-                    },
-                    onDrag = { change, dragAmount ->
-                        change.consume()
-                        dragX += dragAmount.x
-                        dragY += dragAmount.y
-
-                        val dx = dragX
-                        val dy = dragY
-                        dragPreview = when {
-                            abs(dx) > 100 && abs(dy) > 100 -> {
-                                when {
-                                    dx > 0 && dy < 0 -> "🌐 Release to Translate (Up-Right)"
-                                    dx < 0 && dy < 0 -> "🔍 Release to Summarize (Up-Left)"
-                                    dx < 0 && dy > 0 -> "🎭 Release to Analyze Tone (Down-Left)"
-                                    else -> "⚡ Release to Expand Custom Shortcut (Down-Right)"
-                                }
-                            }
-                            abs(dx) > abs(dy) && abs(dx) > 120 -> {
-                                if (dx > 0) "␠ Release for Space (Right)" else "⌫ Release to Backspace (Left)"
-                            }
-                            abs(dy) > abs(dx) && abs(dy) > 120 -> {
-                                if (dy < 0) "💡 Release to Show AI Panel (Up)" else "❌ Release to Collapse (Down)"
-                            }
-                            else -> "Drawing Gesture Trail..."
-                        }
-                    }
-                )
-            }
     ) {
-        // --- LIVE GESTURE DRAWING TRAIL / PREVIEW OVERLAY ---
-        if (dragPreview != null) {
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .background(keyboardColors.accent)
-                    .padding(vertical = 4.dp),
-                contentAlignment = Alignment.Center
-            ) {
+        // Keep transient feedback in a fixed slot: inserting/removing a row moves
+        // every key while the user's next finger may already be down.
+        Box(
+            modifier = Modifier.fillMaxWidth().height(20.dp).testTag("typing_feedback"),
+            contentAlignment = Alignment.Center
+        ) {
+            gestureAlert?.let { message ->
                 Text(
-                    text = dragPreview!!,
-                    color = keyboardColors.onAccent,
-                    fontSize = 12.sp,
-                    fontWeight = FontWeight.Bold
+                    text = message,
+                    color = keyboardColors.keyActive,
+                    fontSize = 11.sp,
+                    textAlign = TextAlign.Center,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
                 )
             }
         }
-        // --- GESTURE INDICATOR ALERT OR TONE NOTIFICATION ---
-        if (gestureAlert != null) {
-            Text(
-                text = gestureAlert ?: "",
-                color = keyboardColors.keyActive,
-                fontSize = 11.sp,
-                textAlign = TextAlign.Center,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(vertical = 2.dp)
-            )
-            // auto-dismiss gesture alert quickly
-            androidx.compose.runtime.LaunchedEffect(gestureAlert) {
-                delay(1500)
-                gestureAlert = null
-            }
+        androidx.compose.runtime.LaunchedEffect(gestureAlert) {
+            val message = gestureAlert ?: return@LaunchedEffect
+            delay(1500)
+            if (gestureAlert == message) gestureAlert = null
         }
 
         // --- AI RESULTS & INTERACTIVE SHELF BAR ---
@@ -619,22 +620,20 @@ fun AgenticKeyboardLayout(
 
         // Tap a result's text to expand the shelf and read the full output
         // (plus the original it replaces) before applying. Resets per result.
-        var resultExpanded by remember(
-            grammarCorrection, summary, translation, rewrite, composeResult, continuation
-        ) { mutableStateOf(false) }
+        var resultExpanded by remember(aiPanelState) { mutableStateOf(false) }
+        fun toggleResultDetails() {
+            resultExpanded = !resultExpanded
+            if (resultExpanded) {
+                showGestureGuide = false
+                viewModel.setAiToolsExpanded(false)
+            }
+        }
 
-        Box(
+        StableAiShelf(
+            expanded = resultExpanded,
             modifier = Modifier
-                .fillMaxWidth()
-                .then(
-                    if (resultExpanded || voiceMatch != null) Modifier.heightIn(min = metrics.shelfHeight)
-                    else if (hasAiResult || isLoading) Modifier.height(metrics.shelfHeight)
-                    else Modifier.height(metrics.toolbarHeight)
-                )
-                .animateContentSize()
                 .background(keyboardColors.shelf)
-                .padding(horizontal = 8.dp, vertical = if (resultExpanded || voiceMatch != null) 8.dp else 0.dp),
-            contentAlignment = Alignment.CenterStart
+                .padding(horizontal = 8.dp, vertical = if (resultExpanded) 8.dp else 0.dp)
         ) {
             if (isLoading) {
                 Row(
@@ -692,7 +691,7 @@ fun AgenticKeyboardLayout(
                                 labelColor = keyboardColors.success,
                                 result = correction.corrected,
                                 expanded = resultExpanded,
-                                onToggle = { resultExpanded = !resultExpanded },
+                                onToggle = { toggleResultDetails() },
                                 original = correction.original,
                                 modifier = Modifier.weight(1f)
                             )
@@ -789,7 +788,7 @@ fun AgenticKeyboardLayout(
                                 labelColor = keyboardColors.labelSummary,
                                 result = summary!!,
                                 expanded = resultExpanded,
-                                onToggle = { resultExpanded = !resultExpanded },
+                                onToggle = { toggleResultDetails() },
                                 original = aiResultSource,
                                 modifier = Modifier.weight(1f)
                             )
@@ -818,7 +817,7 @@ fun AgenticKeyboardLayout(
                                 labelColor = keyboardColors.labelTranslate,
                                 result = translation!!,
                                 expanded = resultExpanded,
-                                onToggle = { resultExpanded = !resultExpanded },
+                                onToggle = { toggleResultDetails() },
                                 original = aiResultSource,
                                 modifier = Modifier.weight(1f)
                             )
@@ -847,7 +846,7 @@ fun AgenticKeyboardLayout(
                                 labelColor = keyboardColors.labelRewrite,
                                 result = rewrite!!,
                                 expanded = resultExpanded,
-                                onToggle = { resultExpanded = !resultExpanded },
+                                onToggle = { toggleResultDetails() },
                                 original = aiResultSource,
                                 modifier = Modifier.weight(1f)
                             )
@@ -877,7 +876,7 @@ fun AgenticKeyboardLayout(
                                 labelColor = keyboardColors.labelCompose,
                                 result = composeResult!!,
                                 expanded = resultExpanded,
-                                onToggle = { resultExpanded = !resultExpanded },
+                                onToggle = { toggleResultDetails() },
                                 modifier = Modifier.weight(1f)
                             )
                             Button(
@@ -906,7 +905,7 @@ fun AgenticKeyboardLayout(
                                 labelColor = keyboardColors.labelContinue,
                                 result = continuation!!,
                                 expanded = resultExpanded,
-                                onToggle = { resultExpanded = !resultExpanded },
+                                onToggle = { toggleResultDetails() },
                                 modifier = Modifier.weight(1f)
                             )
                             Button(
@@ -1151,12 +1150,23 @@ fun AgenticKeyboardLayout(
                             }
                         }
                     }
-                    voiceMatch?.let { match ->
+                    voiceMatch?.takeIf { resultExpanded }?.let { match ->
                         Spacer(modifier = Modifier.height(4.dp))
                         VoiceMatchBadge(match)
                     }
                     }
                     if (hasAiResult) {
+                        IconButton(
+                            onClick = { toggleResultDetails() },
+                            modifier = Modifier.size(28.dp).testTag("expand_result")
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.KeyboardArrowDown,
+                                contentDescription = if (resultExpanded) "Collapse AI result" else "Expand AI result",
+                                tint = keyboardColors.textMuted,
+                                modifier = Modifier.size(16.dp)
+                            )
+                        }
                         IconButton(
                             onClick = {
                                 buzz(HapticFeedbackType.TextHandleMove)
@@ -1186,7 +1196,7 @@ fun AgenticKeyboardLayout(
         val hasRefinableResult = grammarCorrection != null || summary != null || translation != null ||
             rewrite != null || composeResult != null || continuation != null
         AnimatedVisibility(
-            visible = hasRefinableResult && !isLoading,
+            visible = resultExpanded && hasRefinableResult && !isLoading,
             enter = fadeIn(),
             exit = fadeOut()
         ) {
@@ -1321,7 +1331,10 @@ fun AgenticKeyboardLayout(
                 shape = RoundedCornerShape(12.dp)
             ) {
                 Column(
-                    modifier = Modifier.padding(12.dp),
+                    modifier = Modifier
+                        .heightIn(max = if (metrics.isCompact) 100.dp else 240.dp)
+                        .verticalScroll(rememberScrollState())
+                        .padding(12.dp),
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
                     Row(
@@ -1346,6 +1359,25 @@ fun AgenticKeyboardLayout(
                                 modifier = Modifier.size(16.dp)
                             )
                         }
+                    }
+                    Spacer(modifier = Modifier.height(6.dp))
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(72.dp)
+                            .background(keyboardColors.shelf, RoundedCornerShape(8.dp))
+                            .then(commandGestureModifier)
+                            .testTag("command_gesture_pad"),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = dragPreview ?: "Draw command gestures here, away from the keys",
+                            color = keyboardColors.accent,
+                            fontSize = 12.sp,
+                            textAlign = TextAlign.Center,
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis
+                        )
                     }
                     Spacer(modifier = Modifier.height(6.dp))
                     Row(
@@ -1612,8 +1644,11 @@ fun AgenticKeyboardLayout(
                     Text(if (isSwipeToTypeEnabled) "✍️" else "⌨️", fontSize = 15.sp)
                 }
                 IconButton(
-                    onClick = { showGestureGuide = !showGestureGuide },
-                    modifier = Modifier.size(32.dp)
+                    onClick = {
+                        showGestureGuide = !showGestureGuide
+                        if (showGestureGuide) viewModel.setAiToolsExpanded(false)
+                    },
+                    modifier = Modifier.size(32.dp).testTag("toggle_gesture_guide")
                 ) {
                     Text("❓", fontSize = 14.sp)
                 }
