@@ -9,6 +9,10 @@ import androidx.compose.ui.test.isRoot
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performTouchInput
+import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollTo
+import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.onNodeWithText
 import androidx.lifecycle.ViewModelStore
 import androidx.lifecycle.viewModelScope
 import androidx.room.Room
@@ -17,6 +21,7 @@ import io.github.daddymean.agentickeyboard.db.AppDatabase
 import io.github.daddymean.agentickeyboard.db.KeyboardRepository
 import io.github.daddymean.agentickeyboard.ui.theme.MyApplicationTheme
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.flow.MutableStateFlow
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -64,11 +69,12 @@ class KeyboardTouchTargetTest {
 
     private lateinit var keys: Map<Char, Box>
 
-    private fun showKeyboard(keyHeightScale: Float) {
+    private fun showKeyboard(keyHeightScale: Float): KeyboardViewModel {
         val viewModel = KeyboardViewModel(KeyboardRepository(db))
         viewModelStore.put("keyboard", viewModel)
         viewModelJob = viewModel.viewModelScope.coroutineContext[Job]
         viewModel.onEditorStarted("com.example.app", "App", InputType.TYPE_CLASS_TEXT, 0)
+        viewModel.setSwipeEnabled(false)
         composeTestRule.setContent {
             MyApplicationTheme {
                 ProvideKeyboardMetrics(keyHeightScale = keyHeightScale) {
@@ -81,6 +87,61 @@ class KeyboardTouchTargetTest {
             val d = composeTestRule.onNodeWithTag("key_$c").getUnclippedBoundsInRoot()
             Box(d.left.value, d.top.value, d.right.value, d.bottom.value)
         }
+        return viewModel
+    }
+
+    @Suppress("UNCHECKED_CAST")
+    private fun publishPanel(viewModel: KeyboardViewModel, state: AiPanelState) {
+        // Drive the real collected state without a network request or production test API.
+        val field = KeyboardViewModel::class.java.getDeclaredField("_aiPanelState")
+        field.isAccessible = true
+        composeTestRule.runOnIdle {
+            (field.get(viewModel) as MutableStateFlow<AiPanelState>).value = state
+        }
+        composeTestRule.mainClock.advanceTimeBy(300)
+        composeTestRule.waitForIdle()
+    }
+
+    @Test
+    fun `AI loading results and dismissal keep letter targets fixed`() {
+        val viewModel = showKeyboard(1.15f)
+        val key = composeTestRule.onNodeWithTag("key_q")
+        val before = key.getUnclippedBoundsInRoot()
+        for (state in listOf(
+            AiPanelState.Loading,
+            AiPanelState.Summary("A short result", "Original synthetic test text"),
+            AiPanelState.Idle
+        )) {
+            publishPanel(viewModel, state)
+            assertEquals("$state must not move keys", before, key.getUnclippedBoundsInRoot())
+        }
+        assertEquals("q", tapAt(keys['q']!!.cx, keys['q']!!.cy))
+    }
+
+    @Test
+    fun `result details and refinement require explicit expansion`() {
+        val viewModel = showKeyboard(1.15f)
+        publishPanel(viewModel, AiPanelState.Summary("A short result", "Original synthetic test text"))
+        composeTestRule.onNodeWithTag("iterate_chips").assertDoesNotExist()
+        composeTestRule.onNodeWithTag("expand_result").performClick()
+        composeTestRule.mainClock.advanceTimeBy(300)
+        composeTestRule.onNodeWithTag("iterate_chips").assertExists()
+    }
+
+    @Test
+    @Config(sdk = [35], qualifiers = "w780dp-h360dp-land")
+    fun `expanded long results scroll without hiding compact typing controls`() {
+        val viewModel = showKeyboard(1.15f)
+        publishPanel(viewModel, AiPanelState.Summary(
+            "Synthetic result text. ".repeat(100), "Synthetic original text. ".repeat(100)
+        ))
+        composeTestRule.onNodeWithTag("expand_result").performClick()
+        composeTestRule.mainClock.advanceTimeBy(300)
+        composeTestRule.onNodeWithTag("key_space").assertIsDisplayed()
+        composeTestRule.onNodeWithTag("key_enter").assertIsDisplayed()
+        assertTrue(composeTestRule.onNodeWithTag("key_space")
+            .getUnclippedBoundsInRoot().bottom.value <= 360f)
+        composeTestRule.onNodeWithText("Was:", substring = true).performScrollTo().assertIsDisplayed()
     }
 
     /** Taps at ([xDp], [yDp]) in root coordinates; returns what was typed, lower-cased. */
@@ -121,6 +182,38 @@ class KeyboardTouchTargetTest {
         val s = keys['s']!!
         val gap = tapAt((a.r + s.l) / 2, a.cy)
         assertTrue("gap a|s typed '$gap'", gap == "a" || gap == "s")
+    }
+
+    @Test
+    fun `sliding a typing finger with swipe disabled does not start command gestures`() {
+        showKeyboard(1.15f)
+        val key = composeTestRule.onNodeWithTag("key_q")
+        val before = key.getUnclippedBoundsInRoot()
+        val density = composeTestRule.density.density
+        key.performTouchInput {
+            down(center)
+            moveBy(Offset(0f, 20f * density))
+            moveBy(Offset(0f, 20f * density))
+        }
+        composeTestRule.waitForIdle()
+        try {
+            composeTestRule.onNodeWithText("Drawing Gesture Trail...").assertDoesNotExist()
+            assertEquals("keys must not jump under a held finger", before, key.getUnclippedBoundsInRoot())
+        } finally {
+            key.performTouchInput { up() }
+        }
+        // A cancelled slide must not prevent the next ordinary tap.
+        assertEquals("q", tapAt(keys['q']!!.cx, keys['q']!!.cy))
+    }
+
+    @Test
+    fun `transient feedback does not move the letter keys`() {
+        showKeyboard(1.15f)
+        val key = composeTestRule.onNodeWithTag("key_q")
+        val before = key.getUnclippedBoundsInRoot()
+        composeTestRule.onNodeWithTag("key_privacy_toggle").performClick()
+        composeTestRule.waitForIdle()
+        assertEquals("feedback must not resize the keyboard", before, key.getUnclippedBoundsInRoot())
     }
 
     @Test
