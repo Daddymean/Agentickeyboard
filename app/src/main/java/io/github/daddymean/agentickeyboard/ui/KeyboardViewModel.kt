@@ -34,6 +34,7 @@ import io.github.daddymean.agentickeyboard.util.TextExpansion
 import io.github.daddymean.agentickeyboard.util.VoiceMatchScorer
 import io.github.daddymean.agentickeyboard.util.VoiceSample
 import io.github.daddymean.agentickeyboard.util.VoiceVocabulary
+import io.github.daddymean.agentickeyboard.util.wordCount
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.Dispatchers
@@ -1196,7 +1197,7 @@ class KeyboardViewModel(
                         originalText = text,
                         sentiment = "Corrected",
                         toneScore = 0.9f,
-                        wordCount = text.split(WHITESPACE_REGEX).size
+                        wordCount = text.wordCount()
                     )
                 )
             } catch (e: CancellationException) {
@@ -1540,7 +1541,7 @@ class KeyboardViewModel(
                         originalText = text,
                         sentiment = result.sentiment,
                         toneScore = result.toneScore,
-                        wordCount = text.split(WHITESPACE_REGEX).size
+                        wordCount = text.wordCount()
                     )
                 )
             } catch (e: CancellationException) {
@@ -1666,7 +1667,7 @@ class KeyboardViewModel(
                         originalText = item.text,
                         sentiment = item.sentiment,
                         toneScore = item.toneScore,
-                        wordCount = item.text.split(WHITESPACE_REGEX).size,
+                        wordCount = item.text.wordCount(),
                         timestamp = if (item.timestamp > 0) item.timestamp else System.currentTimeMillis()
                     )
                 }
