@@ -1,6 +1,5 @@
 *.iml
 .gradle
-.kotlin
 /local.properties
 /.idea/caches
 /.idea/libraries
@@ -10,13 +9,14 @@
 /.idea/assetWizardSettings.xml
 .DS_Store
 /build
-# Module build output. app/ has its own .gitignore; core/ does not.
-/core/build
 /captures
 .externalNativeBuild
 .cxx
 local.properties
 .env
-
-__pycache__/
-*.pyc
+app/src/test/resources/context/
+build/
+app/build/
+context-app/build/
+core/build/
+**/build/
