@@ -34,8 +34,14 @@ class TwinPreferences(context: Context) {
         get() = prefs.getInt(KEY_SIZE_TIER, 0)
         set(value) = prefs.edit().putInt(KEY_SIZE_TIER, value).apply()
 
+    /** KEYBOARD-042: apps (package names) the twin never learns in, e.g. banking apps that block screenshots. */
+    var secureApps: Set<String>
+        get() = prefs.getStringSet(KEY_SECURE_APPS, null)?.toSet() ?: emptySet()
+        set(value) = prefs.edit().putStringSet(KEY_SECURE_APPS, value.map { it.trim() }.filter { it.isNotEmpty() }.toSet()).apply()
+
     companion object {
         const val PREFS = "twin_settings"
+        const val KEY_SECURE_APPS = "twin_secure_apps"
         const val KEY_ENABLED = "twin_enabled"
         const val KEY_PAUSED = "twin_paused"
         const val KEY_LOW_STORAGE = "twin_low_storage_paused"
