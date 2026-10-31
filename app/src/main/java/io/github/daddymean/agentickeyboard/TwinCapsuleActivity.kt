@@ -1,5 +1,7 @@
 package io.github.daddymean.agentickeyboard
 
+import io.github.daddymean.agentickeyboard.twin.TwinAction
+import io.github.daddymean.agentickeyboard.twin.TwinActionGate
 import android.Manifest
 import android.app.Activity
 import android.app.AlertDialog
@@ -71,9 +73,9 @@ class TwinCapsuleActivity : Activity() {
             for (c in all) {
                 text("${c.kid} · ${c.title}\nOpens ${c.unlock.describe()} · ${c.audio.size} recordings · made ${date(c.createdAtMillis)}", 15f)
                 button("Delete") {
-                    AlertDialog.Builder(this@TwinCapsuleActivity).setMessage("Delete \"${c.title}\" for ${c.kid}? It can't be recovered.")
-                        .setPositiveButton("Delete") { _, _ -> scope.launch { TwinLearning.onWorker { TwinVault.capsules(this@TwinCapsuleActivity).delete(c.id) }; home() } }
-                        .setNegativeButton("Cancel", null).show()
+                    TwinActionGate.run(this@TwinCapsuleActivity, TwinAction.DELETE_CAPSULE, "Delete \"${c.title}\" for ${c.kid}? It can't be recovered.") {
+                        scope.launch { TwinLearning.onWorker { TwinVault.capsules(this@TwinCapsuleActivity).delete(c.id) }; home() }
+                    }
                 }
             }
         }
@@ -106,7 +108,7 @@ class TwinCapsuleActivity : Activity() {
             }
         }
         root.addView(rec)
-        button("Seal it") {
+        button("Seal it", TwinAction.SEAL_CAPSULE) {
             if (recorder.isRecording) { toast("Stop the recording first."); return@button }
             val unlock = runCatching {
                 when {
@@ -141,7 +143,11 @@ class TwinCapsuleActivity : Activity() {
     }
 
     private fun text(t: String, size: Float) = TextView(this).apply { textSize = size; text = t; setPadding(0, pad / 4, 0, pad / 4) }.also(root::addView)
-    private fun button(t: String, onClick: () -> Unit) = Button(this).apply { text = t; setOnClickListener { onClick() } }.also(root::addView)
+    /** KEYBOARD-043: with an [action], the click goes through the twin action policy first. */
+    private fun button(t: String, action: TwinAction? = null, onClick: () -> Unit) = Button(this).apply {
+        text = t
+        setOnClickListener { if (action == null) onClick() else TwinActionGate.run(this@TwinCapsuleActivity, action, onAllowed = onClick) }
+    }.also(root::addView)
     private fun row(vararg buttons: Pair<String, () -> Unit>) {
         val r = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
         buttons.forEach { (label, f) -> r.addView(Button(this).apply { text = label; setOnClickListener { f() } }) }

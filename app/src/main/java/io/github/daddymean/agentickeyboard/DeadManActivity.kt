@@ -1,5 +1,7 @@
 package io.github.daddymean.agentickeyboard
 
+import io.github.daddymean.agentickeyboard.twin.TwinAction
+import io.github.daddymean.agentickeyboard.twin.TwinActionGate
 import android.app.Activity
 import android.app.AlertDialog
 import android.content.Intent
@@ -130,7 +132,7 @@ class DeadManActivity : Activity() {
             s.holders.joinToString { it.label } + ". Recipients: Kid 1–6.", 15f)
         button("Replace a key holder") { replaceScreen(s) }
         button("Reissue all share cards (a card was lost)") {
-            confirm("This makes new cards for all three holders. Old cards and old key files stop matching; " +
+            TwinActionGate.run(this@DeadManActivity, TwinAction.REISSUE_SHARE_CARDS, "This makes new cards for all three holders. Old cards and old key files stop matching; " +
                 "give everyone their new card and replace the key file next to the archive.") {
                 scope.launch {
                     runCatching { TwinLearning.onWorker { controller.reissue(LocalDate.now()) } }
@@ -138,7 +140,7 @@ class DeadManActivity : Activity() {
                 }
             }
         }
-        if (!s.needsNewCards) button("Save a new release archive and its key file to this phone…") { pickFolder(REQUEST_ARCHIVE) }
+        if (!s.needsNewCards) button("Save a new release archive and its key file to this phone…", TwinAction.SAVE_RELEASE_ARCHIVE) { pickFolder(REQUEST_ARCHIVE) }
     }
 
     private fun iamScreen(s: DeadManState) {
@@ -173,7 +175,7 @@ class DeadManActivity : Activity() {
             text("The key holders changed: add the new holder as a contact in Google Inactive Account Manager (and remove " +
                 "the old one), then confirm the Google trigger again.", 14f)
         }
-        button("Save the cards and the key file to a folder on this phone…") { pickFolder(REQUEST_CARDS) }
+        button("Save the cards and the key file to a folder on this phone…", TwinAction.SAVE_SHARE_CARDS) { pickFolder(REQUEST_CARDS) }
         text("To confirm you have copied every card, type the last 8 characters of each one (after its last dash):", 14f)
         val checks = r.cards.map { (h, _) ->
             EditText(this).apply {
@@ -201,7 +203,7 @@ class DeadManActivity : Activity() {
         title("Replace a key holder")
         text("Choose who to replace. A kid can hold a key from their 18th birthday. Every holder gets a new card; " +
             "the archive stays as it is.", 14f)
-        for (h in s.holders) button("Replace ${h.label}") {
+        for (h in s.holders) button("Replace ${h.label}", TwinAction.REPLACE_KEY_HOLDER) {
             clear()
             title("Replace ${h.label} with…")
             val used = s.holders.map { it.label }.toSet() - h.label
@@ -316,11 +318,12 @@ class DeadManActivity : Activity() {
     private fun selectable(t: String) = TextView(this).apply {
         textSize = 14f; typeface = Typeface.MONOSPACE; text = t; setTextIsSelectable(true); setPadding(0, pad / 4, 0, pad / 4)
     }.also(root::addView)
-    private fun button(t: String, onClick: () -> Unit) = Button(this).apply { text = t; setOnClickListener { onClick() } }.also(root::addView)
+    /** KEYBOARD-043: with an [action], the click goes through the twin action policy first. */
+    private fun button(t: String, action: TwinAction? = null, onClick: () -> Unit) = Button(this).apply {
+        text = t
+        setOnClickListener { if (action == null) onClick() else TwinActionGate.run(this@DeadManActivity, action, onAllowed = onClick) }
+    }.also(root::addView)
     private fun toast(t: String) = android.widget.Toast.makeText(this, t, android.widget.Toast.LENGTH_LONG).show()
-    private fun confirm(message: String, ok: () -> Unit) {
-        AlertDialog.Builder(this).setMessage(message).setPositiveButton("Continue") { _, _ -> ok() }.setNegativeButton("Cancel", null).show()
-    }
 
     companion object {
         private const val TAG = "DeadMan"

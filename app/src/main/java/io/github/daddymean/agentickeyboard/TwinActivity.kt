@@ -94,6 +94,21 @@ class TwinActivity : Activity() {
             text = "Save app list"
             setOnClickListener { prefs.secureApps = secureApps.text.split('\n', ',').toSet() }
         })
+        // KEYBOARD-043: remembered "don't ask again" twin actions, each revocable.
+        layout.addView(TextView(this).apply { textSize = 18f; text = "Twin actions you allowed without asking" })
+        val grants = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        layout.addView(grants)
+        fun showGrants() {
+            grants.removeAllViews()
+            val policy = io.github.daddymean.agentickeyboard.twin.TwinActionPolicy.of(this@TwinActivity)
+            val remembered = policy.remembered()
+            if (remembered.isEmpty()) grants.addView(TextView(this@TwinActivity).apply { textSize = 14f; text = "None. Saving exports, archives and share cards always asks." })
+            for (a in remembered) grants.addView(Button(this@TwinActivity).apply {
+                text = "Ask again before: ${a.label}"
+                setOnClickListener { policy.revoke(a); showGrants() }
+            })
+        }
+        showGrants()
         status = TextView(this).apply { textSize = 15f; setPadding(0, pad / 2, 0, pad / 2) }
         layout.addView(status)
         layout.addView(TextView(this).apply { textSize = 18f; text = "Your writing style" })
