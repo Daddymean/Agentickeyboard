@@ -76,6 +76,13 @@ class TwinActivity : Activity() {
         })
         layout.addView(switch("Learn for my twin", prefs.isEnabled) { _, on -> prefs.isEnabled = on; refresh() })
         layout.addView(switch("Pause twin learning", prefs.isPaused) { _, on -> prefs.isPaused = on; refresh() })
+        // KEYBOARD-044: optional floating quick-ask bubble (off by default; needs "Display over other apps").
+        layout.addView(switch("Quick-ask bubble while typing (hidden in private fields; reads nothing on screen)", prefs.isBubbleEnabled) { _, on ->
+            prefs.isBubbleEnabled = on
+            if (on && !android.provider.Settings.canDrawOverlays(this)) {
+                startActivity(android.content.Intent(android.provider.Settings.ACTION_MANAGE_OVERLAY_PERMISSION, android.net.Uri.parse("package:$packageName")))
+            }
+        })
         // KEYBOARD-042: apps the twin never learns in (a keyboard cannot see another app's FLAG_SECURE).
         layout.addView(TextView(this).apply { textSize = 15f; text = "Never learn in these apps (package names, one per line), e.g. banking apps:" })
         val secureApps = android.widget.EditText(this).apply {

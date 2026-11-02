@@ -63,6 +63,7 @@ import io.github.daddymean.agentickeyboard.util.commitInserted
 import io.github.daddymean.agentickeyboard.util.commitTyped
 import io.github.daddymean.agentickeyboard.twin.TwinCaptureSession
 import io.github.daddymean.agentickeyboard.twin.TwinPrivacyFilter
+import io.github.daddymean.agentickeyboard.twin.TwinBubblePolicy
 import io.github.daddymean.agentickeyboard.twin.TwinLearning
 import io.github.daddymean.agentickeyboard.twin.TwinPreferences
 import io.github.daddymean.agentickeyboard.twin.TwinTextWindow
@@ -850,11 +851,32 @@ class AgenticKeyboardService : InputMethodService(), LifecycleOwner, ViewModelSt
         super.onStartInputView(info, restarting)
         inputViewShown = true
         scheduleIncomingMood()
+        updateQuickAskBubble()
+    }
+
+    // --- KEYBOARD-044: optional quick-ask bubble -------------------------------------
+    private val quickAskBubble by lazy { TwinQuickAskBubble(this) }
+
+    private fun updateQuickAskBubble() {
+        val enabled = twinPrefs.isBubbleEnabled
+        if (!enabled) { quickAskBubble.hide(); return }
+        quickAskBubble.setVisible(
+            TwinBubblePolicy.visible(
+                TwinBubblePolicy.State(
+                    enabled = true,
+                    overlayGranted = quickAskBubble.canDraw(),
+                    keyboardShown = inputViewShown,
+                    sensitiveField = viewModel.isSensitiveField.value,
+                    twinFieldBlocked = twinFieldBlocked
+                )
+            )
+        )
     }
 
     override fun onFinishInputView(finishingInput: Boolean) {
         inputViewShown = false
         clearIncomingMood()
+        quickAskBubble.hide()
         super.onFinishInputView(finishingInput)
     }
 
@@ -863,6 +885,7 @@ class AgenticKeyboardService : InputMethodService(), LifecycleOwner, ViewModelSt
         clearIncomingMood()
         clearConversationContext()
         lifecycleRegistry.handleLifecycleEvent(Lifecycle.Event.ON_PAUSE)
+        quickAskBubble.hide()
         super.onWindowHidden()
     }
 
@@ -874,6 +897,7 @@ class AgenticKeyboardService : InputMethodService(), LifecycleOwner, ViewModelSt
         clearIncomingMood()
         clipboardStatus.value = null
         lifecycleRegistry.handleLifecycleEvent(Lifecycle.Event.ON_STOP)
+        quickAskBubble.hide()
         super.onFinishInput()
     }
 
@@ -882,6 +906,7 @@ class AgenticKeyboardService : InputMethodService(), LifecycleOwner, ViewModelSt
         clearIncomingMood()
         viewModel.setReplyContextValidator(null)
         lifecycleRegistry.handleLifecycleEvent(Lifecycle.Event.ON_DESTROY)
+        quickAskBubble.hide()
         serviceScope.cancel()
         store.clear()
         // Flushes queued notes (bounded) and unbinds in the background.

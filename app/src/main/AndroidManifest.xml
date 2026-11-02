@@ -6,6 +6,8 @@
     <!-- KEYBOARD-025: voice answers in the legacy-twin journal. Requested only on the
          first Record tap, after an explanation; used only while the journal is open. -->
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
+    <!-- KEYBOARD-044: optional quick-ask bubble, off by default, granted by Keith in system settings. -->
+    <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
 
     <application
         android:name=".AgenticKeyboardApplication"

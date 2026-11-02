@@ -59,7 +59,7 @@ class TwinMemoryActivity : Activity() {
         window.setFlags(WindowManager.LayoutParams.FLAG_SECURE, WindowManager.LayoutParams.FLAG_SECURE)
         root = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(pad, pad, pad, pad) }
         setContentView(ScrollView(this).apply { addView(root) })
-        scope.launch { reload(); home() }
+        scope.launch { reload(); if (intent?.getBooleanExtra(EXTRA_OPEN_ASK, false) == true) whoIsAsking() else home() }
     }
 
     override fun onDestroy() {
@@ -358,6 +358,8 @@ class TwinMemoryActivity : Activity() {
     private fun date(ms: Long) = DateFormat.format("yyyy-MM-dd", Date(ms)).toString()
 
     companion object {
+        /** KEYBOARD-044: opened from the quick-ask bubble, go straight to "Ask the twin". */
+        const val EXTRA_OPEN_ASK = "open_ask"
         private const val TAG = "TwinMemory"
         const val NOTICE =
             "Your twin answers only from memories you approve, plus your two core memories. Every answer shows where it " +

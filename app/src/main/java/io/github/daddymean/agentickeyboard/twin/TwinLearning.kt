@@ -39,8 +39,14 @@ class TwinPreferences(context: Context) {
         get() = prefs.getStringSet(KEY_SECURE_APPS, null)?.toSet() ?: emptySet()
         set(value) = prefs.edit().putStringSet(KEY_SECURE_APPS, value.map { it.trim() }.filter { it.isNotEmpty() }.toSet()).apply()
 
+    /** KEYBOARD-044: the floating quick-ask bubble; off by default. */
+    var isBubbleEnabled: Boolean
+        get() = prefs.getBoolean(KEY_BUBBLE, TwinBubblePolicy.DEFAULT_ENABLED)
+        set(value) = prefs.edit().putBoolean(KEY_BUBBLE, value).apply()
+
     companion object {
         const val PREFS = "twin_settings"
+        const val KEY_BUBBLE = "twin_quick_ask_bubble"
         const val KEY_SECURE_APPS = "twin_secure_apps"
         const val KEY_ENABLED = "twin_enabled"
         const val KEY_PAUSED = "twin_paused"
