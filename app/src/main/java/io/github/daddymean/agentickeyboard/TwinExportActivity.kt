@@ -1,5 +1,7 @@
 package io.github.daddymean.agentickeyboard
 
+import io.github.daddymean.agentickeyboard.twin.TwinAction
+import io.github.daddymean.agentickeyboard.twin.TwinActionGate
 import android.app.Activity
 import android.app.AlertDialog
 import android.content.Intent
@@ -58,7 +60,7 @@ class TwinExportActivity : Activity() {
         second = passphraseField("Type it again")
         layout.addView(first)
         layout.addView(second)
-        export = Button(this).apply { text = "Choose where to save on this phone…"; setOnClickListener { start() } }
+        export = Button(this).apply { text = "Choose where to save on this phone…"; setOnClickListener { TwinActionGate.run(this@TwinExportActivity, TwinAction.EXPORT) { start() } } }
         layout.addView(export)
         status = TextView(this).apply { textSize = 15f; setPadding(0, pad / 2, 0, 0) }
         layout.addView(status)
