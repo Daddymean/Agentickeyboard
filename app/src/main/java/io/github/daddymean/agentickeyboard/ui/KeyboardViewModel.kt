@@ -44,6 +44,8 @@ import io.github.daddymean.agentickeyboard.util.LearnedRuleFilter
 import io.github.daddymean.agentickeyboard.util.LocalSpelling
 import io.github.daddymean.agentickeyboard.util.TapTrail
 import io.github.daddymean.agentickeyboard.util.TouchCalibration
+import io.github.daddymean.agentickeyboard.util.lastWordOrNull
+import io.github.daddymean.agentickeyboard.util.wordCount
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -1036,7 +1038,7 @@ class KeyboardViewModel(
                     })
                 }
                 activeText.last().isWhitespace() -> {
-                    val previous = activeText.trim().split(WHITESPACE_REGEX).lastOrNull()
+                    val previous = activeText.lastWordOrNull()
                         ?.replace(NON_ALPHA_REGEX, "")?.lowercase().orEmpty()
                     _predictiveSuggestions.value = PredictionChip.unbound(if (previous.length >= 2) {
                         repository.nextWords(previous, 3)
@@ -1045,7 +1047,7 @@ class KeyboardViewModel(
                     })
                 }
                 else -> {
-                    val sourceWord = activeText.split(WHITESPACE_REGEX).lastOrNull().orEmpty()
+                    val sourceWord = activeText.lastWordOrNull().orEmpty()
                     val lastWord = sourceWord.lowercase()
                     val completions = if (lastWord.isNotEmpty()) {
                         val personal = topVocabulary.value.map { it.word }
@@ -1196,7 +1198,7 @@ class KeyboardViewModel(
                         originalText = text,
                         sentiment = "Corrected",
                         toneScore = 0.9f,
-                        wordCount = text.split(WHITESPACE_REGEX).size
+                        wordCount = text.wordCount()
                     )
                 )
             } catch (e: CancellationException) {
@@ -1540,7 +1542,7 @@ class KeyboardViewModel(
                         originalText = text,
                         sentiment = result.sentiment,
                         toneScore = result.toneScore,
-                        wordCount = text.split(WHITESPACE_REGEX).size
+                        wordCount = text.wordCount()
                     )
                 )
             } catch (e: CancellationException) {
@@ -1666,7 +1668,7 @@ class KeyboardViewModel(
                         originalText = item.text,
                         sentiment = item.sentiment,
                         toneScore = item.toneScore,
-                        wordCount = item.text.split(WHITESPACE_REGEX).size,
+                        wordCount = item.text.wordCount(),
                         timestamp = if (item.timestamp > 0) item.timestamp else System.currentTimeMillis()
                     )
                 }

@@ -13,6 +13,7 @@ import com.squareup.moshi.Moshi
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import io.github.daddymean.agentickeyboard.util.wordCount
 
 object GeminiManager {
     private const val TAG = "GeminiManager"
@@ -155,7 +156,7 @@ object GeminiManager {
      * Summarizes long input message text.
      */
     suspend fun summarizeMessage(text: String, personalizationContext: String = "", bypassCache: Boolean = false, cacheResponse: Boolean = true): String = withContext(Dispatchers.IO) {
-        if (text.trim().split(WHITESPACE_REGEX).size < 10) {
+        if (text.wordCount() < 10) {
             return@withContext "Message is too short to summarize."
         }
 
