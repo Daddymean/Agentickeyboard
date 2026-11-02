@@ -76,6 +76,17 @@ class TwinActivity : Activity() {
         })
         layout.addView(switch("Learn for my twin", prefs.isEnabled) { _, on -> prefs.isEnabled = on; refresh() })
         layout.addView(switch("Pause twin learning", prefs.isPaused) { _, on -> prefs.isPaused = on; refresh() })
+        // KEYBOARD-042: apps the twin never learns in (a keyboard cannot see another app's FLAG_SECURE).
+        layout.addView(TextView(this).apply { textSize = 15f; text = "Never learn in these apps (package names, one per line), e.g. banking apps:" })
+        val secureApps = android.widget.EditText(this).apply {
+            setText(prefs.secureApps.sorted().joinToString("\n"))
+            imeOptions = android.view.inputmethod.EditorInfo.IME_FLAG_NO_PERSONALIZED_LEARNING
+        }
+        layout.addView(secureApps)
+        layout.addView(Button(this).apply {
+            text = "Save app list"
+            setOnClickListener { prefs.secureApps = secureApps.text.split('\n', ',').toSet() }
+        })
         status = TextView(this).apply { textSize = 15f; setPadding(0, pad / 2, 0, pad / 2) }
         layout.addView(status)
         layout.addView(TextView(this).apply { textSize = 18f; text = "Your writing style" })

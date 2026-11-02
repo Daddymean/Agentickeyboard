@@ -62,6 +62,7 @@ import io.github.daddymean.agentickeyboard.util.commitTextWithCaret
 import io.github.daddymean.agentickeyboard.util.commitInserted
 import io.github.daddymean.agentickeyboard.util.commitTyped
 import io.github.daddymean.agentickeyboard.twin.TwinCaptureSession
+import io.github.daddymean.agentickeyboard.twin.TwinPrivacyFilter
 import io.github.daddymean.agentickeyboard.twin.TwinLearning
 import io.github.daddymean.agentickeyboard.twin.TwinPreferences
 import io.github.daddymean.agentickeyboard.twin.TwinTextWindow
@@ -703,8 +704,22 @@ class AgenticKeyboardService : InputMethodService(), LifecycleOwner, ViewModelSt
         twinEnabled = twinPrefs.isEnabled,
         twinPaused = twinPrefs.isPaused,
         learningPaused = settings.isLearningPaused,
-        sensitiveField = viewModel.isSensitiveField.value
+        sensitiveField = viewModel.isSensitiveField.value || twinFieldBlocked
     )
+
+    /** KEYBOARD-042: the current field fails the twin's stricter filter; true until a field is known. */
+    private var twinFieldBlocked = true
+
+    private fun twinFieldBlocked(info: EditorInfo?): Boolean {
+        if (info == null) return true
+        val field = TwinPrivacyFilter.Field(
+            inputType = info.inputType,
+            imeOptions = info.imeOptions,
+            hints = listOf(info.hintText?.toString(), info.label?.toString(), info.fieldName, info.privateImeOptions),
+            packageName = info.packageName
+        )
+        return TwinPrivacyFilter.blocksCapture(field, twinPrefs.secureApps, ownPackage = packageName)
+    }
 
     /**
      * The text the twin sees: the normal 1,000-character window, or up to
@@ -788,6 +803,7 @@ class AgenticKeyboardService : InputMethodService(), LifecycleOwner, ViewModelSt
             info?.imeOptions ?: 0
         )
         refreshClipboardSettings()
+        twinFieldBlocked = twinFieldBlocked(info)
         if (!restarting) {
             // KEYBOARD-024: a new field. Whatever it already holds was not typed here.
             startTwinSession(info)
