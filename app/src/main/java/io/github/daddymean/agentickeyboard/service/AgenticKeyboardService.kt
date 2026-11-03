@@ -17,6 +17,10 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
+import androidx.compose.foundation.layout.padding
+import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.platform.ComposeView
 import androidx.compose.ui.platform.LocalDensity
@@ -221,6 +225,19 @@ class AgenticKeyboardService : InputMethodService(), LifecycleOwner, ViewModelSt
                             onMatchTone = { matchToneForDraft() },
                             onDismiss = { clearIncomingMood() }
                         )
+                    }
+                    // Haggle mode (opt-in): counter ideas from Flip medians. Shown only; never inserted or sent.
+                    if (!sensitiveField && draftText.isNotBlank()) {
+                        viewModel.haggleAdviceFor(draftText)?.let { advice ->
+                            androidx.compose.material3.Text(
+                                "💬 Counter ideas: " + advice.counters.joinToString(" / ") {
+                                    io.github.daddymean.agentickeyboard.util.HaggleAdvisor.money(it)
+                                } + " · " + advice.summary,
+                                fontSize = 11.sp,
+                                maxLines = 2,
+                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 2.dp).testTag("haggle_hint")
+                            )
+                        }
                     }
                     if (aiToolsExpanded && !sensitiveField) {
                         ConversationContextBar(
