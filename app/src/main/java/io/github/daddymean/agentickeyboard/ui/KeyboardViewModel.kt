@@ -553,8 +553,28 @@ class KeyboardViewModel(
      * password/secure fields and incognito editors (IME_FLAG_NO_PERSONALIZED_LEARNING)
      * and restores the persona last used in this app.
      */
+    fun isToneMirrorOutgoing(): Boolean = settings?.isToneMirrorOutgoing ?: false
+    fun isToneMirrorIncoming(): Boolean = settings?.isToneMirrorIncoming ?: false
+    fun setToneMirrorOutgoing(on: Boolean) { settings?.isToneMirrorOutgoing = on }
+    fun setToneMirrorIncoming(on: Boolean) { settings?.isToneMirrorIncoming = on }
+
+    private var editorInputType = 0
+    private var editorImeOptions = 0
+
+    /**
+     * Tone mirror hint for Keith's own draft: null unless the opt-in toggle is on and the
+     * editor is not sensitive. Rule-based on the phone; the draft is not stored.
+     */
+    fun toneHintFor(draft: String): io.github.daddymean.agentickeyboard.util.ToneMirror.Hint? {
+        val on = settings?.isToneMirrorOutgoing ?: false
+        if (!io.github.daddymean.agentickeyboard.util.ToneMirror.allowed(on, editorInputType, editorImeOptions)) return null
+        return io.github.daddymean.agentickeyboard.util.ToneMirror.outgoingHint(draft)
+    }
+
     fun onEditorStarted(packageName: String?, appLabel: String = "", inputType: Int, imeOptions: Int = 0) {
         _isSensitiveField.value = EditorPrivacy.isSensitiveEditor(inputType, imeOptions)
+        editorInputType = inputType
+        editorImeOptions = imeOptions
         activeAppPackage = packageName
         activeAppLabel = appLabel
         previousCommittedWord = null

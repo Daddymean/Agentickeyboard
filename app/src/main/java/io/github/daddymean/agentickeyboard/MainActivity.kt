@@ -1102,6 +1102,20 @@ fun ExportTab(viewModel: KeyboardViewModel) {
                         checked = isAutoFix,
                         onCheckedChange = { viewModel.setAutoFixEnabled(it) }
                     )
+                    var toneOut by remember { mutableStateOf(viewModel.isToneMirrorOutgoing()) }
+                    var toneIn by remember { mutableStateOf(viewModel.isToneMirrorIncoming()) }
+                    SettingSwitchRow(
+                        title = "Tone mirror: my drafts",
+                        description = "Shows how your draft may land (curt, warm, pushy) before you send. Checked on this phone; never in password or incognito fields.",
+                        checked = toneOut,
+                        onCheckedChange = { toneOut = it; viewModel.setToneMirrorOutgoing(it) }
+                    )
+                    SettingSwitchRow(
+                        title = "Tone mirror: pressure flags",
+                        description = "Flags false choices, assumed yeses and fake urgency in their last message. Uses the same allowed-app read as the mood badge. Off by default.",
+                        checked = toneIn,
+                        onCheckedChange = { toneIn = it; viewModel.setToneMirrorIncoming(it) }
+                    )
                     SettingSwitchRow(
                         title = "Number row",
                         description = "Show a dedicated 1-0 row above the letters.",

@@ -16,11 +16,13 @@ import io.github.daddymean.agentickeyboard.ui.theme.KeyboardTheme
 import io.github.daddymean.agentickeyboard.ui.theme.LocalKeyboardColors
 import io.github.daddymean.agentickeyboard.util.IncomingMoodSession
 import io.github.daddymean.agentickeyboard.util.ToneMatch
+import io.github.daddymean.agentickeyboard.util.ToneMirror
 
 /** KEYBOARD-022: a small strip with the estimated mood of their latest message. */
 @Composable
 fun IncomingMoodBadge(
     badge: IncomingMoodSession.Badge,
+    pressure: List<ToneMirror.Pressure> = emptyList(),
     themeOverride: String,
     hasDraft: Boolean,
     onMatchTone: (ToneMatch.Target) -> Unit,
@@ -35,7 +37,7 @@ fun IncomingMoodBadge(
         Surface(color = colors.shelf, modifier = Modifier.fillMaxWidth().testTag("incoming_mood_badge")) {
             Row(Modifier.padding(horizontal = 10.dp), verticalAlignment = Alignment.CenterVertically) {
                 Text(
-                    moodBadgeText(badge),
+                    moodBadgeText(badge, pressure),
                     color = colors.text, fontSize = 12.sp, maxLines = 1,
                     modifier = Modifier.weight(1f)
                 )
@@ -52,5 +54,7 @@ fun IncomingMoodBadge(
     }
 }
 
-internal fun moodBadgeText(badge: IncomingMoodSession.Badge): String =
-    "Their last message: ${badge.mood.emoji} ${badge.mood.label} · estimated on this phone"
+internal fun moodBadgeText(badge: IncomingMoodSession.Badge, pressure: List<ToneMirror.Pressure> = emptyList()): String =
+    "Their last message: ${badge.mood.emoji} ${badge.mood.label}" +
+        (if (pressure.isEmpty()) "" else " · 🛡️ " + pressure.joinToString(", ") { it.label }) +
+        " · estimated on this phone"

@@ -17,6 +17,10 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
+import androidx.compose.foundation.layout.padding
+import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.platform.ComposeView
 import androidx.compose.ui.platform.LocalDensity
@@ -113,6 +117,8 @@ class AgenticKeyboardService : InputMethodService(), LifecycleOwner, ViewModelSt
     // KEYBOARD-022: only the estimated mood and its deadline; never message text.
     private val incomingMood = IncomingMoodSession()
     private val moodBadge = MutableStateFlow<IncomingMoodSession.Badge?>(null)
+    /** Tone mirror pressure flags for the same message (labels only, never the text). */
+    private val pressureFlags = MutableStateFlow<List<io.github.daddymean.agentickeyboard.util.ToneMirror.Pressure>>(emptyList())
     private var moodJob: Job? = null
     private var inputViewShown = false
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
@@ -213,14 +219,29 @@ class AgenticKeyboardService : InputMethodService(), LifecycleOwner, ViewModelSt
             ProvideKeyboardMetrics(keyHeightScale) {
                 Column {
                     TrustPrismBanner(viewModel)
+                    val pressure by pressureFlags.collectAsState()
                     mood?.takeIf { !sensitiveField }?.let { badge ->
                         IncomingMoodBadge(
                             badge = badge,
+                            pressure = pressure,
                             themeOverride = themeOverride,
                             hasDraft = draftText.isNotBlank(),
                             onMatchTone = { matchToneForDraft() },
                             onDismiss = { clearIncomingMood() }
                         )
+                    }
+                    // Tone mirror (opt-in): how the draft will likely land. A hint only; nothing is changed or sent.
+                    if (!sensitiveField && draftText.isNotBlank()) {
+                        viewModel.toneHintFor(draftText)
+                            ?.takeIf { it.tone != io.github.daddymean.agentickeyboard.util.ToneMirror.Tone.NEUTRAL }
+                            ?.let { hint ->
+                                androidx.compose.material3.Text(
+                                    "✍️ ${hint.tone.label}" + if (hint.reason.isNotEmpty()) " · ${hint.reason}" else "",
+                                    fontSize = 11.sp,
+                                    maxLines = 1,
+                                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 2.dp).testTag("tone_mirror_hint")
+                                )
+                            }
                     }
                     if (aiToolsExpanded && !sensitiveField) {
                         ConversationContextBar(
@@ -404,17 +425,26 @@ class AgenticKeyboardService : InputMethodService(), LifecycleOwner, ViewModelSt
                 )) return@launch
             // Read and score off the main thread so opening the keyboard never waits on it;
             // the text stays inside this block and only the mood comes back.
-            val mood = withContext(Dispatchers.Default) {
-                ConversationCaptureService.latestIncoming(target)?.let { IncomingSentiment.score(it) }
+            val pressureOn = io.github.daddymean.agentickeyboard.util.ToneMirror.allowed(
+                settings.isToneMirrorIncoming,
+                currentInputEditorInfo?.inputType ?: 0,
+                currentInputEditorInfo?.imeOptions ?: 0
+            )
+            val (mood, pressure) = withContext(Dispatchers.Default) {
+                val text = ConversationCaptureService.latestIncoming(target)
+                (text?.let { IncomingSentiment.score(it) }) to
+                    (if (pressureOn && text != null) io.github.daddymean.agentickeyboard.util.ToneMirror.pressureFlags(text) else emptyList())
             }
             // The field or screen may have changed while reading: re-check before showing.
             if (!inputViewShown || viewModel.isSensitiveField.value ||
                 currentInputEditorInfo?.packageName != target) return@launch
             val badge = incomingMood.set(mood, SystemClock.elapsedRealtime())
+            pressureFlags.value = if (badge != null) pressure else emptyList()
             moodBadge.value = badge
             if (badge != null) {
                 delay(VisibleContextPolicy.TTL_MS)
                 incomingMood.clear()
+                pressureFlags.value = emptyList()
                 moodBadge.value = null
             }
         }
