@@ -23,6 +23,7 @@ import io.github.daddymean.agentickeyboard.util.CommandPalette
 import io.github.daddymean.agentickeyboard.util.CommittedEditUndo
 import io.github.daddymean.agentickeyboard.util.ContextNotes
 import io.github.daddymean.agentickeyboard.util.KeyboardSettings
+import io.github.daddymean.agentickeyboard.util.ProjectGlossary
 import io.github.daddymean.agentickeyboard.util.mastery.KeyboardMastery
 import io.github.daddymean.agentickeyboard.util.mastery.MasteryEvent
 import io.github.daddymean.agentickeyboard.util.mastery.MasteryState
@@ -289,6 +290,11 @@ class KeyboardViewModel(
     /** Words the user undid twice: never auto-fixed again (kept in settings). */
     private val autoFixNeverWords = MutableStateFlow(settings?.autoFixNeverWords ?: emptySet())
 
+    /** Curated project nouns, never auto-fixed (glossary from a user-edited list only). */
+    private val glossaryGuardWords = MutableStateFlow(
+        ProjectGlossary.autoFixGuard(ProjectGlossary.parse(settings?.projectGlossary.orEmpty()))
+    )
+
     private val _isNumberRowEnabled = MutableStateFlow(settings?.isNumberRowEnabled ?: false)
     val isNumberRowEnabled = _isNumberRowEnabled.asStateFlow()
 
@@ -388,6 +394,8 @@ class KeyboardViewModel(
             KeyboardSettings.KEY_AUTO_CAPITALIZE -> _isAutoCapitalizeEnabled.value = s.isAutoCapitalizeEnabled
             KeyboardSettings.KEY_AUTO_FIX -> _isAutoFixEnabled.value = s.isAutoFixOnSpace
             KeyboardSettings.KEY_AUTO_FIX_NEVER -> autoFixNeverWords.value = s.autoFixNeverWords
+            KeyboardSettings.KEY_PROJECT_GLOSSARY ->
+                glossaryGuardWords.value = ProjectGlossary.autoFixGuard(ProjectGlossary.parse(s.projectGlossary))
             KeyboardSettings.KEY_NUMBER_ROW -> _isNumberRowEnabled.value = s.isNumberRowEnabled
             KeyboardSettings.KEY_KEY_HEIGHT_SCALE -> _keyHeightScale.value = s.keyHeightScale
             KeyboardSettings.KEY_PROOFREAD -> _isProofreadEnabled.value = s.isProofreadEnabled
@@ -601,6 +609,16 @@ class KeyboardViewModel(
     fun setAutoCapitalizeEnabled(enabled: Boolean) {
         _isAutoCapitalizeEnabled.value = enabled
         settings?.isAutoCapitalizeEnabled = enabled
+    }
+
+    private val _projectGlossaryText = MutableStateFlow(settings?.projectGlossary.orEmpty())
+    val projectGlossaryText = _projectGlossaryText.asStateFlow()
+
+    /** Saves the curated glossary text; its terms join the auto-fix guard immediately. */
+    fun setProjectGlossary(text: String) {
+        _projectGlossaryText.value = text
+        glossaryGuardWords.value = ProjectGlossary.autoFixGuard(ProjectGlossary.parse(text))
+        settings?.projectGlossary = text
     }
 
     fun setAutoFixEnabled(enabled: Boolean) {
@@ -857,7 +875,7 @@ class KeyboardViewModel(
      * a typo; three is a word the user means.
      */
     private fun personalAutoFixGuard(): Set<String> =
-        personalAutoFixWords.value + autoFixKeptThisSession + autoFixNeverWords.value
+        personalAutoFixWords.value + autoFixKeptThisSession + autoFixNeverWords.value + glossaryGuardWords.value
 
     /**
      * Whether smart space may rewrite text the user already typed (the double-space
