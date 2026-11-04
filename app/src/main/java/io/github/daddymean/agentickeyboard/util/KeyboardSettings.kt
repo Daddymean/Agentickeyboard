@@ -48,6 +48,8 @@ class KeyboardSettings(context: Context) {
         const val KEY_MASTERY_STATE = "mastery_state"
         const val KEY_MASTERY_COMPANION_VISIBLE = "mastery_companion_visible"
         const val KEY_MASTERY_AURA = "mastery_aura"
+        const val KEY_HAGGLE_MODE = "haggle_mode"
+        const val KEY_HAGGLE_CACHE = "haggle_price_cache"
         const val KEY_TONE_MIRROR_OUTGOING = "tone_mirror_outgoing"
         const val KEY_TONE_MIRROR_INCOMING = "tone_mirror_incoming"
         const val KEY_PROJECT_GLOSSARY = "project_glossary"
@@ -80,6 +82,15 @@ class KeyboardSettings(context: Context) {
         get() = prefs.getStringSet(KEY_AUTO_FIX_NEVER, emptySet()).orEmpty().toSet()
         set(value) = prefs.edit().putStringSet(KEY_AUTO_FIX_NEVER, value.toSet()).apply()
 
+    /** Haggle mode suggestions. Off by default; suggestions only, never inserts or sends. */
+    var isHaggleModeEnabled: Boolean
+        get() = prefs.getBoolean(KEY_HAGGLE_MODE, false)
+        set(value) = prefs.edit().putBoolean(KEY_HAGGLE_MODE, value).apply()
+
+    /** Flip median-sold cache JSON imported by the user (see [HaggleAdvisor]). Never fetched. */
+    var hagglePriceCache: String
+        get() = prefs.getString(KEY_HAGGLE_CACHE, "").orEmpty()
+        set(value) = prefs.edit().putString(KEY_HAGGLE_CACHE, value).apply()
     /** Tone mirror hint on Keith's own drafts. Off by default (opt-in). */
     var isToneMirrorOutgoing: Boolean
         get() = prefs.getBoolean(KEY_TONE_MIRROR_OUTGOING, false)

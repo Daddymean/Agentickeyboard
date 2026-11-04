@@ -561,6 +561,31 @@ class KeyboardViewModel(
      * password/secure fields and incognito editors (IME_FLAG_NO_PERSONALIZED_LEARNING)
      * and restores the persona last used in this app.
      */
+    private var haggleEditorSensitive = false
+    private var haggleComps: List<io.github.daddymean.agentickeyboard.util.HaggleAdvisor.Comp>? = null
+
+    fun isHaggleModeEnabled(): Boolean = settings?.isHaggleModeEnabled ?: false
+    fun setHaggleModeEnabled(on: Boolean) { settings?.isHaggleModeEnabled = on }
+
+    /** Imports a Flip median cache; returns how many items were accepted. */
+    fun importHaggleCache(json: String): Int {
+        val comps = io.github.daddymean.agentickeyboard.util.HaggleAdvisor.parseCache(json)
+        if (comps.isNotEmpty() || json.isBlank()) settings?.hagglePriceCache = json
+        haggleComps = comps
+        return comps.size
+    }
+
+    /**
+     * Counter-offer suggestions for Keith's own draft. Null unless haggle mode is on and the
+     * editor is not sensitive. Suggestions only: nothing is inserted or sent.
+     */
+    fun haggleAdviceFor(draft: String): io.github.daddymean.agentickeyboard.util.HaggleAdvisor.Advice? {
+        if (!isHaggleModeEnabled() || haggleEditorSensitive || _isSensitiveField.value) return null
+        val comps = haggleComps ?: io.github.daddymean.agentickeyboard.util.HaggleAdvisor
+            .parseCache(settings?.hagglePriceCache.orEmpty()).also { haggleComps = it }
+        return io.github.daddymean.agentickeyboard.util.HaggleAdvisor.advise(draft, comps)
+    }
+
     fun isToneMirrorOutgoing(): Boolean = settings?.isToneMirrorOutgoing ?: false
     fun isToneMirrorIncoming(): Boolean = settings?.isToneMirrorIncoming ?: false
     fun setToneMirrorOutgoing(on: Boolean) { settings?.isToneMirrorOutgoing = on }
@@ -593,6 +618,7 @@ class KeyboardViewModel(
 
     fun onEditorStarted(packageName: String?, appLabel: String = "", inputType: Int, imeOptions: Int = 0) {
         _isSensitiveField.value = EditorPrivacy.isSensitiveEditor(inputType, imeOptions)
+        haggleEditorSensitive = _isSensitiveField.value
         editorInputType = inputType
         editorImeOptions = imeOptions
         activeAppPackage = packageName

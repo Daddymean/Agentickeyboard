@@ -54,6 +54,7 @@ import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.NavigationBarItemDefaults
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Switch
@@ -1103,6 +1104,22 @@ fun ExportTab(viewModel: KeyboardViewModel) {
                         checked = isAutoFix,
                         onCheckedChange = { viewModel.setAutoFixEnabled(it) }
                     )
+                    var haggleOn by remember { mutableStateOf(viewModel.isHaggleModeEnabled()) }
+                    var haggleStatus by remember { mutableStateOf("") }
+                    SettingSwitchRow(
+                        title = "Haggle mode",
+                        description = "Suggests counter-offers from your imported Flip sold prices when your draft names an item and a price. Suggestions only; it never types or sends for you. Off in password/incognito fields.",
+                        checked = haggleOn,
+                        onCheckedChange = { haggleOn = it; viewModel.setHaggleModeEnabled(it) }
+                    )
+                    if (haggleOn) {
+                        TextButton(onClick = {
+                            val json = clipboardManager.getText()?.text.orEmpty()
+                            val n = viewModel.importHaggleCache(json)
+                            haggleStatus = if (n > 0) "Imported $n Flip price comps." else "Clipboard has no valid Flip cache (version 1 JSON)."
+                        }) { Text("Import Flip price cache from clipboard", fontSize = 11.sp) }
+                        if (haggleStatus.isNotEmpty()) Text(haggleStatus, fontSize = 10.sp, color = Color(0xFF5F5D6B))
+                    }
                     var toneOut by remember { mutableStateOf(viewModel.isToneMirrorOutgoing()) }
                     var toneIn by remember { mutableStateOf(viewModel.isToneMirrorIncoming()) }
                     SettingSwitchRow(

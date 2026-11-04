@@ -230,6 +230,19 @@ class AgenticKeyboardService : InputMethodService(), LifecycleOwner, ViewModelSt
                             onDismiss = { clearIncomingMood() }
                         )
                     }
+                    // Haggle mode (opt-in): counter ideas from Flip medians. Shown only; never inserted or sent.
+                    if (!sensitiveField && draftText.isNotBlank()) {
+                        viewModel.haggleAdviceFor(draftText)?.let { advice ->
+                            androidx.compose.material3.Text(
+                                "💬 Counter ideas: " + advice.counters.joinToString(" / ") {
+                                    io.github.daddymean.agentickeyboard.util.HaggleAdvisor.money(it)
+                                } + " · " + advice.summary,
+                                fontSize = 11.sp,
+                                maxLines = 2,
+                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 2.dp).testTag("haggle_hint")
+                            )
+                        }
+                    }
                     // Tone mirror (opt-in): how the draft will likely land. A hint only; nothing is changed or sent.
                     if (!sensitiveField && draftText.isNotBlank()) {
                         viewModel.toneHintFor(draftText)
