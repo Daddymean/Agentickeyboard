@@ -48,6 +48,7 @@ class KeyboardSettings(context: Context) {
         const val KEY_MASTERY_STATE = "mastery_state"
         const val KEY_MASTERY_COMPANION_VISIBLE = "mastery_companion_visible"
         const val KEY_MASTERY_AURA = "mastery_aura"
+        const val KEY_PROJECT_GLOSSARY = "project_glossary"
     }
 
     /** Per-letter normalized tap offsets only; no typed text or raw touch history. */
@@ -76,6 +77,11 @@ class KeyboardSettings(context: Context) {
     var autoFixNeverWords: Set<String>
         get() = prefs.getStringSet(KEY_AUTO_FIX_NEVER, emptySet()).orEmpty().toSet()
         set(value) = prefs.edit().putStringSet(KEY_AUTO_FIX_NEVER, value.toSet()).apply()
+
+    /** Curated project glossary text (one term per line); see [ProjectGlossary]. Never filled from typing. */
+    var projectGlossary: String
+        get() = prefs.getString(KEY_PROJECT_GLOSSARY, "").orEmpty()
+        set(value) = prefs.edit().putString(KEY_PROJECT_GLOSSARY, value).apply()
 
     var isNumberRowEnabled: Boolean
         get() = prefs.getBoolean(KEY_NUMBER_ROW, true)
