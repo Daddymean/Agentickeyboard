@@ -262,7 +262,6 @@ class DeadManActivity : Activity() {
                     val stamp = LocalDate.now().toString()
                     when (requestCode) {
                         REQUEST_CARDS -> {
-                            io.github.daddymean.agentickeyboard.twin.TwinApprovals.shared.require(TwinAction.SAVE_SHARE_CARDS)
                             val r = pendingCards ?: error("no cards to save")
                             write(dir, "twin-release-key-set${r.state.epoch}.json", "application/json") {
                                 it.write(r.state.keyFile.toString(2).toByteArray())
@@ -276,7 +275,6 @@ class DeadManActivity : Activity() {
                         }
                         else -> {
                             // KEYBOARD-039: every archive gets its own data key, wrapped under the current set's KEK.
-                            io.github.daddymean.agentickeyboard.twin.TwinApprovals.shared.require(TwinAction.SAVE_RELEASE_ARCHIVE)
                             val next = controller.prepareArchive()
                             val archive = write(dir, "twin-release-$stamp${TwinExporter.FILE_EXTENSION}", "application/octet-stream") {
                                 TwinExporter(TwinLearning.store(this@DeadManActivity), TwinVault.journal(this@DeadManActivity), TwinVault.memory(this@DeadManActivity), TwinVault.capsules(this@DeadManActivity))

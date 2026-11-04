@@ -74,7 +74,7 @@ class TwinCapsuleActivity : Activity() {
                 text("${c.kid} · ${c.title}\nOpens ${c.unlock.describe()} · ${c.audio.size} recordings · made ${date(c.createdAtMillis)}", 15f)
                 button("Delete") {
                     TwinActionGate.run(this@TwinCapsuleActivity, TwinAction.DELETE_CAPSULE, "Delete \"${c.title}\" for ${c.kid}? It can't be recovered.") {
-                        scope.launch { runCatching { TwinLearning.onWorker { io.github.daddymean.agentickeyboard.twin.TwinApprovals.shared.require(TwinAction.DELETE_CAPSULE); TwinVault.capsules(this@TwinCapsuleActivity).delete(c.id) } }.onFailure { toast(it.message ?: "Not deleted.") }; home() }
+                        scope.launch { TwinLearning.onWorker { TwinVault.capsules(this@TwinCapsuleActivity).delete(c.id) }; home() }
                     }
                 }
             }
@@ -121,7 +121,6 @@ class TwinCapsuleActivity : Activity() {
             scope.launch {
                 runCatching {
                     TwinLearning.onWorker {
-                        io.github.daddymean.agentickeyboard.twin.TwinApprovals.shared.require(TwinAction.SEAL_CAPSULE)
                         val journal = TwinVault.journal(this@TwinCapsuleActivity)
                         val audio = takes.map { (name, t) -> CapsuleAudio(name, t.second, journal.readRecording(t.first)) }
                         val c: Capsule = TimeCapsules.create(kid ?: "", title.text.toString(), unlock, body.text.toString(), audio, System.currentTimeMillis())
