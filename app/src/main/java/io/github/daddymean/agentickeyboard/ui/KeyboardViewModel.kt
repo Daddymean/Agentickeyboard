@@ -586,6 +586,24 @@ class KeyboardViewModel(
         return io.github.daddymean.agentickeyboard.util.HaggleAdvisor.advise(draft, comps)
     }
 
+    fun isToneMirrorOutgoing(): Boolean = settings?.isToneMirrorOutgoing ?: false
+    fun isToneMirrorIncoming(): Boolean = settings?.isToneMirrorIncoming ?: false
+    fun setToneMirrorOutgoing(on: Boolean) { settings?.isToneMirrorOutgoing = on }
+    fun setToneMirrorIncoming(on: Boolean) { settings?.isToneMirrorIncoming = on }
+
+    private var editorInputType = 0
+    private var editorImeOptions = 0
+
+    /**
+     * Tone mirror hint for Keith's own draft: null unless the opt-in toggle is on and the
+     * editor is not sensitive. Rule-based on the phone; the draft is not stored.
+     */
+    fun toneHintFor(draft: String): io.github.daddymean.agentickeyboard.util.ToneMirror.Hint? {
+        val on = settings?.isToneMirrorOutgoing ?: false
+        if (!io.github.daddymean.agentickeyboard.util.ToneMirror.allowed(on, editorInputType, editorImeOptions)) return null
+        return io.github.daddymean.agentickeyboard.util.ToneMirror.outgoingHint(draft)
+    }
+
     /** In-memory clipboard provenance for the IME paste path (no clip text kept). */
     private val clipProvenance = io.github.daddymean.agentickeyboard.util.ClipboardProvenance()
 
@@ -601,6 +619,8 @@ class KeyboardViewModel(
     fun onEditorStarted(packageName: String?, appLabel: String = "", inputType: Int, imeOptions: Int = 0) {
         _isSensitiveField.value = EditorPrivacy.isSensitiveEditor(inputType, imeOptions)
         haggleEditorSensitive = _isSensitiveField.value
+        editorInputType = inputType
+        editorImeOptions = imeOptions
         activeAppPackage = packageName
         activeAppLabel = appLabel
         previousCommittedWord = null

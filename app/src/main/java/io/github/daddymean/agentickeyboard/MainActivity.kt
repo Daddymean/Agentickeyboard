@@ -1120,6 +1120,20 @@ fun ExportTab(viewModel: KeyboardViewModel) {
                         }) { Text("Import Flip price cache from clipboard", fontSize = 11.sp) }
                         if (haggleStatus.isNotEmpty()) Text(haggleStatus, fontSize = 10.sp, color = Color(0xFF5F5D6B))
                     }
+                    var toneOut by remember { mutableStateOf(viewModel.isToneMirrorOutgoing()) }
+                    var toneIn by remember { mutableStateOf(viewModel.isToneMirrorIncoming()) }
+                    SettingSwitchRow(
+                        title = "Tone mirror: my drafts",
+                        description = "Shows how your draft may land (curt, warm, pushy) before you send. Checked on this phone; never in password or incognito fields.",
+                        checked = toneOut,
+                        onCheckedChange = { toneOut = it; viewModel.setToneMirrorOutgoing(it) }
+                    )
+                    SettingSwitchRow(
+                        title = "Tone mirror: pressure flags",
+                        description = "Flags false choices, assumed yeses and fake urgency in their last message. Uses the same allowed-app read as the mood badge. Off by default.",
+                        checked = toneIn,
+                        onCheckedChange = { toneIn = it; viewModel.setToneMirrorIncoming(it) }
+                    )
                     OutlinedTextField(
                         value = glossaryText,
                         onValueChange = { viewModel.setProjectGlossary(it) },

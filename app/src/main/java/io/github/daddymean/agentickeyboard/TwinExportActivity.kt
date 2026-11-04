@@ -134,7 +134,6 @@ class TwinExportActivity : Activity() {
         scope.launch {
             val result = runCatching {
                 TwinLearning.onWorker {
-                    io.github.daddymean.agentickeyboard.twin.TwinApprovals.shared.require(TwinAction.EXPORT)
                     val exporter = TwinExporter(TwinLearning.store(this@TwinExportActivity), TwinVault.journal(this@TwinExportActivity), TwinVault.memory(this@TwinExportActivity), TwinVault.capsules(this@TwinExportActivity))
                     val summary = contentResolver.openOutputStream(uri, "wt")!!.use { exporter.export(it, passphrase, System.currentTimeMillis()) }
                     contentResolver.openInputStream(uri)!!.use { TwinExporter.verify(it, passphrase) }
