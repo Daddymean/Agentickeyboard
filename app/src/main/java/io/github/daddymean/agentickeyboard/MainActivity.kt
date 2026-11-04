@@ -1036,6 +1036,7 @@ fun ExportTab(viewModel: KeyboardViewModel) {
     val isAutoCapitalize by viewModel.isAutoCapitalizeEnabled.collectAsState()
     val isAutoFix by viewModel.isAutoFixEnabled.collectAsState()
     val isNumberRow by viewModel.isNumberRowEnabled.collectAsState()
+    val glossaryText by viewModel.projectGlossaryText.collectAsState()
     val keyHeightScale by viewModel.keyHeightScale.collectAsState()
     val isProofread by viewModel.isProofreadEnabled.collectAsState()
     val isLearningPaused by viewModel.isLearningPaused.collectAsState()
@@ -1115,6 +1116,20 @@ fun ExportTab(viewModel: KeyboardViewModel) {
                         description = "Flags false choices, assumed yeses and fake urgency in their last message. Uses the same allowed-app read as the mood badge. Off by default.",
                         checked = toneIn,
                         onCheckedChange = { toneIn = it; viewModel.setToneMirrorIncoming(it) }
+                    )
+                    OutlinedTextField(
+                        value = glossaryText,
+                        onValueChange = { viewModel.setProjectGlossary(it) },
+                        label = { Text("Project glossary (one term per line)", fontSize = 11.sp) },
+                        supportingText = {
+                            Text(
+                                "Only words you list here are protected from auto-fix. Nothing is learned from typing.",
+                                fontSize = 10.sp
+                            )
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                        minLines = 2,
+                        maxLines = 5
                     )
                     SettingSwitchRow(
                         title = "Number row",

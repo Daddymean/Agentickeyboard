@@ -50,6 +50,7 @@ class KeyboardSettings(context: Context) {
         const val KEY_MASTERY_AURA = "mastery_aura"
         const val KEY_TONE_MIRROR_OUTGOING = "tone_mirror_outgoing"
         const val KEY_TONE_MIRROR_INCOMING = "tone_mirror_incoming"
+        const val KEY_PROJECT_GLOSSARY = "project_glossary"
     }
 
     /** Per-letter normalized tap offsets only; no typed text or raw touch history. */
@@ -88,6 +89,10 @@ class KeyboardSettings(context: Context) {
     var isToneMirrorIncoming: Boolean
         get() = prefs.getBoolean(KEY_TONE_MIRROR_INCOMING, false)
         set(value) = prefs.edit().putBoolean(KEY_TONE_MIRROR_INCOMING, value).apply()
+    /** Curated project glossary text (one term per line); see [ProjectGlossary]. Never filled from typing. */
+    var projectGlossary: String
+        get() = prefs.getString(KEY_PROJECT_GLOSSARY, "").orEmpty()
+        set(value) = prefs.edit().putString(KEY_PROJECT_GLOSSARY, value).apply()
 
     var isNumberRowEnabled: Boolean
         get() = prefs.getBoolean(KEY_NUMBER_ROW, true)
