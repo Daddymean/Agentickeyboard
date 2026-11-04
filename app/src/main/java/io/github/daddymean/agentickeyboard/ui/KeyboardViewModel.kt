@@ -561,6 +561,18 @@ class KeyboardViewModel(
      * password/secure fields and incognito editors (IME_FLAG_NO_PERSONALIZED_LEARNING)
      * and restores the persona last used in this app.
      */
+    /** In-memory clipboard provenance for the IME paste path (no clip text kept). */
+    private val clipProvenance = io.github.daddymean.agentickeyboard.util.ClipboardProvenance()
+
+    /** Called with clips the keyboard already reads in the foreground; skipped in sensitive fields. */
+    fun observeClipboard(text: String?, flaggedSensitive: Boolean) {
+        clipProvenance.observe(text, activeAppPackage, System.currentTimeMillis(), flaggedSensitive || _isSensitiveField.value)
+    }
+
+    /** A warning to show before pasting [text] through the keyboard, or null. */
+    fun clipboardPasteWarning(text: String?): String? =
+        (clipProvenance.checkPaste(text, System.currentTimeMillis()) as? io.github.daddymean.agentickeyboard.util.ClipboardProvenance.Verdict.Changed)?.message
+
     fun onEditorStarted(packageName: String?, appLabel: String = "", inputType: Int, imeOptions: Int = 0) {
         _isSensitiveField.value = EditorPrivacy.isSensitiveEditor(inputType, imeOptions)
         activeAppPackage = packageName

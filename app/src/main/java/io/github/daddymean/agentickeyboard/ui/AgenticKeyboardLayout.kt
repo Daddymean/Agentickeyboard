@@ -1141,6 +1141,8 @@ fun AgenticKeyboardLayout(
                                         } else {
                                             clipboardText = clip
                                             showClipboardActions = !showClipboardActions
+                                            // Clipper check: address changed since the keyboard last saw it.
+                                            viewModel.clipboardPasteWarning(clip)?.let { gestureAlert = it }
                                         }
                                     },
                                     modifier = Modifier.size(36.dp).testTag("clipboard_actions")
