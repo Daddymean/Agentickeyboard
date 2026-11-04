@@ -48,6 +48,8 @@ class KeyboardSettings(context: Context) {
         const val KEY_MASTERY_STATE = "mastery_state"
         const val KEY_MASTERY_COMPANION_VISIBLE = "mastery_companion_visible"
         const val KEY_MASTERY_AURA = "mastery_aura"
+        const val KEY_TONE_MIRROR_OUTGOING = "tone_mirror_outgoing"
+        const val KEY_TONE_MIRROR_INCOMING = "tone_mirror_incoming"
         const val KEY_PROJECT_GLOSSARY = "project_glossary"
     }
 
@@ -78,6 +80,15 @@ class KeyboardSettings(context: Context) {
         get() = prefs.getStringSet(KEY_AUTO_FIX_NEVER, emptySet()).orEmpty().toSet()
         set(value) = prefs.edit().putStringSet(KEY_AUTO_FIX_NEVER, value.toSet()).apply()
 
+    /** Tone mirror hint on Keith's own drafts. Off by default (opt-in). */
+    var isToneMirrorOutgoing: Boolean
+        get() = prefs.getBoolean(KEY_TONE_MIRROR_OUTGOING, false)
+        set(value) = prefs.edit().putBoolean(KEY_TONE_MIRROR_OUTGOING, value).apply()
+
+    /** Pressure-language flags on incoming messages. Off by default; reads only already-gated incoming text. */
+    var isToneMirrorIncoming: Boolean
+        get() = prefs.getBoolean(KEY_TONE_MIRROR_INCOMING, false)
+        set(value) = prefs.edit().putBoolean(KEY_TONE_MIRROR_INCOMING, value).apply()
     /** Curated project glossary text (one term per line); see [ProjectGlossary]. Never filled from typing. */
     var projectGlossary: String
         get() = prefs.getString(KEY_PROJECT_GLOSSARY, "").orEmpty()
