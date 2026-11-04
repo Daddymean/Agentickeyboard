@@ -565,6 +565,7 @@ class AgenticKeyboardService : InputMethodService(), LifecycleOwner, ViewModelSt
         }.getOrNull()
         val text = snapshot?.text
         val flaggedSensitive = snapshot?.flaggedSensitive ?: false
+        viewModel.observeClipboard(text, flaggedSensitive)
 
         if (text == null) {
             if (!silent) clipboardStatus.value = "Clipboard is unavailable or has no plain text."

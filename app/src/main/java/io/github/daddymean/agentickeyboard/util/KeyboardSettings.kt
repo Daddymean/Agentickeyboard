@@ -50,6 +50,7 @@ class KeyboardSettings(context: Context) {
         const val KEY_MASTERY_AURA = "mastery_aura"
         const val KEY_HAGGLE_MODE = "haggle_mode"
         const val KEY_HAGGLE_CACHE = "haggle_price_cache"
+        const val KEY_PROJECT_GLOSSARY = "project_glossary"
     }
 
     /** Per-letter normalized tap offsets only; no typed text or raw touch history. */
@@ -88,6 +89,10 @@ class KeyboardSettings(context: Context) {
     var hagglePriceCache: String
         get() = prefs.getString(KEY_HAGGLE_CACHE, "").orEmpty()
         set(value) = prefs.edit().putString(KEY_HAGGLE_CACHE, value).apply()
+    /** Curated project glossary text (one term per line); see [ProjectGlossary]. Never filled from typing. */
+    var projectGlossary: String
+        get() = prefs.getString(KEY_PROJECT_GLOSSARY, "").orEmpty()
+        set(value) = prefs.edit().putString(KEY_PROJECT_GLOSSARY, value).apply()
 
     var isNumberRowEnabled: Boolean
         get() = prefs.getBoolean(KEY_NUMBER_ROW, true)
