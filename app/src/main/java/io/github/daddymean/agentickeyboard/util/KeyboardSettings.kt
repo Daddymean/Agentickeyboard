@@ -31,6 +31,7 @@ class KeyboardSettings(context: Context) {
         const val KEY_HAPTICS = "haptics_enabled"
         const val KEY_VOICE_LOCK = "voice_lock"
         const val KEY_SEND_GUARD = "send_guard"
+        const val KEY_AI_APPLY_CONFIRM = "ai_apply_confirm"
         const val KEY_SYNC_NOTES_TO_CLOUD = "sync_notes_to_cloud"
         const val KEY_THEME_OVERRIDE = "theme_override"
         const val KEY_PERSONA = "persona"
@@ -136,6 +137,11 @@ class KeyboardSettings(context: Context) {
     var isSendGuardEnabled: Boolean
         get() = prefs.getBoolean(KEY_SEND_GUARD, false)
         set(value) = prefs.edit().putBoolean(KEY_SEND_GUARD, value).apply()
+
+    /** Show where/what and ask before an AI result is written into the field. Opt-in. */
+    var isAiApplyConfirmEnabled: Boolean
+        get() = prefs.getBoolean(KEY_AI_APPLY_CONFIRM, false)
+        set(value) = prefs.edit().putBoolean(KEY_AI_APPLY_CONFIRM, value).apply()
 
     /**
      * Whether notes saved from the keyboard may sync off the phone (to the

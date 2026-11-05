@@ -57,4 +57,23 @@ class EditorPrivacyTest {
     fun `flag constant is the documented platform bit`() {
         assertEquals(0x1000000, EditorInfo.IME_FLAG_NO_PERSONALIZED_LEARNING)
     }
+
+    @Test
+    fun `card and one-time-code hints make an ordinary field sensitive`() {
+        assertTrue(EditorPrivacy.isSensitiveEditor(plainText, 0, listOf("Card number")))
+        assertTrue(EditorPrivacy.isSensitiveEditor(plainText, 0, listOf(null, "creditCardNumber")))
+        assertTrue(EditorPrivacy.isSensitiveEditor(plainText, 0, listOf("smsOTPCode")))
+        assertTrue(EditorPrivacy.isSensitiveEditor(plainText, 0, listOf("Security code")))
+        val number = InputType.TYPE_CLASS_NUMBER
+        assertTrue(EditorPrivacy.isOneTimeCode(number, listOf("Enter the code we texted you")))
+        assertTrue(EditorPrivacy.isSensitiveEditor(number, 0, listOf("Enter the code we texted you")))
+    }
+
+    @Test
+    fun `ordinary hints stay normal`() {
+        assertFalse(EditorPrivacy.isSensitiveEditor(plainText, 0, listOf("Type a message", "Shipping notes")))
+        assertFalse(EditorPrivacy.isSensitiveEditor(plainText, 0, listOf("Promo code")))
+        assertFalse(EditorPrivacy.hasSensitiveHint(emptyList()))
+    }
 }
+

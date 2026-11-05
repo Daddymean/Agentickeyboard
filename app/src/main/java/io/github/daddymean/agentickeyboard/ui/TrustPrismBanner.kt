@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -36,6 +37,13 @@ fun TrustPrismBanner(viewModel: KeyboardViewModel) {
         isSensitiveField = isSensitiveField,
         cloudRedactionEnabled = CloudPrivacyPolicy.redactionEnabled
     )
+
+    // Sensitive field (password, PIN, card, one-time code, incognito): a quiet
+    // "you take over" chip so it is clear AI and learning stepped aside.
+    if (status.mode == TrustPrismMode.SECURE_FIELD) {
+        TakeoverChip()
+        return
+    }
 
     // Routine states are shown by the toolbar's privacy icon; only the unprotected
     // cloud state is loud enough to earn a full banner above the keys.
@@ -89,3 +97,30 @@ fun TrustPrismBanner(viewModel: KeyboardViewModel) {
         }
     }
 }
+
+/** Compact, calm notice shown while a sensitive field is focused. */
+@Composable
+fun TakeoverChip() {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 8.dp, vertical = 3.dp),
+        horizontalArrangement = Arrangement.Center
+    ) {
+        Surface(
+            modifier = Modifier.testTag("takeover_chip"),
+            color = Color(0xFF12372A),
+            shape = RoundedCornerShape(12.dp)
+        ) {
+            Text(
+                text = TAKEOVER_CHIP_TEXT,
+                color = Color.White.copy(alpha = 0.9f),
+                fontSize = 10.sp,
+                maxLines = 1,
+                modifier = Modifier.padding(horizontal = 10.dp, vertical = 3.dp)
+            )
+        }
+    }
+}
+
+const val TAKEOVER_CHIP_TEXT = "\uD83D\uDD12 You take over \u00B7 AI and learning are off"

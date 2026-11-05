@@ -47,35 +47,11 @@ object TwinPrivacyFilter {
         if (EditorPrivacy.requestsNoPersonalizedLearning(field.imeOptions)) out += Reason.INCOGNITO
         val pkg = field.packageName
         if (field.secureWindow || (pkg != null && (pkg == ownPackage || pkg in secureApps))) out += Reason.SECURE_WINDOW
-        val words = field.hints.filterNotNull().flatMap(::words)
-        if (words.any(::isSensitiveWord) || PHRASES.any { p -> containsRun(words, p) }) out += Reason.SENSITIVE_HINT
-        val numberClass = (field.inputType and android.text.InputType.TYPE_MASK_CLASS) == android.text.InputType.TYPE_CLASS_NUMBER
-        if (numberClass && words.any { it == "code" || it == "codes" }) out += Reason.ONE_TIME_CODE
+        if (EditorPrivacy.hasSensitiveHint(field.hints)) out += Reason.SENSITIVE_HINT
+        if (EditorPrivacy.isOneTimeCode(field.inputType, field.hints)) out += Reason.ONE_TIME_CODE
         return out
     }
 
     /** Splits camelCase, snake_case, kebab-case and spaces into lower-case words. */
-    internal fun words(raw: String): List<String> =
-        raw.replace(Regex("([a-z0-9])([A-Z])"), "$1 $2")
-            .replace(Regex("([A-Z]+)([A-Z][a-z])"), "$1 $2")
-            .lowercase()
-            .split(Regex("[^a-z0-9]+"))
-            .filter { it.isNotEmpty() }
-
-    private fun isSensitiveWord(w: String): Boolean = w in WORDS
-
-    private fun containsRun(words: List<String>, phrase: List<String>): Boolean =
-        words.windowed(phrase.size).any { it == phrase }
-
-    private val WORDS = setOf(
-        "password", "passwd", "passcode", "passphrase", "pin", "otp", "totp", "cvv", "cvc", "csc",
-        "ssn", "iban", "creditcard", "cardnumber", "onetimecode", "mfa", "2fa"
-    )
-
-    private val PHRASES = listOf(
-        listOf("credit", "card"), listOf("card", "number"), listOf("cc", "number"), listOf("cc", "csc"),
-        listOf("security", "code"), listOf("verification", "code"), listOf("one", "time"),
-        listOf("expiration", "date"), listOf("social", "security"), listOf("routing", "number"),
-        listOf("account", "number"), listOf("sms", "otp")
-    )
+    internal fun words(raw: String): List<String> = EditorPrivacy.words(raw)
 }

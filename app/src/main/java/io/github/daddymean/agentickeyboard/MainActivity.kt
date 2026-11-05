@@ -1044,6 +1044,7 @@ fun ExportTab(viewModel: KeyboardViewModel) {
     val isHaptics by viewModel.isHapticsEnabled.collectAsState()
     val isVoiceLock by viewModel.isVoiceLockEnabled.collectAsState()
     val isSendGuard by viewModel.isSendGuardEnabled.collectAsState()
+    val isAiApplyConfirm by viewModel.isAiApplyConfirmEnabled.collectAsState()
     val isSyncNotes by viewModel.isSyncNotesToCloud.collectAsState()
     val clipboardManager = LocalClipboardManager.current
     val context = LocalContext.current
@@ -1214,6 +1215,12 @@ fun ExportTab(viewModel: KeyboardViewModel) {
                         description = "Pauses Send once when a draft reads hostile so you can confirm or soften it. Checked locally on-device.",
                         checked = isSendGuard,
                         onCheckedChange = { viewModel.setSendGuardEnabled(it) }
+                    )
+                    SettingSwitchRow(
+                        title = "Confirm AI apply",
+                        description = "Before an AI result is written into a field, shows which app and a preview of the text so you confirm or cancel.",
+                        checked = isAiApplyConfirm,
+                        onCheckedChange = { viewModel.setAiApplyConfirmEnabled(it) }
                     )
                     SettingSwitchRow(
                         title = "Sync notes to cloud",
