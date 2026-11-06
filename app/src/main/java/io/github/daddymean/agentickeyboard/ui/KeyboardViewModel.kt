@@ -86,6 +86,9 @@ data class AutoCorrectionUndo(
 )
 
 /** A just-applied AI result that backspace can revert; see [AutoCorrectionUndo]. */
+/** An AI result waiting on the opt-in where/what confirm. */
+data class PendingAiApply(val where: String, val preview: String)
+
 data class AiApplyUndo(
     val original: String,
     val replacement: String,
@@ -118,6 +121,8 @@ class KeyboardViewModel(
 ) : ViewModel() {
 
     companion object {
+        /** Characters of an AI result shown in the where/what apply confirm. */
+        const val AI_APPLY_PREVIEW_CHARS = 60
         private const val PERSONAL_WORD_MIN_COUNT = 3
         private val NON_ALPHA_REGEX = "[^a-zA-Z]".toRegex()
         private val WHITESPACE_REGEX = "\\s+".toRegex()
@@ -318,6 +323,12 @@ class KeyboardViewModel(
     private val _isSendGuardEnabled = MutableStateFlow(settings?.isSendGuardEnabled ?: false)
     val isSendGuardEnabled = _isSendGuardEnabled.asStateFlow()
 
+    private val _isAiApplyConfirmEnabled = MutableStateFlow(settings?.isAiApplyConfirmEnabled ?: false)
+    val isAiApplyConfirmEnabled = _isAiApplyConfirmEnabled.asStateFlow()
+
+    private val _pendingAiApply = MutableStateFlow<PendingAiApply?>(null)
+    val pendingAiApply = _pendingAiApply.asStateFlow()
+
     private val _isSyncNotesToCloud = MutableStateFlow(settings?.isSyncNotesToCloud ?: false)
     val isSyncNotesToCloud = _isSyncNotesToCloud.asStateFlow()
 
@@ -403,6 +414,10 @@ class KeyboardViewModel(
             KeyboardSettings.KEY_HAPTICS -> _isHapticsEnabled.value = s.isHapticsEnabled
             KeyboardSettings.KEY_VOICE_LOCK -> _isVoiceLockEnabled.value = s.isVoiceLockEnabled
             KeyboardSettings.KEY_SEND_GUARD -> _isSendGuardEnabled.value = s.isSendGuardEnabled
+            KeyboardSettings.KEY_AI_APPLY_CONFIRM -> {
+                _isAiApplyConfirmEnabled.value = s.isAiApplyConfirmEnabled
+                if (!s.isAiApplyConfirmEnabled) _pendingAiApply.value = null
+            }
             KeyboardSettings.KEY_SYNC_NOTES_TO_CLOUD -> _isSyncNotesToCloud.value = s.isSyncNotesToCloud
             KeyboardSettings.KEY_THEME_OVERRIDE -> _themeOverride.value = s.themeOverride
             KeyboardSettings.KEY_PERSONA -> _userPersonaPreference.value = s.persona
@@ -496,6 +511,7 @@ class KeyboardViewModel(
     /** Clears the active AI panel and any armed send warning. */
     fun dismissResults() {
         aiSession.clear()
+        _pendingAiApply.value = null
         _voiceMatch.value = null
         pendingVoiceBaseline = null
         _sendGuardWarning.value = null
@@ -616,8 +632,20 @@ class KeyboardViewModel(
     fun clipboardPasteWarning(text: String?): String? =
         (clipProvenance.checkPaste(text, System.currentTimeMillis()) as? io.github.daddymean.agentickeyboard.util.ClipboardProvenance.Verdict.Changed)?.message
 
-    fun onEditorStarted(packageName: String?, appLabel: String = "", inputType: Int, imeOptions: Int = 0) {
-        _isSensitiveField.value = EditorPrivacy.isSensitiveEditor(inputType, imeOptions)
+    /**
+     * [hints]: autofill hints, hint text, label, field name and private IME options.
+     * Card, PIN and one-time-code hints make the field sensitive just like a
+     * password field (shared word list with the twin's filter).
+     */
+    fun onEditorStarted(
+        packageName: String?,
+        appLabel: String = "",
+        inputType: Int,
+        imeOptions: Int = 0,
+        hints: List<String?> = emptyList()
+    ) {
+        _isSensitiveField.value = EditorPrivacy.isSensitiveEditor(inputType, imeOptions, hints)
+        _pendingAiApply.value = null
         haggleEditorSensitive = _isSensitiveField.value
         editorInputType = inputType
         editorImeOptions = imeOptions
@@ -769,6 +797,37 @@ class KeyboardViewModel(
 
     fun dismissSendGuardWarning() {
         _sendGuardWarning.value = null
+    }
+
+    fun setAiApplyConfirmEnabled(enabled: Boolean) {
+        _isAiApplyConfirmEnabled.value = enabled
+        settings?.isAiApplyConfirmEnabled = enabled
+        if (!enabled) _pendingAiApply.value = null
+    }
+
+    /**
+     * Called before an AI result is written into the field. Returns true when the
+     * opt-in confirm is on and has been armed (the caller waits for [confirmAiApply]);
+     * false when the result may be applied right away.
+     */
+    fun requestAiApply(text: String): Boolean {
+        if (!_isAiApplyConfirmEnabled.value || _isSensitiveField.value) return false
+        val where = activeAppLabel.ifBlank { "this app" }
+        val flat = text.replace(Regex("\\s+"), " ").trim()
+        val preview = if (flat.length > AI_APPLY_PREVIEW_CHARS) flat.take(AI_APPLY_PREVIEW_CHARS).trimEnd() + "…" else flat
+        _pendingAiApply.value = PendingAiApply(where, preview)
+        return true
+    }
+
+    /** Clears the armed confirm; true if one was pending (the caller then applies). */
+    fun confirmAiApply(): Boolean {
+        val had = _pendingAiApply.value != null
+        _pendingAiApply.value = null
+        return had
+    }
+
+    fun cancelAiApply() {
+        _pendingAiApply.value = null
     }
 
     fun setLogRetentionDays(days: Int) {

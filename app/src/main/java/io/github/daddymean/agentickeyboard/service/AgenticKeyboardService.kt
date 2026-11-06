@@ -755,12 +755,20 @@ class AgenticKeyboardService : InputMethodService(), LifecycleOwner, ViewModelSt
     /** KEYBOARD-042: the current field fails the twin's stricter filter; true until a field is known. */
     private var twinFieldBlocked = true
 
+    /**
+     * Field metadata the privacy checks read: hint, label, field name, private IME options.
+     * (EditorInfo exposes no autofill hints; apps' autofill hints live on the View only.)
+     */
+    private fun editorHints(info: EditorInfo?): List<String?> =
+        if (info == null) emptyList()
+        else listOf(info.hintText?.toString(), info.label?.toString(), info.fieldName, info.privateImeOptions)
+
     private fun twinFieldBlocked(info: EditorInfo?): Boolean {
         if (info == null) return true
         val field = TwinPrivacyFilter.Field(
             inputType = info.inputType,
             imeOptions = info.imeOptions,
-            hints = listOf(info.hintText?.toString(), info.label?.toString(), info.fieldName, info.privateImeOptions),
+            hints = editorHints(info),
             packageName = info.packageName
         )
         return TwinPrivacyFilter.blocksCapture(field, twinPrefs.secureApps, ownPackage = packageName)
@@ -845,7 +853,8 @@ class AgenticKeyboardService : InputMethodService(), LifecycleOwner, ViewModelSt
             info?.packageName,
             resolveAppLabel(info?.packageName),
             info?.inputType ?: 0,
-            info?.imeOptions ?: 0
+            info?.imeOptions ?: 0,
+            editorHints(info)
         )
         refreshClipboardSettings()
         twinFieldBlocked = twinFieldBlocked(info)
