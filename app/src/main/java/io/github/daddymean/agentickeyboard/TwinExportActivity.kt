@@ -48,6 +48,8 @@ class TwinExportActivity : Activity() {
     private lateinit var status: TextView
     private lateinit var export: Button
     private var pending: CharArray? = null
+    /** KEYBOARD-045: nonce issued for this export run; required before write. */
+    private var pendingNonce: String? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -60,7 +62,7 @@ class TwinExportActivity : Activity() {
         second = passphraseField("Type it again")
         layout.addView(first)
         layout.addView(second)
-        export = Button(this).apply { text = "Choose where to save on this phone…"; setOnClickListener { TwinActionGate.run(this@TwinExportActivity, TwinAction.EXPORT) { start() } } }
+        export = Button(this).apply { text = "Choose where to save on this phone…"; setOnClickListener { TwinActionGate.run(this@TwinExportActivity, TwinAction.EXPORT) { nonce -> pendingNonce = nonce; start() } } }
         layout.addView(export)
         status = TextView(this).apply { textSize = 15f; setPadding(0, pad / 2, 0, 0) }
         layout.addView(status)
@@ -116,25 +118,32 @@ class TwinExportActivity : Activity() {
         pending = null
         val uri = data?.data
         if (resultCode != RESULT_OK || uri == null || passphrase == null) {
-            passphrase?.fill('\u0000'); status.text = "Export cancelled."; return
+            passphrase?.fill('\u0000'); pendingNonce = null; status.text = "Export cancelled."; return
         }
         if (!isLocalProvider(uri)) {
-            passphrase.fill('\u0000')
+            passphrase.fill('\u0000'); pendingNonce = null
             runCatching { DocumentsContract.deleteDocument(contentResolver, uri) }
             status.text = "That location isn't on this phone. Choose a folder on the phone (for example Downloads); " +
                 "cloud locations are refused so nothing leaves the device."
             return
         }
-        run(uri, passphrase)
+        val nonce = pendingNonce
+        pendingNonce = null
+        if (nonce == null) {
+            passphrase.fill('\u0000')
+            status.text = "Export wasn't approved for this run."
+            return
+        }
+        run(uri, passphrase, nonce)
     }
 
-    private fun run(uri: Uri, passphrase: CharArray) {
+    private fun run(uri: Uri, passphrase: CharArray, nonce: String) {
         export.isEnabled = false
         status.text = "Encrypting… this takes a little while."
         scope.launch {
             val result = runCatching {
                 TwinLearning.onWorker {
-                    io.github.daddymean.agentickeyboard.twin.TwinApprovals.shared.require(TwinAction.EXPORT)
+                    io.github.daddymean.agentickeyboard.twin.TwinApprovals.shared.require(TwinAction.EXPORT, nonce)
                     val exporter = TwinExporter(TwinLearning.store(this@TwinExportActivity), TwinVault.journal(this@TwinExportActivity), TwinVault.memory(this@TwinExportActivity), TwinVault.capsules(this@TwinExportActivity))
                     val summary = contentResolver.openOutputStream(uri, "wt")!!.use { exporter.export(it, passphrase, System.currentTimeMillis()) }
                     contentResolver.openInputStream(uri)!!.use { TwinExporter.verify(it, passphrase) }

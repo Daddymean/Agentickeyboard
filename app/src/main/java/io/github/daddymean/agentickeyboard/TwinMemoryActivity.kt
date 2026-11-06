@@ -121,7 +121,7 @@ class TwinMemoryActivity : Activity() {
                 text(date(c.atMillis) + (c.child?.let { " · for $it" } ?: "") + (c.prompt?.let { "\n$it" } ?: ""), 13f)
                 text(c.text, 15f)
                 row(
-                    "Approve" to { TwinActionGate.run(this@TwinMemoryActivity, TwinAction.APPROVE_MEMORY) { scope.launch { decide { LegacyVault.approve(it, c, System.currentTimeMillis()) }; review() } } },
+                    "Approve" to { TwinActionGate.run(this@TwinMemoryActivity, TwinAction.APPROVE_MEMORY) { _ -> scope.launch { decide { LegacyVault.approve(it, c, System.currentTimeMillis()) }; review() } } },
                     "Edit…" to { editThenApprove(c) },
                     "Reject" to { scope.launch { decide { LegacyVault.reject(it, c) }; review() } }
                 )
@@ -139,7 +139,7 @@ class TwinMemoryActivity : Activity() {
         AlertDialog.Builder(this).setTitle("Edit, then approve").setView(field)
             .setPositiveButton("Approve") { _, _ ->
                 val edited = field.text.toString()
-                TwinActionGate.run(this@TwinMemoryActivity, TwinAction.APPROVE_MEMORY) {
+                TwinActionGate.run(this@TwinMemoryActivity, TwinAction.APPROVE_MEMORY) { _ ->
                     scope.launch { decide { LegacyVault.approve(it, c, System.currentTimeMillis(), edited) }; review() }
                 }
             }
@@ -342,10 +342,13 @@ class TwinMemoryActivity : Activity() {
     private fun clear() = root.removeAllViews()
     private fun title(t: String) = text(t, 22f)
     private fun text(t: String, size: Float) = TextView(this).apply { textSize = size; text = t; setPadding(0, pad / 4, 0, pad / 4) }.also(root::addView)
-    /** KEYBOARD-043: with an [action], the click goes through the twin action policy first. */
+    /** KEYBOARD-043/045: with an [action], the click goes through the gate (nonce unused for non-gated ops). */
     private fun button(t: String, action: TwinAction? = null, onClick: () -> Unit) = Button(this).apply {
         text = t
-        setOnClickListener { if (action == null) onClick() else TwinActionGate.run(this@TwinMemoryActivity, action, onAllowed = onClick) }
+        setOnClickListener {
+            if (action == null) onClick()
+            else TwinActionGate.run(this@TwinMemoryActivity, action) { _ -> onClick() }
+        }
     }.also(root::addView)
     private fun row(vararg buttons: Pair<String, () -> Unit>) {
         val r = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }

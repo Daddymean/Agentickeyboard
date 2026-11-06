@@ -55,6 +55,8 @@ class DeadManActivity : Activity() {
      * (KEYBOARD-039).
      */
     private var pendingCards: Rekey? = null
+    /** KEYBOARD-045: nonce for the in-flight gated save (cards or archive). */
+    private var pendingNonce: String? = null
     private val pad by lazy { (20 * resources.displayMetrics.density).toInt() }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -67,6 +69,7 @@ class DeadManActivity : Activity() {
 
     override fun onDestroy() {
         pendingCards = null
+        pendingNonce = null
         scope.cancel()
         super.onDestroy()
     }
@@ -133,7 +136,7 @@ class DeadManActivity : Activity() {
         button("Replace a key holder") { replaceScreen(s) }
         button("Reissue all share cards (a card was lost)") {
             TwinActionGate.run(this@DeadManActivity, TwinAction.REISSUE_SHARE_CARDS, "This makes new cards for all three holders. Old cards and old key files stop matching; " +
-                "give everyone their new card and replace the key file next to the archive.") {
+                "give everyone their new card and replace the key file next to the archive.") { _ ->
                 scope.launch {
                     runCatching { TwinLearning.onWorker { controller.reissue(LocalDate.now()) } }
                         .onSuccess { cardsScreen(it) }.onFailure { toast(it.message ?: "Couldn't reissue the cards.") }
@@ -262,7 +265,7 @@ class DeadManActivity : Activity() {
                     val stamp = LocalDate.now().toString()
                     when (requestCode) {
                         REQUEST_CARDS -> {
-                            io.github.daddymean.agentickeyboard.twin.TwinApprovals.shared.require(TwinAction.SAVE_SHARE_CARDS)
+                            io.github.daddymean.agentickeyboard.twin.TwinApprovals.shared.require(TwinAction.SAVE_SHARE_CARDS, pendingNonce ?: error("no approval for this run"))
                             val r = pendingCards ?: error("no cards to save")
                             write(dir, "twin-release-key-set${r.state.epoch}.json", "application/json") {
                                 it.write(r.state.keyFile.toString(2).toByteArray())
@@ -276,7 +279,7 @@ class DeadManActivity : Activity() {
                         }
                         else -> {
                             // KEYBOARD-039: every archive gets its own data key, wrapped under the current set's KEK.
-                            io.github.daddymean.agentickeyboard.twin.TwinApprovals.shared.require(TwinAction.SAVE_RELEASE_ARCHIVE)
+                            io.github.daddymean.agentickeyboard.twin.TwinApprovals.shared.require(TwinAction.SAVE_RELEASE_ARCHIVE, pendingNonce ?: error("no approval for this run"))
                             val next = controller.prepareArchive()
                             val archive = write(dir, "twin-release-$stamp${TwinExporter.FILE_EXTENSION}", "application/octet-stream") {
                                 TwinExporter(TwinLearning.store(this@DeadManActivity), TwinVault.journal(this@DeadManActivity), TwinVault.memory(this@DeadManActivity), TwinVault.capsules(this@DeadManActivity))
@@ -293,6 +296,7 @@ class DeadManActivity : Activity() {
                     }
                 }
             }
+            pendingNonce = null
             if (requestCode == REQUEST_ARCHIVE) home()
             result.onSuccess { toast(it) }.onFailure {
                 SafeLog.w(TAG, "Dead-man save failed", it)
@@ -320,10 +324,16 @@ class DeadManActivity : Activity() {
     private fun selectable(t: String) = TextView(this).apply {
         textSize = 14f; typeface = Typeface.MONOSPACE; text = t; setTextIsSelectable(true); setPadding(0, pad / 4, 0, pad / 4)
     }.also(root::addView)
-    /** KEYBOARD-043: with an [action], the click goes through the twin action policy first. */
+    /** KEYBOARD-043/045: gated clicks stash the run nonce for require() after the file picker. */
     private fun button(t: String, action: TwinAction? = null, onClick: () -> Unit) = Button(this).apply {
         text = t
-        setOnClickListener { if (action == null) onClick() else TwinActionGate.run(this@DeadManActivity, action, onAllowed = onClick) }
+        setOnClickListener {
+            if (action == null) onClick()
+            else TwinActionGate.run(this@DeadManActivity, action) { nonce ->
+                if (action in io.github.daddymean.agentickeyboard.twin.TwinApprovals.GATED) pendingNonce = nonce
+                onClick()
+            }
+        }
     }.also(root::addView)
     private fun toast(t: String) = android.widget.Toast.makeText(this, t, android.widget.Toast.LENGTH_LONG).show()
 
