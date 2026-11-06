@@ -69,12 +69,12 @@ class TwinCapsuleActivity : Activity() {
             root.removeAllViews()
             text("Time capsules", 22f)
             text(NOTICE, 14f)
-            button("New time capsule") { edit(null, LinkedHashMap()) }
+            button("New time capsule") { _ -> edit(null, LinkedHashMap()) }
             for (c in all) {
                 text("${c.kid} · ${c.title}\nOpens ${c.unlock.describe()} · ${c.audio.size} recordings · made ${date(c.createdAtMillis)}", 15f)
-                button("Delete") {
-                    TwinActionGate.run(this@TwinCapsuleActivity, TwinAction.DELETE_CAPSULE, "Delete \"${c.title}\" for ${c.kid}? It can't be recovered.") {
-                        scope.launch { runCatching { TwinLearning.onWorker { io.github.daddymean.agentickeyboard.twin.TwinApprovals.shared.require(TwinAction.DELETE_CAPSULE); TwinVault.capsules(this@TwinCapsuleActivity).delete(c.id) } }.onFailure { toast(it.message ?: "Not deleted.") }; home() }
+                button("Delete") { _ ->
+                    TwinActionGate.run(this@TwinCapsuleActivity, TwinAction.DELETE_CAPSULE, "Delete \"${c.title}\" for ${c.kid}? It can't be recovered.") { nonce ->
+                        scope.launch { runCatching { TwinLearning.onWorker { io.github.daddymean.agentickeyboard.twin.TwinApprovals.shared.require(TwinAction.DELETE_CAPSULE, nonce); TwinVault.capsules(this@TwinCapsuleActivity).delete(c.id) } }.onFailure { toast(it.message ?: "Not deleted.") }; home() }
                     }
                 }
             }
@@ -108,7 +108,7 @@ class TwinCapsuleActivity : Activity() {
             }
         }
         root.addView(rec)
-        button("Seal it", TwinAction.SEAL_CAPSULE) {
+        button("Seal it", TwinAction.SEAL_CAPSULE) { nonce ->
             if (recorder.isRecording) { toast("Stop the recording first."); return@button }
             val unlock = runCatching {
                 when {
@@ -121,7 +121,7 @@ class TwinCapsuleActivity : Activity() {
             scope.launch {
                 runCatching {
                     TwinLearning.onWorker {
-                        io.github.daddymean.agentickeyboard.twin.TwinApprovals.shared.require(TwinAction.SEAL_CAPSULE)
+                        io.github.daddymean.agentickeyboard.twin.TwinApprovals.shared.require(TwinAction.SEAL_CAPSULE, nonce)
                         val journal = TwinVault.journal(this@TwinCapsuleActivity)
                         val audio = takes.map { (name, t) -> CapsuleAudio(name, t.second, journal.readRecording(t.first)) }
                         val c: Capsule = TimeCapsules.create(kid ?: "", title.text.toString(), unlock, body.text.toString(), audio, System.currentTimeMillis())
@@ -131,7 +131,7 @@ class TwinCapsuleActivity : Activity() {
                 }.onSuccess { toast("Sealed."); home() }.onFailure { toast(it.message ?: "Couldn't save.") }
             }
         }
-        button("Cancel") {
+        button("Cancel") { _ ->
             scope.launch { TwinLearning.onWorker { takes.values.forEach { TwinVault.journal(this@TwinCapsuleActivity).deleteAudio(it.first) } }; home() }
         }
     }
@@ -144,10 +144,13 @@ class TwinCapsuleActivity : Activity() {
     }
 
     private fun text(t: String, size: Float) = TextView(this).apply { textSize = size; text = t; setPadding(0, pad / 4, 0, pad / 4) }.also(root::addView)
-    /** KEYBOARD-043: with an [action], the click goes through the twin action policy first. */
-    private fun button(t: String, action: TwinAction? = null, onClick: () -> Unit) = Button(this).apply {
+    /** KEYBOARD-043/045: with an [action], the click goes through the gate; [onClick] receives the run nonce. */
+    private fun button(t: String, action: TwinAction? = null, onClick: (nonce: String) -> Unit) = Button(this).apply {
         text = t
-        setOnClickListener { if (action == null) onClick() else TwinActionGate.run(this@TwinCapsuleActivity, action, onAllowed = onClick) }
+        setOnClickListener {
+            if (action == null) onClick("")
+            else TwinActionGate.run(this@TwinCapsuleActivity, action, onAllowed = onClick)
+        }
     }.also(root::addView)
     private fun row(vararg buttons: Pair<String, () -> Unit>) {
         val r = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }

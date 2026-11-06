@@ -15,9 +15,9 @@ Run on Keith's phone after installing a debug build over the existing debug buil
 - [ ] Add your bank app's package to "Never learn in these apps", save, type there: no capture. Remove it again.
 - [ ] Type a normal sentence in Notes/Messages: capture count goes up by one.
 
-## #191 risk levels + approval gate (#045)
+## #191 risk levels + approval gate (#045, single-run nonce)
 - [ ] Twin → Export: tapping "Choose where to save" asks every time ("You'll be asked every time"). Cancel → nothing saved.
-- [ ] Allow → pick Downloads → export saves and verifies. Do it again: it asks again.
+- [ ] Allow → pick Downloads → export saves and verifies. Do it again: it asks again (each Allow is one run only; a leftover approval cannot unlock a second export).
 - [ ] Dead-man → "Save a new release archive": always asks. Cancel → no file.
 - [ ] Capsule → Seal: first time asks once with "Don't ask again". Tick it, allow → sealed.
 - [ ] Twin settings lists "Ask again before: Seal a time capsule". Tap it → list is empty again.
