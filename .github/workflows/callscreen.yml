@@ -1,0 +1,49 @@
+name: Isolated call screening
+
+on:
+  pull_request:
+    branches: [main, master]
+  push:
+    branches: [main, master]
+
+permissions:
+  contents: read
+
+jobs:
+  callscreen:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Python privacy regression tests
+        run: python3 -m unittest discover -s tools/tests -v
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+          cache: gradle
+      - name: Build standalone variants, unit tests and lint
+        run: |
+          chmod +x gradlew
+          ./gradlew :callscreen:assembleDebug :callscreen:assembleRelease :callscreen:testDebugUnitTest :callscreen:lintDebug --stacktrace
+      - name: Guard both merged manifests
+        run: |
+          python3 - <<'PY'
+          import pathlib
+          import subprocess
+          root = pathlib.Path('callscreen/build/intermediates/merged_manifests')
+          for variant in ('debug', 'release'):
+              paths = list((root / variant).rglob('AndroidManifest.xml'))
+              if not paths:
+                  raise SystemExit('Missing merged manifest: ' + variant)
+              subprocess.run(['python3', 'tools/check_callscreen_manifest.py', *map(str, paths)], check=True)
+          PY
+      - name: Upload standalone APKs and validation reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: callscreen-validation
+          path: |
+            callscreen/build/outputs/apk/**/*.apk
+            callscreen/build/reports/
+            callscreen/build/test-results/
+          if-no-files-found: warn
