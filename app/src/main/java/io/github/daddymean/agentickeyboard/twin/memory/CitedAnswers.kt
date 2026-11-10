@@ -107,7 +107,15 @@ object CitationGuard {
  * word, each with its citation, then passes the result through [CitationGuard].
  */
 object TwinAnswerer {
-    fun answer(question: String, state: VaultState, index: MemoryIndex, limit: Int = 3): CitedReply {
+    fun answer(question: String, state: VaultState, index: MemoryIndex, limit: Int = 3): CitedReply =
+        answer(question, state, index::search, limit)
+
+    fun answer(
+        question: String,
+        state: VaultState,
+        search: (String, Int) -> List<SearchHit>,
+        limit: Int = 3
+    ): CitedReply {
         DecisionGuard.check(question)?.let { return it }
         val citations = ArrayList<Citation>()
         val segments = arrayListOf(ReplySegment(CitationGuard.INTRO))
@@ -120,7 +128,7 @@ object TwinAnswerer {
                 segments += ReplySegment("“${b.value}”", listOf(citations.lastIndex))
             }
         }
-        for (hit in index.search(question, limit)) {
+        for (hit in search(question, limit)) {
             citations += CitationGuard.citation(hit.memory)
             segments += ReplySegment("“${hit.memory.text}”", listOf(citations.lastIndex))
         }

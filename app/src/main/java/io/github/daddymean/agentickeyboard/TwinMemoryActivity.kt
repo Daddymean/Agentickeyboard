@@ -16,6 +16,7 @@ import android.widget.ScrollView
 import android.widget.TextView
 import android.widget.Toast
 import io.github.daddymean.agentickeyboard.twin.TwinLearning
+import io.github.daddymean.agentickeyboard.twin.TwinPreferences
 import io.github.daddymean.agentickeyboard.twin.TwinVault
 import io.github.daddymean.agentickeyboard.twin.consent.ConsentState
 import io.github.daddymean.agentickeyboard.twin.consent.Status
@@ -24,7 +25,7 @@ import io.github.daddymean.agentickeyboard.twin.consent.TwinUseRules
 import io.github.daddymean.agentickeyboard.twin.memory.Candidate
 import io.github.daddymean.agentickeyboard.twin.memory.CitedReply
 import io.github.daddymean.agentickeyboard.twin.memory.LegacyVault
-import io.github.daddymean.agentickeyboard.twin.memory.MemoryIndex
+import io.github.daddymean.agentickeyboard.twin.memory.SemanticMemorySearch
 import io.github.daddymean.agentickeyboard.twin.memory.TwinAnswerer
 import io.github.daddymean.agentickeyboard.twin.memory.VaultState
 import io.github.daddymean.agentickeyboard.util.SafeLog
@@ -40,7 +41,7 @@ import java.util.Date
  * - **Review**: journal answers become memories only when Keith approves (or edits and
  *   approves) them. Reject keeps one out for good.
  * - **Core blocks**: "Who I am" and "About my kids", always in the twin's context.
- * - **Vault**: the approved memories, searchable on the device (FTS4, in memory).
+ * - **Vault**: the approved memories, searchable on the device (FTS4, in memory; optional on-device embeddings after opt-in).
  * - **Ask the twin**: answers that quote approved memories, each with its source.
  * - KEYBOARD-033: each kid opts in, pauses or retires the twin for themselves; every
  *   answer carries the AI label; there is no copy, share or notification path.
@@ -53,7 +54,7 @@ class TwinMemoryActivity : Activity() {
     private lateinit var root: LinearLayout
     private var state = VaultState()
     private var consent = ConsentState()
-    private var index: MemoryIndex? = null
+    private var searcher: SemanticMemorySearch? = null
     private val pad by lazy { (20 * resources.displayMetrics.density).toInt() }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -65,8 +66,8 @@ class TwinMemoryActivity : Activity() {
     }
 
     override fun onDestroy() {
-        index?.close()
-        index = null
+        searcher?.close()
+        searcher = null
         scope.cancel()
         super.onDestroy()
     }
@@ -81,8 +82,10 @@ class TwinMemoryActivity : Activity() {
 
     private suspend fun setState(s: VaultState) {
         state = s
-        val old = index
-        index = TwinLearning.onWorker { MemoryIndex.build(this, s) }
+        val old = searcher
+        searcher = TwinLearning.onWorker {
+            SemanticMemorySearch.open(this, s, TwinPreferences(this).secureApps).also { it.sync(s) }
+        }
         TwinLearning.onWorker { old?.close() }
     }
 
@@ -170,7 +173,7 @@ class TwinMemoryActivity : Activity() {
         val search = field("Search memories", 1).apply { setText(query); root.addView(this) }
         button("Search") { vault(search.text.toString()) }
         val shown = if (query.isBlank()) state.memories.sortedByDescending { it.approvedAtMillis }.take(100)
-        else index?.search(query, 50)?.map { it.memory } ?: emptyList()
+        else searcher?.search(query, 50)?.map { it.memory } ?: emptyList()
         if (shown.isEmpty()) text(if (query.isBlank()) "No memories approved yet." else "No matches.", 15f)
         for (m in shown) {
             text(date(m.atMillis) + (m.prompt?.let { " · $it" } ?: "") + if (m.edited) " · edited" else "", 13f)
@@ -299,10 +302,10 @@ class TwinMemoryActivity : Activity() {
         val q = field("Ask a question", 2).apply { root.addView(this) }
         val out = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
         button("Ask") {
-            val idx = index ?: return@button
+            val search = searcher ?: return@button
             if (who != "Keith (preview)" && !TwinConsent.mayAsk(consent, who, guardian)) { whoIsAsking(); return@button }
             scope.launch {
-                val reply = TwinLearning.onWorker { TwinAnswerer.answer(q.text.toString(), state, idx) }
+                val reply = TwinLearning.onWorker { TwinAnswerer.answer(q.text.toString(), state, search::search) }
                 show(out, reply)
             }
         }

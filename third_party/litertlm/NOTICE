@@ -1,0 +1,21 @@
+This app optionally uses the following third-party components for on-device
+EmbeddingGemma 2 memory search. They are not bundled as model weights; the
+weights are downloaded only after the user opts in.
+
+1. LiteRT-LM Android API
+   Artifact: com.google.ai.edge.litertlm:litertlm-android:0.19.1
+   License: Apache License 2.0
+   Copyright The LiteRT-LM Authors
+   https://github.com/google-ai-edge/LiteRT-LM
+   The AAR includes LICENSE and THIRD_PARTY_NOTICE.txt (transitive notices,
+   including an LLVM GPLv2-combination clause and a "GPL 3 with special bison
+   exception" notice for a parser-generator exception; native DT_NEEDED entries
+   are only Android system libraries). Gson 2.14.0 (Apache-2.0) is a declared
+   Maven dependency of the AAR.
+
+2. EmbeddingGemma 2 text 270M (LiteRT-LM package)
+   Source: litert-community/embeddinggemma-2-text-270m-litert-lm
+   Base model: google/embeddinggemma-2
+   License: Apache License 2.0
+   File pin: embeddinggemma-2-text-270m.litertlm
+   SHA-256: 2d079ee2f6f066b1f368e8d7c819f55214eaef1d0513b312321901f30ab286fb
