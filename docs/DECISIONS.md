@@ -2,6 +2,8 @@
 
 Short, dated, newest first. Full records: [Nexus decisions/](https://github.com/Daddymean/Nexus/tree/main/decisions) and [projects/agentickeyboard/DECISIONS.md](https://github.com/Daddymean/Nexus/blob/main/projects/agentickeyboard/DECISIONS.md). Add a line here in the same PR as any new decision.
 
+- **2026-11-08** — Keith approved isolated `:callscreen` APK, observation-first rules, no persistent call history, and CLI implementation. Draft HOLD PR only; twin/consent/filter remain untouched. Design: `superpowers/specs/2026-11-08-call-screening-design.md`.
+
 - **2026-10-23** — Token-saving and review policy ([ADR-0007](https://github.com/Daddymean/Nexus/blob/main/decisions/ADR-0007-review-policy-and-token-savings.md)): one reviewer per PR, a second only for security-sensitive PRs; local tests before review; larger slices; routine work to cheaper models; Slack #agent-board for claims; trimmed AGENTS.md/CLAUDE.md; CI posts a per-commit summary. Supersedes ADR-0005's two-review rule. Merges and releases still need Keith.
 - **2026-10-23** — Keith merged #183 (supervised mode, time capsules), #185 (offline handwriting; recognition off until Keith enables it on the phone), #186 (computer-side voice cloning).
 - **2026-10-19** — #181/#182 as built: retirement undoable for 30 days, Keith's preview skips the consent check, no reminders.
