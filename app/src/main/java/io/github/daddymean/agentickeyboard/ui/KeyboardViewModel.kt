@@ -645,6 +645,7 @@ class KeyboardViewModel(
         hints: List<String?> = emptyList()
     ) {
         _isSensitiveField.value = EditorPrivacy.isSensitiveEditor(inputType, imeOptions, hints)
+        GeminiManager.privacyBlocked = _isSensitiveField.value
         _pendingAiApply.value = null
         haggleEditorSensitive = _isSensitiveField.value
         editorInputType = inputType
@@ -669,6 +670,17 @@ class KeyboardViewModel(
                 }
             }
         }
+    }
+
+    /**
+     * The IME applies the twin privacy filter here so this class does not
+     * import twin code. Banking / secure-app fields are treated as sensitive
+     * for AI as well as for twin capture.
+     */
+    fun applyTwinPrivacyBlock(blocked: Boolean) {
+        if (blocked) _isSensitiveField.value = true
+        GeminiManager.privacyBlocked = _isSensitiveField.value
+        haggleEditorSensitive = _isSensitiveField.value
     }
 
     // --- Settings setters (persisted when a settings store is attached) ---

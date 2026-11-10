@@ -1,0 +1,29 @@
+<resources>
+    <string name="app_name">Local Call Screening</string>
+    <string name="limitations">Observation mode allows every call. Active mode can silence or reject unknown numbers. Known contacts and your allowlist always pass. Caller ID can be spoofed. Private/unavailable calls may bypass screening. Rejection does not guarantee voicemail. No audio, internet, or call history is stored.</string>
+    <string name="role_request">Select screening app</string>
+    <string name="contacts_request">Allow contact matching</string>
+    <string name="notifications_request">Allow generic notifications</string>
+    <string name="observe">Return to observation mode</string>
+    <string name="activate">Enable selected active rule…</string>
+    <string name="confirm_title">Enable call filtering?</string>
+    <string name="confirm_body">Unknown callers may be silenced or rejected, including legitimate calls. Contacts permission and the screening role are required; failures allow calls. The selected rule persists until you return to observation mode.</string>
+    <string name="confirm">Enable</string>
+    <string name="allowlist_hint">Allowlist: one international +number per line (US 10-digit numbers also accepted)</string>
+    <string name="save_allowlist">Save allowlist</string>
+    <string name="invalid_allowlist">Not saved: use complete international +numbers or US 10-digit numbers, one per line.</string>
+    <string name="saved">Allowlist saved locally.</string>
+    <string name="need_permissions">Select this screening app and grant contacts permission first.</string>
+    <string name="role_unavailable">Call-screening role unavailable on this device.</string>
+    <string name="status">Mode: %1$s
+Screening role: %2$s · Contacts: %3$s</string>
+    <string name="observation">Observation (always allow)</string>
+    <string name="enabled">Enabled</string>
+    <string name="disabled">Disabled</string>
+    <string name="action_allow">ALLOW unknown callers</string>
+    <string name="action_silence">SILENCE unknown callers</string>
+    <string name="action_reject">REJECT unknown callers</string>
+    <string name="notification_channel">Screening status (no caller details)</string>
+    <string name="notification_title">Local call screening</string>
+    <string name="notification_body">An incoming call was checked. No call history saved.</string>
+</resources>

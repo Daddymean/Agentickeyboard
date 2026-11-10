@@ -16,6 +16,9 @@ import io.github.daddymean.agentickeyboard.twin.TwinLearning
 import io.github.daddymean.agentickeyboard.twin.TwinPreferences
 import io.github.daddymean.agentickeyboard.twin.TwinStoragePolicy
 import io.github.daddymean.agentickeyboard.twin.TwinStyleStats
+import io.github.daddymean.agentickeyboard.models.DownloadResult
+import io.github.daddymean.agentickeyboard.models.ModelCatalog
+import io.github.daddymean.agentickeyboard.models.ModelManager
 import io.github.daddymean.agentickeyboard.twin.TwinVault
 import io.github.daddymean.agentickeyboard.util.KeyboardSettings
 import io.github.daddymean.agentickeyboard.util.SafeLog
@@ -24,6 +27,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.util.Date
 import java.util.Locale
 
@@ -94,6 +98,47 @@ class TwinActivity : Activity() {
             text = "Save app list"
             setOnClickListener { prefs.secureApps = secureApps.text.split('\n', ',').toSet() }
         })
+        // Optional on-device EmbeddingGemma 2 for memory search. Off by default; download
+        // is the only network step and is SHA-256 pinned. Twin text is never uploaded.
+        val models = ModelManager.forApp(this)
+        val embedSpec = ModelCatalog.EMBEDDING_GEMMA_2
+        layout.addView(TextView(this).apply {
+            textSize = 15f
+            text = "On-device memory search (optional). Downloads EmbeddingGemma 2 (~165 MB, Apache-2.0) only after you opt in, checks a SHA-256 pin, and keeps the file on this phone. Search falls back to keyword matching until the model is ready. Nothing from the twin is uploaded."
+        })
+        val embedStatus = TextView(this).apply { textSize = 14f }
+        fun refreshEmbedStatus() {
+            embedStatus.text = when {
+                !models.isOptedIn(embedSpec.id) -> "Embedding search is off."
+                models.isReady(embedSpec) -> "EmbeddingGemma 2 is on this phone and ready."
+                else -> "Opted in, but the model is not on this phone yet. Download it over Wi-Fi (~165 MB)."
+            }
+        }
+        layout.addView(switch("Use EmbeddingGemma 2 for memory search", models.isOptedIn(embedSpec.id)) { _, on ->
+            models.setOptedIn(embedSpec, on)
+            refreshEmbedStatus()
+        })
+        layout.addView(Button(this).apply {
+            text = "Download EmbeddingGemma 2"
+            setOnClickListener {
+                if (!models.isOptedIn(embedSpec.id)) {
+                    android.widget.Toast.makeText(this@TwinActivity, "Turn the option on first.", android.widget.Toast.LENGTH_LONG).show()
+                    return@setOnClickListener
+                }
+                embedStatus.text = "Downloading and verifying SHA-256…"
+                scope.launch {
+                    val result = withContext(Dispatchers.IO) { models.download(embedSpec) }
+                    embedStatus.text = when (result) {
+                        is DownloadResult.Ready -> "EmbeddingGemma 2 is on this phone and ready."
+                        is DownloadResult.NotOptedIn -> "Turn the option on first."
+                        is DownloadResult.HashMismatch -> "Download discarded: the file did not match the pinned SHA-256."
+                        is DownloadResult.Failed -> "Download failed."
+                    }
+                }
+            }
+        })
+        layout.addView(embedStatus)
+        refreshEmbedStatus()
         // KEYBOARD-043: remembered "don't ask again" twin actions, each revocable.
         layout.addView(TextView(this).apply { textSize = 18f; text = "Twin actions you allowed without asking" })
         val grants = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
@@ -209,7 +254,7 @@ class TwinActivity : Activity() {
         AlertDialog.Builder(this)
             .setTitle("Delete all twin data?")
             .setMessage(
-                "This deletes every stored message, every journal answer, recording and result, the approved memories and core blocks, the dead-man " +
+                "This deletes every stored message, every journal answer, recording and result, the approved memories, the on-device memory search index and core blocks, the dead-man " +
                     "switch set-up, and destroys " +
                     "the encryption key on this phone. " +
                     "It cannot be undone. Learning stays on unless you turn it off."

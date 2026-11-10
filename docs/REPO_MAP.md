@@ -13,6 +13,7 @@ Read at session start (with [DECISIONS.md](DECISIONS.md)) instead of exploring t
 | `app/.../twin/` | AI legacy twin: store, cipher, vault, learning filter; `capsule/`, `consent/`, `deadman/`, `export/`, `journal/`, `memory/` |
 | `app/.../*Activity.kt` | Screens: Main, Journal, Twin*, DeadMan, SnippetVault, ClipboardHistory, ConversationCapture |
 | `app/src/test/` | Pure-JVM unit tests (run in CI); screenshot tests via Roborazzi |
+| `callscreen/` | `:callscreen`, standalone local-only APK; observation-first call rules, no audio/network/history; see `callscreen/README.md` |
 | `core/` | `:core`, context platform contract (Room, Snapshot, AIDL, ContextClient). See [context-core.md](context-core.md) |
 | `context-app/` | `:context-app`, IContextService host, collectors, distiller, Supabase sync (WorkManager) |
 | `supabase/` | Edge functions, migrations, tests for the context sync backend. Twin data never goes here |
