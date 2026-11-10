@@ -6,6 +6,8 @@ import androidx.concurrent.futures.await
 import com.google.mlkit.genai.common.DownloadCallback
 import com.google.mlkit.genai.common.FeatureStatus
 import com.google.mlkit.genai.common.GenAiException
+import io.github.daddymean.agentickeyboard.ondevice.NanoErrorCodes
+import io.github.daddymean.agentickeyboard.ondevice.NanoUseBlockedException
 import com.google.mlkit.genai.prompt.Generation
 import com.google.mlkit.genai.prompt.GenerativeModel
 import com.google.mlkit.genai.proofreading.Proofreader
@@ -179,30 +181,50 @@ class MlKitOnDeviceAi(context: Context, scope: CoroutineScope) : OnDeviceAi {
 
     override suspend fun proofread(text: String): String? {
         if (text.isBlank()) return null
-        val result = proofreader.runInference(ProofreadingRequest.builder(text).build()).await()
-        return cleanOutput(result.results.firstOrNull()?.text)
+        return runNano {
+            val result = proofreader.runInference(ProofreadingRequest.builder(text).build()).await()
+            cleanOutput(result.results.firstOrNull()?.text)
+        }
     }
 
     override suspend fun rewrite(text: String, tone: OnDeviceTone): String? {
         if (text.isBlank()) return null
-        val result = rewriterFor(tone).runInference(RewritingRequest.builder(text).build()).await()
-        return cleanOutput(result.results.firstOrNull()?.text)
+        return runNano {
+            val result = rewriterFor(tone).runInference(RewritingRequest.builder(text).build()).await()
+            cleanOutput(result.results.firstOrNull()?.text)
+        }
     }
 
     override suspend fun summarize(text: String): String? {
         if (text.isBlank()) return null
+        return runNano {
         val result = summarizer.runInference(SummarizationRequest.builder(text).build()).await()
         // The summarizer emits bullet-formatted output; strip the markers so the
         // shelf shows plain prose like the cloud summary does.
-        val summary = cleanOutput(result.summary) ?: return null
-        return summary.lines().joinToString(" ") { it.replace(BULLET_PREFIX, "").trim() }
+        val summary = cleanOutput(result.summary) ?: return@runNano null
+        summary.lines().joinToString(" ") { it.replace(BULLET_PREFIX, "").trim() }
             .trim().takeIf { it.isNotEmpty() }
+        }
     }
 
     override suspend fun generate(prompt: String): String? {
         if (prompt.isBlank()) return null
-        val response = generativeModel.generateContent(prompt)
-        return cleanOutput(response.candidates.firstOrNull()?.text)
+        return runNano {
+            val response = generativeModel.generateContent(prompt)
+            cleanOutput(response.candidates.firstOrNull()?.text)
+        }
+    }
+
+
+    private inline fun <T> runNano(block: () -> T): T {
+        try {
+            return block()
+        } catch (e: GenAiException) {
+            if (NanoErrorCodes.isBlockedOrBusy(e.errorCode)) {
+                throw NanoUseBlockedException(e.errorCode, e.message, e)
+            }
+            throw e
+        }
     }
 
     /**

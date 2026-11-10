@@ -31,7 +31,8 @@
 -dontwarn org.conscrypt.**
 -dontwarn org.openjsse.**
 
-# LiteRT-LM is invoked through LiteRtTextEmbedder by reflection (the AAR is
-# Java 21 / Kotlin 2.4, which this module cannot compile against directly).
+# LiteRT-LM is invoked through Java reflection (LiteRtGemmaEngine and
+# LiteRtTextEmbedder). The AAR is Java 21 / Kotlin 2.4, which this module
+# cannot compile against directly.
 -keep class com.google.ai.edge.litertlm.** { *; }
 -dontwarn com.google.ai.edge.litertlm.**

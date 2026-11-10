@@ -81,11 +81,11 @@ android {
   testOptions { unitTests { isIncludeAndroidResources = true } }
 }
 
-// litertlm-android 0.19.1 (first Android AAR with EmbeddingEngine that we pin) is
-// published with Kotlin 2.4 metadata. This project compiles with Kotlin 2.2.10,
-// which can only read metadata up to 2.3.0. We talk to the AAR only from Java
-// (LiteRtTextEmbedder) and skip the metadata version check so the rest of the
-// app can stay on 2.2.10. Do not import com.google.ai.edge.litertlm from Kotlin.
+// litertlm-android 0.19.1 is published with Kotlin 2.4 metadata and Java 21 class
+// files. This project compiles with Kotlin 2.2.10 (metadata up to 2.3.0) and Java 11.
+// We call the AAR only from Java via reflection (LiteRtGemmaEngine and
+// LiteRtTextEmbedder) and skip the metadata version check so the app can
+// stay on 2.2.10. Do not import com.google.ai.edge.litertlm from Kotlin.
 tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompile>().configureEach {
   compilerOptions.freeCompilerArgs.add("-Xskip-metadata-version-check")
 }
@@ -151,13 +151,14 @@ dependencies {
   // KEYBOARD-037: handwriting recognition on the device. Its model (~20 MB) is downloaded from Google once,
   // only after Keith approves it in the journal; see docs/twin-handwriting.md.
   implementation(libs.mlkit.digital.ink)
-  implementation(libs.moshi.core)
-  implementation(libs.okhttp)
-  // LiteRT-LM 0.19.1 (Apache-2.0) for optional on-device EmbeddingGemma 2.
+  // LiteRT-LM 0.19.1 (Apache-2.0) for optional on-device EmbeddingGemma 2
+  // and Gemma 4 E2B. Weights are downloaded after opt-in, never bundled.
   // Exclude the AAR's Kotlin 2.4 reflect so we stay on the project's Kotlin 2.2.10.
   implementation(libs.litertlm.android) {
     exclude(group = "org.jetbrains.kotlin", module = "kotlin-reflect")
   }
+  implementation(libs.moshi.core)
+  implementation(libs.okhttp)
   // implementation(libs.play.services.location)
   implementation(libs.retrofit)
   testImplementation(libs.androidx.compose.ui.test.junit4)
