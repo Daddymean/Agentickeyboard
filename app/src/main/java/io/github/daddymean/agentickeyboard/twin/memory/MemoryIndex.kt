@@ -45,7 +45,7 @@ abstract class MemoryIndexDatabase : RoomDatabase() {
 /** A search result: the memory, its score and the query terms it matched. */
 data class SearchHit(val memory: Memory, val score: Double, val terms: Set<String>)
 
-/** Ranks candidate hits; BM25 by default. A later on-device embeddings ranker plugs in here. */
+/** Ranks candidate hits; BM25 by default. On-device embeddings use [SemanticMemorySearch] when the model is present. */
 fun interface MemoryRanker {
     fun rank(terms: List<String>, candidates: List<Memory>, corpus: List<Memory>): List<SearchHit>
 }
