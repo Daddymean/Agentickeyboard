@@ -53,6 +53,13 @@ object GeminiManager {
     var onDeviceAi: OnDeviceAi? = null
 
     /**
+     * When true, on-device Nano and local Gemma must not run. Set from the
+     * IME when [EditorPrivacy] or [TwinPrivacyFilter] blocks the field.
+     */
+    @Volatile
+    var privacyBlocked: Boolean = false
+
+    /**
      * Checks if the API key is configured and seems valid.
      */
     fun isApiKeyAvailable(): Boolean {

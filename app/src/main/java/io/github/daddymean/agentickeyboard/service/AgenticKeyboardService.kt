@@ -858,6 +858,7 @@ class AgenticKeyboardService : InputMethodService(), LifecycleOwner, ViewModelSt
         )
         refreshClipboardSettings()
         twinFieldBlocked = twinFieldBlocked(info)
+        viewModel.applyTwinPrivacyBlock(twinFieldBlocked)
         if (!restarting) {
             // KEYBOARD-024: a new field. Whatever it already holds was not typed here.
             startTwinSession(info)

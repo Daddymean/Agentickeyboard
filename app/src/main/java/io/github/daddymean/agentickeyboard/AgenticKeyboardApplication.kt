@@ -8,6 +8,9 @@ import io.github.daddymean.agentickeyboard.network.GeminiManager
 import io.github.daddymean.agentickeyboard.util.GeminiKeyStore
 import io.github.daddymean.agentickeyboard.util.KeyboardSettings
 import io.github.daddymean.agentickeyboard.util.LearnedRuleCleanup
+import io.github.daddymean.agentickeyboard.ondevice.CascadingOnDeviceAi
+import io.github.daddymean.agentickeyboard.ondevice.LocalGemmaController
+import io.github.daddymean.agentickeyboard.ondevice.OnDeviceEngineRouter
 import io.github.daddymean.agentickeyboard.util.MlKitOnDeviceAi
 import io.github.daddymean.agentickeyboard.util.OnDeviceAi
 import io.github.daddymean.agentickeyboard.util.SafeLog
@@ -15,6 +18,7 @@ import io.github.daddymean.agentickeyboard.util.SwipeToTypeEngine
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.launch
 
 class AgenticKeyboardApplication : Application() {
@@ -24,10 +28,26 @@ class AgenticKeyboardApplication : Application() {
 
     private val appScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
-    // On-device Gemini Nano (via AICore) for the offline AI path. Constructing it
-    // kicks off the async feature-status check / model download; inference itself
-    // runs out-of-process in AICore, so the keyboard process stays lean.
-    val onDeviceAi: OnDeviceAi by lazy { MlKitOnDeviceAi(this, appScope) }
+    val localGemma: LocalGemmaController by lazy { LocalGemmaController(this, settings, appScope) }
+
+    private val nanoAi: OnDeviceAi by lazy { MlKitOnDeviceAi(this, appScope) }
+
+    // Nano first, then a user-downloaded Gemma 4 E2B model, then heuristics.
+    // Inference for Nano still runs in AICore; Gemma loads only after opt-in.
+    val onDeviceAi: OnDeviceAi by lazy {
+        CascadingOnDeviceAi(
+            nano = nanoAi,
+            local = localGemma.asOnDeviceAi,
+            context = {
+                OnDeviceEngineRouter.Context(
+                    privacyBlocked = GeminiManager.privacyBlocked,
+                    nanoStatus = nanoAi.status.value,
+                    localEnabled = localGemma.isEnabled(),
+                    localReady = localGemma.isReady()
+                )
+            }
+        )
+    }
 
     private fun readWords(id: Int): List<String> =
         resources.openRawResource(id).bufferedReader().useLines { lines ->
@@ -38,6 +58,9 @@ class AgenticKeyboardApplication : Application() {
         super.onCreate()
         GeminiManager.onDeviceAi = onDeviceAi
         GeminiManager.userApiKey = GeminiKeyStore.load(this)
+        appScope.launch {
+            nanoAi.status.collect { (onDeviceAi as? CascadingOnDeviceAi)?.refreshStatus() }
+        }
         // Load the frequency-ranked swipe dictionary off the main thread.
         appScope.launch {
             try {

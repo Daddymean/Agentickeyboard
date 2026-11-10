@@ -3,6 +3,7 @@
     xmlns:tools="http://schemas.android.com/tools">
 
     <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <!-- KEYBOARD-025: voice answers in the legacy-twin journal. Requested only on the
          first Record tap, after an explanation; used only while the journal is open. -->
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
@@ -19,6 +20,12 @@
         android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="true"
         android:theme="@style/Theme.MyApplication">
+        <uses-native-library
+            android:name="libvndksupport.so"
+            android:required="false" />
+        <uses-native-library
+            android:name="libOpenCL.so"
+            android:required="false" />
         <activity
             android:name=".ConversationCaptureActivity"
             android:exported="false"

@@ -54,6 +54,8 @@ class KeyboardSettings(context: Context) {
         const val KEY_TONE_MIRROR_OUTGOING = "tone_mirror_outgoing"
         const val KEY_TONE_MIRROR_INCOMING = "tone_mirror_incoming"
         const val KEY_PROJECT_GLOSSARY = "project_glossary"
+        const val KEY_LOCAL_GEMMA_CELLULAR = "local_gemma_e2b_allow_cellular"
+        const val KEY_LOCAL_GEMMA_SIZE_ACK = "local_gemma_e2b_size_ack"
     }
 
     /** Per-letter normalized tap offsets only; no typed text or raw touch history. */
@@ -142,6 +144,16 @@ class KeyboardSettings(context: Context) {
     var isAiApplyConfirmEnabled: Boolean
         get() = prefs.getBoolean(KEY_AI_APPLY_CONFIRM, false)
         set(value) = prefs.edit().putBoolean(KEY_AI_APPLY_CONFIRM, value).apply()
+
+    /** Allow the Gemma 4 E2B download over a metered (cellular) network. Default off (Wi-Fi only). */
+    var isLocalGemmaCellularAllowed: Boolean
+        get() = prefs.getBoolean(KEY_LOCAL_GEMMA_CELLULAR, false)
+        set(value) = prefs.edit().putBoolean(KEY_LOCAL_GEMMA_CELLULAR, value).apply()
+
+    /** User has been shown the model size and agreed to download it. */
+    var isLocalGemmaSizeAcknowledged: Boolean
+        get() = prefs.getBoolean(KEY_LOCAL_GEMMA_SIZE_ACK, false)
+        set(value) = prefs.edit().putBoolean(KEY_LOCAL_GEMMA_SIZE_ACK, value).apply()
 
     /**
      * Whether notes saved from the keyboard may sync off the phone (to the

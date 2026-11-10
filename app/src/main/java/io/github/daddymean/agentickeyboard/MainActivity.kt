@@ -101,6 +101,7 @@ import io.github.daddymean.agentickeyboard.util.AppPersonas
 import io.github.daddymean.agentickeyboard.util.KeyboardSettings
 import io.github.daddymean.agentickeyboard.util.LearnedRuleCleanup
 import io.github.daddymean.agentickeyboard.util.KeyboardSetupStatus
+import io.github.daddymean.agentickeyboard.ondevice.GemmaSettingsSection
 import io.github.daddymean.agentickeyboard.util.OnDeviceAiStatus
 import io.github.daddymean.agentickeyboard.util.TextExpansion
 
@@ -1288,6 +1289,7 @@ fun ExportTab(viewModel: KeyboardViewModel) {
                         color = Color(0xFF5F5D6B),
                         fontSize = 10.sp
                     )
+                    GemmaSettingsSection()
 
                     Spacer(modifier = Modifier.height(10.dp))
                     Text(
