@@ -1,5 +1,5 @@
 This app optionally uses the following third-party components for on-device
-EmbeddingGemma 2 memory search. They are not bundled as model weights; the
+EmbeddingGemma 2 memory search and Gemma 4 E2B rewrite. They are not bundled as model weights; the
 weights are downloaded only after the user opts in.
 
 1. LiteRT-LM Android API

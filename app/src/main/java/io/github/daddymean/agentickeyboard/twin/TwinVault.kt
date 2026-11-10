@@ -5,8 +5,10 @@ import io.github.daddymean.agentickeyboard.twin.capsule.CapsuleStore
 import io.github.daddymean.agentickeyboard.twin.consent.ConsentStore
 import io.github.daddymean.agentickeyboard.twin.deadman.DeadManStore
 import io.github.daddymean.agentickeyboard.twin.journal.JournalStore
+import io.github.daddymean.agentickeyboard.twin.memory.EncryptedVectorIndex
 import io.github.daddymean.agentickeyboard.twin.memory.LegacyVault
 import io.github.daddymean.agentickeyboard.twin.memory.MemoryStore
+import java.io.File
 
 /**
  * KEYBOARD-025: everything the legacy twin keeps on this phone, for delete-all.
@@ -64,15 +66,27 @@ object TwinVault {
 
     /** Deletes every journal record and recording, the memories, the consent record, the time capsules, the dead-man state, every twin entry, and the key. Call on the twin worker. */
     fun deleteAll(context: Context) {
-        deleteAll(journal(context), TwinLearning.store(context), deadMan(context), memory(context), consent(context), capsules(context))
+        deleteAll(
+            journal(context), TwinLearning.store(context), deadMan(context), memory(context), consent(context), capsules(context),
+            EncryptedVectorIndex.file(context)
+        )
     }
 
-    internal fun deleteAll(journal: JournalStore, store: TwinStore, deadMan: DeadManStore? = null, memory: MemoryStore? = null, consent: ConsentStore? = null, capsules: CapsuleStore? = null) {
+    internal fun deleteAll(
+        journal: JournalStore,
+        store: TwinStore,
+        deadMan: DeadManStore? = null,
+        memory: MemoryStore? = null,
+        consent: ConsentStore? = null,
+        capsules: CapsuleStore? = null,
+        vectorIndex: File? = null
+    ) {
         journal.deleteAll()
         capsules?.deleteAll()
         memory?.delete()
         consent?.delete()
         deadMan?.delete()
+        vectorIndex?.let { it.delete(); File(it.path + ".tmp").delete() }
         store.deleteAll() // also destroys the shared Keystore key
     }
 }
