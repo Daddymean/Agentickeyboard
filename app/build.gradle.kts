@@ -61,12 +61,22 @@ android {
       if (uploadKeystore.exists()) {
         signingConfig = signingConfigs.getByName("release")
       }
+      // LiteRT-LM ships arm64-v8a + x86_64 native libs (~22 MB + ~26 MB).
+      // Release phones are arm64; drop the emulator ABI to shrink the APK.
+      ndk {
+        abiFilters += "arm64-v8a"
+      }
     }
     debug {
       // Use the checked-in debug keystore only when present; otherwise fall back
       // to the default Android debug signing so fresh clones build unmodified.
       if (file("${rootDir}/debug.keystore").exists()) {
         signingConfig = signingConfigs.getByName("debugConfig")
+      }
+      // Keep x86_64 so the emulator still loads LiteRT-LM; drop 32-bit ABIs
+      // that the AAR does not ship anyway (digitalink still would).
+      ndk {
+        abiFilters += listOf("arm64-v8a", "x86_64")
       }
     }
   }
