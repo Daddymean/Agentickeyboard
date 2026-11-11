@@ -5,12 +5,10 @@ import io.github.daddymean.agentickeyboard.util.OnDeviceAiStatus
 import io.github.daddymean.agentickeyboard.util.OnDeviceTone
 import io.github.daddymean.agentickeyboard.util.SafeLog
 import java.io.File
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
-import kotlinx.coroutines.withContext
 
 /**
  * Kotlin [OnDeviceAi] wrapper around [LiteRtGemmaEngine]. This file must not
@@ -19,7 +17,9 @@ import kotlinx.coroutines.withContext
 class GemmaLitertEngine(
     private val modelFile: () -> File?,
     private val cacheDir: File,
-    private val enabled: () -> Boolean
+    private val enabled: () -> Boolean,
+    private val timeoutMs: Long = GemmaGenerateGuard.DEFAULT_TIMEOUT_MS,
+    private val scheduler: GemmaNativeScheduler = GemmaNativeScheduler()
 ) : OnDeviceAi {
 
     private val _status = MutableStateFlow(OnDeviceAiStatus.UNSUPPORTED)
@@ -44,23 +44,48 @@ class GemmaLitertEngine(
 
     override suspend fun generate(prompt: String): String? {
         if (!enabled() || prompt.isBlank()) return null
-        val file = modelFile() ?: return null
-        if (!file.isFile) return null
-        return mutex.withLock {
-            withContext(Dispatchers.IO) {
+        if (scheduler.isBusy) {
+            throw GemmaInferenceException(GemmaFailureReason.BUSY)
+        }
+        val file = modelFile()
+        if (file == null || !file.isFile) {
+            throw GemmaInferenceException(GemmaFailureReason.MODEL_MISSING)
+        }
+        if (!mutex.tryLock()) {
+            throw GemmaInferenceException(GemmaFailureReason.BUSY)
+        }
+        try {
+            return scheduler.run(
+                timeoutMs = timeoutMs,
+                onDiscarded = { closeEngine() }
+            ) {
                 try {
                     val live = engine ?: LiteRtGemmaEngine(file, cacheDir).also { engine = it }
                     cleanOutput(live.generate(prompt))
+                } catch (e: GemmaInferenceException) {
+                    closeEngine()
+                    throw e
                 } catch (t: Throwable) {
-                    SafeLog.i(TAG, "LiteRT-LM Gemma generate failed", t)
-                    close()
-                    null
+                    closeEngine()
+                    throw t
                 }
             }
+        } catch (e: GemmaInferenceException) {
+            SafeLog.i(TAG, "LiteRT-LM Gemma generate failed: ${e.reason}", e)
+            throw e
+        } finally {
+            mutex.unlock()
         }
     }
 
     fun close() {
+        // Never close the native engine while a hung generate() is still on
+        // the worker; onDiscarded does that after the call returns.
+        if (!scheduler.isBusy) closeEngine()
+        scheduler.shutdown()
+    }
+
+    private fun closeEngine() {
         val current = engine
         engine = null
         try {

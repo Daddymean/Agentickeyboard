@@ -38,12 +38,16 @@ class AgenticKeyboardApplication : Application() {
         CascadingOnDeviceAi(
             nano = nanoAi,
             local = localGemma.asOnDeviceAi,
+            onFailure = { engine, reason ->
+                SafeLog.i("CascadingOnDeviceAi", "On-device $engine failed, trying next: $reason")
+            },
             context = {
                 OnDeviceEngineRouter.Context(
                     privacyBlocked = GeminiManager.privacyBlocked,
                     nanoStatus = nanoAi.status.value,
                     localEnabled = localGemma.isEnabled(),
-                    localReady = localGemma.isReady()
+                    localReady = localGemma.isReady(),
+                    localSupported = localGemma.isDeviceSupported()
                 )
             }
         )

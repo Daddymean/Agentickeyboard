@@ -1,5 +1,6 @@
 package io.github.daddymean.agentickeyboard.util
 
+import io.github.daddymean.agentickeyboard.ondevice.OnDeviceRewriteUnavailableException
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.StateFlow
 
@@ -105,6 +106,8 @@ object OnDeviceAiRouter {
         return try {
             onDevice(ai) ?: fallback()
         } catch (e: CancellationException) {
+            throw e
+        } catch (e: OnDeviceRewriteUnavailableException) {
             throw e
         } catch (_: Exception) {
             fallback()

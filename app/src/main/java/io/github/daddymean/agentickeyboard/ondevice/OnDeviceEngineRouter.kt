@@ -2,15 +2,20 @@ package io.github.daddymean.agentickeyboard.ondevice
 
 import io.github.daddymean.agentickeyboard.util.OnDeviceAiStatus
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.TimeoutCancellationException
 
 /**
  * Routing for rewrite / proofread / tone:
  * 1. Refuse entirely on a privacy-blocked field (password, OTP, payment, incognito).
- * 2. Gemini Nano when it is AVAILABLE and allowed.
- * 3. Local Gemma 4 E2B when the user opted in and the model is downloaded.
- * 4. Otherwise the existing (heuristic) behavior.
+ * 2. Gemini Nano (ML Kit) when it is AVAILABLE and allowed, unless a rewrite
+ *    prefers local Gemma when that engine is eligible.
+ * 3. Local Gemma 4 E2B when the user opted in, the model is ready, and the
+ *    device is supported (ABI + RAM).
+ * 4. If the first engine fails (null, timeout, init/inference exception), try
+ *    the other on-device engine. Never a silent cloud fallback.
  *
- * Never a silent cloud fallback. Pure JVM so unit tests can use a fake engine.
+ * Pure JVM so unit tests can use a fake engine. Failure reasons passed to
+ * [onFailure] are enum or class names only — never user text.
  */
 object OnDeviceEngineRouter {
 
@@ -20,69 +25,74 @@ object OnDeviceEngineRouter {
         val privacyBlocked: Boolean,
         val nanoStatus: OnDeviceAiStatus,
         val localEnabled: Boolean,
-        val localReady: Boolean
-    )
+        val localReady: Boolean,
+        val localSupported: Boolean = true
+    ) {
+        val localEligible: Boolean
+            get() = localEnabled && localReady && localSupported
+    }
 
     fun decide(context: Context, nanoBlockedOrBusy: Boolean = false): Engine {
         if (context.privacyBlocked) return Engine.EXISTING
         val nanoAllowed = context.nanoStatus == OnDeviceAiStatus.AVAILABLE && !nanoBlockedOrBusy
         if (nanoAllowed) return Engine.NANO
-        if (context.localEnabled && context.localReady) return Engine.LOCAL_GEMMA
+        if (context.localEligible) return Engine.LOCAL_GEMMA
         return Engine.EXISTING
     }
 
     /**
-     * Runs [onNano] then [onLocal] according to [decide], then [fallback].
-     * A blocked/busy Nano error, a null result, or any other non-cancellation
-     * Nano failure falls through to local Gemma when it is ready, then to
-     * [fallback]. Cloud is never invoked here.
+     * Runs [onNano] then [onLocal] according to [decide] (or local-first when
+     * [preferLocalIfReady] and the model is eligible), then the other engine
+     * if the first fails, then [fallback].
+     *
+     * A timeout or any non-cancellation failure is a failed attempt, not an
+     * abort of the cascade. When [surfaceUnavailable] is set and at least one
+     * engine was attempted, both failing throws
+     * [OnDeviceRewriteUnavailableException] instead of a silent fallback.
      */
     suspend fun <T> route(
         context: Context,
         onNano: suspend () -> T?,
         onLocal: suspend () -> T?,
-        fallback: () -> T
+        fallback: () -> T,
+        preferLocalIfReady: Boolean = false,
+        onFailure: (Engine, String) -> Unit = { _, _ -> },
+        surfaceUnavailable: Boolean = false
     ): T {
         if (context.privacyBlocked) return fallback()
-        val first = decide(context)
-        if (first == Engine.NANO) {
-            try {
-                onNano()?.let { return it }
-            } catch (e: CancellationException) {
-                throw e
-            } catch (e: Exception) {
-                val blocked = NanoErrorCodes.isBlockedOrBusy(e)
-                val after = decide(context, nanoBlockedOrBusy = blocked || true)
-                if (after == Engine.LOCAL_GEMMA) {
-                    try {
-                        onLocal()?.let { return it }
-                    } catch (ce: CancellationException) {
-                        throw ce
-                    } catch (_: Exception) {
-                        return fallback()
-                    }
-                }
-                return fallback()
+
+        val engines = LinkedHashSet<Engine>()
+        if (preferLocalIfReady && context.localEligible) {
+            engines += Engine.LOCAL_GEMMA
+            if (context.nanoStatus == OnDeviceAiStatus.AVAILABLE) engines += Engine.NANO
+        } else {
+            val first = decide(context)
+            if (first != Engine.EXISTING) engines += first
+            if (first != Engine.LOCAL_GEMMA && context.localEligible) engines += Engine.LOCAL_GEMMA
+            if (first != Engine.NANO && context.nanoStatus == OnDeviceAiStatus.AVAILABLE) {
+                engines += Engine.NANO
             }
-            if (context.localEnabled && context.localReady) {
-                try {
-                    onLocal()?.let { return it }
-                } catch (e: CancellationException) {
-                    throw e
-                } catch (_: Exception) {
-                    return fallback()
-                }
-            }
-            return fallback()
         }
-        if (first == Engine.LOCAL_GEMMA) {
+
+        var attempted = false
+        for (engine in engines) {
+            attempted = true
             try {
-                onLocal()?.let { return it }
+                val value = if (engine == Engine.NANO) onNano() else onLocal()
+                if (value != null) return value
+                onFailure(engine, GemmaFailureReason.EMPTY_OUTPUT.name)
+            } catch (e: TimeoutCancellationException) {
+                onFailure(engine, GemmaFailureReason.TIMEOUT.name)
             } catch (e: CancellationException) {
                 throw e
-            } catch (_: Exception) {
-                return fallback()
+            } catch (e: GemmaInferenceException) {
+                onFailure(engine, e.reason.name)
+            } catch (e: Exception) {
+                onFailure(engine, e.javaClass.simpleName)
             }
+        }
+        if (surfaceUnavailable && attempted) {
+            throw OnDeviceRewriteUnavailableException()
         }
         return fallback()
     }

@@ -2,6 +2,7 @@ package io.github.daddymean.agentickeyboard
 
 import io.github.daddymean.agentickeyboard.network.GeminiManager
 import io.github.daddymean.agentickeyboard.ui.KeyboardViewModel
+import io.github.daddymean.agentickeyboard.ondevice.OnDeviceRewriteUnavailableException
 import io.github.daddymean.agentickeyboard.util.OnDeviceAi
 import io.github.daddymean.agentickeyboard.util.OnDeviceAiRouter
 import io.github.daddymean.agentickeyboard.util.OnDeviceAiStatus
@@ -10,6 +11,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
+import org.junit.Assert.fail
 import org.junit.Test
 
 /** Pure-JVM fake: canned results, settable availability, call counting. */
@@ -226,5 +228,20 @@ class OnDeviceAiRoutingTest {
         assertNull(GeminiManager.normalizeSentiment("whatever"))
         assertNull(GeminiManager.normalizeSentiment(null))
         assertNull(GeminiManager.normalizeSentiment(""))
+    }
+
+    @Test
+    fun rewriteUnavailableIsNotSwallowedByHeuristicFallback() = runTest {
+        val ai = FakeOnDeviceAi(rewriteResult = "unused")
+        try {
+            OnDeviceAiRouter.route(
+                ai,
+                { throw OnDeviceRewriteUnavailableException() },
+                { "heuristic" }
+            )
+            fail("expected unavailable to propagate")
+        } catch (e: OnDeviceRewriteUnavailableException) {
+            assertEquals(OnDeviceRewriteUnavailableException.USER_MESSAGE, e.message)
+        }
     }
 }
