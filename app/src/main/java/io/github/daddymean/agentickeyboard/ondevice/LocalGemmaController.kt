@@ -1,6 +1,8 @@
 package io.github.daddymean.agentickeyboard.ondevice
 
+import android.app.ActivityManager
 import android.content.Context
+import android.os.Build
 import android.net.ConnectivityManager
 import android.net.NetworkCapabilities
 import io.github.daddymean.agentickeyboard.models.DownloadResult
@@ -35,14 +37,16 @@ class LocalGemmaController(
     private val scope: CoroutineScope,
     private val manager: ModelManager = ModelManager.forApp(context),
     private val consent: ModelConsent = ModelConsent(context),
-    cacheDir: File = File(context.applicationContext.cacheDir, "litert-lm")
+    cacheDir: File = File(context.applicationContext.cacheDir, "litert-lm"),
+    private val deviceAbis: () -> List<String> = { Build.SUPPORTED_ABIS.toList() },
+    private val totalRamBytes: () -> Long = { totalRamBytes(context) }
 ) {
     val artifact: ModelSpec = ModelCatalog.GEMMA_4_E2B
 
     val engine: GemmaLitertEngine = GemmaLitertEngine(
         modelFile = { manager.verifiedFile(artifact) },
         cacheDir = cacheDir,
-        enabled = { isEnabled() && isReady() }
+        enabled = { isUsable() }
     )
 
     private val _storeState = MutableStateFlow<GemmaStoreState>(
@@ -53,12 +57,17 @@ class LocalGemmaController(
     val asOnDeviceAi: OnDeviceAi get() = engine
 
     init {
-        engine.refreshAvailability(isEnabled() && isReady())
+        engine.refreshAvailability(isUsable())
     }
 
     fun isEnabled(): Boolean = manager.isOptedIn(artifact.id)
 
     fun isReady(): Boolean = manager.isReady(artifact)
+
+    fun isDeviceSupported(): Boolean =
+        GemmaEligibility.deviceSupported(deviceAbis(), totalRamBytes())
+
+    fun isUsable(): Boolean = isEnabled() && isReady() && isDeviceSupported()
 
     fun setEnabled(enabled: Boolean) {
         if (enabled) {
@@ -68,7 +77,7 @@ class LocalGemmaController(
             consent.setOptedIn(artifact.id, false)
             engine.close()
         }
-        engine.refreshAvailability(isEnabled() && isReady())
+        engine.refreshAvailability(isUsable())
         _storeState.value = if (isReady()) GemmaStoreState.Ready else GemmaStoreState.Idle
     }
 
@@ -98,7 +107,7 @@ class LocalGemmaController(
         when (decision) {
             ModelDownloadPolicy.Decision.AlreadyReady -> {
                 _storeState.value = GemmaStoreState.Ready
-                engine.refreshAvailability(true)
+                engine.refreshAvailability(isUsable())
                 return
             }
             ModelDownloadPolicy.Decision.InProgress -> return
@@ -119,7 +128,7 @@ class LocalGemmaController(
                 }
                 is DownloadResult.Failed -> GemmaStoreState.Failed(result.message)
             }
-            engine.refreshAvailability(isEnabled() && isReady())
+            engine.refreshAvailability(isUsable())
         }
     }
 
@@ -131,10 +140,22 @@ class LocalGemmaController(
     }
 
     fun onEnabledChanged() {
-        engine.refreshAvailability(isEnabled() && isReady())
+        engine.refreshAvailability(isUsable())
     }
 
     companion object {
+        fun totalRamBytes(context: Context): Long {
+            val am = context.applicationContext.getSystemService(Context.ACTIVITY_SERVICE) as? ActivityManager
+                ?: return 0L
+            val info = ActivityManager.MemoryInfo()
+            return try {
+                am.getMemoryInfo(info)
+                info.totalMem
+            } catch (_: Exception) {
+                0L
+            }
+        }
+
         fun formattedSize(spec: ModelSpec): String {
             val gb = spec.sizeBytes / 1_000_000_000.0
             val bytes = spec.sizeBytes.toString().reversed().chunked(3).joinToString(",").reversed()

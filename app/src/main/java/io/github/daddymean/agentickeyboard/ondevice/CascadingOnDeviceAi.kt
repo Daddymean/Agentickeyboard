@@ -8,12 +8,16 @@ import kotlinx.coroutines.flow.asStateFlow
 
 /**
  * [OnDeviceAi] that prefers Gemini Nano, then local Gemma 4 E2B, then
- * leaves a null result so the existing heuristic path runs. Privacy-blocked
- * fields never reach either model.
+ * leaves a null result so the existing heuristic path runs. Rewrite prefers
+ * local Gemma when it is eligible and falls back to ML Kit (Nano); if both
+ * fail it throws [OnDeviceRewriteUnavailableException] so the UI can show a
+ * clear state instead of a silent no-op. Privacy-blocked fields never reach
+ * either model.
  */
 class CascadingOnDeviceAi(
     private val nano: OnDeviceAi,
     private val local: OnDeviceAi,
+    private val onFailure: (OnDeviceEngineRouter.Engine, String) -> Unit = { _, _ -> },
     private val context: () -> OnDeviceEngineRouter.Context
 ) : OnDeviceAi {
 
@@ -30,20 +34,27 @@ class CascadingOnDeviceAi(
 
     private fun resolve(nanoStatus: OnDeviceAiStatus, ctx: OnDeviceEngineRouter.Context): OnDeviceAiStatus {
         if (nanoStatus == OnDeviceAiStatus.AVAILABLE) return OnDeviceAiStatus.AVAILABLE
-        if (ctx.localEnabled && ctx.localReady) return OnDeviceAiStatus.AVAILABLE
+        if (ctx.localEligible) return OnDeviceAiStatus.AVAILABLE
         return nanoStatus
     }
 
     override suspend fun proofread(text: String): String? = cascade(task = true) { it.proofread(text) }
 
     override suspend fun rewrite(text: String, tone: OnDeviceTone): String? =
-        cascade(task = true) { it.rewrite(text, tone) }
+        cascade(task = true, preferLocalIfReady = true, surfaceUnavailable = true) {
+            it.rewrite(text, tone)
+        }
 
     override suspend fun summarize(text: String): String? = cascade(task = true) { it.summarize(text) }
 
     override suspend fun generate(prompt: String): String? = cascade(task = false) { it.generate(prompt) }
 
-    private suspend fun cascade(task: Boolean, call: suspend (OnDeviceAi) -> String?): String? {
+    private suspend fun cascade(
+        task: Boolean,
+        preferLocalIfReady: Boolean = false,
+        surfaceUnavailable: Boolean = false,
+        call: suspend (OnDeviceAi) -> String?
+    ): String? {
         refreshStatus()
         val ctx = context()
         if (ctx.privacyBlocked) return null
@@ -52,7 +63,14 @@ class CascadingOnDeviceAi(
             ctx.copy(nanoStatus = nanoStatus),
             onNano = { call(nano) },
             onLocal = { call(local) },
-            fallback = { null }
+            fallback = { null },
+            preferLocalIfReady = preferLocalIfReady,
+            onFailure = onFailure,
+            surfaceUnavailable = surfaceUnavailable
         )
+    }
+
+    companion object {
+        private const val TAG = "CascadingOnDeviceAi"
     }
 }

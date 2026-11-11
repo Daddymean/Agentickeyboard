@@ -3,11 +3,14 @@ package io.github.daddymean.agentickeyboard.ondevice
 import io.github.daddymean.agentickeyboard.util.OnDeviceAi
 import io.github.daddymean.agentickeyboard.util.OnDeviceAiStatus
 import io.github.daddymean.agentickeyboard.util.OnDeviceTone
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.withTimeout
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
+import org.junit.Assert.fail
 import org.junit.Test
 
 private class FakeEngine(
@@ -38,8 +41,9 @@ class OnDeviceEngineRouterTest {
         privacy: Boolean = false,
         nano: OnDeviceAiStatus = OnDeviceAiStatus.AVAILABLE,
         localEnabled: Boolean = true,
-        localReady: Boolean = true
-    ) = OnDeviceEngineRouter.Context(privacy, nano, localEnabled, localReady)
+        localReady: Boolean = true,
+        localSupported: Boolean = true
+    ) = OnDeviceEngineRouter.Context(privacy, nano, localEnabled, localReady, localSupported)
 
     @Test
     fun prefersNanoWhenAvailableAndAllowed() {
@@ -166,5 +170,192 @@ class OnDeviceEngineRouterTest {
         assertTrue(NanoErrorCodes.isBlockedOrBusy(NanoErrorCodes.BACKGROUND_USE_BLOCKED))
         assertTrue(NanoErrorCodes.isBlockedOrBusy(NanoUseBlockedException(30)))
         assertEquals(false, NanoErrorCodes.isBlockedOrBusy(8))
+    }
+
+    @Test
+    fun unsupportedOrLowRamDeviceUsesNano() {
+        assertEquals(
+            OnDeviceEngineRouter.Engine.NANO,
+            OnDeviceEngineRouter.decide(ctx(localSupported = false))
+        )
+        assertEquals(
+            OnDeviceEngineRouter.Engine.EXISTING,
+            OnDeviceEngineRouter.decide(ctx(nano = OnDeviceAiStatus.UNSUPPORTED, localSupported = false))
+        )
+    }
+
+    @Test
+    fun rewritePrefersGemmaWhenEligibleThenFallsToMlKit() = runTest {
+        val nano = FakeEngine(result = "mlkit")
+        val local = FakeEngine(throwOnUse = GemmaInferenceException(GemmaFailureReason.INIT_FAILED))
+        val failures = mutableListOf<Pair<OnDeviceEngineRouter.Engine, String>>()
+        val out = OnDeviceEngineRouter.route(
+            ctx(nano = OnDeviceAiStatus.AVAILABLE),
+            { nano.rewrite("x", OnDeviceTone.SHORTEN) },
+            { local.rewrite("x", OnDeviceTone.SHORTEN) },
+            { "heuristic" },
+            preferLocalIfReady = true,
+            onFailure = { engine, reason -> failures += engine to reason }
+        )
+        assertEquals("mlkit", out)
+        assertEquals(1, local.calls)
+        assertEquals(1, nano.calls)
+        assertEquals(
+            listOf(OnDeviceEngineRouter.Engine.LOCAL_GEMMA to GemmaFailureReason.INIT_FAILED.name),
+            failures
+        )
+    }
+
+    @Test
+    fun rewriteFallsToMlKitOnInferenceException() = runTest {
+        val nano = FakeEngine(result = "mlkit")
+        val local = FakeEngine(throwOnUse = GemmaInferenceException(GemmaFailureReason.INFERENCE_FAILED))
+        val out = OnDeviceEngineRouter.route(
+            ctx(),
+            { nano.rewrite("x", OnDeviceTone.FRIENDLY) },
+            { local.rewrite("x", OnDeviceTone.FRIENDLY) },
+            { "heuristic" },
+            preferLocalIfReady = true
+        )
+        assertEquals("mlkit", out)
+    }
+
+    @Test
+    fun rewriteFallsToMlKitOnTimeout() = runTest {
+        val nano = FakeEngine(result = "mlkit")
+        val local = FakeEngine(throwOnUse = GemmaInferenceException(GemmaFailureReason.TIMEOUT))
+        val out = OnDeviceEngineRouter.route(
+            ctx(),
+            { nano.rewrite("x", OnDeviceTone.PROFESSIONAL) },
+            { local.rewrite("x", OnDeviceTone.PROFESSIONAL) },
+            { "heuristic" },
+            preferLocalIfReady = true
+        )
+        assertEquals("mlkit", out)
+        assertEquals(1, nano.calls)
+    }
+
+    @Test
+    fun timeoutCancellationFromGemmaStillFallsToMlKit() = runTest {
+        val nano = FakeEngine(result = "mlkit")
+        var localCalls = 0
+        val out = OnDeviceEngineRouter.route(
+            ctx(),
+            { nano.rewrite("x", OnDeviceTone.SHORTEN) },
+            {
+                localCalls++
+                withTimeout(1) {
+                    delay(1_000)
+                    "late"
+                }
+            },
+            { "heuristic" },
+            preferLocalIfReady = true
+        )
+        assertEquals("mlkit", out)
+        assertEquals(1, localCalls)
+    }
+
+    @Test
+    fun missingOrCorruptModelUsesMlKitWithoutCallingGemma() = runTest {
+        val nano = FakeEngine(result = "mlkit")
+        val local = FakeEngine(result = "gemma")
+        val out = OnDeviceEngineRouter.route(
+            ctx(localReady = false),
+            { nano.rewrite("x", OnDeviceTone.SHORTEN) },
+            { local.rewrite("x", OnDeviceTone.SHORTEN) },
+            { "heuristic" },
+            preferLocalIfReady = true
+        )
+        assertEquals("mlkit", out)
+        assertEquals(1, nano.calls)
+        assertEquals(0, local.calls)
+    }
+
+    @Test
+    fun lowRamUsesMlKitWithoutCallingGemma() = runTest {
+        val nano = FakeEngine(result = "mlkit")
+        val local = FakeEngine(result = "gemma")
+        val out = OnDeviceEngineRouter.route(
+            ctx(localSupported = false),
+            { nano.rewrite("x", OnDeviceTone.SHORTEN) },
+            { local.rewrite("x", OnDeviceTone.SHORTEN) },
+            { "heuristic" },
+            preferLocalIfReady = true
+        )
+        assertEquals("mlkit", out)
+        assertEquals(0, local.calls)
+        assertEquals(1, nano.calls)
+    }
+
+    @Test
+    fun bothEnginesFailSurfacesUnavailable() = runTest {
+        val nano = FakeEngine(throwOnUse = IllegalStateException("nano down"))
+        val local = FakeEngine(throwOnUse = GemmaInferenceException(GemmaFailureReason.INFERENCE_FAILED))
+        try {
+            OnDeviceEngineRouter.route(
+                ctx(),
+                { nano.rewrite("x", OnDeviceTone.SHORTEN) },
+                { local.rewrite("x", OnDeviceTone.SHORTEN) },
+                { "heuristic" },
+                preferLocalIfReady = true,
+                surfaceUnavailable = true
+            )
+            fail("expected unavailable")
+        } catch (e: OnDeviceRewriteUnavailableException) {
+            assertEquals(OnDeviceRewriteUnavailableException.USER_MESSAGE, e.message)
+        }
+        assertEquals(1, local.calls)
+        assertEquals(1, nano.calls)
+    }
+
+    @Test
+    fun noEngineEligibleUsesFallbackWithoutUnavailable() = runTest {
+        val nano = FakeEngine(result = "mlkit")
+        val local = FakeEngine(result = "gemma")
+        val out = OnDeviceEngineRouter.route(
+            ctx(nano = OnDeviceAiStatus.UNSUPPORTED, localReady = false),
+            { nano.rewrite("x", OnDeviceTone.SHORTEN) },
+            { local.rewrite("x", OnDeviceTone.SHORTEN) },
+            { "heuristic" },
+            preferLocalIfReady = true,
+            surfaceUnavailable = true
+        )
+        assertEquals("heuristic", out)
+        assertEquals(0, nano.calls)
+        assertEquals(0, local.calls)
+    }
+
+    @Test
+    fun cascadingRewriteFallsToMlKitThenSurfacesUnavailable() = runTest {
+        val nano = FakeEngine(result = "mlkit")
+        val failing = FakeEngine(throwOnUse = GemmaInferenceException(GemmaFailureReason.TIMEOUT))
+        val reasons = mutableListOf<String>()
+        val ai = CascadingOnDeviceAi(nano, failing, onFailure = { _, reason -> reasons += reason }) {
+            ctx(nano = OnDeviceAiStatus.AVAILABLE)
+        }
+        assertEquals("mlkit", ai.rewrite("hello", OnDeviceTone.SHORTEN))
+        assertEquals(listOf(GemmaFailureReason.TIMEOUT.name), reasons)
+
+        val blockedNano = FakeEngine(throwOnUse = IllegalStateException("nano down"))
+        val blocked = CascadingOnDeviceAi(blockedNano, failing, onFailure = { _, _ -> }) {
+            ctx()
+        }
+        try {
+            blocked.rewrite("hello", OnDeviceTone.SHORTEN)
+            fail("expected unavailable")
+        } catch (e: OnDeviceRewriteUnavailableException) {
+            assertEquals(OnDeviceRewriteUnavailableException.USER_MESSAGE, e.message)
+        }
+    }
+
+    @Test
+    fun cascadingRewriteSkipsEnginesOnPrivacyBlock() = runTest {
+        val nano = FakeEngine(result = "mlkit")
+        val local = FakeEngine(result = "gemma")
+        val ai = CascadingOnDeviceAi(nano, local) { ctx(privacy = true) }
+        assertNull(ai.rewrite("secret", OnDeviceTone.SHORTEN))
+        assertEquals(0, nano.calls)
+        assertEquals(0, local.calls)
     }
 }

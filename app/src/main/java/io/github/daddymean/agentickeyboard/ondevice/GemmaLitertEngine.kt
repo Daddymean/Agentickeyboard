@@ -19,7 +19,8 @@ import kotlinx.coroutines.withContext
 class GemmaLitertEngine(
     private val modelFile: () -> File?,
     private val cacheDir: File,
-    private val enabled: () -> Boolean
+    private val enabled: () -> Boolean,
+    private val timeoutMs: Long = GemmaGenerateGuard.DEFAULT_TIMEOUT_MS
 ) : OnDeviceAi {
 
     private val _status = MutableStateFlow(OnDeviceAiStatus.UNSUPPORTED)
@@ -44,17 +45,28 @@ class GemmaLitertEngine(
 
     override suspend fun generate(prompt: String): String? {
         if (!enabled() || prompt.isBlank()) return null
-        val file = modelFile() ?: return null
-        if (!file.isFile) return null
+        val file = modelFile()
+        if (file == null || !file.isFile) {
+            throw GemmaInferenceException(GemmaFailureReason.MODEL_MISSING)
+        }
         return mutex.withLock {
             withContext(Dispatchers.IO) {
                 try {
-                    val live = engine ?: LiteRtGemmaEngine(file, cacheDir).also { engine = it }
-                    cleanOutput(live.generate(prompt))
-                } catch (t: Throwable) {
-                    SafeLog.i(TAG, "LiteRT-LM Gemma generate failed", t)
-                    close()
-                    null
+                    GemmaGenerateGuard.run(timeoutMs) {
+                        try {
+                            val live = engine ?: LiteRtGemmaEngine(file, cacheDir).also { engine = it }
+                            cleanOutput(live.generate(prompt))
+                        } catch (e: GemmaInferenceException) {
+                            close()
+                            throw e
+                        } catch (t: Throwable) {
+                            close()
+                            throw t
+                        }
+                    }
+                } catch (e: GemmaInferenceException) {
+                    SafeLog.i(TAG, "LiteRT-LM Gemma generate failed: ${e.reason}", e)
+                    throw e
                 }
             }
         }
