@@ -100,6 +100,18 @@ jobs:
             "$APKSIGNER" verify --print-certs "$apk" | grep -E "certificate (DN|SHA-256)" || echo "   not signed: cannot be installed"
           done
 
+      # abiFilters keep the historic app-debug / app-release artifact names.
+      # Release is arm64-v8a only; debug is arm64-v8a + x86_64 for the emulator.
+      - name: Show APK sizes and ABIs
+        run: |
+          python3 - <<'PY'
+          import glob, os, zipfile
+          for apk in glob.glob("app/build/outputs/apk/debug/*.apk") + glob.glob("app/build/outputs/apk/release/*.apk"):
+              z = zipfile.ZipFile(apk)
+              abis = sorted({n.split("/")[1] for n in z.namelist() if n.startswith("lib/") and n.count("/") >= 2})
+              print(f"{apk}: {os.path.getsize(apk)} bytes; ABIs={abis}")
+          PY
+
       - name: Upload release APK
         uses: actions/upload-artifact@v4
         with:
