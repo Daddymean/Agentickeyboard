@@ -31,13 +31,33 @@ object GemmaGenerateGuard {
         } catch (e: GemmaInferenceException) {
             throw e
         } catch (t: Throwable) {
-            val reason = if (t is IllegalStateException && isInitFailure(t)) {
-                GemmaFailureReason.INIT_FAILED
-            } else {
-                GemmaFailureReason.INFERENCE_FAILED
-            }
-            throw GemmaInferenceException(reason, t)
+            throw wrap(t)
         }
+    }
+
+    /** Blocking equivalent used by [GemmaNativeScheduler] on the worker thread. */
+    fun consume(block: () -> String?): String {
+        return try {
+            block() ?: throw GemmaInferenceException(GemmaFailureReason.EMPTY_OUTPUT)
+        } catch (e: GemmaInferenceException) {
+            throw e
+        } catch (t: Throwable) {
+            throw wrap(t)
+        }
+    }
+
+    fun wrap(error: Throwable): GemmaInferenceException {
+        var current: Throwable? = error
+        while (current != null) {
+            if (current is GemmaInferenceException) return current
+            current = current.cause
+        }
+        val reason = if (error is IllegalStateException && isInitFailure(error)) {
+            GemmaFailureReason.INIT_FAILED
+        } else {
+            GemmaFailureReason.INFERENCE_FAILED
+        }
+        return GemmaInferenceException(reason, error)
     }
 
     private fun isInitFailure(error: Throwable): Boolean {

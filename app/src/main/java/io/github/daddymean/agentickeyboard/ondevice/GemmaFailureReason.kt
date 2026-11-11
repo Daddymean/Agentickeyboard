@@ -13,7 +13,8 @@ enum class GemmaFailureReason {
     INIT_FAILED,
     INFERENCE_FAILED,
     TIMEOUT,
-    EMPTY_OUTPUT
+    EMPTY_OUTPUT,
+    BUSY
 }
 
 /**

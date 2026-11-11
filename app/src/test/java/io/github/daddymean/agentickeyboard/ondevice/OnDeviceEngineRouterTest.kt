@@ -3,7 +3,10 @@ package io.github.daddymean.agentickeyboard.ondevice
 import io.github.daddymean.agentickeyboard.util.OnDeviceAi
 import io.github.daddymean.agentickeyboard.util.OnDeviceAiStatus
 import io.github.daddymean.agentickeyboard.util.OnDeviceTone
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.test.runTest
@@ -357,5 +360,38 @@ class OnDeviceEngineRouterTest {
         assertNull(ai.rewrite("secret", OnDeviceTone.SHORTEN))
         assertEquals(0, nano.calls)
         assertEquals(0, local.calls)
+    }
+
+    @Test
+    fun blockingGemmaHangFallsBackToMlKitWithinTimeout() = runBlocking {
+        val nano = FakeEngine(result = "mlkit")
+        val scheduler = GemmaNativeScheduler()
+        val hang = CountDownLatch(1)
+        val started = System.nanoTime()
+        try {
+            val out = OnDeviceEngineRouter.route(
+                ctx(),
+                { nano.rewrite("x", OnDeviceTone.SHORTEN) },
+                {
+                    scheduler.run(timeoutMs = 200) {
+                        hang.await()
+                        "late-gemma"
+                    }
+                },
+                { "heuristic" },
+                preferLocalIfReady = true
+            )
+            val elapsedMs = TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - started)
+            assertEquals("mlkit", out)
+            assertEquals(1, nano.calls)
+            assertTrue("ML Kit fallback should happen near the 200ms timeout, was ${elapsedMs}ms", elapsedMs < 1_500)
+        } finally {
+            hang.countDown()
+            val deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(2)
+            while (scheduler.isBusy && System.nanoTime() < deadline) {
+                Thread.sleep(10)
+            }
+            scheduler.shutdown()
+        }
     }
 }
