@@ -1,8 +1,7 @@
 package io.github.daddymean.agentickeyboard.network
 
 import com.squareup.moshi.Moshi
-import okhttp3.Call
-import okhttp3.Connection
+import java.lang.reflect.Proxy
 import okhttp3.Interceptor
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.Protocol
@@ -21,7 +20,6 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 import retrofit2.Retrofit
 import retrofit2.converter.moshi.MoshiConverterFactory
-import java.util.concurrent.TimeUnit
 
 /**
  * Runs real Gemini request bodies - serialized exactly as Retrofit's Moshi converter
@@ -113,7 +111,7 @@ class CloudRedactionInterceptorTest {
         val original = Request.Builder().url(URL).post(body).build()
         val chain = CapturingChain(original)
 
-        CloudRedactionInterceptor().intercept(chain)
+        CloudRedactionInterceptor().intercept(chain.asChain)
 
         assertSame(original, chain.proceeded)
     }
@@ -125,7 +123,7 @@ class CloudRedactionInterceptorTest {
         val original = Request.Builder().url(URL).post(body).build()
         val chain = CapturingChain(original)
 
-        CloudRedactionInterceptor().intercept(chain)
+        CloudRedactionInterceptor().intercept(chain.asChain)
 
         assertSame(original, chain.proceeded)
     }
@@ -135,7 +133,7 @@ class CloudRedactionInterceptorTest {
         val body = productionBody(requestWithText("Card:\n4111 1111 1111 1111"))
         val chain = CapturingChain(Request.Builder().url(URL).post(body).build())
 
-        CloudRedactionInterceptor().intercept(chain)
+        CloudRedactionInterceptor().intercept(chain.asChain)
 
         assertEquals(body.contentType(), chain.proceeded!!.body!!.contentType())
     }
@@ -206,7 +204,7 @@ class CloudRedactionInterceptorTest {
 
     private fun interceptAndCapture(body: RequestBody): String {
         val chain = CapturingChain(Request.Builder().url(URL).post(body).build())
-        CloudRedactionInterceptor().intercept(chain)
+        CloudRedactionInterceptor().intercept(chain.asChain)
         val buffer = Buffer()
         chain.proceeded!!.body!!.writeTo(buffer)
         return buffer.readUtf8()
@@ -221,30 +219,34 @@ class CloudRedactionInterceptorTest {
         return parsed!!
     }
 
-    private class CapturingChain(private val request: Request) : Interceptor.Chain {
+    /**
+     * A chain that records the request the interceptor passes on and answers 200.
+     * It is a dynamic proxy rather than a hand-written implementation, so it does
+     * not have to be rewritten each time OkHttp adds a member to Interceptor.Chain.
+     */
+    private class CapturingChain(private val request: Request) {
         var proceeded: Request? = null
 
-        override fun request(): Request = request
-
-        override fun proceed(request: Request): Response {
-            proceeded = request
-            return Response.Builder()
-                .request(request)
-                .protocol(Protocol.HTTP_1_1)
-                .code(200)
-                .message("OK")
-                .body("{}".toResponseBody(JSON))
-                .build()
-        }
-
-        override fun connection(): Connection? = null
-        override fun call(): Call = throw UnsupportedOperationException()
-        override fun connectTimeoutMillis(): Int = 0
-        override fun withConnectTimeout(timeout: Int, unit: TimeUnit): Interceptor.Chain = this
-        override fun readTimeoutMillis(): Int = 0
-        override fun withReadTimeout(timeout: Int, unit: TimeUnit): Interceptor.Chain = this
-        override fun writeTimeoutMillis(): Int = 0
-        override fun withWriteTimeout(timeout: Int, unit: TimeUnit): Interceptor.Chain = this
+        val asChain: Interceptor.Chain = Proxy.newProxyInstance(
+            Interceptor.Chain::class.java.classLoader,
+            arrayOf(Interceptor.Chain::class.java)
+        ) { _, method, args ->
+            when (method.name) {
+                "request" -> request
+                "proceed" -> {
+                    val passedOn = args[0] as Request
+                    proceeded = passedOn
+                    Response.Builder()
+                        .request(passedOn)
+                        .protocol(Protocol.HTTP_1_1)
+                        .code(200)
+                        .message("OK")
+                        .body("{}".toResponseBody(JSON))
+                        .build()
+                }
+                else -> throw UnsupportedOperationException(method.name)
+            }
+        } as Interceptor.Chain
     }
 
     private companion object {
