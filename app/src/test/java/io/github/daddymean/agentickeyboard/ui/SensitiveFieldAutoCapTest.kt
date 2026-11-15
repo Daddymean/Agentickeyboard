@@ -71,12 +71,19 @@ class SensitiveFieldAutoCapTest {
                 }
             }
         }
-        composeTestRule.mainClock.advanceTimeByFrame()
+        settle()
     }
+
+    /**
+     * The clock is driven by hand. A tap is handled on one frame and the keys
+     * redraw on a later one, so advance a few frames rather than exactly one
+     * (newer Compose test rules queue that work instead of running it at once).
+     */
+    private fun settle() = repeat(3) { composeTestRule.mainClock.advanceTimeByFrame() }
 
     private fun tapQ(): String {
         composeTestRule.onNodeWithTag("key_q").performClick()
-        composeTestRule.mainClock.advanceTimeByFrame()
+        settle()
         return typed.last()
     }
 
@@ -112,7 +119,7 @@ class SensitiveFieldAutoCapTest {
     fun `explicit shift still capitalizes in a password field`() {
         showKeyboardFor(text or InputType.TYPE_TEXT_VARIATION_PASSWORD)
         composeTestRule.onNodeWithTag("key_shift").performClick()
-        composeTestRule.mainClock.advanceTimeByFrame()
+        settle()
         composeTestRule.onNodeWithTag("key_q").assertTextEquals("Q")
         assertEquals("Q", tapQ())
     }
