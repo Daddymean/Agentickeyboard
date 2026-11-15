@@ -40,6 +40,7 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import io.github.daddymean.agentickeyboard.util.AutoFix
+import io.github.daddymean.agentickeyboard.util.LatencyMeter
 import io.github.daddymean.agentickeyboard.util.LearnedRuleCleanup
 import io.github.daddymean.agentickeyboard.util.LearnedRuleFilter
 import io.github.daddymean.agentickeyboard.util.LocalSpelling
@@ -1174,6 +1175,7 @@ class KeyboardViewModel(
         // One in-flight computation at a time: a slow bigram lookup for an old
         // keystroke must not land after (and overwrite) a newer result.
         predictionJob?.cancel()
+        val requestedAt = System.nanoTime()
         predictionJob = viewModelScope.launch {
             when {
                 activeText.isEmpty() -> {
@@ -1214,6 +1216,7 @@ class KeyboardViewModel(
                     _predictiveSuggestions.value = completions.map { PredictionChip(it, sourceWord) }
                 }
             }
+            LatencyMeter.record(LatencyMeter.Metric.SUGGESTIONS, System.nanoTime() - requestedAt)
         }
     }
 

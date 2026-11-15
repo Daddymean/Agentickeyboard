@@ -46,9 +46,11 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
@@ -102,6 +104,7 @@ import io.github.daddymean.agentickeyboard.util.EditClipboardAction
 import io.github.daddymean.agentickeyboard.util.RedactionApplyGuard
 import io.github.daddymean.agentickeyboard.util.ReplyIntents
 import io.github.daddymean.agentickeyboard.util.SelectionCommand
+import io.github.daddymean.agentickeyboard.util.LatencyMeter
 import io.github.daddymean.agentickeyboard.util.SwipePoint
 import io.github.daddymean.agentickeyboard.util.SwipeToTypeEngine
 import io.github.daddymean.agentickeyboard.util.TrustPrism
@@ -110,14 +113,20 @@ import io.github.daddymean.agentickeyboard.util.commitTextWithCaret
 import io.github.daddymean.agentickeyboard.util.commitInserted
 import io.github.daddymean.agentickeyboard.util.commitTyped
 import io.github.daddymean.agentickeyboard.util.commitSuggestionPick
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import kotlin.math.abs
 
 /** Shift key behavior: one-shot shift resets after a letter; double-tap locks caps. */
 enum class ShiftState { OFF, SHIFT, CAPS_LOCK }
 
 /** Long-press alternatives for accent characters and common punctuation. */
+/** One live-preview decode: the path so far and the swipe it belongs to. */
+private class SwipePreviewRequest(val swipeId: Int, val path: List<SwipePoint>, val vocabulary: List<String>)
+
 private val keyVariants = mapOf(
     "a" to listOf("à", "á", "â", "ä", "ã", "å"),
     "e" to listOf("è", "é", "ê", "ë"),
@@ -242,6 +251,21 @@ fun AgenticKeyboardLayout(
     var keysAreaHeight by remember { mutableFloatStateOf(0f) }
     val swipePathPoints = remember { mutableStateListOf<SwipePoint>() }
     var liveSwipePreviewWord by remember { mutableStateOf<String?>(null) }
+    // The live preview decodes off the main thread so a slow pass cannot hold up
+    // the gesture. Requests are conflated: only the newest path is decoded, and a
+    // result is shown only if its swipe is still the one in progress.
+    var swipeId by remember { mutableIntStateOf(0) }
+    val swipePreviewRequests = remember { Channel<SwipePreviewRequest>(Channel.CONFLATED) }
+    LaunchedEffect(swipePreviewRequests) {
+        for (request in swipePreviewRequests) {
+            val best = withContext(Dispatchers.Default) {
+                LatencyMeter.time(LatencyMeter.Metric.SWIPE) {
+                    SwipeToTypeEngine.getSwipeWordMatches(request.path, request.vocabulary).firstOrNull()
+                }
+            }
+            if (request.swipeId == swipeId && swipePathPoints.size > 1) liveSwipePreviewWord = best
+        }
+    }
 
     // Text shown during composition. In IME mode the service keeps the ViewModel in
     // sync through onUpdateSelection, so this recomposes as the user types.
@@ -362,7 +386,9 @@ fun AgenticKeyboardLayout(
 
         val lastWord = text.takeLastWhile { !it.isWhitespace() }
         if (lastWord.isNotEmpty()) {
-            val replacement = viewModel.resolveWordCommit(lastWord, text.dropLast(lastWord.length))
+            val replacement = LatencyMeter.time(LatencyMeter.Metric.WORD_COMMIT) {
+                viewModel.resolveWordCommit(lastWord, text.dropLast(lastWord.length))
+            }
             // Learn the word as it ends up: an auto-fixed typo is not the user's word.
             val fixed = replacement?.takeIf { it.fromLearnedRule || it.fromAutoFix }?.replacement
             viewModel.onWordCommitted(fixed ?: lastWord)
@@ -1808,6 +1834,7 @@ fun AgenticKeyboardLayout(
                         val yOffsetRows = rowCount - 3f
                         detectDragGestures(
                             onDragStart = { startOffset ->
+                                swipeId++
                                 swipePathPoints.clear()
                                 if (keysAreaWidth > 0 && keysAreaHeight > 0) {
                                     val relX = (startOffset.x / keysAreaWidth) * 10f
@@ -1817,10 +1844,12 @@ fun AgenticKeyboardLayout(
                             },
                             onDragEnd = {
                                 if (swipePathPoints.size > 1) {
-                                    val matches = SwipeToTypeEngine.getSwipeWordMatches(
-                                        swipePathPoints.toList(),
-                                        userVocabulary = topVocabulary.map { it.word }
-                                    )
+                                    val matches = LatencyMeter.time(LatencyMeter.Metric.SWIPE) {
+                                        SwipeToTypeEngine.getSwipeWordMatches(
+                                            swipePathPoints.toList(),
+                                            userVocabulary = topVocabulary.map { it.word }
+                                        )
+                                    }
                                     val finalWord = matches.firstOrNull()
                                     if (finalWord != null) {
                                         buzz(HapticFeedbackType.LongPress)
@@ -1864,11 +1893,9 @@ fun AgenticKeyboardLayout(
                                     // Throttled: rescoring the dictionary on every
                                     // single pointer move is wasted work.
                                     if (swipePathPoints.size > 1 && swipePathPoints.size % 4 == 0) {
-                                        val matches = SwipeToTypeEngine.getSwipeWordMatches(
-                                            swipePathPoints.toList(),
-                                            userVocabulary = topVocabulary.map { it.word }
+                                        swipePreviewRequests.trySend(
+                                            SwipePreviewRequest(swipeId, swipePathPoints.toList(), topVocabulary.map { it.word })
                                         )
-                                        liveSwipePreviewWord = matches.firstOrNull()
                                     }
                                 }
                             }

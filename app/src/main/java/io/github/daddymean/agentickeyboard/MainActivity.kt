@@ -102,6 +102,7 @@ import io.github.daddymean.agentickeyboard.util.KeyboardSettings
 import io.github.daddymean.agentickeyboard.util.LearnedRuleCleanup
 import io.github.daddymean.agentickeyboard.util.KeyboardSetupStatus
 import io.github.daddymean.agentickeyboard.ondevice.GemmaSettingsSection
+import io.github.daddymean.agentickeyboard.util.LatencyMeter
 import io.github.daddymean.agentickeyboard.util.OnDeviceAiStatus
 import io.github.daddymean.agentickeyboard.util.TextExpansion
 
@@ -1565,6 +1566,25 @@ fun ExportTab(viewModel: KeyboardViewModel) {
                         DashboardStat("AI applies", usageStats.aiApplies)
                         DashboardStat("Shortcuts", usageStats.shortcutExpansions)
                     }
+                    Spacer(modifier = Modifier.height(12.dp))
+                    Text(
+                        "⏱ TYPING SPEED, RECENT (TYPICAL / SLOW, MS)",
+                        color = Color.White.copy(alpha = 0.6f),
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.Bold,
+                        letterSpacing = 0.5.sp
+                    )
+                    Spacer(modifier = Modifier.height(10.dp))
+                    // Timings only, held in memory; read again whenever the counters above change.
+                    val latency = remember(usageStats) {
+                        LatencyMeter.Metric.entries.map { it to LatencyMeter.summary(it) }
+                    }
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        latency.forEach { (metric, summary) -> LatencyStat(metric.label, summary) }
+                    }
                 }
             }
         }
@@ -2317,6 +2337,24 @@ fun SettingSwitchRow(
                 checkedThumbColor = Color.White,
                 checkedTrackColor = Color(0xFF6750A4)
             )
+        )
+    }
+}
+
+/** Median / 95th-percentile milliseconds for one keyboard operation, or a dash before any sample. */
+@Composable
+fun LatencyStat(label: String, summary: LatencyMeter.Summary?) {
+    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+        Text(
+            if (summary == null) "–" else "%.1f / %.1f".format(java.util.Locale.US, summary.medianMs, summary.p95Ms),
+            color = Color(0xFF4ADE80),
+            fontSize = 14.sp,
+            fontWeight = FontWeight.Bold
+        )
+        Text(
+            label,
+            color = Color.White.copy(alpha = 0.7f),
+            fontSize = 10.sp
         )
     }
 }
