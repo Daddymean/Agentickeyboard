@@ -51,7 +51,8 @@ flight.
 ```
 app/src/main/java/io/github/daddymean/agentickeyboard/
 ├── AgenticKeyboardApplication.kt   # App singleton exposing the Room repository
-├── MainActivity.kt                 # Companion app: playground, shortcuts, Style Hub, setup guide
+├── MainActivity.kt                 # Companion app host; its tabs are in PlaygroundTab.kt,
+│                                   #   ShortcutsTab.kt, ExportTab.kt (Style Hub) and SetupTab.kt
 ├── service/AgenticKeyboardService.kt  # The InputMethodService hosting the Compose keyboard
 ├── ui/
 │   ├── AgenticKeyboardLayout.kt    # Keyboard UI: keys, AI shelf, gestures, swipe-to-type

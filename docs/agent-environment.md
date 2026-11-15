@@ -64,8 +64,8 @@ This project is worked on under tight usage limits. Default to lean mode:
   with a short handoff brief rather than continuing a long conversation — a long
   chat re-sends its whole history every turn.
 - **Read in slices, not whole files.** Use Read `offset`/`limit` (or Grep) to
-  pull only the lines you need. `AgenticKeyboardLayout.kt`, `KeyboardViewModel.kt`,
-  and `MainActivity.kt` are large — never read them end-to-end without reason.
+  pull only the lines you need. `AgenticKeyboardLayout.kt`, `KeyboardViewModel.kt`
+  and `ExportTab.kt` are large — never read them end-to-end without reason.
 - **Edit, don't rewrite.** Use targeted `Edit` (old→new string) on the lines that
   change. Do not `Write` a whole large file to change a few lines.
 - **Don't re-read a file just to verify an edit.** The harness reports edit
