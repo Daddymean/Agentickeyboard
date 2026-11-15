@@ -61,18 +61,28 @@ fi
 [ "$#" -gt 0 ] || { echo "cloud-gradle: SDK ready in $SDK. Pass Gradle tasks to run them."; exit 0; }
 
 log="$(mktemp)"
-trap 'rm -f "$log"' EXIT
-max="${CLOUD_GRADLE_ATTEMPTS:-12}"
+trap 'rm -f "$log" "$log.missing" "$log.previous"' EXIT
+max="${CLOUD_GRADLE_ATTEMPTS:-20}"
+refresh=()
 for attempt in $(seq 1 "$max"); do
   status=0
-  (cd "$ROOT" && ./gradlew --console=plain "$@") 2>&1 | tee "$log" || status=$?
+  (cd "$ROOT" && ./gradlew --console=plain "${refresh[@]}" "$@") 2>&1 | tee "$log" || status=$?
   [ "$status" -eq 0 ] && exit 0
   # Only a failed download is worth another go. Robolectric fetches its Android
   # runtime jars itself, on first use, and reports a 429 as a failed fetch.
-  if ! grep -qE "status code 429|Too Many Requests|Could not (find|resolve|download|GET) |Failed to fetch maven artifact" "$log"; then
+  if ! grep -qE "status code 429|Too Many Requests|Could not (find|resolve|download|GET) |Failed to fetch maven artifact|was not found in any of the following sources" "$log"; then
     exit "$status"
   fi
   [ "$attempt" -lt "$max" ] || break
+  # When throttled, Central also answers 404 for files that exist, and Gradle
+  # remembers a 404 as "missing" for a day. If this attempt is stuck on exactly
+  # the files the last one was, make the next one ask again.
+  grep -E "Could not find .*\.(jar|pom|module|aar)|was not found in any" "$log" | sort -u > "$log.missing" || true
+  refresh=()
+  if [ -s "$log.missing" ] && cmp -s "$log.missing" "$log.previous"; then
+    refresh=(--refresh-dependencies)
+  fi
+  mv "$log.missing" "$log.previous"
   echo "cloud-gradle: downloads were rate-limited (attempt $attempt of $max); retrying in 20 s"
   sleep 20
 done
