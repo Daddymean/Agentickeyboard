@@ -71,10 +71,15 @@ app/src/main/java/io/github/daddymean/agentickeyboard/
 **Prerequisites:** [Android Studio](https://developer.android.com/studio)
 
 1. Open the project directory in Android Studio.
-2. Create a `.env` file in the project root and set `GEMINI_API_KEY` to your
-   [Gemini API key](https://aistudio.google.com/apikey) (see `.env.example`).
-   Without a key the app still runs using its offline fallbacks.
-3. Run the `app` configuration on an emulator or device.
+2. Run the `app` configuration on an emulator or device.
+3. For the cloud AI actions, paste your
+   [Gemini API key](https://aistudio.google.com/apikey) into the key card in the
+   app. It is stored encrypted with the Android Keystore on the device. No key is
+   ever read from a file or compiled into the app; without one the app uses its
+   offline fallbacks.
+
+Without Android Studio (Linux, cloud sessions): `tools/cloud-gradle.sh assembleDebug`
+installs the Android SDK on first use and builds the APK.
 
 ### Enable the keyboard
 1. In the app, open the **Setup Guide** tab and tap *Open System Keyboards*
@@ -126,8 +131,8 @@ key that signed each APK. A build installs over an earlier one only if the
 digests match. An APK signed with the upload key will not update a copy
 installed from Google Play, which re-signs with Google's app signing key.
 
-CI builds carry no `GEMINI_API_KEY`, so cloud AI actions fall back to their
-offline equivalents. Build locally with a key to exercise the Gemini paths.
+No build carries a Gemini API key. Until one is entered in the app, cloud AI
+actions fall back to their offline equivalents.
 
 ## Testing
 
