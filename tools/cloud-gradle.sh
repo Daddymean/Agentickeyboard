@@ -6,7 +6,7 @@
 #   tools/cloud-gradle.sh lintDebug
 #
 # First run: installs the Android SDK pieces this project compiles against
-# (about 470 MB, outside the repository) and points local.properties at them.
+# (about 500 MB, outside the repository) and points local.properties at them.
 # Every run: passes its arguments to ./gradlew, and reruns it while the failure
 # is a download that was rate-limited. Maven Central answers HTTP 429 to the
 # shared addresses cloud sessions use; Gradle keeps what it already fetched, so
@@ -21,12 +21,13 @@ SDK="${ANDROID_HOME:-$HOME/android-sdk}"
 # Command-line tools 19.0, pinned by checksum.
 TOOLS_URL="https://dl.google.com/android/repository/commandlinetools-linux-13114758_latest.zip"
 TOOLS_SHA256="7ec965280a073311c339e571cd5de778b9975026cfcbe79f2b1cdcb1e15317ee"
-# Keep in step with compileSdk in the module build files and with the build
-# tools the Android Gradle Plugin version in gradle/libs.versions.toml expects.
-PACKAGES=("platform-tools" "platforms;android-36.1" "build-tools;36.0.0")
+# Keep in step with compileSdk in the module build files (:callscreen is still
+# on 36). The Android Gradle Plugin fetches the build tools it wants on the
+# first build, which the accepted licences allow.
+PACKAGES=("platform-tools" "platforms;android-37.2" "platforms;android-36")
 
 installed() {
-  [ -d "$SDK/platform-tools" ] && [ -d "$SDK/platforms/android-36.1" ] && [ -d "$SDK/build-tools/36.0.0" ]
+  [ -d "$SDK/platform-tools" ] && [ -d "$SDK/platforms/android-37.2" ] && [ -d "$SDK/platforms/android-36" ]
 }
 
 install_sdk() {

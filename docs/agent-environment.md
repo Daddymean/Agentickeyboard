@@ -7,9 +7,9 @@ Details linked from [AGENTS.md](../AGENTS.md). Moved here from the old CLAUDE.md
 Agentic Keyboard (Lumina AI Keyboard) — an Android IME (custom keyboard) built
 with Kotlin, Jetpack Compose, Room, Retrofit/Moshi, and the Gemini API.
 
-- Android Gradle Plugin: **9.1.1** (requires **Gradle 9.1.0+** and **JDK 17+**)
+- Android Gradle Plugin: **9.5.1** on **Gradle 9.9.1** (wrapper), **JDK 17+**
 - `minSdk` 34 (required by `:core`, which `:app` depends on; this single-user
-  platform targets Android 16), `compileSdk`/`targetSdk` 36
+  platform targets Android 16), `compileSdk` 37.2, `targetSdk` 36
 
 ## Build & test environment — READ THIS FIRST
 
@@ -34,7 +34,7 @@ tools/cloud-gradle.sh testDebugUnitTest lintDebug                         # what
   `repo.maven.apache.org`. If the session's network policy blocks them, the
   script fails at the download; then fall back to CI and say so. Do not work
   around a blocked host.
-- Use the wrapper (`./gradlew`, Gradle 9.3.1), never the older system `gradle`.
+- Use the wrapper (`./gradlew`, Gradle 9.9.1), never the older system `gradle`.
 - Device and emulator tests (`connectedAndroidTest`) do not run here.
 
 **CI is still the source of truth** (`.github/workflows/android-build.yml`):
