@@ -638,7 +638,8 @@ class JournalActivity : Activity() {
         )
         row(
             "Save" to {
-                val ink = view.ink
+                // A copy: the view's ink can still be written on or cleared while the body is built.
+                val ink = view.ink.snapshot()
                 val saidText = said.text.toString()
                 val recognizedBy = source?.takeIf { saidText.isNotBlank() }?.let { "$it, checked by Keith" }
                 scope.launch {
