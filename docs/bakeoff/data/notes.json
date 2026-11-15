@@ -1,0 +1,306 @@
+{
+  "notes": [
+    {
+      "id": "n01",
+      "title": "Blueberry pancake recipe",
+      "text": "Martin's Saturday blueberry pancakes use 150 grams of flour, 1 egg, and a cup of milk. They cook 3 minutes per side in a dry skillet.",
+      "tags": "recipe"
+    },
+    {
+      "id": "n02",
+      "title": "Pepper's vet visit",
+      "text": "The fictional terrier mix Pepper has a checkup with Dr. Lang at Cedar Mills Animal Desk on 2026-08-14 at 10:00.",
+      "tags": "pet"
+    },
+    {
+      "id": "n03",
+      "title": "Library evening shift",
+      "text": "Martin works evening shifts at Cedar Mills public library from 16:00 to 21:00 on weekdays.",
+      "tags": "work"
+    },
+    {
+      "id": "n04",
+      "title": "Book club pick",
+      "text": "The Cedar Mills book club is reading The Night River by I. Elwood in September.",
+      "tags": "books"
+    },
+    {
+      "id": "n05",
+      "title": "Spare key location",
+      "text": "A spare key for the garden shed is under the blue flowerpot, not under the mat.",
+      "tags": "household"
+    },
+    {
+      "id": "n06",
+      "title": "Ferry timetable",
+      "text": "The 7:15 ferry from Cedar Mills jetty was cancelled on 2026-05-02; the next listed boat was 8:00.",
+      "tags": "travel"
+    },
+    {
+      "id": "n07",
+      "title": "Wagon loan",
+      "text": "Jordan Hale borrowed a foldable wagon on Friday and promised to return it Sunday noon.",
+      "tags": "loan"
+    },
+    {
+      "id": "n08",
+      "title": "Invoice North Pine",
+      "text": "Invoice INV-204 from North Pine Software is USD 240.00 dated 2026-04-12 for a calendar plugin, paid by Mira Chen.",
+      "tags": "finance"
+    },
+    {
+      "id": "n09",
+      "title": "Cedar Tools hammers",
+      "text": "A proposed hardware purchase from Cedar Tools is 3 hammers totaling USD 54.00 on 2026-05-01, not yet approved.",
+      "tags": "finance"
+    },
+    {
+      "id": "n10",
+      "title": "River Coach booking",
+      "text": "Deal RC-88 with River Coach Lines costs 120 GBP on 2026-06-12 and is approved for Jordan Hale.",
+      "tags": "travel"
+    },
+    {
+      "id": "n11",
+      "title": "Hillside workshop fee",
+      "text": "Hillside Services gardening workshop fee of USD 19.99 on 2026-03-30 was rejected. Requester: Priya Shah.",
+      "tags": "finance"
+    },
+    {
+      "id": "n12",
+      "title": "Cafe tea receipt",
+      "text": "Blue Kettle Cafe charged USD 8.00 on 2026-07-04 for tea. No deal id.",
+      "tags": "finance"
+    },
+    {
+      "id": "n13",
+      "title": "Bake sale",
+      "text": "The library bake sale is on May 3 at 5:30 p.m. in the lobby, optional potluck style.",
+      "tags": "event"
+    },
+    {
+      "id": "n14",
+      "title": "Room B12 meeting",
+      "text": "A sample review meeting moved to room B12 at 3:00 p.m.; attendees should bring the cedar sample.",
+      "tags": "work"
+    },
+    {
+      "id": "n15",
+      "title": "Library card expiry",
+      "text": "A patron library card expires on 12 March and can be renewed at the desk.",
+      "tags": "work"
+    },
+    {
+      "id": "n16",
+      "title": "Widget shipment",
+      "text": "An order of 12 widgets should ship to 400 Maple Street and costs USD 48.50.",
+      "tags": "shipping"
+    },
+    {
+      "id": "n17",
+      "title": "Pamphlet draft",
+      "text": "An 8-page pamphlet draft is finished; the author asked whether to send a paper copy or a PDF.",
+      "tags": "work"
+    },
+    {
+      "id": "n18",
+      "title": "Tracking ZX-1944",
+      "text": "Package tracking number ZX-1944 is late; the last scan was at the Cedar Mills depot.",
+      "tags": "shipping"
+    },
+    {
+      "id": "n19",
+      "title": "Lemon honey measure",
+      "text": "A cordial recipe adds 15 milliliters of lemon and 2 teaspoons of honey.",
+      "tags": "recipe"
+    },
+    {
+      "id": "n20",
+      "title": "Train times",
+      "text": "A train leaves platform 9 at 06:05 and arrives at 08:40.",
+      "tags": "travel"
+    },
+    {
+      "id": "n21",
+      "title": "Winter's Tale typo",
+      "text": "A poster title should read A Winter's Tale, not A Winters Tale.",
+      "tags": "work"
+    },
+    {
+      "id": "n22",
+      "title": "Pepper diet",
+      "text": "Pepper's fictional diet is one cup of dry food at 7 a.m. and a carrot stick at noon. No chocolate.",
+      "tags": "pet"
+    },
+    {
+      "id": "n23",
+      "title": "Garden shed paint",
+      "text": "The garden shed was painted sage green on 2026-04-20 and needs a second coat next month.",
+      "tags": "household"
+    },
+    {
+      "id": "n24",
+      "title": "Paper lanterns",
+      "text": "A festival box contains 12 paper lanterns stored on the hall shelf, unused.",
+      "tags": "household"
+    },
+    {
+      "id": "n25",
+      "title": "Cedar cutting board",
+      "text": "A cedar cutting board is priced at USD 18 in the weekend market stall, stall C3.",
+      "tags": "shopping"
+    },
+    {
+      "id": "n26",
+      "title": "Favorite saying",
+      "text": "Martin's favorite saying is: Let's try a smaller step.",
+      "tags": "persona"
+    },
+    {
+      "id": "n27",
+      "title": "Town name",
+      "text": "The short story is set in the made-up town of Cedar Mills, not a real city.",
+      "tags": "persona"
+    },
+    {
+      "id": "n28",
+      "title": "Blue crate aisle 4",
+      "text": "A blue crate of donated books is in aisle 4 of the library basement, not lost.",
+      "tags": "work"
+    },
+    {
+      "id": "n29",
+      "title": "Bakery mixer",
+      "text": "The bakery mixer at Hilltop Oven stopped 20 minutes before a Saturday sale; a manual whisk backup was used.",
+      "tags": "event"
+    },
+    {
+      "id": "n30",
+      "title": "Monday book gift",
+      "text": "Sam received the book The Night River on Monday.",
+      "tags": "books"
+    },
+    {
+      "id": "n31",
+      "title": "Council meeting typo",
+      "text": "A draft notice wrongly said Februry 31 in ceder Mills; the intended place is Cedar Mills.",
+      "tags": "work"
+    },
+    {
+      "id": "n32",
+      "title": "Folding table",
+      "text": "A folding table for the bake sale is stored behind the reference desk, six feet long.",
+      "tags": "event"
+    },
+    {
+      "id": "n33",
+      "title": "Rain plan",
+      "text": "If it rains on May 3, the bake sale moves to the reading room, not the lobby.",
+      "tags": "event"
+    },
+    {
+      "id": "n34",
+      "title": "Pepper leash",
+      "text": "Pepper's red leash hangs on the third hook by the back door.",
+      "tags": "pet"
+    },
+    {
+      "id": "n35",
+      "title": "Blueberry supplier",
+      "text": "Blueberries for pancakes come from Willow Cart Farm, one pint each Friday.",
+      "tags": "recipe"
+    },
+    {
+      "id": "n36",
+      "title": "Quiet hours",
+      "text": "Cedar Mills public library has quiet hours from 18:00 to 19:00 on weekdays.",
+      "tags": "work"
+    },
+    {
+      "id": "n37",
+      "title": "Lost umbrella",
+      "text": "A green umbrella was left on bus 14 last Tuesday and is at the transit window.",
+      "tags": "lost"
+    },
+    {
+      "id": "n38",
+      "title": "Map drawer",
+      "text": "The town walking-map reprints are in drawer C of the circulation desk.",
+      "tags": "work"
+    },
+    {
+      "id": "n39",
+      "title": "Piano tuner",
+      "text": "The community-room piano was tuned on 2026-02-11 by Rowan Gelt.",
+      "tags": "event"
+    },
+    {
+      "id": "n40",
+      "title": "Seed packets",
+      "text": "Six sunflower seed packets are in a tin labeled April, on the kitchen window ledge.",
+      "tags": "household"
+    },
+    {
+      "id": "n41",
+      "title": "Password reminder policy",
+      "text": "The fictional library staff must never store patron passwords on sticky notes.",
+      "tags": "work"
+    },
+    {
+      "id": "n42",
+      "title": "Chess night",
+      "text": "Friday chess night starts at 19:15 in the children's annex, bringing your own board is optional.",
+      "tags": "event"
+    },
+    {
+      "id": "n43",
+      "title": "Glue stock",
+      "text": "Acid-free glue sticks are on backorder; only 2 remain in the craft closet.",
+      "tags": "work"
+    },
+    {
+      "id": "n44",
+      "title": "River path closure",
+      "text": "The east river path is closed from the footbridge to the willow bench until 2026-08-01.",
+      "tags": "travel"
+    },
+    {
+      "id": "n45",
+      "title": "Pepper birthday",
+      "text": "In the story, Pepper's birthday is July 9; the celebration is a walk, not cake.",
+      "tags": "pet"
+    },
+    {
+      "id": "n46",
+      "title": "Audio kit",
+      "text": "A portable audio kit for story time is in bin A2, with 4 headphones.",
+      "tags": "work"
+    },
+    {
+      "id": "n47",
+      "title": "Mira's plugin note",
+      "text": "Mira Chen asked that the calendar plugin invoice be filed under software renewals, not hardware.",
+      "tags": "finance"
+    },
+    {
+      "id": "n48",
+      "title": "Priya's garden query",
+      "text": "Priya Shah later asked whether a smaller gardening talk could replace the rejected workshop.",
+      "tags": "finance"
+    },
+    {
+      "id": "n49",
+      "title": "Stargazing night",
+      "text": "A fictional stargazing night is planned for 2026-09-20 at the jetty if the sky is clear.",
+      "tags": "event"
+    },
+    {
+      "id": "n50",
+      "title": "Emergency number drill",
+      "text": "The library desk drill uses the fictional extension 717 for facilities, not a real emergency service.",
+      "tags": "work"
+    }
+  ],
+  "synthetic": true,
+  "no_real_personal_data": true
+}

@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Debug builds only. The model benchmark stays disabled (no launcher icon,
+     cannot be started) unless the build passes -PmodelBenchmark=true. -->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <application>
+        <activity
+            android:name=".bench.ModelBenchmarkActivity"
+            android:enabled="${modelBenchmarkEnabled}"
+            android:exported="${modelBenchmarkEnabled}"
+            android:label="Model benchmark"
+            android:taskAffinity=""
+            android:theme="@style/Theme.MyApplication">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+    </application>
+</manifest>

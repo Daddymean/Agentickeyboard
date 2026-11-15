@@ -1,0 +1,9 @@
+{
+ "init_time_in_second": 0.7365490380000002,
+ "time_to_first_token_in_second": 0.48862624175,
+ "last_prefill_token_count": 256,
+ "last_prefill_tokens_per_second": 566.876015455414,
+ "last_decode_token_count": 128,
+ "last_decode_tokens_per_second": 27.006316877103348,
+ "peak_rss_mib": 1272.87890625
+}

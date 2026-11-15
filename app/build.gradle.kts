@@ -48,6 +48,8 @@ android {
   buildTypes {
     release {
       isCrunchPngs = false
+      // The model benchmark harness is debug-only and never ships.
+      buildConfigField("boolean", "MODEL_BENCHMARK", "false")
       // R8 shrinking/obfuscation, exercised by CI's assembleRelease step on
       // every push. Library consumer rules plus proguard-rules.pro cover the
       // reflective surfaces (see that file for the reasoning).
@@ -68,6 +70,11 @@ android {
       }
     }
     debug {
+      // Model bake-off harness (src/debug/.../bench). Off by default; only a
+      // debug build with -PmodelBenchmark=true enables the screen.
+      val modelBenchmark = (project.findProperty("modelBenchmark") as String?) == "true"
+      buildConfigField("boolean", "MODEL_BENCHMARK", modelBenchmark.toString())
+      manifestPlaceholders["modelBenchmarkEnabled"] = modelBenchmark.toString()
       // Use the checked-in debug keystore only when present; otherwise fall back
       // to the default Android debug signing so fresh clones build unmodified.
       if (file("${rootDir}/debug.keystore").exists()) {
