@@ -56,7 +56,9 @@ jobs:
       - name: Build debug APK and run unit tests
         # Record mode makes Roborazzi write KeyboardScreenshotTest's PNGs (it writes
         # nothing otherwise); they are uploaded below as `ui-screenshots`.
-        run: ./gradlew assembleDebug testDebugUnitTest -Proborazzi.test.record=true --stacktrace
+        # No --stacktrace: a compile or test failure already names the file and line,
+        # and the trace buries it under ~250 lines for whoever reads the log.
+        run: ./gradlew assembleDebug testDebugUnitTest -Proborazzi.test.record=true
 
       # The release (upload) key is exposed only to pushes to main/master and manual
       # runs, never to pull_request builds: those run the PR branch's own build
@@ -84,7 +86,7 @@ jobs:
           STORE_PASSWORD: ${{ github.event_name != 'pull_request' && secrets.RELEASE_STORE_PASSWORD || '' }}
           KEY_PASSWORD: ${{ github.event_name != 'pull_request' && secrets.RELEASE_KEY_PASSWORD || '' }}
           KEY_ALIAS: ${{ github.event_name != 'pull_request' && secrets.RELEASE_KEY_ALIAS || '' }}
-        run: ./gradlew assembleRelease --stacktrace
+        run: ./gradlew assembleRelease
 
       - name: Name release artifact
         id: release
@@ -181,7 +183,7 @@ jobs:
       # has 0 errors, so no baseline is needed). Runs last so a lint failure never
       # prevents the APK/test/screenshot artifacts above from uploading.
       - name: Android lint
-        run: ./gradlew lintDebug --stacktrace
+        run: ./gradlew lintDebug
 
       - name: Upload lint reports
         if: always()

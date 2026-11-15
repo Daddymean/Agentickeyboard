@@ -8,7 +8,6 @@ import android.content.Intent
 import android.net.Uri
 import android.os.Bundle
 import android.provider.DocumentsContract
-import android.text.Editable
 import android.text.InputType
 import android.view.View
 import android.view.WindowManager
@@ -86,10 +85,10 @@ class TwinExportActivity : Activity() {
     }
 
     private fun takePassphrase(field: EditText): CharArray {
-        // An EditText's text is always an Editable; Kotlin 2.4 types the property as
-        // the CharSequence that TextView declares, so say so.
-        val e = field.text as Editable
-        val out = CharArray(e.length).also { e.getChars(0, e.length, it, 0) }
+        // Copied character by character: against SDK 37 Kotlin no longer sees
+        // Editable.getChars. No String of the passphrase is ever made.
+        val e = field.text
+        val out = CharArray(e.length) { e[it] }
         e.clear()
         return out
     }
