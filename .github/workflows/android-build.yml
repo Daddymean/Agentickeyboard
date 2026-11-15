@@ -119,7 +119,7 @@ jobs:
           PY
 
       - name: Upload release APK
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v6
         with:
           name: ${{ steps.release.outputs.artifact }}
           path: app/build/outputs/apk/release/*.apk
@@ -127,7 +127,7 @@ jobs:
 
       - name: Upload unit test reports
         if: always()
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v6
         with:
           name: unit-test-reports
           path: |
@@ -141,7 +141,7 @@ jobs:
 
       - name: Upload UI screenshots
         if: always()
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v6
         with:
           name: ui-screenshots
           path: app/build/outputs/roborazzi/*.png
@@ -161,7 +161,7 @@ jobs:
           --output app/build/outputs/apk/debug/build-manifest.json
 
       - name: Upload debug APK
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v6
         with:
           name: app-debug
           path: |
@@ -170,7 +170,7 @@ jobs:
           if-no-files-found: error
 
       - name: Upload context-app debug APK
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v6
         with:
           name: context-app-debug
           path: context-app/build/outputs/apk/debug/context-app-debug.apk
@@ -185,7 +185,7 @@ jobs:
 
       - name: Upload lint reports
         if: always()
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v6
         with:
           name: lint-reports
           path: |

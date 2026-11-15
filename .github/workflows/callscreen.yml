@@ -45,7 +45,7 @@ jobs:
           PY
       - name: Upload standalone APKs and validation reports
         if: always()
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v6
         with:
           name: callscreen-validation
           path: |
