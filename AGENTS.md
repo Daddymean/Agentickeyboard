@@ -42,7 +42,7 @@ Claim the task in Nexus first, then write handoff JSONL under `communications/` 
 
 ## Build and test
 - CI (`.github/workflows/android-build.yml`) is the source of truth: debug + release build, unit tests, screenshots, lint, then a pass/fail summary on the commit.
-- Cloud sessions without an Android SDK must not try to build locally; see [docs/agent-environment.md](docs/agent-environment.md). Sessions with an SDK run unit tests + `lintDebug` before asking for review.
+- Cloud sessions build and test locally with `tools/cloud-gradle.sh <gradle tasks>` (installs the SDK on first use, retries rate-limited downloads); see [docs/agent-environment.md](docs/agent-environment.md). Run unit tests + `lintDebug` before asking for review.
 - Never claim a local build passed unless you ran it.
 
 ## Conventions
