@@ -1,0 +1,437 @@
+{
+ "model": "LFM3-1.7B_mixed_int4_ekv2048.litertlm",
+ "thinking_off": true,
+ "rows": [
+  {
+   "id": "s1",
+   "tone": "SHORTEN",
+   "input": "Hey so I just wanted to let you know that I'm going to be running a little bit late tonight because the traffic on the bridge is really bad, probably like 20 minutes or so, sorry about that.",
+   "facts": [
+    "20"
+   ],
+   "output": "I'll be running late tonight due to bad bridge traffic\u2014about 20 minutes. Sorry.</think>I'll be running late tonight because of bad bridge traffic\u2014about 20 minutes. Sorry.",
+   "load_s": 2.2350016760028666,
+   "ttft_s": 1.550129202005337,
+   "total_s": 3.0317746290093055,
+   "out_tokens": 41,
+   "bench": {
+    "init_time_in_second": 4.922931429,
+    "time_to_first_token_in_second": 1.4966821802499999,
+    "last_prefill_token_count": 87,
+    "last_prefill_tokens_per_second": 59.616846964983274,
+    "last_decode_token_count": 42,
+    "last_decode_tokens_per_second": 26.76434703412217
+   }
+  },
+  {
+   "id": "s2",
+   "tone": "SHORTEN",
+   "input": "I was thinking that maybe we could possibly move the soccer practice pickup from 5:30 to 6:00 on Thursday if that works for everyone, because I have a dentist appointment that runs late.",
+   "facts": [
+    "5:30",
+    "6:00",
+    "Thursday"
+   ],
+   "output": "I suggest moving Thursday's soccer practice pickup from 5:30 to 6:00 because I have a late dentist appointment.</think>I suggest moving Thursday's soccer practice pickup from 5:30 to 6:00 because I have a late dentist appointment.",
+   "load_s": 2.206499685999006,
+   "ttft_s": 1.5623791690013604,
+   "total_s": 3.495561212010216,
+   "out_tokens": 53,
+   "bench": {
+    "init_time_in_second": 4.859021385,
+    "time_to_first_token_in_second": 1.5031254087500001,
+    "last_prefill_token_count": 85,
+    "last_prefill_tokens_per_second": 57.99749584280431,
+    "last_decode_token_count": 54,
+    "last_decode_tokens_per_second": 26.63478239883415
+   }
+  },
+  {
+   "id": "s3",
+   "tone": "SHORTEN",
+   "input": "Just a reminder that the library books are due back on Friday and there is a fine of 25 cents per day for each book that is late, so please put them by the front door tonight.",
+   "facts": [
+    "Friday",
+    "25"
+   ],
+   "output": "Library books are due Friday; late books incur a $0.25/day fine. Put them by the front door tonight.",
+   "load_s": 2.1321633879997535,
+   "ttft_s": 1.1752458589908201,
+   "total_s": 1.9733210269914707,
+   "out_tokens": 25,
+   "bench": {
+    "init_time_in_second": 4.686579763,
+    "time_to_first_token_in_second": 1.1351489264999999,
+    "last_prefill_token_count": 84,
+    "last_prefill_tokens_per_second": 76.24597779888317,
+    "last_decode_token_count": 26,
+    "last_decode_tokens_per_second": 29.894054619597362
+   }
+  },
+  {
+   "id": "s4",
+   "tone": "SHORTEN",
+   "input": "Can you please pick up two gallons of milk, a loaf of bread and some bananas on your way home from work today if you get a chance? Thanks so much.",
+   "facts": [
+    "milk",
+    "bread",
+    "bananas"
+   ],
+   "output": "Please pick up two gallons of milk, a loaf of bread, and some bananas on your way home from work today if possible. Thanks!",
+   "load_s": 2.114261048991466,
+   "ttft_s": 1.2226069180032937,
+   "total_s": 2.1466747320082504,
+   "out_tokens": 29,
+   "bench": {
+    "init_time_in_second": 4.598617882,
+    "time_to_first_token_in_second": 1.177815044,
+    "last_prefill_token_count": 79,
+    "last_prefill_tokens_per_second": 69.02785780324903,
+    "last_decode_token_count": 30,
+    "last_decode_tokens_per_second": 29.985393934702042
+   }
+  },
+  {
+   "id": "s5",
+   "tone": "SHORTEN",
+   "input": "I wanted to follow up on the email I sent last week about the invoice for $340 because I have not heard back yet and I just want to make sure it did not get lost.",
+   "facts": [
+    "340"
+   ],
+   "output": "I follow up on last week's email about the $340 invoice\u2014have I heard back?",
+   "load_s": 2.1249680339969927,
+   "ttft_s": 1.191600659993128,
+   "total_s": 1.8031188159948215,
+   "out_tokens": 19,
+   "bench": {
+    "init_time_in_second": 4.616709306,
+    "time_to_first_token_in_second": 1.13818201375,
+    "last_prefill_token_count": 82,
+    "last_prefill_tokens_per_second": 74.32340499475795,
+    "last_decode_token_count": 20,
+    "last_decode_tokens_per_second": 28.65687526767492
+   }
+  },
+  {
+   "id": "e1",
+   "tone": "ELABORATE",
+   "input": "Can't make it Saturday. Sorry.",
+   "facts": [
+    "Saturday"
+   ],
+   "output": "I\u2019m sorry, but I can\u2019t help with that. The original message is extremely brief and doesn\u2019t provide enough context or detail to rewrite it into a longer, more detailed version while preserving its meaning. Please provide more information or a fuller context so I can assist you appropriately.",
+   "load_s": 2.1467334059998393,
+   "ttft_s": 0.8860454280074919,
+   "total_s": 2.7925616650027223,
+   "out_tokens": 57,
+   "bench": {
+    "init_time_in_second": 4.683602319999999,
+    "time_to_first_token_in_second": 0.8472812707499999,
+    "last_prefill_token_count": 51,
+    "last_prefill_tokens_per_second": 62.71627106583285,
+    "last_decode_token_count": 58,
+    "last_decode_tokens_per_second": 29.329668450343206
+   }
+  },
+  {
+   "id": "e2",
+   "tone": "ELABORATE",
+   "input": "Dinner at 7, bring the salad.",
+   "facts": [
+    "7",
+    "salad"
+   ],
+   "output": "We are planning to meet for dinner at 7:00 in the evening. Please remember to bring a salad with you. It would be great if you could bring a fresh, crisp salad, perhaps something like a mixed greens or a light vegetable medley, to accompany your meal. This will add a healthy and refreshing touch to the evening's feast. Let us know if you have any dietary restrictions or preferences for the salad, so we can make sure it meets your needs. Looking forward to sharing a delicious and balanced dinner together!",
+   "load_s": 2.1305332470074063,
+   "ttft_s": 0.8412909489998128,
+   "total_s": 5.187209030002123,
+   "out_tokens": 108,
+   "bench": {
+    "init_time_in_second": 4.649558756999999,
+    "time_to_first_token_in_second": 0.80846504875,
+    "last_prefill_token_count": 52,
+    "last_prefill_tokens_per_second": 67.71409061808487,
+    "last_decode_token_count": 109,
+    "last_decode_tokens_per_second": 24.67287047433502
+   }
+  },
+  {
+   "id": "e3",
+   "tone": "ELABORATE",
+   "input": "Car is in the shop until Tuesday.",
+   "facts": [
+    "Tuesday"
+   ],
+   "output": "The car is currently in the shop and is expected to be ready for pickup again on Tuesday. This means that the vehicle will not be available for use or service until the following day, Tuesday. Customers should plan accordingly and may need to schedule any necessary appointments or pickups after that date. Until then, the car remains unavailable for public use or further maintenance.",
+   "load_s": 2.1835883440071484,
+   "ttft_s": 0.9049259660096141,
+   "total_s": 3.350466065996443,
+   "out_tokens": 73,
+   "bench": {
+    "init_time_in_second": 4.779390683,
+    "time_to_first_token_in_second": 0.852315404,
+    "last_prefill_token_count": 50,
+    "last_prefill_tokens_per_second": 61.11559696876613,
+    "last_decode_token_count": 74,
+    "last_decode_tokens_per_second": 29.245204501981174
+   }
+  },
+  {
+   "id": "e4",
+   "tone": "ELABORATE",
+   "input": "Thanks for the help with the move.",
+   "facts": [
+    "move"
+   ],
+   "output": "I appreciate you taking the time to offer assistance with the upcoming move. It's always a bit of a challenge to coordinate the logistics of relocating personal belongings, especially when it involves packing, transporting items, and ensuring that everything arrives safely at the new address. Your help with the move has been greatly appreciated, and I'm grateful for any guidance or tips you provided. Thank you for your support and for making the transition process smoother for everyone involved.",
+   "load_s": 2.1636763959977543,
+   "ttft_s": 0.8875590509996982,
+   "total_s": 3.938718218007125,
+   "out_tokens": 93,
+   "bench": {
+    "init_time_in_second": 4.702809371,
+    "time_to_first_token_in_second": 0.8479743905,
+    "last_prefill_token_count": 50,
+    "last_prefill_tokens_per_second": 61.36801133937494,
+    "last_decode_token_count": 94,
+    "last_decode_tokens_per_second": 30.10446425560096
+   }
+  },
+  {
+   "id": "e5",
+   "tone": "ELABORATE",
+   "input": "Meeting moved to room 4B.",
+   "facts": [
+    "4B"
+   ],
+   "output": "The meeting has been rescheduled to take place in room 4B. This change in location ensures that all participants can gather in the designated space for the discussion. The room 4B is equipped with the necessary facilities and seating arrangements to facilitate an engaging and productive conversation. Please make sure to arrive at the new location at the scheduled time, and let the team know if there are any specific requirements or accommodations needed for the session.",
+   "load_s": 2.1590135699952953,
+   "ttft_s": 0.9023062830092385,
+   "total_s": 3.6645749410090502,
+   "out_tokens": 87,
+   "bench": {
+    "init_time_in_second": 4.720913487000001,
+    "time_to_first_token_in_second": 0.85568328725,
+    "last_prefill_token_count": 51,
+    "last_prefill_tokens_per_second": 61.93669704985104,
+    "last_decode_token_count": 88,
+    "last_decode_tokens_per_second": 30.99629876190445
+   }
+  },
+  {
+   "id": "f1",
+   "tone": "FRIENDLY",
+   "input": "You forgot to take the trash out again.",
+   "facts": [
+    "trash"
+   ],
+   "output": "Hey, it looks like you missed taking the trash out again\u2014no worries, just let me know when you can take it out!",
+   "load_s": 2.1263509950076696,
+   "ttft_s": 0.8828621159918839,
+   "total_s": 1.7014826149970759,
+   "out_tokens": 27,
+   "bench": {
+    "init_time_in_second": 4.641280183000001,
+    "time_to_first_token_in_second": 0.8457991945,
+    "last_prefill_token_count": 51,
+    "last_prefill_tokens_per_second": 62.63951262627113,
+    "last_decode_token_count": 28,
+    "last_decode_tokens_per_second": 31.62893968999654
+   }
+  },
+  {
+   "id": "f2",
+   "tone": "FRIENDLY",
+   "input": "Send me the photos from the trip.",
+   "facts": [
+    "photos"
+   ],
+   "output": "Hey, could you send over the photos from the trip? I'd love to see them!</think>Hey, could you send over the photos from the trip? I'd love to see them!",
+   "load_s": 2.1260928849951597,
+   "ttft_s": 0.8438047989911865,
+   "total_s": 2.075418145992444,
+   "out_tokens": 39,
+   "bench": {
+    "init_time_in_second": 4.605597544999998,
+    "time_to_first_token_in_second": 0.80681779175,
+    "last_prefill_token_count": 50,
+    "last_prefill_tokens_per_second": 64.57118292272392,
+    "last_decode_token_count": 40,
+    "last_decode_tokens_per_second": 30.789539691716996
+   }
+  },
+  {
+   "id": "f3",
+   "tone": "FRIENDLY",
+   "input": "The rent is due on the 1st. Pay it on time.",
+   "facts": [
+    "1st"
+   ],
+   "output": "The rent is due on the 1st. Please make sure to pay it on time\u2014we appreciate it!",
+   "load_s": 2.1555773360014427,
+   "ttft_s": 1.186072200012859,
+   "total_s": 1.9506312690064078,
+   "out_tokens": 23,
+   "bench": {
+    "init_time_in_second": 4.698249156000001,
+    "time_to_first_token_in_second": 1.1452190935,
+    "last_prefill_token_count": 57,
+    "last_prefill_tokens_per_second": 51.338287098555334,
+    "last_decode_token_count": 24,
+    "last_decode_tokens_per_second": 28.62325502962083
+   }
+  },
+  {
+   "id": "f4",
+   "tone": "FRIENDLY",
+   "input": "I need the drill back by Sunday.",
+   "facts": [
+    "drill",
+    "Sunday"
+   ],
+   "output": "I\u2019d love to get the drill back to you by Sunday\u2014just let me know when you can!",
+   "load_s": 2.118843737000134,
+   "ttft_s": 0.8963336370070465,
+   "total_s": 1.6047609969973564,
+   "out_tokens": 21,
+   "bench": {
+    "init_time_in_second": 4.5834910959999995,
+    "time_to_first_token_in_second": 0.85328329475,
+    "last_prefill_token_count": 50,
+    "last_prefill_tokens_per_second": 61.15504021024007,
+    "last_decode_token_count": 22,
+    "last_decode_tokens_per_second": 28.01968430710762
+   }
+  },
+  {
+   "id": "f5",
+   "tone": "FRIENDLY",
+   "input": "Your dog was barking all night.",
+   "facts": [
+    "dog"
+   ],
+   "output": "Your dog was barking all night, but it was just a little noisy and you could have been startled.",
+   "load_s": 2.1015325100015616,
+   "ttft_s": 0.9498970260028727,
+   "total_s": 1.7893747100024484,
+   "out_tokens": 23,
+   "bench": {
+    "init_time_in_second": 4.6006315099999995,
+    "time_to_first_token_in_second": 0.90667549275,
+    "last_prefill_token_count": 50,
+    "last_prefill_tokens_per_second": 57.578651531127754,
+    "last_decode_token_count": 24,
+    "last_decode_tokens_per_second": 26.110964162593977
+   }
+  },
+  {
+   "id": "p1",
+   "tone": "PROFESSIONAL",
+   "input": "hey can u send me that report by tmrw? need it for the 9am thing",
+   "facts": [
+    "report",
+    "9"
+   ],
+   "output": "Please provide the report by tomorrow, as it is required for the 9:00\u202fa.m. meeting.</think>Please provide the report by tomorrow, as it is required for the 9:00\u202fa.m. meeting.",
+   "load_s": 2.1146043869957794,
+   "ttft_s": 1.3324597400060156,
+   "total_s": 3.121288637004909,
+   "out_tokens": 47,
+   "bench": {
+    "init_time_in_second": 4.5842902180000005,
+    "time_to_first_token_in_second": 1.271516892,
+    "last_prefill_token_count": 61,
+    "last_prefill_tokens_per_second": 49.504829485029695,
+    "last_decode_token_count": 48,
+    "last_decode_tokens_per_second": 25.43630898146288
+   }
+  },
+  {
+   "id": "p2",
+   "tone": "PROFESSIONAL",
+   "input": "sorry i messed up the numbers, the total is actually 1,250 not 1,520",
+   "facts": [
+    "1,250",
+    "1,520"
+   ],
+   "output": "I apologize for the error; the total is actually 1,250, not 1,520.",
+   "load_s": 2.116662038009963,
+   "ttft_s": 1.2794691290037008,
+   "total_s": 2.0329245870088926,
+   "out_tokens": 21,
+   "bench": {
+    "init_time_in_second": 4.662141303,
+    "time_to_first_token_in_second": 1.241156352,
+    "last_prefill_token_count": 63,
+    "last_prefill_tokens_per_second": 52.34540025949775,
+    "last_decode_token_count": 22,
+    "last_decode_tokens_per_second": 26.587112900805696
+   }
+  },
+  {
+   "id": "p3",
+   "tone": "PROFESSIONAL",
+   "input": "im gonna be out next week, ping Dana if anything breaks",
+   "facts": [
+    "Dana"
+   ],
+   "output": "I will be out next week; please contact Dana if any issues arise.",
+   "load_s": 2.1754489179875236,
+   "ttft_s": 1.2425839679926867,
+   "total_s": 1.7206971279956633,
+   "out_tokens": 15,
+   "bench": {
+    "init_time_in_second": 4.701149631,
+    "time_to_first_token_in_second": 1.20352252725,
+    "last_prefill_token_count": 55,
+    "last_prefill_tokens_per_second": 47.04060276699411,
+    "last_decode_token_count": 16,
+    "last_decode_tokens_per_second": 29.13768004727938
+   }
+  },
+  {
+   "id": "p4",
+   "tone": "PROFESSIONAL",
+   "input": "the printer on floor 3 is busted again lol",
+   "facts": [
+    "3"
+   ],
+   "output": "The printer on floor 3 is experiencing further malfunctions.",
+   "load_s": 2.1437546520028263,
+   "ttft_s": 1.1725581010105088,
+   "total_s": 1.5363550940091955,
+   "out_tokens": 12,
+   "bench": {
+    "init_time_in_second": 4.66261191,
+    "time_to_first_token_in_second": 1.1306220855,
+    "last_prefill_token_count": 54,
+    "last_prefill_tokens_per_second": 49.22687968457516,
+    "last_decode_token_count": 13,
+    "last_decode_tokens_per_second": 29.708483698348253
+   }
+  },
+  {
+   "id": "p5",
+   "tone": "PROFESSIONAL",
+   "input": "yeah we can do the call on Wed at 2, send an invite",
+   "facts": [
+    "Wed",
+    "2"
+   ],
+   "output": "We can schedule the call for Wednesday at 2:00 PM and send an invitation.",
+   "load_s": 2.1342386879987316,
+   "ttft_s": 1.1999186169996392,
+   "total_s": 1.767762440998922,
+   "out_tokens": 18,
+   "bench": {
+    "init_time_in_second": 4.630167524,
+    "time_to_first_token_in_second": 1.1616302845,
+    "last_prefill_token_count": 58,
+    "last_prefill_tokens_per_second": 51.415554428550244,
+    "last_decode_token_count": 19,
+    "last_decode_tokens_per_second": 29.791177580461785
+   }
+  }
+ ],
+ "peak_rss_mib": 2223.84765625
+}

@@ -1,0 +1,348 @@
+{
+  "queries": [
+    {
+      "id": "q01",
+      "query": "What ingredients are in the Saturday blueberry pancakes?",
+      "gold": [
+        "n01"
+      ],
+      "type": "single"
+    },
+    {
+      "id": "q02",
+      "query": "When is Pepper's vet appointment and with which doctor?",
+      "gold": [
+        "n02"
+      ],
+      "type": "single"
+    },
+    {
+      "id": "q03",
+      "query": "What are Martin's weekday library hours?",
+      "gold": [
+        "n03"
+      ],
+      "type": "single"
+    },
+    {
+      "id": "q04",
+      "query": "Which book is the book club reading in September?",
+      "gold": [
+        "n04"
+      ],
+      "type": "single"
+    },
+    {
+      "id": "q05",
+      "query": "Where is the garden shed spare key kept?",
+      "gold": [
+        "n05"
+      ],
+      "type": "single"
+    },
+    {
+      "id": "q06",
+      "query": "What happened to the 7:15 ferry on 2026-05-02?",
+      "gold": [
+        "n06"
+      ],
+      "type": "single"
+    },
+    {
+      "id": "q07",
+      "query": "When will the borrowed foldable wagon be returned?",
+      "gold": [
+        "n07"
+      ],
+      "type": "single"
+    },
+    {
+      "id": "q08",
+      "query": "What is invoice INV-204 for and how much was it?",
+      "gold": [
+        "n08"
+      ],
+      "type": "single"
+    },
+    {
+      "id": "q09",
+      "query": "How many hammers are in the Cedar Tools proposal and what is the total?",
+      "gold": [
+        "n09"
+      ],
+      "type": "single"
+    },
+    {
+      "id": "q10",
+      "query": "What is deal RC-88 and who is it approved for?",
+      "gold": [
+        "n10"
+      ],
+      "type": "single"
+    },
+    {
+      "id": "q11",
+      "query": "Was the Hillside Services workshop fee approved?",
+      "gold": [
+        "n11"
+      ],
+      "type": "single"
+    },
+    {
+      "id": "q12",
+      "query": "How much did the tea at Blue Kettle Cafe cost on 2026-07-04?",
+      "gold": [
+        "n12"
+      ],
+      "type": "single"
+    },
+    {
+      "id": "q13",
+      "query": "Where does the bake sale go if it rains on May 3?",
+      "gold": [
+        "n33"
+      ],
+      "type": "single"
+    },
+    {
+      "id": "q14",
+      "query": "What is the tracking number of the late package and where was it last scanned?",
+      "gold": [
+        "n18"
+      ],
+      "type": "single"
+    },
+    {
+      "id": "q15",
+      "query": "How much lemon and honey go into the cordial?",
+      "gold": [
+        "n19"
+      ],
+      "type": "single"
+    },
+    {
+      "id": "q16",
+      "query": "What time does the platform 9 train leave and arrive?",
+      "gold": [
+        "n20"
+      ],
+      "type": "single"
+    },
+    {
+      "id": "q17",
+      "query": "What should the poster title say instead of A Winters Tale?",
+      "gold": [
+        "n21"
+      ],
+      "type": "single"
+    },
+    {
+      "id": "q18",
+      "query": "When is Pepper allowed chocolate?",
+      "gold": [
+        "n22"
+      ],
+      "type": "single"
+    },
+    {
+      "id": "q19",
+      "query": "What color was the garden shed painted and on what date?",
+      "gold": [
+        "n23"
+      ],
+      "type": "single"
+    },
+    {
+      "id": "q20",
+      "query": "How many paper lanterns are in the festival box?",
+      "gold": [
+        "n24"
+      ],
+      "type": "single"
+    },
+    {
+      "id": "q21",
+      "query": "What is the weekend market price of the cedar cutting board?",
+      "gold": [
+        "n25"
+      ],
+      "type": "single"
+    },
+    {
+      "id": "q22",
+      "query": "What is Martin's favorite saying?",
+      "gold": [
+        "n26"
+      ],
+      "type": "single"
+    },
+    {
+      "id": "q23",
+      "query": "Where can I find the donated blue crate of books?",
+      "gold": [
+        "n28"
+      ],
+      "type": "single"
+    },
+    {
+      "id": "q24",
+      "query": "What is in drawer C at the circulation desk?",
+      "gold": [
+        "n38"
+      ],
+      "type": "single"
+    },
+    {
+      "id": "q25",
+      "query": "When was the community-room piano tuned and by whom?",
+      "gold": [
+        "n39"
+      ],
+      "type": "single"
+    },
+    {
+      "id": "q26",
+      "query": "Where are the sunflower seed packets stored?",
+      "gold": [
+        "n40"
+      ],
+      "type": "single"
+    },
+    {
+      "id": "q27",
+      "query": "What time does Friday chess night start?",
+      "gold": [
+        "n42"
+      ],
+      "type": "single"
+    },
+    {
+      "id": "q28",
+      "query": "How many acid-free glue sticks remain?",
+      "gold": [
+        "n43"
+      ],
+      "type": "single"
+    },
+    {
+      "id": "q29",
+      "query": "Until when is the east river path closed?",
+      "gold": [
+        "n44"
+      ],
+      "type": "single"
+    },
+    {
+      "id": "q30",
+      "query": "What happens on Pepper's birthday in the story?",
+      "gold": [
+        "n45"
+      ],
+      "type": "single"
+    },
+    {
+      "id": "q31",
+      "query": "Where is the portable audio kit and how many headphones are with it?",
+      "gold": [
+        "n46"
+      ],
+      "type": "single"
+    },
+    {
+      "id": "q32",
+      "query": "Under which category should Mira Chen's calendar plugin invoice be filed?",
+      "gold": [
+        "n47"
+      ],
+      "type": "single"
+    },
+    {
+      "id": "q33",
+      "query": "When is the fictional stargazing night at the jetty?",
+      "gold": [
+        "n49"
+      ],
+      "type": "single"
+    },
+    {
+      "id": "q34",
+      "query": "What fictional extension is used in the library facilities drill?",
+      "gold": [
+        "n50"
+      ],
+      "type": "single"
+    },
+    {
+      "id": "q35",
+      "query": "Tell me about library bake sale plans, including the rain backup.",
+      "gold": [
+        "n13",
+        "n32",
+        "n33"
+      ],
+      "type": "multi"
+    },
+    {
+      "id": "q36",
+      "query": "Summarize Pepper-related household facts: food, leash, and birthday.",
+      "gold": [
+        "n22",
+        "n34",
+        "n45"
+      ],
+      "type": "multi"
+    },
+    {
+      "id": "q37",
+      "query": "Which notes discuss rejected or proposed money matters for Priya Shah or Cedar Tools?",
+      "gold": [
+        "n09",
+        "n11",
+        "n48"
+      ],
+      "type": "multi"
+    },
+    {
+      "id": "q38",
+      "query": "What do we know about The Night River in this story world?",
+      "gold": [
+        "n04",
+        "n30"
+      ],
+      "type": "multi"
+    },
+    {
+      "id": "q39",
+      "query": "Where is the lost green umbrella from bus 14?",
+      "gold": [
+        "n37"
+      ],
+      "type": "single"
+    },
+    {
+      "id": "q40",
+      "query": "What is the classified combination to the library safe?",
+      "gold": [],
+      "type": "negative"
+    },
+    {
+      "id": "q41",
+      "query": "Who is the real mayor's private mobile number?",
+      "gold": [],
+      "type": "negative"
+    },
+    {
+      "id": "q42",
+      "query": "What did the ship's captain order for breakfast in 1842?",
+      "gold": [],
+      "type": "negative"
+    }
+  ],
+  "k_values": [
+    1,
+    3,
+    5
+  ],
+  "recall_definition": "For queries with gold ids, recall@k = |gold \u2229 top-k| / |gold|, then macro-average. Negative queries (empty gold) are scored separately as whether any note appears in top-1/3/5; they are not included in recall averages.",
+  "synthetic": true
+}

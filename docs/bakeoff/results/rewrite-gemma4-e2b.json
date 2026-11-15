@@ -1,0 +1,437 @@
+{
+ "model": "gemma-4-E2B-it.litertlm",
+ "thinking_off": false,
+ "rows": [
+  {
+   "id": "s1",
+   "tone": "SHORTEN",
+   "input": "Hey so I just wanted to let you know that I'm going to be running a little bit late tonight because the traffic on the bridge is really bad, probably like 20 minutes or so, sorry about that.",
+   "facts": [
+    "20"
+   ],
+   "output": "I'll be late tonight due to bad bridge traffic, about 20 minutes. Sorry.",
+   "load_s": 2.8478522980003618,
+   "ttft_s": 0.3469710740027949,
+   "total_s": 1.0224602930102265,
+   "out_tokens": 20,
+   "bench": {
+    "init_time_in_second": 5.7027311759999995,
+    "time_to_first_token_in_second": 0.29221511899999997,
+    "last_prefill_token_count": 84,
+    "last_prefill_tokens_per_second": 328.3527716480266,
+    "last_decode_token_count": 21,
+    "last_decode_tokens_per_second": 27.47803738698928
+   }
+  },
+  {
+   "id": "s2",
+   "tone": "SHORTEN",
+   "input": "I was thinking that maybe we could possibly move the soccer practice pickup from 5:30 to 6:00 on Thursday if that works for everyone, because I have a dentist appointment that runs late.",
+   "facts": [
+    "5:30",
+    "6:00",
+    "Thursday"
+   ],
+   "output": "Can we move Thursday's soccer practice pickup to 6:00 instead of 5:30? My dentist appointment is running late.",
+   "load_s": 0.20878087900928222,
+   "ttft_s": 0.3232141100015724,
+   "total_s": 1.3551415570109384,
+   "out_tokens": 30,
+   "bench": {
+    "init_time_in_second": 0.466806053,
+    "time_to_first_token_in_second": 0.26445418425,
+    "last_prefill_token_count": 82,
+    "last_prefill_tokens_per_second": 359.3984549951306,
+    "last_decode_token_count": 31,
+    "last_decode_tokens_per_second": 27.551881212186537
+   }
+  },
+  {
+   "id": "s3",
+   "tone": "SHORTEN",
+   "input": "Just a reminder that the library books are due back on Friday and there is a fine of 25 cents per day for each book that is late, so please put them by the front door tonight.",
+   "facts": [
+    "Friday",
+    "25"
+   ],
+   "output": "Library books are due Friday. A 25-cent late fee applies daily. Please return them by the front door tonight.",
+   "load_s": 0.16703770599269774,
+   "ttft_s": 0.31493917800253257,
+   "total_s": 1.1976731410104549,
+   "out_tokens": 26,
+   "bench": {
+    "init_time_in_second": 0.369870958,
+    "time_to_first_token_in_second": 0.26802118425,
+    "last_prefill_token_count": 80,
+    "last_prefill_tokens_per_second": 344.3176991864978,
+    "last_decode_token_count": 27,
+    "last_decode_tokens_per_second": 28.028771941334025
+   }
+  },
+  {
+   "id": "s4",
+   "tone": "SHORTEN",
+   "input": "Can you please pick up two gallons of milk, a loaf of bread and some bananas on your way home from work today if you get a chance? Thanks so much.",
+   "facts": [
+    "milk",
+    "bread",
+    "bananas"
+   ],
+   "output": "Please pick up two gallons of milk, a loaf of bread, and bananas on your way home from work if you can. Thanks.",
+   "load_s": 0.17146115101058967,
+   "ttft_s": 0.3055548910051584,
+   "total_s": 1.2115665080054896,
+   "out_tokens": 27,
+   "bench": {
+    "init_time_in_second": 0.381092063,
+    "time_to_first_token_in_second": 0.25798498575,
+    "last_prefill_token_count": 73,
+    "last_prefill_tokens_per_second": 327.76464347025995,
+    "last_decode_token_count": 28,
+    "last_decode_tokens_per_second": 28.3573734587251
+   }
+  },
+  {
+   "id": "s5",
+   "tone": "SHORTEN",
+   "input": "I wanted to follow up on the email I sent last week about the invoice for $340 because I have not heard back yet and I just want to make sure it did not get lost.",
+   "facts": [
+    "340"
+   ],
+   "output": "Following up on my email last week regarding the $340 invoice. Please confirm receipt.",
+   "load_s": 0.1778715859982185,
+   "ttft_s": 0.3308259940095013,
+   "total_s": 0.9733458050031913,
+   "out_tokens": 19,
+   "bench": {
+    "init_time_in_second": 0.386768257,
+    "time_to_first_token_in_second": 0.276649906,
+    "last_prefill_token_count": 79,
+    "last_prefill_tokens_per_second": 329.05888205876965,
+    "last_decode_token_count": 20,
+    "last_decode_tokens_per_second": 27.343851289742883
+   }
+  },
+  {
+   "id": "e1",
+   "tone": "ELABORATE",
+   "input": "Can't make it Saturday. Sorry.",
+   "facts": [
+    "Saturday"
+   ],
+   "output": "I am writing to inform you that I will be unable to attend the event or engagement scheduled for this coming Saturday. Please accept my sincere apologies for any inconvenience this may cause.",
+   "load_s": 0.17225584699190222,
+   "ttft_s": 0.30571638100082055,
+   "total_s": 1.4667786970094312,
+   "out_tokens": 35,
+   "bench": {
+    "init_time_in_second": 0.39459098400000003,
+    "time_to_first_token_in_second": 0.258074322,
+    "last_prefill_token_count": 48,
+    "last_prefill_tokens_per_second": 214.68371873205433,
+    "last_decode_token_count": 36,
+    "last_decode_tokens_per_second": 28.994249222620688
+   }
+  },
+  {
+   "id": "e2",
+   "tone": "ELABORATE",
+   "input": "Dinner at 7, bring the salad.",
+   "facts": [
+    "7",
+    "salad"
+   ],
+   "output": "The scheduled time for our dinner engagement is precisely seven o'clock in the evening. As a reminder for the evening, please ensure that you bring the salad to share or to be included in the meal.",
+   "load_s": 0.17035404600028414,
+   "ttft_s": 0.2957665550056845,
+   "total_s": 1.6791744549991563,
+   "out_tokens": 41,
+   "bench": {
+    "init_time_in_second": 0.37002561900000003,
+    "time_to_first_token_in_second": 0.25099602425,
+    "last_prefill_token_count": 48,
+    "last_prefill_tokens_per_second": 222.0204693436865,
+    "last_decode_token_count": 42,
+    "last_decode_tokens_per_second": 28.735844832305492
+   }
+  },
+  {
+   "id": "e3",
+   "tone": "ELABORATE",
+   "input": "Car is in the shop until Tuesday.",
+   "facts": [
+    "Tuesday"
+   ],
+   "output": "The automobile is currently undergoing maintenance and repairs at the dealership or garage, and it is scheduled to be completed by Tuesday at the latest.",
+   "load_s": 0.17447699399781413,
+   "ttft_s": 0.30406414800381754,
+   "total_s": 1.2082503029960208,
+   "out_tokens": 27,
+   "bench": {
+    "init_time_in_second": 0.37896981499999993,
+    "time_to_first_token_in_second": 0.25878584175,
+    "last_prefill_token_count": 47,
+    "last_prefill_tokens_per_second": 210.10874477602604,
+    "last_decode_token_count": 28,
+    "last_decode_tokens_per_second": 28.49639857171776
+   }
+  },
+  {
+   "id": "e4",
+   "tone": "ELABORATE",
+   "input": "Thanks for the help with the move.",
+   "facts": [
+    "move"
+   ],
+   "output": "I would like to express my sincere gratitude for all the assistance you provided during the recent move. Your help was invaluable in making the entire process significantly smoother and less stressful than I had anticipated. I truly appreciate you taking the time and effort to lend your support throughout the entire undertaking.",
+   "load_s": 0.16179257800104097,
+   "ttft_s": 0.3075480370025616,
+   "total_s": 2.2070914910000283,
+   "out_tokens": 56,
+   "bench": {
+    "init_time_in_second": 0.353385971,
+    "time_to_first_token_in_second": 0.25696205175,
+    "last_prefill_token_count": 47,
+    "last_prefill_tokens_per_second": 211.55049974867126,
+    "last_decode_token_count": 57,
+    "last_decode_tokens_per_second": 28.741515268961752
+   }
+  },
+  {
+   "id": "e5",
+   "tone": "ELABORATE",
+   "input": "Meeting moved to room 4B.",
+   "facts": [
+    "4B"
+   ],
+   "output": "The previously scheduled meeting has been officially relocated and will now take place in an alternative location, specifically in room 4B.",
+   "load_s": 0.16431686299620196,
+   "ttft_s": 0.30869710999832023,
+   "total_s": 1.210573211996234,
+   "out_tokens": 25,
+   "bench": {
+    "init_time_in_second": 0.358083257,
+    "time_to_first_token_in_second": 0.2653685255,
+    "last_prefill_token_count": 47,
+    "last_prefill_tokens_per_second": 206.4851130933243,
+    "last_decode_token_count": 26,
+    "last_decode_tokens_per_second": 26.49062019356034
+   }
+  },
+  {
+   "id": "f1",
+   "tone": "FRIENDLY",
+   "input": "You forgot to take the trash out again.",
+   "facts": [
+    "trash"
+   ],
+   "output": "Hey, just a friendly reminder that we need to take out the trash again!",
+   "load_s": 0.17493017100787256,
+   "ttft_s": 0.3061157350020949,
+   "total_s": 0.8337046810047468,
+   "out_tokens": 16,
+   "bench": {
+    "init_time_in_second": 0.379358087,
+    "time_to_first_token_in_second": 0.2602419435,
+    "last_prefill_token_count": 48,
+    "last_prefill_tokens_per_second": 213.80457857961682,
+    "last_decode_token_count": 17,
+    "last_decode_tokens_per_second": 27.98152626716399
+   }
+  },
+  {
+   "id": "f2",
+   "tone": "FRIENDLY",
+   "input": "Send me the photos from the trip.",
+   "facts": [
+    "photos"
+   ],
+   "output": "Could you send me the photos from your trip when you get a chance?",
+   "load_s": 0.17411249100405257,
+   "ttft_s": 0.30989340400265064,
+   "total_s": 0.8037486349930987,
+   "out_tokens": 15,
+   "bench": {
+    "init_time_in_second": 0.378529761,
+    "time_to_first_token_in_second": 0.2627634275,
+    "last_prefill_token_count": 47,
+    "last_prefill_tokens_per_second": 207.22939405922358,
+    "last_decode_token_count": 16,
+    "last_decode_tokens_per_second": 27.807419279810816
+   }
+  },
+  {
+   "id": "f3",
+   "tone": "FRIENDLY",
+   "input": "The rent is due on the 1st. Pay it on time.",
+   "facts": [
+    "1st"
+   ],
+   "output": "Just a friendly reminder that rent is due on the 1st. We'd really appreciate it if you could take care of that on time!",
+   "load_s": 0.1775256469991291,
+   "ttft_s": 0.32213145299465396,
+   "total_s": 1.3103980309970211,
+   "out_tokens": 30,
+   "bench": {
+    "init_time_in_second": 0.38562961,
+    "time_to_first_token_in_second": 0.271080498,
+    "last_prefill_token_count": 54,
+    "last_prefill_tokens_per_second": 228.3409052587029,
+    "last_decode_token_count": 31,
+    "last_decode_tokens_per_second": 28.90842632658083
+   }
+  },
+  {
+   "id": "f4",
+   "tone": "FRIENDLY",
+   "input": "I need the drill back by Sunday.",
+   "facts": [
+    "drill",
+    "Sunday"
+   ],
+   "output": "Could you please bring the drill back to me by Sunday?",
+   "load_s": 0.17797573500138242,
+   "ttft_s": 0.30321854700741824,
+   "total_s": 0.6870274910033913,
+   "out_tokens": 12,
+   "bench": {
+    "init_time_in_second": 0.392821372,
+    "time_to_first_token_in_second": 0.25745820275,
+    "last_prefill_token_count": 47,
+    "last_prefill_tokens_per_second": 211.88885365673164,
+    "last_decode_token_count": 13,
+    "last_decode_tokens_per_second": 28.055371773687277
+   }
+  },
+  {
+   "id": "f5",
+   "tone": "FRIENDLY",
+   "input": "Your dog was barking all night.",
+   "facts": [
+    "dog"
+   ],
+   "output": "Your dog was barking quite a bit all night long.",
+   "load_s": 0.16397135700390209,
+   "ttft_s": 0.3037784279877087,
+   "total_s": 0.6607492089970037,
+   "out_tokens": 11,
+   "bench": {
+    "init_time_in_second": 0.35819165399999997,
+    "time_to_first_token_in_second": 0.25936503774999997,
+    "last_prefill_token_count": 46,
+    "last_prefill_tokens_per_second": 206.24893840644924,
+    "last_decode_token_count": 12,
+    "last_decode_tokens_per_second": 27.52274381499096
+   }
+  },
+  {
+   "id": "p1",
+   "tone": "PROFESSIONAL",
+   "input": "hey can u send me that report by tmrw? need it for the 9am thing",
+   "facts": [
+    "report",
+    "9"
+   ],
+   "output": "Please submit the report by tomorrow. It is required for the 9:00 AM meeting.",
+   "load_s": 0.17518071399535984,
+   "ttft_s": 0.30087535000348,
+   "total_s": 0.9804144380032085,
+   "out_tokens": 20,
+   "bench": {
+    "init_time_in_second": 0.38917280400000004,
+    "time_to_first_token_in_second": 0.254840263,
+    "last_prefill_token_count": 58,
+    "last_prefill_tokens_per_second": 265.27754173412603,
+    "last_decode_token_count": 21,
+    "last_decode_tokens_per_second": 27.62329813682301
+   }
+  },
+  {
+   "id": "p2",
+   "tone": "PROFESSIONAL",
+   "input": "sorry i messed up the numbers, the total is actually 1,250 not 1,520",
+   "facts": [
+    "1,250",
+    "1,520"
+   ],
+   "output": "Please accept my apologies for the error in the figures; the correct total is 1,250, not 1,520.",
+   "load_s": 0.169597848012927,
+   "ttft_s": 0.2963494300056482,
+   "total_s": 1.2894868760049576,
+   "out_tokens": 30,
+   "bench": {
+    "init_time_in_second": 0.37009030299999995,
+    "time_to_first_token_in_second": 0.25142699475,
+    "last_prefill_token_count": 63,
+    "last_prefill_tokens_per_second": 290.48514791397685,
+    "last_decode_token_count": 31,
+    "last_decode_tokens_per_second": 28.944869650752445
+   }
+  },
+  {
+   "id": "p3",
+   "tone": "PROFESSIONAL",
+   "input": "im gonna be out next week, ping Dana if anything breaks",
+   "facts": [
+    "Dana"
+   ],
+   "output": "I will be out of the office next week. Please contact Dana if anything urgent arises.",
+   "load_s": 0.16198766100569628,
+   "ttft_s": 0.29851370300457347,
+   "total_s": 0.9095574120001402,
+   "out_tokens": 18,
+   "bench": {
+    "init_time_in_second": 0.36002799599999996,
+    "time_to_first_token_in_second": 0.25525770799999997,
+    "last_prefill_token_count": 51,
+    "last_prefill_tokens_per_second": 232.88105837847303,
+    "last_decode_token_count": 19,
+    "last_decode_tokens_per_second": 27.57723375517217
+   }
+  },
+  {
+   "id": "p4",
+   "tone": "PROFESSIONAL",
+   "input": "the printer on floor 3 is busted again lol",
+   "facts": [
+    "3"
+   ],
+   "output": "The printer on the third floor is malfunctioning once again.",
+   "load_s": 0.18321078800363466,
+   "ttft_s": 0.31049522499961313,
+   "total_s": 0.6496393020061078,
+   "out_tokens": 11,
+   "bench": {
+    "init_time_in_second": 0.39826965900000005,
+    "time_to_first_token_in_second": 0.263131126,
+    "last_prefill_token_count": 49,
+    "last_prefill_tokens_per_second": 214.78435306858614,
+    "last_decode_token_count": 12,
+    "last_decode_tokens_per_second": 28.57524370664488
+   }
+  },
+  {
+   "id": "p5",
+   "tone": "PROFESSIONAL",
+   "input": "yeah we can do the call on Wed at 2, send an invite",
+   "facts": [
+    "Wed",
+    "2"
+   ],
+   "output": "We can schedule the call for Wednesday at 2:00 PM. Please send an invitation.",
+   "load_s": 0.1747506940009771,
+   "ttft_s": 0.29822819199762307,
+   "total_s": 0.9602810450014658,
+   "out_tokens": 20,
+   "bench": {
+    "init_time_in_second": 0.380184984,
+    "time_to_first_token_in_second": 0.2538751875,
+    "last_prefill_token_count": 54,
+    "last_prefill_tokens_per_second": 246.98280883934459,
+    "last_decode_token_count": 21,
+    "last_decode_tokens_per_second": 28.379672261328043
+   }
+  }
+ ],
+ "peak_rss_mib": 1448.32421875
+}
