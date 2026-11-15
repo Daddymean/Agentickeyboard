@@ -18,14 +18,20 @@ object SwipeToTypeEngine {
         'n' to SwipePoint(6.8f, 2.5f), 'm' to SwipePoint(7.8f, 2.5f)
     )
 
-    // Frequency-ranked dictionary loaded from res/raw/wordlist.txt at app start.
-    // The small built-in list below remains as a fallback (and keeps unit tests
-    // hermetic when no dictionary has been loaded).
-    @Volatile
-    private var loadedDictionary: List<String> = emptyList()
+    // Key centres again, indexed by letter, for the decoder's inner loops (it
+    // rescans the dictionary several times a second while a swipe is in flight).
+    private val keyX = FloatArray(26) { keyCenters.getValue('a' + it).x }
+    private val keyY = FloatArray(26) { keyCenters.getValue('a' + it).y }
 
+    /** A frequency-ranked dictionary (most frequent first) and each word's rank. */
+    private class Loaded(val words: List<String>, val ranks: Map<String, Int>)
+
+    // Loaded from res/raw/wordlist.txt at app start. The small built-in list
+    // below remains as a fallback (and keeps unit tests hermetic when no
+    // dictionary has been loaded). Words and ranks are published together so the
+    // decoder never pairs a new word list with the old ranks.
     @Volatile
-    private var wordRanks: Map<String, Int> = emptyMap()
+    private var loaded = Loaded(emptyList(), emptyMap())
 
     /**
      * Installs a frequency-ranked dictionary (most frequent first). Passing an
@@ -38,8 +44,7 @@ object SwipeToTypeEngine {
             .distinct()
             .take(10_000)
             .toList()
-        loadedDictionary = cleaned
-        wordRanks = cleaned.withIndex().associate { (i, w) -> w to i }
+        loaded = Loaded(cleaned, cleaned.withIndex().associate { (i, w) -> w to i })
     }
 
     private val defaultDictionary = listOf(
@@ -95,66 +100,82 @@ object SwipeToTypeEngine {
         return result
     }
 
+    /**
+     * The words one decode pass scans (the user's vocabulary, then the base
+     * dictionary) with everything that depends only on the word worked out once:
+     * the key centres of its first and last letters and its frequency penalty.
+     * Words that cannot be swiped (shorter than two letters, or not starting and
+     * ending on a letter key) are left out.
+     */
+    private class Candidates(
+        val userVocabulary: List<String>,
+        val base: Loaded,
+        val words: Array<String>,
+        val firstX: FloatArray,
+        val firstY: FloatArray,
+        val lastX: FloatArray,
+        val lastY: FloatArray,
+        val rankPenalty: FloatArray
+    )
+
     @Volatile
-    private var lastUserVocabulary: List<String>? = null
-    @Volatile
-    private var lastBaseDictionary: List<String>? = null
-    @Volatile
-    private var cachedFullDictionary: List<String> = emptyList()
+    private var cachedCandidates: Candidates? = null
+
+    private fun candidatesFor(userVocabulary: List<String>): Candidates {
+        val base = loaded
+        cachedCandidates?.let { if (it.base === base && it.userVocabulary == userVocabulary) return it }
+        val baseWords = base.words.ifEmpty { defaultDictionary }
+        val words = (userVocabulary.map { it.lowercase() } + baseWords).distinct().filter {
+            it.length >= 2 && it.first() in 'a'..'z' && it.last() in 'a'..'z'
+        }
+        // Nudge similar-scoring candidates toward more frequent words. The
+        // penalty spans ~0.8 units across the full 10k dictionary; user
+        // vocabulary (rank unknown) is treated as highly frequent.
+        val built = Candidates(
+            userVocabulary = userVocabulary,
+            base = base,
+            words = words.toTypedArray(),
+            firstX = FloatArray(words.size) { keyX[words[it].first() - 'a'] },
+            firstY = FloatArray(words.size) { keyY[words[it].first() - 'a'] },
+            lastX = FloatArray(words.size) { keyX[words[it].last() - 'a'] },
+            lastY = FloatArray(words.size) { keyY[words[it].last() - 'a'] },
+            rankPenalty = FloatArray(words.size) { ((base.ranks[words[it]] ?: 0) / 10_000f) * 0.8f }
+        )
+        cachedCandidates = built
+        return built
+    }
 
     fun getSwipeWordMatches(rawPath: List<SwipePoint>, userVocabulary: List<String> = emptyList()): List<String> {
         if (rawPath.isEmpty()) return emptyList()
 
         val path = interpolatePath(rawPath)
-        val startPt = path.first()
-        val endPt = path.last()
+        val pathX = FloatArray(path.size) { path[it].x }
+        val pathY = FloatArray(path.size) { path[it].y }
+        val startX = pathX[0]
+        val startY = pathY[0]
+        val endX = pathX[path.size - 1]
+        val endY = pathY[path.size - 1]
 
-        val baseDictionary = loadedDictionary.ifEmpty { defaultDictionary }
-        val fullDictionary = if (userVocabulary != lastUserVocabulary || baseDictionary !== lastBaseDictionary) {
-            val combined = (userVocabulary.map { it.lowercase() } + baseDictionary).distinct()
-            lastUserVocabulary = userVocabulary
-            lastBaseDictionary = baseDictionary
-            cachedFullDictionary = combined
-            combined
-        } else {
-            cachedFullDictionary
-        }
-        val ranks = wordRanks
+        val dictionary = candidatesFor(userVocabulary)
 
-        // Hoisted out of scoreWord. The set of keys the gesture passed over
-        // depends only on the path, which is identical for every candidate in
-        // this call, but scoreWord used to rebuild it per candidate: for a
-        // several-hundred-point interpolated path that was a closest-key scan
-        // of the whole path for each surviving word. Computing it once here is
-        // the same number for every candidate, so the ranking is unchanged.
+        // The set of keys the gesture passed over depends only on the path, so
+        // it is worked out once here rather than per candidate.
         val visitedKeyCount = path.mapTo(HashSet()) { getClosestChar(it) }.size
 
         val candidates = mutableListOf<Pair<String, Float>>()
 
-        for (word in fullDictionary) {
-            if (word.length < 2) continue
-
-            val firstChar = word.first()
-            val lastChar = word.last()
-
-            val firstCenter = keyCenters[firstChar] ?: continue
-            val lastCenter = keyCenters[lastChar] ?: continue
-
-            val startDist = distance(startPt, firstCenter)
-            val endDist = distance(endPt, lastCenter)
+        for (i in dictionary.words.indices) {
+            val startDist = distance(startX, startY, dictionary.firstX[i], dictionary.firstY[i])
+            val endDist = distance(endX, endY, dictionary.lastX[i], dictionary.lastY[i])
 
             // Max distance threshold to start/end points: 2.2 units (roughly 2 key keys away)
             if (startDist > 2.2f || endDist > 2.2f) {
                 continue
             }
 
-            var score = scoreWord(word, path, visitedKeyCount)
-
-            // Nudge similar-scoring candidates toward more frequent words. The
-            // penalty spans ~0.8 units across the full 10k dictionary; user
-            // vocabulary (rank unknown) is treated as highly frequent.
-            val rank = ranks[word] ?: 0
-            score += (rank / 10_000f) * 0.8f
+            val word = dictionary.words[i]
+            var score = scoreWord(word, pathX, pathY, visitedKeyCount)
+            score += dictionary.rankPenalty[i]
 
             candidates.add(word to score)
         }
@@ -162,20 +183,38 @@ object SwipeToTypeEngine {
         return candidates.sortedBy { it.second }.map { it.first }
     }
 
-    private fun scoreWord(word: String, path: List<SwipePoint>, visitedKeyCount: Int): Float {
+    private fun distance(x1: Float, y1: Float, x2: Float, y2: Float): Float {
+        val dx = x1 - x2
+        val dy = y1 - y2
+        return sqrt(dx * dx + dy * dy)
+    }
+
+    private fun scoreWord(word: String, pathX: FloatArray, pathY: FloatArray, visitedKeyCount: Int): Float {
         var score = 0f
         var pathIdx = 0
 
         for (char in word) {
-            val targetCenter = keyCenters[char] ?: continue
+            if (char !in 'a'..'z') continue
+            val targetX = keyX[char - 'a']
+            val targetY = keyY[char - 'a']
             var minDistance = Float.MAX_VALUE
+            var minSquared = Float.MAX_VALUE
             var bestIdx = pathIdx
 
-            for (i in pathIdx until path.size) {
-                val dist = distance(path[i], targetCenter)
-                if (dist < minDistance) {
-                    minDistance = dist
-                    bestIdx = i
+            // Most of the decoder's time goes here. Square roots keep their
+            // order, so a point that is not closer in squared distance cannot be
+            // closer; the root is taken only for the few that might be.
+            for (i in pathIdx until pathX.size) {
+                val dx = pathX[i] - targetX
+                val dy = pathY[i] - targetY
+                val squared = dx * dx + dy * dy
+                if (squared < minSquared) {
+                    val dist = sqrt(squared)
+                    if (dist < minDistance) {
+                        minDistance = dist
+                        minSquared = squared
+                        bestIdx = i
+                    }
                 }
             }
 

@@ -13,41 +13,37 @@ with Kotlin, Jetpack Compose, Room, Retrofit/Moshi, and the Gemini API.
 
 ## Build & test environment — READ THIS FIRST
 
-**This repository is developed in a cloud CLI environment that does NOT have an
-Android SDK installed.** Do not attempt to build or test Android code locally
-here. Specifically:
+**Cloud sessions can build and test locally.** A fresh session has a JDK but no
+Android SDK; one command installs what the project needs and then runs Gradle:
 
-- **Do NOT run local Gradle builds or tests** (`./gradlew assembleDebug`,
-  `./gradlew testDebugUnitTest`, `./gradlew lint`, etc.). They will fail because
-  there is no Android SDK, and often no network access to download one.
-- **Do NOT create or expect a `local.properties` file** or an `sdk.dir` /
-  `ANDROID_HOME` / `ANDROID_SDK_ROOT`. Their absence is expected, not a bug to
-  "fix".
-- **Do NOT try to install the Android SDK, build-tools, or platform images.**
-- The locally available `gradle` (if any) may be an older version than this
-  project requires and must not be used to build the project.
+```
+tools/cloud-gradle.sh :app:testDebugUnitTest                              # all app unit tests
+tools/cloud-gradle.sh :app:testDebugUnitTest --tests '*LocalSpellingTest*'  # one class, seconds once warm
+tools/cloud-gradle.sh testDebugUnitTest lintDebug                         # what to run before asking for review
+```
 
-**All builds and tests run in GitHub Actions CI, not locally.** The workflow at
-`.github/workflows/android-build.yml` builds a debug APK, runs the unit tests,
-and compiles the R8-minified release APK (unsigned; signing needs the upload
-keystore) on every push and pull request to `main`/`master`, uploading both
-APKs as artifacts.
+- The first run downloads the SDK (about 470 MB, into `~/android-sdk`, outside
+  the repo) and the Gradle dependencies. Allow several minutes; later runs take
+  seconds. It writes the git-ignored `local.properties`, so a plain `./gradlew`
+  works afterwards too.
+- **Maven Central rate-limits cloud sessions** (HTTP 429, which Gradle may also
+  report as "Could not find"). The script reruns Gradle while that is the only
+  failure; each rerun keeps what was already fetched. A plain `./gradlew` does
+  not retry, so prefer the script until the caches are warm.
+- It needs `dl.google.com`, `services.gradle.org`, `plugins.gradle.org` and
+  `repo.maven.apache.org`. If the session's network policy blocks them, the
+  script fails at the download; then fall back to CI and say so. Do not work
+  around a blocked host.
+- Use the wrapper (`./gradlew`, Gradle 9.3.1), never the older system `gradle`.
+- Device and emulator tests (`connectedAndroidTest`) do not run here.
 
-### How to validate changes without a local build
+**CI is still the source of truth** (`.github/workflows/android-build.yml`):
+debug and R8 release builds, all unit tests, screenshots and lint on every
+push and pull request. Run the local checks before asking for review, then let
+CI confirm.
 
-Since you cannot compile here, verify code changes by:
-
-1. Careful review against the surrounding code and Kotlin/Compose semantics.
-2. Structural sanity checks (balanced braces/parens, no stale references to
-   renamed/removed symbols, imports present).
-3. Keeping unit-test logic (in `app/src/test/`) pure JVM where possible so it
-   is exercised by CI.
-4. **Pushing to a branch and letting GitHub Actions build.** Read the CI result
-   (and job logs on failure) to confirm the build passes — that is the source of
-   truth for "does it compile / do tests pass", not a local run.
-
-When reporting status, never claim a local build or test run succeeded. Say the
-change was verified by review and defer the authoritative pass/fail to CI.
+When reporting status, state the command you ran and its result. Never claim a
+check passed that you did not run; unrun checks are `not_run`.
 
 ## Repository layout
 
@@ -74,9 +70,9 @@ This project is worked on under tight usage limits. Default to lean mode:
   change. Do not `Write` a whole large file to change a few lines.
 - **Don't re-read a file just to verify an edit.** The harness reports edit
   success; a re-read is wasted tokens.
-- **Lean on CI instead of exhaustive manual review.** The pipeline compiles the
-  code — push and read the (small) CI status rather than reasoning through every
-  line locally.
+- **Test locally, narrowly.** Run the one test class you are changing with
+  `tools/cloud-gradle.sh ... --tests`, rather than reasoning through every line
+  or waiting on a CI round trip for each attempt.
 - **Prefer small GitHub calls.** Use `pull_request_read` `get_status` /
   `get_check_runs` and pass `minimal_output: true`. Avoid `actions_list` /
   `get_workflow_run` full objects — they return very large payloads.

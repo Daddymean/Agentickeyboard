@@ -22,6 +22,7 @@ class LocalSpelling(
     private val coreSize = core.size
     private val knownOnly: Set<String> = knownOnly.map { it.lowercase() }.filterNot { it in ranks }.toSet()
     private val alphabetical = ranked.sorted()
+    private val alphabeticalRanks = IntArray(alphabetical.size) { ranks.getValue(alphabetical[it]) }
     // The one-edit index (used where keyboard-aware correction is off) covers the
     // most frequent words only, to keep memory small with the extra words loaded.
     private val deletions = buildMap<String, MutableList<String>> {
@@ -161,11 +162,27 @@ class LocalSpelling(
         proximity.scored(token, taps, limit)
 
     private fun prefixCompletions(token: String, limit: Int): List<String> {
-        if (token.length !in 2..24 || token.any { it !in 'a'..'z' }) return emptyList()
+        if (limit <= 0 || token.length !in 2..24 || token.any { it !in 'a'..'z' }) return emptyList()
         val found = alphabetical.binarySearch(token)
-        val start = if (found >= 0) found else -found - 1
-        return alphabetical.asSequence().drop(start).takeWhile { it.startsWith(token) }
-            .filter { it != token }.sortedBy { ranks[it] }.take(limit).toList()
+        // Runs on every keystroke: walk the matching block by index and keep only
+        // the [limit] most frequent, instead of sorting the whole block (a
+        // two-letter prefix matches hundreds of words).
+        val best = ArrayList<String>(limit)
+        val bestRanks = IntArray(limit)
+        var i = if (found >= 0) found + 1 else -found - 1
+        while (i < alphabetical.size && alphabetical[i].startsWith(token)) {
+            val rank = alphabeticalRanks[i]
+            if (best.size < limit || rank < bestRanks[best.size - 1]) {
+                if (best.size == limit) best.removeAt(limit - 1)
+                var at = best.size
+                while (at > 0 && bestRanks[at - 1] > rank) at--
+                for (k in best.size downTo at + 1) bestRanks[k] = bestRanks[k - 1]
+                bestRanks[at] = rank
+                best.add(at, alphabetical[i])
+            }
+            i++
+        }
+        return best
     }
 
     private fun preserveCase(source: String, candidate: String): String = when {

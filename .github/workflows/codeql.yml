@@ -19,6 +19,12 @@ on:
   schedule:
     - cron: '29 7 * * 3'
 
+concurrency:
+  # A newer push to a pull request replaces the run for the older commit. Runs on
+  # main are never cancelled, so every merged commit keeps its result.
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
   analyze:
     name: Analyze (${{ matrix.language }})
