@@ -10,6 +10,12 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  # A newer push to a pull request replaces the run for the older commit. Runs on
+  # main are never cancelled, so every merged commit keeps its result.
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
   build:
     name: Build debug APK and run unit tests
@@ -206,6 +212,8 @@ jobs:
           SHA: ${{ github.event.pull_request.head.sha || github.sha }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: |
+          # A run replaced by a newer push did not fail; leave that commit without a verdict.
+          if [ "$RESULT" = "cancelled" ]; then echo "Build cancelled (superseded); no status posted."; exit 0; fi
           if [ "$RESULT" = "success" ]; then state=success; icon="✅ PASS"; else state=failure; icon="❌ FAIL ($RESULT)"; fi
           echo "### $icon · Android build \`${SHA:0:7}\`" >> "$GITHUB_STEP_SUMMARY"
           echo "Build, unit tests, screenshots and lint: $RESULT. [Run]($RUN_URL)" >> "$GITHUB_STEP_SUMMARY"
