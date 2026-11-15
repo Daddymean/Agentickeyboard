@@ -2,7 +2,9 @@ package io.github.daddymean.agentickeyboard.ui
 
 import android.content.Context
 import android.view.ViewConfiguration
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.getUnclippedBoundsInRoot
 import androidx.compose.ui.test.junit4.createComposeRule
@@ -41,7 +43,7 @@ class KeyboardLayoutWindowSizeTest {
 
     @get:Rule val composeTestRule = createComposeRule()
 
-    private fun showKeyboard(numberRow: Boolean = false, aiTools: Boolean = false) {
+    private fun showKeyboard(numberRow: Boolean = false, aiTools: Boolean = false, keyHeightScale: Float = 1f) {
         // The keyboard holds animations and Room-backed flows that keep scheduling
         // frames, so an auto-advancing clock never reports idle. Drive it manually:
         // these tests assert on layout, not on animation.
@@ -53,8 +55,8 @@ class KeyboardLayoutWindowSizeTest {
         composeTestRule.setContent {
             MyApplicationTheme {
                 // Mirrors how AgenticKeyboardService wraps the IME view tree.
-                ProvideKeyboardMetrics {
-                    AgenticKeyboardLayout(viewModel = viewModel)
+                ProvideKeyboardMetrics(keyHeightScale = keyHeightScale) {
+                    AgenticKeyboardLayout(viewModel = viewModel, modifier = Modifier.testTag(KEYBOARD))
                 }
             }
         }
@@ -172,5 +174,49 @@ class KeyboardLayoutWindowSizeTest {
         composeTestRule.onNodeWithTag("key_1").assertDoesNotExist()
         // The letters it was competing with are still there.
         composeTestRule.onNodeWithTag("key_q").assertIsDisplayed()
+    }
+
+    /**
+     * KEYBOARD-041: the key-size boost is capped so the tallest keyboard (number row on) stays within
+     * 45% of the window. The cap used to budget only a 44dp toolbar, while the layout stacks the 20dp
+     * feedback slot, the AI shelf, a spacer and the command row's own padding above and below the keys,
+     * so a boosted keyboard ran about 40dp over. Measured on the real layout, not the formula.
+     */
+    /**
+     * A boost never takes the keyboard past the budget. Keys never shrink below base size, so when even
+     * the unboosted keyboard is over budget the boost must add nothing at all. One render per test
+     * (compose allows one setContent): only key height changes with the boost, so the unboosted height
+     * is the measured height minus the five rows' extra key height.
+     */
+    private fun assertBoostRespectsBudget(screenHeightDp: Int, scale: Float) {
+        showKeyboard(numberRow = true, keyHeightScale = scale)
+        val boosted = composeTestRule.onNodeWithTag(KEYBOARD).getUnclippedBoundsInRoot().height.value
+        val key = composeTestRule.onNodeWithTag("key_q").getUnclippedBoundsInRoot().height.value
+        val base = boosted - 5 * (key - PORTRAIT_BASE_KEY_DP)
+        val budget = screenHeightDp * 0.45f
+        assertTrue("x$scale on h${screenHeightDp}dp: key ${key}dp below base", key >= PORTRAIT_BASE_KEY_DP - 0.5f)
+        assertTrue("x$scale on h${screenHeightDp}dp: keyboard is ${boosted}dp, budget ${budget}dp, unboosted ${base}dp",
+            boosted <= maxOf(budget, base) + 0.5f)
+    }
+
+    @Test
+    @Config(sdk = [35], qualifiers = "w360dp-h800dp-port")
+    fun `a 1_3x boost fits the height budget on a small phone`() = assertBoostRespectsBudget(800, 1.3f)
+
+    @Test
+    @Config(sdk = [35], qualifiers = "w360dp-h800dp-port")
+    fun `a 1_5x boost fits the height budget on a small phone`() = assertBoostRespectsBudget(800, 1.5f)
+
+    @Test
+    @Config(sdk = [35], qualifiers = "w411dp-h891dp-port")
+    fun `a 1_5x boost fits the height budget on a large phone`() = assertBoostRespectsBudget(891, 1.5f)
+
+    @Test
+    @Config(sdk = [35], qualifiers = "w360dp-h640dp-port")
+    fun `a short phone gets no boost rather than an over-budget keyboard`() = assertBoostRespectsBudget(640, 1.5f)
+
+    private companion object {
+        const val KEYBOARD = "keyboard_root"
+        const val PORTRAIT_BASE_KEY_DP = 44f
     }
 }

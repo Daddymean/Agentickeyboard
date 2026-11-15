@@ -7,6 +7,7 @@ import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import kotlin.math.floor
 
 /**
  * Size budget for the on-screen keyboard.
@@ -70,6 +71,15 @@ private const val KEYBOARD_HEIGHT_BUDGET = 0.45f
 /** Number row + three letter rows + bottom command row. */
 private const val MAX_KEY_ROWS = 5
 
+// Fixed heights AgenticKeyboardLayout stacks around the key rows (KEYBOARD-041). They live in the
+// layout; KeyboardLayoutWindowSizeTest measures the real keyboard, so a drift here fails a test.
+/** The transient feedback slot above the shelf. */
+private const val FEEDBACK_SLOT_DP = 20f
+/** Spacer between the shelf (or edit bar) and the key rows. */
+private const val KEYS_TOP_SPACER_DP = 4f
+/** The bottom command row pads 4dp above and below instead of using rowGap. */
+private const val COMMAND_ROW_PADDING_DP = 4f
+
 /**
  * Derives the keyboard's size budget from the current window. Pure arithmetic so
  * it can be exercised by JVM unit tests.
@@ -91,16 +101,27 @@ fun keyboardMetricsFor(
     val rowGap = if (compact) 2f else 3f
     val toolbarHeight = if (compact) 36f else 44f
     val bottomPadding = if (compact) 2f else 8f
+    val shelfHeight = if (compact) 40f else 64f
     val requested = baseKeyHeight * keyHeightScale.coerceIn(KEY_SCALE_MIN, KEY_SCALE_MAX)
-    val fitting = (screenHeightDp * KEYBOARD_HEIGHT_BUDGET - toolbarHeight - bottomPadding) /
-        MAX_KEY_ROWS - rowGap * 2
-    val keyHeight = if (requested <= baseKeyHeight) requested else minOf(requested, maxOf(fitting, baseKeyHeight))
+    // Everything around the keys at rest (no panel expanded): the feedback slot, the AI shelf (which
+    // holds the idle toolbar), the spacer, rowGap above and below each of the four key rows, the
+    // command row's own padding and the bottom padding. The toolbar alone used to stand in for all of
+    // this, so a boosted keyboard ran ~40dp over budget on a phone.
+    val chrome = FEEDBACK_SLOT_DP + shelfHeight + KEYS_TOP_SPACER_DP +
+        rowGap * 2 * (MAX_KEY_ROWS - 1) + COMMAND_ROW_PADDING_DP * 2 + bottomPadding
+    val fitting = floor((screenHeightDp * KEYBOARD_HEIGHT_BUDGET - chrome) / MAX_KEY_ROWS)
+    // A boost is trimmed to what fits (rounded down, so rounding can't overshoot), never below the
+    // base size: a window too short even for base keys gets no boost, not smaller keys.
+    val keyHeight = when {
+        requested <= baseKeyHeight -> Math.round(requested).toFloat()
+        else -> minOf(Math.round(requested).toFloat(), maxOf(fitting, baseKeyHeight))
+    }
     return KeyboardMetrics(
         keyWidth = keyWidth.dp,
-        keyHeight = Math.round(keyHeight).dp,
+        keyHeight = keyHeight.dp,
         rowGap = rowGap.dp,
         keyGap = KEY_GAP_DP.dp,
-        shelfHeight = if (compact) 40.dp else 64.dp,
+        shelfHeight = shelfHeight.dp,
         toolbarHeight = toolbarHeight.dp,
         bottomPadding = bottomPadding.dp,
         isCompact = compact
