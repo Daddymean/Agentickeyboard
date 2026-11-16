@@ -4,12 +4,11 @@ plugins {
   alias(libs.plugins.google.devtools.ksp)
   alias(libs.plugins.androidx.room)
   alias(libs.plugins.roborazzi)
-  alias(libs.plugins.secrets)
 }
 
 android {
   namespace = "io.github.daddymean.agentickeyboard"
-  compileSdk { version = release(36) { minorApiLevel = 1 } }
+  compileSdk { version = release(37) { minorApiLevel = 2 } }
 
   defaultConfig {
     applicationId = "com.aistudio.agentickeyboard.vqkymt"
@@ -98,15 +97,10 @@ android {
   testOptions { unitTests { isIncludeAndroidResources = true } }
 }
 
-// litertlm-android 0.19.1 is published with Kotlin 2.4 metadata and Java 21 class
-// files. This project compiles with Kotlin 2.2.10 (metadata up to 2.3.0) and Java 11.
-// We call the AAR only from Java via reflection (LiteRtGemmaEngine and
-// LiteRtTextEmbedder) and skip the metadata version check so the app can
-// stay on 2.2.10. Do not import com.google.ai.edge.litertlm from Kotlin.
-tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompile>().configureEach {
-  compilerOptions.freeCompilerArgs.add("-Xskip-metadata-version-check")
-}
-
+// litertlm-android 0.19.1 is published with Java 21 class files, and this
+// project compiles for Java 11. We call the AAR only from Java via reflection
+// (LiteRtGemmaEngine and LiteRtTextEmbedder). Do not import
+// com.google.ai.edge.litertlm from Kotlin.
 
 // Room schema history (exportSchema = true) so migrations are auditable.
 //
@@ -119,13 +113,6 @@ tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompile>().configureEach 
 // "Expected start of the object '{', but had 'EOF'". The plugin gives each
 // variant its own output and reconciles them, so the race cannot happen.
 room { schemaDirectory("$projectDir/schemas") }
-
-// Configure the Secrets Gradle Plugin to use .env and .env.example files
-// to match the convention used in Web projects.
-secrets {
-  propertiesFileName = ".env"
-  defaultPropertiesFileName = ".env.example"
-}
 
 // Some unused dependencies are commented out below instead of being removed.
 // This makes it easy to add them back in the future if needed.
@@ -170,7 +157,7 @@ dependencies {
   implementation(libs.mlkit.digital.ink)
   // LiteRT-LM 0.19.1 (Apache-2.0) for optional on-device EmbeddingGemma 2
   // and Gemma 4 E2B. Weights are downloaded after opt-in, never bundled.
-  // Exclude the AAR's Kotlin 2.4 reflect so we stay on the project's Kotlin 2.2.10.
+  // The AAR is only reached through Java reflection, so kotlin-reflect is not needed.
   implementation(libs.litertlm.android) {
     exclude(group = "org.jetbrains.kotlin", module = "kotlin-reflect")
   }

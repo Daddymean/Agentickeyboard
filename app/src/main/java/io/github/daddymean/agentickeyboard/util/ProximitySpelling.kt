@@ -39,43 +39,160 @@ internal class ProximitySpelling(private val ranked: List<String>, private val r
     /** A candidate with its edit [cost] and ranking [score] (lower is better). */
     data class Scored(val word: String, val cost: Double, val score: Double)
 
+    /** The dictionary as a letter tree, so words that start alike share their work. */
+    private val trie = Trie(ranked)
+
     /**
-     * Runs on every keystroke of an unknown word and, through auto-fix, on the
-     * main thread at each space, so the scan allocates nothing per dictionary
-     * word: one distance matrix is reused, and key geometry comes from the tables
-     * in the companion instead of map lookups. The arithmetic and its order are
-     * those of the plain weighted Damerau-Levenshtein distance, so the costs,
-     * scores and ranking are bit-for-bit what the straightforward version gives.
+     * Runs on every keystroke of an unknown word and, through auto-fix, at each
+     * space, so it does not score the dictionary word by word. It walks the
+     * letter tree instead: one row of the weighted Damerau-Levenshtein matrix
+     * per letter, shared by every word below that letter, and a branch is
+     * dropped as soon as its row shows that nothing beneath it can come in under
+     * the cost limit. Each cell is the same minimum over the same sums as in the
+     * plain word-by-word distance, so the costs, scores and ranking are exactly
+     * what that gives (see ProximityScoringEquivalenceTest).
      */
     fun scored(token: String, taps: List<TapOffset?>?, limit: Int): List<Scored> {
         val n = token.length
-        val scored = ArrayList<Scored>()
-        if (n == 0) return scored
-        val maxCost = maxCost(n)
-        val usableTaps = taps?.takeIf { it.size == n }
-        val typedKeys = IntArray(n) { keyIndex(token[it]) }
+        if (n == 0) return emptyList()
+        val search = Search(token, taps?.takeIf { it.size == n }, maxCost(n))
         val first = token[0]
-        // Candidates are at most two letters longer than the token.
-        val width = n + 3
-        val d = DoubleArray((n + 1) * width)
-        // Column 0 (deleting every typed letter so far) is the same for every word.
-        for (i in 1..n) d[i * width] = d[(i - 1) * width] + deletionCost(token, i - 1)
-        val insertion = DoubleArray(n + 2)
-        for (word in ranked) {
-            val m = word.length
-            if (abs(m - n) > 2) continue
+        val firstKey = keyIndex(first) * KEYS
+        var node = trie.firstChild[0]
+        while (node != NONE) {
+            val letter = trie.letter[node]
             // The first letter is right, a neighbour, or swapped with the second.
-            val w0 = word[0]
-            if (first != w0 && !NEIGHBOURS[typedKeys[0] * KEYS + keyIndex(w0)] &&
-                !(n > 1 && m > 1 && token[1] == w0 && first == word[1])
-            ) continue
-            val cost = cost(token, typedKeys, word, usableTaps, maxCost, d, width, insertion)
-            if (cost > maxCost) continue
-            val score = cost * COST_WEIGHT + log10((ranks[word] ?: ranked.size) + 10.0) -
-                PREFIX_BONUS * minOf(sharedPrefix(token, word), 4)
-            scored.add(Scored(word, cost, score))
+            if (letter == first || NEIGHBOURS[firstKey + keyIndex(letter)]) {
+                search.visit(node, 1, swappedStart = false)
+            } else if (n > 1 && letter == token[1]) {
+                search.visit(node, 1, swappedStart = true)
+            }
+            node = trie.nextSibling[node]
         }
-        return scored.sortedBy { it.score }.take(limit)
+        // Ties keep dictionary order, as a stable sort of the word-by-word scan did.
+        search.found.sortWith(compareBy<Found> { it.scored.score }.thenBy { it.index })
+        return search.found.take(limit).map { it.scored }
+    }
+
+    private class Found(val index: Int, val scored: Scored)
+
+    /** One lookup: the typed token and the matrix rows for the branch being walked. */
+    private inner class Search(val token: String, val taps: List<TapOffset?>?, val maxCost: Double) {
+        private val n = token.length
+        private val typedKeys = IntArray(n) { keyIndex(token[it]) * KEYS }
+        private val deletion = DoubleArray(n) { deletionCost(token, it) }
+        private val width = n + 1
+        // Row r holds the cost of turning each prefix of the token into the first
+        // r letters of the branch. Candidates are at most two letters longer.
+        private val rows = DoubleArray((n + 3) * width).also {
+            for (i in 1..n) it[i] = it[i - 1] + deletion[i - 1]
+        }
+        private val branch = CharArray(n + 3)
+        val found = ArrayList<Found>()
+
+        fun visit(node: Int, depth: Int, swappedStart: Boolean) {
+            val letter = trie.letter[node]
+            branch[depth - 1] = letter
+            val previousLetter = if (depth > 1) branch[depth - 2] else NO_LETTER
+            // The cost of a letter the user left out. A dropped vowel ("probly") is
+            // cheap, and so is one half of a double letter ("helo", KEYBOARD-011).
+            val insertion = when {
+                depth > 1 && letter == previousLetter -> DROPPED_DOUBLE
+                letter == 'a' || letter == 'e' || letter == 'i' || letter == 'o' || letter == 'u' -> DROPPED_VOWEL
+                else -> 1.0
+            }
+            val letterKey = keyIndex(letter)
+            val row = depth * width
+            val above = row - width
+            var rowMin = rows[above] + insertion
+            rows[row] = rowMin
+            for (i in 1..n) {
+                val typedChar = token[i - 1]
+                val substitution = if (typedChar == letter) {
+                    0.0
+                } else {
+                    val base = SUBSTITUTION[typedKeys[i - 1] + letterKey]
+                    val tap = taps?.get(i - 1)
+                    if (tap == null || base == 1.0) base else leanedSubstitution(typedChar, letter, base, tap)
+                }
+                var v = minOf(
+                    rows[row + i - 1] + deletion[i - 1],
+                    rows[above + i] + insertion,
+                    rows[above + i - 1] + substitution
+                )
+                if (i > 1 && depth > 1 && typedChar == previousLetter && token[i - 2] == letter) {
+                    v = minOf(v, rows[above - width + i - 2] + TRANSPOSITION)
+                }
+                rows[row + i] = v
+                if (v < rowMin) rowMin = v
+            }
+            // Every way of finishing a word below this letter passes through this
+            // row and only adds cost, so once the whole row is over the limit the
+            // branch holds no candidates.
+            if (rowMin > maxCost) return
+
+            val word = trie.word[node]
+            if (word != NONE && depth >= n - 2 && !(swappedStart && depth == 1)) {
+                val cost = rows[row + n]
+                if (cost <= maxCost) {
+                    val text = ranked[word]
+                    val score = cost * COST_WEIGHT + log10((ranks[text] ?: ranked.size) + 10.0) -
+                        PREFIX_BONUS * minOf(sharedPrefix(token, text), 4)
+                    found.add(Found(word, Scored(text, cost, score)))
+                }
+            }
+            if (depth == n + 2) return
+            var child = trie.firstChild[node]
+            while (child != NONE) {
+                // A swapped start ("ht" for "th") needs the token's first letter second.
+                if (!(swappedStart && depth == 1) || trie.letter[child] == token[0]) {
+                    visit(child, depth + 1, swappedStart)
+                }
+                child = trie.nextSibling[child]
+            }
+        }
+    }
+
+    /**
+     * The words as a letter tree in flat arrays: node 0 is the root, [word] is the
+     * word's position in the list where a word ends at that node. Built once per
+     * dictionary.
+     */
+    private class Trie(words: List<String>) {
+        val letter: CharArray
+        val firstChild: IntArray
+        val nextSibling: IntArray
+        val word: IntArray
+
+        init {
+            val capacity = words.sumOf { it.length } + 1
+            val letters = CharArray(capacity)
+            val children = IntArray(capacity) { NONE }
+            val siblings = IntArray(capacity) { NONE }
+            val ends = IntArray(capacity) { NONE }
+            val lastChild = IntArray(capacity) { NONE }
+            var size = 1
+            for ((index, text) in words.withIndex()) {
+                if (text.isEmpty()) continue
+                var node = 0
+                for (c in text) {
+                    var child = children[node]
+                    while (child != NONE && letters[child] != c) child = siblings[child]
+                    if (child == NONE) {
+                        child = size++
+                        letters[child] = c
+                        if (lastChild[node] == NONE) children[node] = child else siblings[lastChild[node]] = child
+                        lastChild[node] = child
+                    }
+                    node = child
+                }
+                if (ends[node] == NONE) ends[node] = index
+            }
+            letter = letters.copyOf(size)
+            firstChild = children.copyOf(size)
+            nextSibling = siblings.copyOf(size)
+            word = ends.copyOf(size)
+        }
     }
 
     private fun maxCost(length: Int): Double = when {
@@ -85,73 +202,8 @@ internal class ProximitySpelling(private val ranked: List<String>, private val r
         else -> 2.0
     }
 
-    /**
-     * Weighted Damerau-Levenshtein distance, abandoned once every path exceeds
-     * [limit]. [d] is the caller's reusable matrix ([width] columns per row) with
-     * column 0 already filled; [insertion] is scratch space for the word's
-     * per-letter insertion costs.
-     */
-    private fun cost(
-        typed: String,
-        typedKeys: IntArray,
-        word: String,
-        taps: List<TapOffset?>?,
-        limit: Double,
-        d: DoubleArray,
-        width: Int,
-        insertion: DoubleArray
-    ): Double {
-        val n = typed.length
-        val m = word.length
-        for (j in 0 until m) insertion[j] = insertionCost(word, j)
-        for (j in 1..m) d[j] = d[j - 1] + insertion[j - 1]
-        for (i in 1..n) {
-            val row = i * width
-            val above = row - width
-            val typedChar = typed[i - 1]
-            val typedKey = typedKeys[i - 1] * KEYS
-            val deletion = deletionCost(typed, i - 1)
-            val tap = taps?.get(i - 1)
-            var rowMin = Double.MAX_VALUE
-            for (j in 1..m) {
-                val wordChar = word[j - 1]
-                val substitution = if (typedChar == wordChar) {
-                    0.0
-                } else {
-                    val base = SUBSTITUTION[typedKey + keyIndex(wordChar)]
-                    if (tap == null || base == 1.0) base else leanedSubstitution(typedChar, wordChar, base, tap)
-                }
-                var v = minOf(
-                    d[above + j] + deletion,
-                    d[row + j - 1] + insertion[j - 1],
-                    d[above + j - 1] + substitution
-                )
-                if (i > 1 && j > 1 && typedChar == word[j - 2] && typed[i - 2] == wordChar) {
-                    v = minOf(v, d[above - width + j - 2] + TRANSPOSITION)
-                }
-                d[row + j] = v
-                if (v < rowMin) rowMin = v
-            }
-            if (rowMin > limit) return Double.MAX_VALUE
-        }
-        return d[n * width + m]
-    }
-
     private fun deletionCost(typed: String, index: Int): Double =
         if (index > 0 && typed[index] == typed[index - 1]) DOUBLED_KEY else 1.0
-
-    /**
-     * The cost of a letter the user left out. A dropped vowel ("probly") is cheap,
-     * and so is one half of a double letter ("helo" for "hello", KEYBOARD-011).
-     */
-    private fun insertionCost(word: String, index: Int): Double {
-        val c = word[index]
-        return when {
-            index > 0 && c == word[index - 1] -> DROPPED_DOUBLE
-            c == 'a' || c == 'e' || c == 'i' || c == 'o' || c == 'u' -> DROPPED_VOWEL
-            else -> 1.0
-        }
-    }
 
     /**
      * A neighbouring-key substitution ([base] below 1.0) when the tap position is
@@ -206,6 +258,8 @@ internal class ProximitySpelling(private val ranked: List<String>, private val r
         // The same geometry as flat tables indexed by letter (a-z, then one slot
         // for anything else), for the per-keystroke scan in [scored].
         private const val KEYS = 27
+        private const val NONE = -1
+        private const val NO_LETTER = '\u0000'
         private fun keyIndex(c: Char): Int = if (c in 'a'..'z') c - 'a' else KEYS - 1
         private val KEY_COLUMN = DoubleArray(KEYS).also { for ((key, at) in KEY_POSITIONS) it[keyIndex(key)] = at.first }
         private val KEY_ROW = DoubleArray(KEYS).also { for ((key, at) in KEY_POSITIONS) it[keyIndex(key)] = at.second }

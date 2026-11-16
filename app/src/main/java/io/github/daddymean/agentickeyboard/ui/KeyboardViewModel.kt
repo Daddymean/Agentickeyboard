@@ -40,6 +40,7 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import io.github.daddymean.agentickeyboard.util.AutoFix
+import io.github.daddymean.agentickeyboard.util.LatencyMeter
 import io.github.daddymean.agentickeyboard.util.LearnedRuleCleanup
 import io.github.daddymean.agentickeyboard.util.LearnedRuleFilter
 import io.github.daddymean.agentickeyboard.util.LocalSpelling
@@ -56,62 +57,6 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
-
-/**
- * What a committed word should become, and whether a learned typo rule produced it.
- * [cursorOffset] is where the caret should land inside [replacement] when the
- * expanded template declared a {cursor} marker.
- */
-data class WordReplacement(
-    val replacement: String,
-    val fromLearnedRule: Boolean,
-    val cursorOffset: Int? = null,
-    /** KEYBOARD-011: a high-confidence typo fix, not a stored rule. */
-    val fromAutoFix: Boolean = false
-)
-
-/**
- * A just-applied auto-correction that backspace can revert. [editorUndo] is an
- * exact-range revert, tried first. When the caret was left inside the replacement
- * ([cursorOffset] non-null) it is the only revert: a suffix match on the text before
- * the caret cannot find such an edit.
- */
-data class AutoCorrectionUndo(
-    val original: String,
-    val replacement: String,
-    val fromLearnedRule: Boolean,
-    val editorUndo: CommittedEditUndo? = null,
-    val cursorOffset: Int? = null,
-    val fromAutoFix: Boolean = false
-)
-
-/** A just-applied AI result that backspace can revert; see [AutoCorrectionUndo]. */
-/** An AI result waiting on the opt-in where/what confirm. */
-data class PendingAiApply(val where: String, val preview: String)
-
-data class AiApplyUndo(
-    val original: String,
-    val replacement: String,
-    val editorUndo: CommittedEditUndo? = null,
-    val cursorOffset: Int? = null
-)
-
-/** Local, on-device usage statistics shown in the Style Hub dashboard. */
-data class UsageStats(
-    val autoCorrections: Int = 0,
-    val swipeWords: Int = 0,
-    val aiApplies: Int = 0,
-    val shortcutExpansions: Int = 0
-)
-
-/** Transient, local-only style match shown beside eligible AI writing results. */
-data class VoiceMatchState(
-    val percent: Int,
-    val confidence: Int,
-    val label: String,
-    val signals: List<String>,
-    val delta: Int? = null
-)
 
 class KeyboardViewModel(
     private val repository: KeyboardRepository,
@@ -1174,6 +1119,7 @@ class KeyboardViewModel(
         // One in-flight computation at a time: a slow bigram lookup for an old
         // keystroke must not land after (and overwrite) a newer result.
         predictionJob?.cancel()
+        val requestedAt = System.nanoTime()
         predictionJob = viewModelScope.launch {
             when {
                 activeText.isEmpty() -> {
@@ -1214,6 +1160,7 @@ class KeyboardViewModel(
                     _predictiveSuggestions.value = completions.map { PredictionChip(it, sourceWord) }
                 }
             }
+            LatencyMeter.record(LatencyMeter.Metric.SUGGESTIONS, System.nanoTime() - requestedAt)
         }
     }
 
@@ -1843,17 +1790,5 @@ class KeyboardViewModelFactory(
             return KeyboardViewModel(repository, settings, contextClient) as T
         }
         throw IllegalArgumentException("Unknown ViewModel class")
-    }
-}
-
-/**
- * KEYBOARD-024: one suggestion-strip chip and the word its list was generated for
- * ([sourceWord], null for next-word predictions and empty-field prompts). Immutable and
- * published as one value with its list, so the click handler reads the source of the
- * chip that is actually rendered.
- */
-data class PredictionChip(val word: String, val sourceWord: String?) {
-    companion object {
-        fun unbound(words: List<String>): List<PredictionChip> = words.map { PredictionChip(it, null) }
     }
 }

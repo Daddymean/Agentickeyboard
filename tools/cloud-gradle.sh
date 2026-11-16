@@ -6,7 +6,7 @@
 #   tools/cloud-gradle.sh lintDebug
 #
 # First run: installs the Android SDK pieces this project compiles against
-# (about 470 MB, outside the repository) and points local.properties at them.
+# (about 500 MB, outside the repository) and points local.properties at them.
 # Every run: passes its arguments to ./gradlew, and reruns it while the failure
 # is a download that was rate-limited. Maven Central answers HTTP 429 to the
 # shared addresses cloud sessions use; Gradle keeps what it already fetched, so
@@ -21,12 +21,13 @@ SDK="${ANDROID_HOME:-$HOME/android-sdk}"
 # Command-line tools 19.0, pinned by checksum.
 TOOLS_URL="https://dl.google.com/android/repository/commandlinetools-linux-13114758_latest.zip"
 TOOLS_SHA256="7ec965280a073311c339e571cd5de778b9975026cfcbe79f2b1cdcb1e15317ee"
-# Keep in step with compileSdk in the module build files and with the build
-# tools the Android Gradle Plugin version in gradle/libs.versions.toml expects.
-PACKAGES=("platform-tools" "platforms;android-36.1" "build-tools;36.0.0")
+# Keep in step with compileSdk in the module build files (:callscreen is still
+# on 36). The Android Gradle Plugin fetches the build tools it wants on the
+# first build, which the accepted licences allow.
+PACKAGES=("platform-tools" "platforms;android-37.2" "platforms;android-36")
 
 installed() {
-  [ -d "$SDK/platform-tools" ] && [ -d "$SDK/platforms/android-36.1" ] && [ -d "$SDK/build-tools/36.0.0" ]
+  [ -d "$SDK/platform-tools" ] && [ -d "$SDK/platforms/android-37.2" ] && [ -d "$SDK/platforms/android-36" ]
 }
 
 install_sdk() {
@@ -61,18 +62,28 @@ fi
 [ "$#" -gt 0 ] || { echo "cloud-gradle: SDK ready in $SDK. Pass Gradle tasks to run them."; exit 0; }
 
 log="$(mktemp)"
-trap 'rm -f "$log"' EXIT
-max="${CLOUD_GRADLE_ATTEMPTS:-12}"
+trap 'rm -f "$log" "$log.missing" "$log.previous"' EXIT
+max="${CLOUD_GRADLE_ATTEMPTS:-20}"
+refresh=()
 for attempt in $(seq 1 "$max"); do
   status=0
-  (cd "$ROOT" && ./gradlew --console=plain "$@") 2>&1 | tee "$log" || status=$?
+  (cd "$ROOT" && ./gradlew --console=plain "${refresh[@]}" "$@") 2>&1 | tee "$log" || status=$?
   [ "$status" -eq 0 ] && exit 0
   # Only a failed download is worth another go. Robolectric fetches its Android
   # runtime jars itself, on first use, and reports a 429 as a failed fetch.
-  if ! grep -qE "status code 429|Too Many Requests|Could not (find|resolve|download|GET) |Failed to fetch maven artifact" "$log"; then
+  if ! grep -qE "status code 429|Too Many Requests|Could not (find|resolve|download|GET) |Failed to fetch maven artifact|was not found in any of the following sources" "$log"; then
     exit "$status"
   fi
   [ "$attempt" -lt "$max" ] || break
+  # When throttled, Central also answers 404 for files that exist, and Gradle
+  # remembers a 404 as "missing" for a day. If this attempt is stuck on exactly
+  # the files the last one was, make the next one ask again.
+  grep -E "Could not find .*\.(jar|pom|module|aar)|was not found in any" "$log" | sort -u > "$log.missing" || true
+  refresh=()
+  if [ -s "$log.missing" ] && cmp -s "$log.missing" "$log.previous"; then
+    refresh=(--refresh-dependencies)
+  fi
+  mv "$log.missing" "$log.previous"
   echo "cloud-gradle: downloads were rate-limited (attempt $attempt of $max); retrying in 20 s"
   sleep 20
 done

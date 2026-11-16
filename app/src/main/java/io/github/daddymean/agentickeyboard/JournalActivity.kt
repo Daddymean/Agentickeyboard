@@ -638,11 +638,19 @@ class JournalActivity : Activity() {
         )
         row(
             "Save" to {
-                val body = runCatching {
-                    InkStrokes.answerBody(p.prompt.id, p.child, question, p.prompt.category, view.ink, said.text.toString(),
-                        source?.takeIf { said.text.isNotBlank() }?.let { "$it, checked by Keith" })
-                }.getOrElse { toast(it.message ?: "Couldn't save."); return@to }
-                add(JournalKinds.ANSWER, body) { scope.launch { home() } }
+                // A copy: the view's ink can still be written on or cleared while the body is built.
+                val ink = view.ink.snapshot()
+                val saidText = said.text.toString()
+                val recognizedBy = source?.takeIf { saidText.isNotBlank() }?.let { "$it, checked by Keith" }
+                scope.launch {
+                    // Building the body renders the ink to a PNG, which is not work for the UI thread.
+                    val body = runCatching {
+                        TwinLearning.onWorker {
+                            InkStrokes.answerBody(p.prompt.id, p.child, question, p.prompt.category, ink, saidText, recognizedBy)
+                        }
+                    }.getOrElse { toast(it.message ?: "Couldn't save."); return@launch }
+                    add(JournalKinds.ANSWER, body) { scope.launch { home() } }
+                }
             },
             "Cancel" to { scope.launch { home() } }
         )

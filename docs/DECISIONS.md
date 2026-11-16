@@ -2,6 +2,8 @@
 
 Short, dated, newest first. Full records: [Nexus decisions/](https://github.com/Daddymean/Nexus/tree/main/decisions) and [projects/agentickeyboard/DECISIONS.md](https://github.com/Daddymean/Nexus/blob/main/projects/agentickeyboard/DECISIONS.md). Add a line here in the same PR as any new decision.
 
+- **2026-11-15** — Keith asked for the newest versions: Compose BOM 2026.09, Kotlin 2.4.21, AGP 9.5.1, Gradle 9.9.1, OkHttp 5, Retrofit 3 and the rest of the catalog; `compileSdk` 37.2 (`targetSdk` stays 36; `:callscreen` untouched). The Gemini key is read only from the key saved in the app: the `BuildConfig`/`.env` fallback and the Secrets Gradle plugin are removed (#215).
+
 - **2026-11-08** — Keith approved isolated `:callscreen` APK, observation-first rules, no persistent call history, and CLI implementation. Draft HOLD PR only; twin/consent/filter remain untouched. Design: `superpowers/specs/2026-11-08-call-screening-design.md`.
 
 - **2026-10-23** — Token-saving and review policy ([ADR-0007](https://github.com/Daddymean/Nexus/blob/main/decisions/ADR-0007-review-policy-and-token-savings.md)): one reviewer per PR, a second only for security-sensitive PRs; local tests before review; larger slices; routine work to cheaper models; Slack #agent-board for claims; trimmed AGENTS.md/CLAUDE.md; CI posts a per-commit summary. Supersedes ADR-0005's two-review rule. Merges and releases still need Keith.

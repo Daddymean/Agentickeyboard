@@ -67,10 +67,9 @@ fun GeminiApiKeyCard() {
             Text(
                 text = when {
                     savedKey != null -> "Online AI uses your key ${GeminiKeyStore.mask(savedKey!!)}."
-                    GeminiManager.hasBuildTimeKey() -> "Using the key built into this APK. Paste your own to override it."
                     else -> "No key set: online AI is off. Get a free key at aistudio.google.com → Get API key."
                 },
-                color = if (savedKey != null || GeminiManager.hasBuildTimeKey()) Color(0xFF1B6B3A) else Color(0xFF79747E),
+                color = if (savedKey != null) Color(0xFF1B6B3A) else Color(0xFF79747E),
                 fontSize = 12.sp,
                 modifier = Modifier.testTag("gemini_key_status")
             )

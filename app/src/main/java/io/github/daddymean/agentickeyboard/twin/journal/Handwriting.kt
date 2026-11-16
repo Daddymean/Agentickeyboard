@@ -26,6 +26,16 @@ class InkStrokes(val width: Int, val height: Int) {
     fun up(x: Float, y: Float, t: Long) { move(x, y, t); current?.let { strokes += it.toFloatArray() }; current = null }
     fun clear() { strokes.clear(); current = null; t0 = -1 }
     val isEmpty: Boolean get() = strokes.isEmpty()
+
+    /**
+     * A copy that later writing or clearing does not change, for work that runs
+     * off the UI thread while the original stays on screen.
+     */
+    fun snapshot(): InkStrokes = InkStrokes(width, height).also {
+        it.strokes += strokes
+        it.current = current?.let { live -> ArrayList(live) }
+        it.t0 = t0
+    }
     fun pointCount() = strokes.sumOf { it.size / 3 }
 
     /** The live stroke too, for drawing while the finger is down. */
