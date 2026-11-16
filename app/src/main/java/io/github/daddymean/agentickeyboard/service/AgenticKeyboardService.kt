@@ -62,6 +62,7 @@ import io.github.daddymean.agentickeyboard.ui.SnippetVaultBar
 import io.github.daddymean.agentickeyboard.ui.TrustPrismBanner
 import io.github.daddymean.agentickeyboard.util.ClipboardCaptureDecision
 import io.github.daddymean.agentickeyboard.util.SafeLog
+import io.github.daddymean.agentickeyboard.util.LatencyMeter
 import io.github.daddymean.agentickeyboard.util.commitTextWithCaret
 import io.github.daddymean.agentickeyboard.util.commitInserted
 import io.github.daddymean.agentickeyboard.util.commitTyped
@@ -301,7 +302,9 @@ class AgenticKeyboardService : InputMethodService(), LifecycleOwner, ViewModelSt
                                 suppressAiPanels = contextResultActive,
                                 onKeyPress = { text ->
                                     // twin: single key; a longer payload is treated as inserted by the connection
-                                    trackedInputConnection()?.commitText(text, 1)
+                                    LatencyMeter.time(LatencyMeter.Metric.KEY) {
+                                        trackedInputConnection()?.commitText(text, 1)
+                                    }
                                 },
                                 onInsertText = { text ->
                                     twinSession.markInserted(System.currentTimeMillis())

@@ -111,8 +111,12 @@ class SensitiveFieldAutoCapTest {
     @Test
     fun `explicit shift still capitalizes in a password field`() {
         showKeyboardFor(text or InputType.TYPE_TEXT_VARIATION_PASSWORD)
+        // The keys redraw from the shift state. With the clock driven by hand,
+        // current Compose applies the tap but never redraws from it, however many
+        // frames are advanced, so let the clock run for this step.
+        composeTestRule.mainClock.autoAdvance = true
         composeTestRule.onNodeWithTag("key_shift").performClick()
-        composeTestRule.mainClock.advanceTimeByFrame()
+        composeTestRule.waitForIdle()
         composeTestRule.onNodeWithTag("key_q").assertTextEquals("Q")
         assertEquals("Q", tapQ())
     }

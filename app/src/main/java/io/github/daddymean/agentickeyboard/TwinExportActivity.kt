@@ -85,8 +85,10 @@ class TwinExportActivity : Activity() {
     }
 
     private fun takePassphrase(field: EditText): CharArray {
+        // Copied character by character: against SDK 37 Kotlin no longer sees
+        // Editable.getChars. No String of the passphrase is ever made.
         val e = field.text
-        val out = CharArray(e.length).also { e.getChars(0, e.length, it, 0) }
+        val out = CharArray(e.length) { e[it] }
         e.clear()
         return out
     }

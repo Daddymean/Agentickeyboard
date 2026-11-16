@@ -10,7 +10,7 @@ plugins {
 
 android {
   namespace = "dev.context.core"
-  compileSdk { version = release(36) { minorApiLevel = 1 } }
+  compileSdk { version = release(37) { minorApiLevel = 2 } }
 
   defaultConfig {
     minSdk = 34
