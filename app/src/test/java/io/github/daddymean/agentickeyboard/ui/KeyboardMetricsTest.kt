@@ -92,7 +92,9 @@ class KeyboardMetricsTest {
         val large = keyboardMetricsFor(screenWidthDp = 412, screenHeightDp = 915, keyHeightScale = 1.15f)
         val extra = keyboardMetricsFor(screenWidthDp = 412, screenHeightDp = 915, keyHeightScale = 1.3f)
         assertEquals(51.dp, large.keyHeight)
-        assertEquals(57.dp, extra.keyHeight)
+        // 57dp requested; 56dp is the most that fits 45% of 915dp once the feedback slot, shelf,
+        // spacer and paddings are counted (KEYBOARD-041: 57dp made the real keyboard 413dp > 411.75dp).
+        assertEquals(56.dp, extra.keyHeight)
         assertEquals(normal.keyWidth, extra.keyWidth)
     }
 
@@ -112,7 +114,9 @@ class KeyboardMetricsTest {
     @Test
     fun `the boost is trimmed to fit the height budget rather than dropped`() {
         val m = keyboardMetricsFor(screenWidthDp = 360, screenHeightDp = 800, keyHeightScale = 1.3f)
-        assertEquals(56.dp, m.keyHeight) // 57dp requested, 55.6dp fits
+        // 57dp requested; (360 - 128dp of fixed chrome) / 5 rows = 46.4dp fits, rounded down so the
+        // keyboard is 358dp, inside its 360dp budget. Before KEYBOARD-041 this was 56dp: a 408dp keyboard.
+        assertEquals(46.dp, m.keyHeight)
     }
 
     @Test
