@@ -1,12 +1,20 @@
 # Decisions — Agentickeyboard
 
-Short, dated, newest first. Full records: [Nexus decisions/](https://github.com/Daddymean/Nexus/tree/main/decisions) and [projects/agentickeyboard/DECISIONS.md](https://github.com/Daddymean/Nexus/blob/main/projects/agentickeyboard/DECISIONS.md). Add a line here in the same PR as any new decision.
+Short, dated, newest first. Current merge and review rules: [2026-11-17 entry](#merge-rules-2026-11-17) (proposed, pending Keith's confirmation). Historical records remain in the frozen [Nexus decisions/](https://github.com/Daddymean/Nexus/tree/main/decisions) tree and [projects/agentickeyboard/DECISIONS.md](https://github.com/Daddymean/Nexus/blob/main/projects/agentickeyboard/DECISIONS.md). Add a line here in the same PR as any new decision.
+
+- **2026-11-17** — <a id="merge-rules-2026-11-17"></a>**PROPOSED, pending Keith's confirmation.** Replaces ADR-0007 §9 ("agents never merge"). Current review and merge rules, recorded after Keith's Nov 14, 2026 8:21 PM PT open-ended mandate (his words: "Yes, give them the open-ended mandate"):
+  - Agents may keep improving, refactoring and upgrading Agentickeyboard, Nexus and Vault, and may propose features themselves.
+  - Agents may merge with green CI. Agentickeyboard `main` still needs Keith's admin merge because of the admin-only ("Nopush") ruleset.
+  - Secrets, spending, security sign-offs (including new permissions) and irreversible actions still go to Keith.
+  - Privacy changes count as security-sensitive: they need two independent reviewers, and Keith merges them.
+  - A second independent reviewer is also required for other security-sensitive PRs (crypto, microphone/audio, secrets/keys, Android permissions), per the ADR-0007 §1 rule that still stands.
+  - Claim work and post ideas on Slack #agent-board.
 
 - **2026-11-15** — Keith asked for the newest versions: Compose BOM 2026.09, Kotlin 2.4.21, AGP 9.5.1, Gradle 9.9.1, OkHttp 5, Retrofit 3 and the rest of the catalog; `compileSdk` 37.2 (`targetSdk` stays 36; `:callscreen` untouched). The Gemini key is read only from the key saved in the app: the `BuildConfig`/`.env` fallback and the Secrets Gradle plugin are removed (#215).
 
 - **2026-11-08** — Keith approved isolated `:callscreen` APK, observation-first rules, no persistent call history, and CLI implementation. Draft HOLD PR only; twin/consent/filter remain untouched. Design: `superpowers/specs/2026-11-08-call-screening-design.md`.
 
-- **2026-10-23** — Token-saving and review policy ([ADR-0007](https://github.com/Daddymean/Nexus/blob/main/decisions/ADR-0007-review-policy-and-token-savings.md)): one reviewer per PR, a second only for security-sensitive PRs; local tests before review; larger slices; routine work to cheaper models; Slack #agent-board for claims; trimmed AGENTS.md/CLAUDE.md; CI posts a per-commit summary. Supersedes ADR-0005's two-review rule. Merges and releases still need Keith.
+- **2026-10-23** — Token-saving and review policy (historical ADR-0007; current merge authority is the [2026-11-17 entry](#merge-rules-2026-11-17), pending Keith's confirmation): one reviewer per PR, a second only for security-sensitive PRs; local tests before review; larger slices; routine work to cheaper models; Slack #agent-board for claims; trimmed AGENTS.md/CLAUDE.md; CI posts a per-commit summary. Supersedes ADR-0005's two-review rule.
 - **2026-10-23** — Keith merged #183 (supervised mode, time capsules), #185 (offline handwriting; recognition off until Keith enables it on the phone), #186 (computer-side voice cloning).
 - **2026-10-19** — #181/#182 as built: retirement undoable for 30 days, Keith's preview skips the consent check, no reminders.
 - **2026-10-19** — Approved and core memories go into the export and release archive (#180).
