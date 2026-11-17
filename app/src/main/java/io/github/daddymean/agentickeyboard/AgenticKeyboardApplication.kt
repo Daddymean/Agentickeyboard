@@ -10,7 +10,8 @@ import io.github.daddymean.agentickeyboard.util.KeyboardSettings
 import io.github.daddymean.agentickeyboard.util.LearnedRuleCleanup
 import io.github.daddymean.agentickeyboard.ondevice.CascadingOnDeviceAi
 import io.github.daddymean.agentickeyboard.ondevice.LocalGemmaController
-import io.github.daddymean.agentickeyboard.ondevice.OnDeviceEngineRouter
+import io.github.daddymean.agentickeyboard.ondevice.OnDeviceContextFactory
+import io.github.daddymean.agentickeyboard.ondevice.PowerBudget
 import io.github.daddymean.agentickeyboard.util.MlKitOnDeviceAi
 import io.github.daddymean.agentickeyboard.util.OnDeviceAi
 import io.github.daddymean.agentickeyboard.util.SafeLog
@@ -34,7 +35,17 @@ class AgenticKeyboardApplication : Application() {
 
     // Nano first, then a user-downloaded Gemma 4 E2B model, then heuristics.
     // Inference for Nano still runs in AICore; Gemma loads only after opt-in.
+    /**
+     * LAB-002: whether the on-device stack below was built on the main thread.
+     * Null until it is built. Building it constructs LocalGemmaController, whose
+     * readiness check SHA-256s the whole downloaded model file (~2.59 GB).
+     */
+    @Volatile
+    internal var onDeviceAiBuiltOnMainThread: Boolean? = null
+        private set
+
     val onDeviceAi: OnDeviceAi by lazy {
+        onDeviceAiBuiltOnMainThread = android.os.Looper.getMainLooper().isCurrentThread
         CascadingOnDeviceAi(
             nano = nanoAi,
             local = localGemma.asOnDeviceAi,
@@ -42,12 +53,15 @@ class AgenticKeyboardApplication : Application() {
                 SafeLog.i("CascadingOnDeviceAi", "On-device $engine failed, trying next: $reason")
             },
             context = {
-                OnDeviceEngineRouter.Context(
+                // LAB-006: Battery Saver / severe heat pauses local Gemma, and the
+                // full-model hash in isReady() runs only when Gemma could be used.
+                OnDeviceContextFactory.build(
                     privacyBlocked = GeminiManager.privacyBlocked,
                     nanoStatus = nanoAi.status.value,
-                    localEnabled = localGemma.isEnabled(),
-                    localReady = localGemma.isReady(),
-                    localSupported = localGemma.isDeviceSupported()
+                    power = PowerBudget.read(this),
+                    isEnabled = localGemma::isEnabled,
+                    isSupported = localGemma::isDeviceSupported,
+                    isReady = localGemma::isReady
                 )
             }
         )
@@ -60,10 +74,16 @@ class AgenticKeyboardApplication : Application() {
 
     override fun onCreate() {
         super.onCreate()
-        GeminiManager.onDeviceAi = onDeviceAi
+        // LAB-002: hand GeminiManager a provider instead of forcing the lazy here.
+        // Forcing it built MlKitOnDeviceAi and LocalGemmaController on the main
+        // thread at every process start (the IME's included), and the latter
+        // hashes the downloaded Gemma file to check it. The warm-up below builds
+        // the same stack at the same moment, on appScope's IO thread.
+        GeminiManager.provideOnDeviceAi { onDeviceAi }
         GeminiManager.userApiKey = GeminiKeyStore.load(this)
         appScope.launch {
-            nanoAi.status.collect { (onDeviceAi as? CascadingOnDeviceAi)?.refreshStatus() }
+            val cascade = onDeviceAi as? CascadingOnDeviceAi
+            nanoAi.status.collect { cascade?.refreshStatus() }
         }
         // Load the frequency-ranked swipe dictionary off the main thread.
         appScope.launch {

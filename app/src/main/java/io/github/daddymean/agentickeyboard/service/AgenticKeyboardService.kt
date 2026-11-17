@@ -60,6 +60,7 @@ import io.github.daddymean.agentickeyboard.ui.ProvideKeyboardMetrics
 import io.github.daddymean.agentickeyboard.ui.ReplyCompletenessBar
 import io.github.daddymean.agentickeyboard.ui.SnippetVaultBar
 import io.github.daddymean.agentickeyboard.ui.TrustPrismBanner
+import io.github.daddymean.agentickeyboard.util.AppLabelCache
 import io.github.daddymean.agentickeyboard.util.EditorSelectionProbe
 import io.github.daddymean.agentickeyboard.util.ClipboardCaptureDecision
 import io.github.daddymean.agentickeyboard.util.SafeLog
@@ -842,14 +843,22 @@ class AgenticKeyboardService : InputMethodService(), LifecycleOwner, ViewModelSt
         TwinLearning.submit(this, candidate) { twinGate().copy(sensitiveField = false).allowsCapture }
     }
 
+    // LAB-003: field focus no longer asks PackageManager for the same label each time.
+    private val appLabels = AppLabelCache()
+
     @Suppress("DEPRECATION")
-    private fun resolveAppLabel(packageName: String?): String {
-        if (packageName.isNullOrBlank()) return ""
-        return runCatching {
+    private fun resolveAppLabel(packageName: String?): String = appLabels.get(packageName) { pkg ->
+        runCatching {
             packageManager.getApplicationLabel(
-                packageManager.getApplicationInfo(packageName, 0)
+                packageManager.getApplicationInfo(pkg, 0)
             ).toString()
         }.getOrDefault("")
+    }
+
+    override fun onConfigurationChanged(newConfig: android.content.res.Configuration) {
+        super.onConfigurationChanged(newConfig)
+        // A locale change can change app labels.
+        appLabels.clear()
     }
 
     override fun onStartInput(info: EditorInfo?, restarting: Boolean) {
