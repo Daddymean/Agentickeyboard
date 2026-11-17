@@ -27,7 +27,10 @@ class GemmaNativeSchedulerTest {
     @Test
     fun returnsSuccessfulOutput() = runBlocking {
         assertEquals("rewritten", scheduler.run { "rewritten" })
-        assertFalse(scheduler.isBusy)
+        // The worker completes the result inside its try and clears isBusy in its
+        // finally, so the caller can resume a moment before the flag drops (seen
+        // 42 times in 20,000 back-to-back runs). Wait for idle like the other tests.
+        waitUntilIdle()
     }
 
     @Test
