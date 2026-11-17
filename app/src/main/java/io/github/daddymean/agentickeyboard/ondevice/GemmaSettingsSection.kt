@@ -52,6 +52,8 @@ fun GemmaSettingsSection() {
             ModelDownloadPolicy.Reason.OPT_IN_REQUIRED -> "Turn the toggle on to allow a download."
             ModelDownloadPolicy.Reason.SIZE_NOT_ACKNOWLEDGED -> "Confirm the size below to start the download."
         }
+        ready && PowerBudget.read(context).pausesLocalModel ->
+            "Paused while Battery Saver is on or the phone is too hot. Gemini Nano or the keyboard's local helpers are used instead; nothing goes to the cloud."
         ready -> "Ready — rewrite, proofread and tone can use Gemma 4 E2B on this phone when Gemini Nano is unavailable."
         else -> "The model is $sizeLabel, Apache-2.0, stored only in this app's private storage. It is not in the install. Download uses Wi-Fi unless you allow cellular."
     }
