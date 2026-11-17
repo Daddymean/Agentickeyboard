@@ -66,7 +66,17 @@ data class VoiceMatchState(
  * published as one value with its list, so the click handler reads the source of the
  * chip that is actually rendered.
  */
-data class PredictionChip(val word: String, val sourceWord: String?) {
+/**
+ * [label] is what the chip shows; it defaults to [word], the text the pick commits.
+ * LAB-007 quick answers show "= 84" but commit "12*7=84", and set [quickAnswer].
+ */
+data class PredictionChip(
+    val word: String,
+    val sourceWord: String?,
+    val label: String = word,
+    /** A computed answer: never learned as vocabulary or a bigram when picked. */
+    val quickAnswer: Boolean = false
+) {
     companion object {
         fun unbound(words: List<String>): List<PredictionChip> = words.map { PredictionChip(it, null) }
     }

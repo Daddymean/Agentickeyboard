@@ -16,6 +16,7 @@ import io.github.daddymean.agentickeyboard.db.WritingLog
 import io.github.daddymean.agentickeyboard.network.GeminiManager
 import io.github.daddymean.agentickeyboard.network.GrammarCorrectionResponse
 import io.github.daddymean.agentickeyboard.network.ToneAnalysisResponse
+import io.github.daddymean.agentickeyboard.util.QuickAnswers
 import io.github.daddymean.agentickeyboard.util.EditorPrivacy
 import io.github.daddymean.agentickeyboard.util.IncomingMoodSession
 import io.github.daddymean.agentickeyboard.util.ToneMatch
@@ -887,6 +888,11 @@ class KeyboardViewModel(
      * Called when the user commits a single word with the space bar or a swipe.
      * Feeds vocabulary learning and the bigram model for next-word prediction.
      */
+    /** LAB-007: a quick answer was picked. Nothing is learned; it also ends the bigram chain. */
+    fun onQuickAnswerCommitted() {
+        previousCommittedWord = null
+    }
+
     fun onWordCommitted(rawWord: String) {
         if (!isLearningAllowed()) {
             previousCommittedWord = null
@@ -1157,7 +1163,13 @@ class KeyboardViewModel(
                     } else {
                         emptyList()
                     }
-                    _predictiveSuggestions.value = completions.map { PredictionChip(it, sourceWord) }
+                    // LAB-007: an offline quick answer (math or unit conversion) leads the
+                    // strip. Unbound (sourceWord = null), so a pick is committed as inserted text.
+                    val quick = QuickAnswers.answer(activeText)
+                        ?.let { listOf(PredictionChip(it.replacement, null, label = it.label, quickAnswer = true)) }
+                        .orEmpty()
+                    _predictiveSuggestions.value =
+                        (quick + completions.map { PredictionChip(it, sourceWord) }).take(3)
                 }
             }
             LatencyMeter.record(LatencyMeter.Metric.SUGGESTIONS, System.nanoTime() - requestedAt)
