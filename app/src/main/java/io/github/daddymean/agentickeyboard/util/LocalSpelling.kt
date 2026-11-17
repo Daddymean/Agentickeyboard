@@ -25,11 +25,8 @@ class LocalSpelling(
     private val alphabeticalRanks = IntArray(alphabetical.size) { ranks.getValue(alphabetical[it]) }
     // The one-edit index (used where keyboard-aware correction is off) covers the
     // most frequent words only, to keep memory small with the extra words loaded.
-    private val deletions = buildMap<String, MutableList<String>> {
-        for (word in ranked.take(DELETION_INDEX_SIZE)) for (i in word.indices) {
-            getOrPut(word.removeRange(i, i + 1)) { mutableListOf() }.add(word)
-        }
-    }
+    // LAB-005: packed (two IntArrays), same lookups as the old String -> List map.
+    private val deletions = DeletionIndex(ranked.take(DELETION_INDEX_SIZE))
     /** True once the real dictionary has replaced the tiny built-in fallback. */
     val isLoaded: Boolean get() = ranked.size >= MIN_LOADED_WORDS
 
@@ -52,11 +49,11 @@ class LocalSpelling(
         if (token in ranks || token in knownOnly || corePrefix) return prefixes.map { preserveCase(word, it) }
         val candidates = linkedSetOf<String>()
         if (token !in ranks) {
-            deletions[token]?.let { candidates.addAll(it) }
+            deletions.addTo(token, candidates)
             for (i in token.indices) {
                 val deleted = token.removeRange(i, i + 1)
                 if (deleted in ranks) candidates.add(deleted)
-                deletions[deleted]?.let { candidates.addAll(it) }
+                deletions.addTo(deleted, candidates)
                 if (i < token.lastIndex) {
                     val swapped = token.substring(0, i) + token[i + 1] + token[i] + token.substring(i + 2)
                     if (swapped in ranks) candidates.add(swapped)
