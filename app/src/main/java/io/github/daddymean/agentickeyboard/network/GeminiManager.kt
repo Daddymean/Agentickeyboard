@@ -46,7 +46,28 @@ object GeminiManager {
      * offline request uses the heuristic fallbacks.
      */
     @Volatile
-    var onDeviceAi: OnDeviceAi? = null
+    private var onDeviceAiValue: OnDeviceAi? = null
+
+    @Volatile
+    private var onDeviceAiProvider: (() -> OnDeviceAi?)? = null
+
+    /**
+     * Setting a value (tests, or null) replaces any provider. The Application
+     * installs a provider instead (LAB-002), so the on-device stack is built
+     * off the main thread rather than inside Application.onCreate.
+     */
+    var onDeviceAi: OnDeviceAi?
+        get() = onDeviceAiValue ?: onDeviceAiProvider?.invoke()
+        set(value) {
+            onDeviceAiProvider = null
+            onDeviceAiValue = value
+        }
+
+    /** Resolves the on-device provider lazily, on whichever thread first needs it. */
+    fun provideOnDeviceAi(provider: () -> OnDeviceAi?) {
+        onDeviceAiValue = null
+        onDeviceAiProvider = provider
+    }
 
     /**
      * When true, on-device Nano and local Gemma must not run. Set from the
