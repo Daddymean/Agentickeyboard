@@ -45,6 +45,8 @@ import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.derivedStateOf
+import androidx.compose.runtime.structuralEqualityPolicy
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
@@ -194,7 +196,10 @@ fun AgenticKeyboardLayout(
     val isOfflineMode by viewModel.isOfflineMode.collectAsState()
     val predictiveSuggestions by viewModel.predictiveSuggestions.collectAsState()
     val topVocabulary by viewModel.topVocabulary.collectAsState()
-    val trackedInputText by viewModel.inputText.collectAsState()
+    // LAB-008: held as State, not read here. Reading it in this body re-ran the whole
+    // keyboard (every key row) on every keystroke; composition now reads it only
+    // through derivedStateOf below, and event handlers read .value when they run.
+    val trackedInputTextState = viewModel.inputText.collectAsState()
     // Mirrors the editor's selection state (playground mode never selects, and
     // the service only updates this flow for real editors, so it stays false).
     val hasEditorSelection by viewModel.hasSelection.collectAsState()
@@ -252,16 +257,17 @@ fun AgenticKeyboardLayout(
         }
     }
 
-    // Text shown during composition. In IME mode the service keeps the ViewModel in
-    // sync through onUpdateSelection, so this recomposes as the user types.
-    val activeText = if (inPlaygroundMode) playgroundTextState else trackedInputText
+    // The draft as the keyboard last saw it. In IME mode the service keeps the
+    // ViewModel in sync through onUpdateSelection. Call it from derivedStateOf or
+    // event handlers, not directly in this body (LAB-008).
+    fun activeTextNow(): String = if (inPlaygroundMode) playgroundTextState else trackedInputTextState.value
 
     // Fresh editor text for event handlers: reading the InputConnection at event
     // time avoids acting on a stale snapshot captured during composition.
     fun currentText(): String = if (inPlaygroundMode) {
         playgroundTextState
     } else {
-        inputConnectionProvider()?.getTextBeforeCursor(1000, 0)?.toString() ?: trackedInputText
+        inputConnectionProvider()?.getTextBeforeCursor(1000, 0)?.toString() ?: trackedInputTextState.value
     }
 
     // Text the user has selected in the active editor, or null when nothing is
@@ -277,8 +283,10 @@ fun AgenticKeyboardLayout(
 
     // Uppercase rendering combines explicit shift with auto-capitalization, which
     // never applies in a password, sensitive or incognito field (KEYBOARD-007).
-    val autoCapActive = !isNumberMode && shiftState == ShiftState.OFF &&
-        AutoCapitalization.applies(isAutoCapitalizeEnabled, isSensitiveField, activeText)
+    val autoCapFromText by remember(isAutoCapitalizeEnabled, isSensitiveField, inPlaygroundMode, playgroundTextState) {
+        derivedStateOf { AutoCapitalization.applies(isAutoCapitalizeEnabled, isSensitiveField, activeTextNow()) }
+    }
+    val autoCapActive = !isNumberMode && shiftState == ShiftState.OFF && autoCapFromText
     val shiftActive = shiftState != ShiftState.OFF || autoCapActive
 
     /**
@@ -1473,10 +1481,14 @@ fun AgenticKeyboardLayout(
         }
 
         // --- COMMAND PALETTE (draft starts with a "/" token) ---
-        val paletteCommands = if (isSensitiveField) emptyList() else CommandPalette.matches(
-            activeText,
-            customCommands.map { CommandPalette.Command(it.token, "Custom", CommandPalette.Action.REWRITE, it.instruction) }
-        )
+        val paletteCommands by remember(isSensitiveField, customCommands, inPlaygroundMode, playgroundTextState) {
+            derivedStateOf(structuralEqualityPolicy()) {
+                if (isSensitiveField) emptyList() else CommandPalette.matches(
+                    activeTextNow(),
+                    customCommands.map { CommandPalette.Command(it.token, "Custom", CommandPalette.Action.REWRITE, it.instruction) }
+                )
+            }
+        }
         AnimatedVisibility(
             visible = paletteCommands.isNotEmpty(),
             enter = fadeIn(),
