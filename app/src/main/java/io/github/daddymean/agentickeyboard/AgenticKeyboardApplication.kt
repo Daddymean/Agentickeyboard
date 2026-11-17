@@ -10,7 +10,8 @@ import io.github.daddymean.agentickeyboard.util.KeyboardSettings
 import io.github.daddymean.agentickeyboard.util.LearnedRuleCleanup
 import io.github.daddymean.agentickeyboard.ondevice.CascadingOnDeviceAi
 import io.github.daddymean.agentickeyboard.ondevice.LocalGemmaController
-import io.github.daddymean.agentickeyboard.ondevice.OnDeviceEngineRouter
+import io.github.daddymean.agentickeyboard.ondevice.OnDeviceContextFactory
+import io.github.daddymean.agentickeyboard.ondevice.PowerBudget
 import io.github.daddymean.agentickeyboard.util.MlKitOnDeviceAi
 import io.github.daddymean.agentickeyboard.util.OnDeviceAi
 import io.github.daddymean.agentickeyboard.util.SafeLog
@@ -42,12 +43,15 @@ class AgenticKeyboardApplication : Application() {
                 SafeLog.i("CascadingOnDeviceAi", "On-device $engine failed, trying next: $reason")
             },
             context = {
-                OnDeviceEngineRouter.Context(
+                // LAB-006: Battery Saver / severe heat pauses local Gemma, and the
+                // full-model hash in isReady() runs only when Gemma could be used.
+                OnDeviceContextFactory.build(
                     privacyBlocked = GeminiManager.privacyBlocked,
                     nanoStatus = nanoAi.status.value,
-                    localEnabled = localGemma.isEnabled(),
-                    localReady = localGemma.isReady(),
-                    localSupported = localGemma.isDeviceSupported()
+                    power = PowerBudget.read(this),
+                    isEnabled = localGemma::isEnabled,
+                    isSupported = localGemma::isDeviceSupported,
+                    isReady = localGemma::isReady
                 )
             }
         )
