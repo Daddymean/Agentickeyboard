@@ -1173,11 +1173,12 @@ fun AgenticKeyboardLayout(
                                                                 conn.commitSuggestionPick(lastWord, suggestion, chip.sourceWord)
                                                             }
                                                         }
-                                                        viewModel.onWordCommitted(suggestion)
+                                                        if (chip.quickAnswer) viewModel.onQuickAnswerCommitted()
+                                                        else viewModel.onWordCommitted(suggestion)
                                                     }
                                                     .padding(horizontal = 10.dp, vertical = 4.dp)
                                             ) {
-                                                Text(suggestion, color = keyboardColors.onChip, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                                Text(chip.label, color = keyboardColors.onChip, fontSize = 11.sp, fontWeight = FontWeight.Bold)
                                             }
                                         }
                                     }
