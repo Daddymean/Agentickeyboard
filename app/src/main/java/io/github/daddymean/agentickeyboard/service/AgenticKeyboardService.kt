@@ -61,6 +61,7 @@ import io.github.daddymean.agentickeyboard.ui.ReplyCompletenessBar
 import io.github.daddymean.agentickeyboard.ui.SnippetVaultBar
 import io.github.daddymean.agentickeyboard.ui.TrustPrismBanner
 import io.github.daddymean.agentickeyboard.util.AppLabelCache
+import io.github.daddymean.agentickeyboard.util.EditorSelectionProbe
 import io.github.daddymean.agentickeyboard.util.ClipboardCaptureDecision
 import io.github.daddymean.agentickeyboard.util.SafeLog
 import io.github.daddymean.agentickeyboard.util.LatencyMeter
@@ -735,10 +736,16 @@ class AgenticKeyboardService : InputMethodService(), LifecycleOwner, ViewModelSt
         }
     }
 
-    private fun syncEditorText() {
-        val textBefore = currentInputConnection?.getTextBeforeCursor(CONTEXT_CHARS, 0)?.toString() ?: ""
+    /**
+     * [selStart]/[selEnd] are the bounds onUpdateSelection reported, or -1 when
+     * unknown. A known collapsed caret skips the getSelectedText round trip
+     * (LAB-001, see EditorSelectionProbe); anything else reads the editor as before.
+     */
+    private fun syncEditorText(selStart: Int = -1, selEnd: Int = -1) {
+        val ic = currentInputConnection
+        val textBefore = ic?.getTextBeforeCursor(CONTEXT_CHARS, 0)?.toString() ?: ""
         viewModel.setInputText(textBefore)
-        val selected = currentInputConnection?.getSelectedText(0)?.toString()
+        val selected = EditorSelectionProbe.selectedText(selStart, selEnd) { ic?.getSelectedText(0) }
         observeTwinText(textBefore, selectionActive = !selected.isNullOrEmpty())
         // Two different questions: whether an AI action has a meaningful target
         // (non-blank), and whether the editor holds any selection at all, which
@@ -899,7 +906,7 @@ class AgenticKeyboardService : InputMethodService(), LifecycleOwner, ViewModelSt
         candidatesEnd: Int
     ) {
         super.onUpdateSelection(oldSelStart, oldSelEnd, newSelStart, newSelEnd, candidatesStart, candidatesEnd)
-        syncEditorText()
+        syncEditorText(newSelStart, newSelEnd)
     }
 
     override fun onWindowShown() {
