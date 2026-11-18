@@ -62,6 +62,7 @@ import io.github.daddymean.agentickeyboard.ui.SnippetVaultBar
 import io.github.daddymean.agentickeyboard.ui.TrustPrismBanner
 import io.github.daddymean.agentickeyboard.util.AppLabelCache
 import io.github.daddymean.agentickeyboard.util.EditorSelectionProbe
+import io.github.daddymean.agentickeyboard.util.EditorTextMirror
 import io.github.daddymean.agentickeyboard.util.ClipboardCaptureDecision
 import io.github.daddymean.agentickeyboard.util.SafeLog
 import io.github.daddymean.agentickeyboard.util.LatencyMeter
@@ -323,7 +324,7 @@ class AgenticKeyboardService : InputMethodService(), LifecycleOwner, ViewModelSt
                                 onCursorMove = { steps -> moveCursor(steps) },
                                 onSelectionCommand = { command -> applySelectionCommand(command) },
                                 onClipboardAction = { action -> performClipboardAction(action) },
-                                inputConnectionProvider = { trackedInputConnection() },
+                                inputConnectionProvider = { trackedInputConnection(serveCachedReads = true) },
                                 navigationBarInset = navigationBarInset,
                                 onOpenSettings = { openKeyboardSettings() }
                             )
@@ -739,11 +740,15 @@ class AgenticKeyboardService : InputMethodService(), LifecycleOwner, ViewModelSt
     /**
      * [selStart]/[selEnd] are the bounds onUpdateSelection reported, or -1 when
      * unknown. A known collapsed caret skips the getSelectedText round trip
-     * (LAB-001, see EditorSelectionProbe); anything else reads the editor as before.
+     * (LAB-001, see EditorSelectionProbe) and lets the editor mirror trust the
+     * read (LAB-009); anything else reads the editor as before.
      */
     private fun syncEditorText(selStart: Int = -1, selEnd: Int = -1) {
-        val ic = currentInputConnection
-        val textBefore = ic?.getTextBeforeCursor(CONTEXT_CHARS, 0)?.toString() ?: ""
+        val ic = rawInputConnection()
+        val read = ic?.getTextBeforeCursor(CONTEXT_CHARS, 0)?.toString()
+        val textBefore = read ?: ""
+        // LAB-009: a real read for a known caret; the layout's next reads reuse it.
+        if (read != null) editorMirror.record(read, selStart, selEnd, ic) else editorMirror.invalidate()
         viewModel.setInputText(textBefore)
         val selected = EditorSelectionProbe.selectedText(selStart, selEnd) { ic?.getSelectedText(0) }
         observeTwinText(textBefore, selectionActive = !selected.isNullOrEmpty())
@@ -826,9 +831,39 @@ class AgenticKeyboardService : InputMethodService(), LifecycleOwner, ViewModelSt
         }?.let(::submitTwin)
     }
 
-    /** The connection the keyboard edits through, reporting each edit to the twin. */
-    private fun trackedInputConnection(): InputConnection? =
-        currentInputConnection?.let { TwinTrackingInputConnection(it, twinSession) }
+    /**
+     * The connection the keyboard edits through, reporting each edit to the twin.
+     * LAB-009: the mirror layer sits *inside* the twin wrapper, so the twin still sees
+     * a TypingAwareConnection and classifies commits exactly as before; with
+     * [serveCachedReads] (the layout's connection) getTextBeforeCursor is answered
+     * from [editorMirror] while it is provably current.
+     */
+    private fun trackedInputConnection(serveCachedReads: Boolean = false): InputConnection? =
+        rawInputConnection()?.let {
+            TwinTrackingInputConnection(editorMirror.wrap(it, it, serveCachedReads), twinSession)
+        }
+
+    // --- LAB-009: editor text mirror -------------------------------------------------
+    private val editorMirror = EditorTextMirror(CONTEXT_CHARS)
+
+    private fun rawInputConnection(): InputConnection? = super.getCurrentInputConnection()
+
+    private var mirroredFor: InputConnection? = null
+    private var mirroredConnection: InputConnection? = null
+
+    /**
+     * Every connection this service hands out (the framework's own helpers such as
+     * sendDownUpKeyEvents included) invalidates the editor mirror on any edit. Reads
+     * through it go to the editor as before; only the layout's connection is served.
+     */
+    override fun getCurrentInputConnection(): InputConnection? {
+        val raw = rawInputConnection() ?: return null
+        if (mirroredFor !== raw) {
+            mirroredFor = raw
+            mirroredConnection = editorMirror.wrap(raw, raw, serveReads = false)
+        }
+        return mirroredConnection
+    }
 
     /** Send/Go: the whole field must equal what was typed here (checked in the session). */
     private fun captureTwinOnSend(ic: InputConnection) {
@@ -862,6 +897,7 @@ class AgenticKeyboardService : InputMethodService(), LifecycleOwner, ViewModelSt
     }
 
     override fun onStartInput(info: EditorInfo?, restarting: Boolean) {
+        editorMirror.invalidate() // LAB-009: a new or restarted field
         super.onStartInput(info, restarting)
         lifecycleRegistry.handleLifecycleEvent(Lifecycle.Event.ON_START)
         clearConversationContext()
@@ -963,6 +999,7 @@ class AgenticKeyboardService : InputMethodService(), LifecycleOwner, ViewModelSt
     }
 
     override fun onFinishInput() {
+        editorMirror.invalidate() // LAB-009
         // The field is gone: cancel any in-flight AI action so its result cannot
         // appear later in a different editor.
         viewModel.dismissResults()
