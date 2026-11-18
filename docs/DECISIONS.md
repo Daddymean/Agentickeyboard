@@ -1,6 +1,6 @@
 # Decisions — Agentickeyboard
 
-Short, dated, newest first. Current merge and review rules: [2026-11-17 entry](#merge-rules-2026-11-17) (confirmed by Keith on 2026-11-17). Historical records remain in the frozen [Nexus decisions/](https://github.com/Daddymean/Nexus/tree/main/decisions) tree and [projects/agentickeyboard/DECISIONS.md](https://github.com/Daddymean/Nexus/blob/main/projects/agentickeyboard/DECISIONS.md). Add a line here in the same PR as any new decision.
+Short, dated, newest first. This file is now the record of decisions. Current merge and review rules: [2026-11-17 entry](#merge-rules-2026-11-17) (confirmed by Keith on 2026-11-17). Older full records (read-only, Nexus is retired): [Nexus decisions/](https://github.com/Daddymean/Nexus/tree/main/decisions) and [projects/agentickeyboard/DECISIONS.md](https://github.com/Daddymean/Nexus/blob/main/projects/agentickeyboard/DECISIONS.md). Add a line here in the same PR as any new decision.
 
 - **2026-11-17** — <a id="merge-rules-2026-11-17"></a>**Confirmed by Keith on 2026-11-17.** Replaces ADR-0007 §9 ("agents never merge"). Current review and merge rules, recorded after Keith's Nov 14, 2026 8:21 PM PT open-ended mandate (his words: "Yes, give them the open-ended mandate"):
   - Agents may keep improving, refactoring and upgrading Agentickeyboard, Nexus and Vault, and may propose features themselves.
@@ -9,7 +9,7 @@ Short, dated, newest first. Current merge and review rules: [2026-11-17 entry](#
   - Privacy changes count as security-sensitive: they need two independent reviewers, and Keith merges them.
   - A second independent reviewer is also required for other security-sensitive PRs (crypto, microphone/audio, secrets/keys, Android permissions), per the ADR-0007 §1 rule that still stands.
   - Claim work and post ideas on Slack #agent-board.
-
+- **2026-11-17** — Keith retired Nexus: frozen read-only, no new records, branches or PRs (he archives it himself). Claims and handoffs go on #agent-board, decisions in this file, agent memory in `agent-ops/lessons` + `tasks.db` (no twin, personal or secret data). App PRs no longer need a paired Nexus PR.
 - **2026-11-15** — Keith asked for the newest versions: Compose BOM 2026.09, Kotlin 2.4.21, AGP 9.5.1, Gradle 9.9.1, OkHttp 5, Retrofit 3 and the rest of the catalog; `compileSdk` 37.2 (`targetSdk` stays 36; `:callscreen` untouched). The Gemini key is read only from the key saved in the app: the `BuildConfig`/`.env` fallback and the Secrets Gradle plugin are removed (#215).
 
 - **2026-11-08** — Keith approved isolated `:callscreen` APK, observation-first rules, no persistent call history, and CLI implementation. Draft HOLD PR only; twin/consent/filter remain untouched. Design: `superpowers/specs/2026-11-08-call-screening-design.md`.
