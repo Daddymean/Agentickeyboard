@@ -92,6 +92,9 @@ import io.github.daddymean.agentickeyboard.util.EditClipboardAction
 import io.github.daddymean.agentickeyboard.util.RedactionApplyGuard
 import io.github.daddymean.agentickeyboard.util.ReplyIntents
 import io.github.daddymean.agentickeyboard.util.SelectionCommand
+import io.github.daddymean.agentickeyboard.util.SelectionTransform
+import kotlinx.coroutines.flow.drop
+import kotlinx.coroutines.flow.first
 import io.github.daddymean.agentickeyboard.util.LatencyMeter
 import io.github.daddymean.agentickeyboard.util.SwipePoint
 import io.github.daddymean.agentickeyboard.util.SwipeToTypeEngine
@@ -142,6 +145,13 @@ fun AgenticKeyboardLayout(
     onAction: () -> Unit = {},
     onMicPress: () -> Unit = {},
     onCursorMove: (Int) -> Unit = {},
+    // LAB-011: hold space, then slide to climb word -> link/amount/quote -> clause
+    // -> sentence -> paragraph -> all. Each returns the rung label, or null when
+    // nothing changed (start returns null when smart select is unavailable).
+    onSmartSelectStart: () -> String? = { null },
+    onSmartSelectRung: (Int) -> String? = { null },
+    // LAB-013: the hold ended; with flickUp the selection's on-device transforms come back as chips.
+    onSmartSelectEnd: (flickUp: Boolean) -> List<SelectionTransform> = { emptyList() },
     onSelectionCommand: (SelectionCommand) -> Unit = {},
     onClipboardAction: (EditClipboardAction) -> Unit = {},
     inputConnectionProvider: () -> InputConnection? = { null },
@@ -231,6 +241,8 @@ fun AgenticKeyboardLayout(
     var dragX by remember { mutableFloatStateOf(0f) }
     var dragY by remember { mutableFloatStateOf(0f) }
     var gestureAlert by remember { mutableStateOf<String?>(null) }
+    // LAB-013: transform chips for the selection after a smart-select flick up.
+    var transformChips by remember { mutableStateOf<List<SelectionTransform>>(emptyList()) }
     var dragPreview by remember { mutableStateOf<String?>(null) }
     var showGestureGuide by remember { mutableStateOf(false) }
     var showClipboardActions by remember { mutableStateOf(false) }
@@ -621,7 +633,35 @@ fun AgenticKeyboardLayout(
             modifier = Modifier.fillMaxWidth().height(20.dp).testTag("typing_feedback"),
             contentAlignment = Alignment.Center
         ) {
-            gestureAlert?.let { message ->
+            if (transformChips.isNotEmpty()) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .horizontalScroll(rememberScrollState())
+                        .testTag("transform_chips"),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    transformChips.forEachIndexed { index, chip ->
+                        Text(
+                            text = chip.label,
+                            color = keyboardColors.text,
+                            fontSize = 11.sp,
+                            maxLines = 1,
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(10.dp))
+                                .background(keyboardColors.keySpecial)
+                                .clickable {
+                                    buzz(HapticFeedbackType.TextHandleMove)
+                                    transformChips = emptyList()
+                                    onInsertText(chip.output) // twin: inserted (selection transform replaces the selection)
+                                }
+                                .padding(horizontal = 8.dp, vertical = 2.dp)
+                                .testTag("transform_chip_$index")
+                        )
+                    }
+                }
+            } else gestureAlert?.let { message ->
                 Text(
                     text = message,
                     color = keyboardColors.keyActive,
@@ -631,6 +671,18 @@ fun AgenticKeyboardLayout(
                     overflow = TextOverflow.Ellipsis
                 )
             }
+        }
+        // Chips go away after 8 s or at the next edit. The text is watched through
+        // snapshotFlow only while chips are showing, so keystrokes never recompose
+        // the keyboard for this.
+        androidx.compose.runtime.LaunchedEffect(transformChips) {
+            if (transformChips.isEmpty()) return@LaunchedEffect
+            kotlinx.coroutines.withTimeoutOrNull(8000) {
+                androidx.compose.runtime.snapshotFlow { trackedInputTextState.value }
+                    .drop(1)
+                    .first()
+            }
+            transformChips = emptyList()
         }
         androidx.compose.runtime.LaunchedEffect(gestureAlert) {
             val message = gestureAlert ?: return@LaunchedEffect
@@ -2152,6 +2204,29 @@ fun AgenticKeyboardLayout(
                     handleSpace()
                 },
                 onHorizontalDrag = if (inPlaygroundMode) null else onCursorMove,
+                onSpaceHold = if (inPlaygroundMode) null else ({
+                    SpaceHoldCallbacks(
+                        onHold = {
+                            val label = onSmartSelectStart()
+                            if (label != null) {
+                                buzz(HapticFeedbackType.LongPress)
+                                gestureAlert = "Select: $label ⇆"
+                            }
+                            label != null
+                        },
+                        onRung = { delta ->
+                            onSmartSelectRung(delta)?.let { label ->
+                                buzz(HapticFeedbackType.TextHandleMove)
+                                gestureAlert = "Select: $label"
+                            }
+                        },
+                        onHoldEnd = { flickUp ->
+                            val chips = onSmartSelectEnd(flickUp)
+                            if (chips.isNotEmpty()) buzz(HapticFeedbackType.LongPress)
+                            transformChips = chips
+                        }
+                    )
+                }),
                 modifier = Modifier
                     .weight(1f)
                     .testTag("key_space")
