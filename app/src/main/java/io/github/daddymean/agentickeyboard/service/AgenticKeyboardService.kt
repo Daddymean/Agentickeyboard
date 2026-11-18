@@ -61,6 +61,7 @@ import io.github.daddymean.agentickeyboard.ui.ReplyCompletenessBar
 import io.github.daddymean.agentickeyboard.ui.SnippetVaultBar
 import io.github.daddymean.agentickeyboard.ui.TrustPrismBanner
 import io.github.daddymean.agentickeyboard.util.AppLabelCache
+import io.github.daddymean.agentickeyboard.util.EditorSelectionProbe
 import io.github.daddymean.agentickeyboard.util.EditorTextMirror
 import io.github.daddymean.agentickeyboard.util.ClipboardCaptureDecision
 import io.github.daddymean.agentickeyboard.util.SafeLog
@@ -738,7 +739,9 @@ class AgenticKeyboardService : InputMethodService(), LifecycleOwner, ViewModelSt
 
     /**
      * [selStart]/[selEnd] are the bounds onUpdateSelection reported, or -1 when
-     * unknown (then the editor mirror is not trusted; LAB-009).
+     * unknown. A known collapsed caret skips the getSelectedText round trip
+     * (LAB-001, see EditorSelectionProbe) and lets the editor mirror trust the
+     * read (LAB-009); anything else reads the editor as before.
      */
     private fun syncEditorText(selStart: Int = -1, selEnd: Int = -1) {
         val ic = rawInputConnection()
@@ -747,7 +750,7 @@ class AgenticKeyboardService : InputMethodService(), LifecycleOwner, ViewModelSt
         // LAB-009: a real read for a known caret; the layout's next reads reuse it.
         if (read != null) editorMirror.record(read, selStart, selEnd, ic) else editorMirror.invalidate()
         viewModel.setInputText(textBefore)
-        val selected = ic?.getSelectedText(0)?.toString()
+        val selected = EditorSelectionProbe.selectedText(selStart, selEnd) { ic?.getSelectedText(0) }
         observeTwinText(textBefore, selectionActive = !selected.isNullOrEmpty())
         // Two different questions: whether an AI action has a meaningful target
         // (non-blank), and whether the editor holds any selection at all, which

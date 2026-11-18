@@ -1,6 +1,8 @@
 # Decisions — Agentickeyboard
 
-Short, dated, newest first. Full records: [Nexus decisions/](https://github.com/Daddymean/Nexus/tree/main/decisions) and [projects/agentickeyboard/DECISIONS.md](https://github.com/Daddymean/Nexus/blob/main/projects/agentickeyboard/DECISIONS.md). Add a line here in the same PR as any new decision.
+Short, dated, newest first. This file is now the record of decisions. Older full records (read-only, Nexus is retired): [Nexus decisions/](https://github.com/Daddymean/Nexus/tree/main/decisions) and [projects/agentickeyboard/DECISIONS.md](https://github.com/Daddymean/Nexus/blob/main/projects/agentickeyboard/DECISIONS.md). Add a line here in the same PR as any new decision.
+
+- **2026-11-17** — Keith retired Nexus: frozen read-only, no new records, branches or PRs (he archives it himself). Claims and handoffs go on #agent-board, decisions in this file, agent memory in `agent-ops/lessons` + `tasks.db` (no twin, personal or secret data). App PRs no longer need a paired Nexus PR.
 
 - **2026-11-15** — Keith asked for the newest versions: Compose BOM 2026.09, Kotlin 2.4.21, AGP 9.5.1, Gradle 9.9.1, OkHttp 5, Retrofit 3 and the rest of the catalog; `compileSdk` 37.2 (`targetSdk` stays 36; `:callscreen` untouched). The Gemini key is read only from the key saved in the app: the `BuildConfig`/`.env` fallback and the Secrets Gradle plugin are removed (#215).
 
