@@ -654,7 +654,7 @@ fun AgenticKeyboardLayout(
                                 .clickable {
                                     buzz(HapticFeedbackType.TextHandleMove)
                                     transformChips = emptyList()
-                                    onInsertText(chip.output) // replaces the selection
+                                    onInsertText(chip.output) // twin: inserted (selection transform replaces the selection)
                                 }
                                 .padding(horizontal = 8.dp, vertical = 2.dp)
                                 .testTag("transform_chip_$index")
