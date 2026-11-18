@@ -93,6 +93,7 @@ import io.github.daddymean.agentickeyboard.util.RedactionApplyGuard
 import io.github.daddymean.agentickeyboard.util.ReplyIntents
 import io.github.daddymean.agentickeyboard.util.SelectionCommand
 import io.github.daddymean.agentickeyboard.util.SelectionTransform
+import io.github.daddymean.agentickeyboard.util.EditTimeline
 import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.first
 import io.github.daddymean.agentickeyboard.util.LatencyMeter
@@ -152,6 +153,11 @@ fun AgenticKeyboardLayout(
     onSmartSelectRung: (Int) -> String? = { null },
     // LAB-013: the hold ended; with flickUp the selection's on-device transforms come back as chips.
     onSmartSelectEnd: (flickUp: Boolean) -> List<SelectionTransform> = { emptyList() },
+    // LAB-014: Rewind. hasRewind is an O(1) check made after a backspace;
+    // rewindVersions builds the chips only when the user taps Rewind.
+    hasRewind: () -> Boolean = { false },
+    rewindVersions: () -> List<EditTimeline.Version> = { emptyList() },
+    onRewind: (String) -> Unit = {},
     onSelectionCommand: (SelectionCommand) -> Unit = {},
     onClipboardAction: (EditClipboardAction) -> Unit = {},
     inputConnectionProvider: () -> InputConnection? = { null },
@@ -243,6 +249,9 @@ fun AgenticKeyboardLayout(
     var gestureAlert by remember { mutableStateOf<String?>(null) }
     // LAB-013: transform chips for the selection after a smart-select flick up.
     var transformChips by remember { mutableStateOf<List<SelectionTransform>>(emptyList()) }
+    // LAB-014: "⟲ Rewind" offer after a backspace, then the versions to jump to.
+    var rewindOffered by remember { mutableStateOf(false) }
+    var rewindChoices by remember { mutableStateOf<List<EditTimeline.Version>>(emptyList()) }
     var dragPreview by remember { mutableStateOf<String?>(null) }
     var showGestureGuide by remember { mutableStateOf(false) }
     var showClipboardActions by remember { mutableStateOf(false) }
@@ -497,6 +506,7 @@ fun AgenticKeyboardLayout(
         viewModel.clearPendingUndo()
         viewModel.clearPendingAiUndo()
         onDelete()
+        if (!rewindOffered && hasRewind()) rewindOffered = true
     }
 
     // Active AI actions visibility
@@ -633,7 +643,46 @@ fun AgenticKeyboardLayout(
             modifier = Modifier.fillMaxWidth().height(20.dp).testTag("typing_feedback"),
             contentAlignment = Alignment.Center
         ) {
-            if (transformChips.isNotEmpty()) {
+            if (rewindChoices.isNotEmpty() || rewindOffered) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .horizontalScroll(rememberScrollState())
+                        .testTag("rewind_strip"),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    @Composable
+                    fun Chip(label: String, tag: String, onTap: () -> Unit) = Text(
+                        text = label,
+                        color = keyboardColors.text,
+                        fontSize = 11.sp,
+                        maxLines = 1,
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(10.dp))
+                            .background(keyboardColors.keySpecial)
+                            .clickable(onClick = onTap)
+                            .padding(horizontal = 8.dp, vertical = 2.dp)
+                            .testTag(tag)
+                    )
+                    if (rewindChoices.isEmpty()) {
+                        Chip("⟲ Rewind", "rewind_offer") {
+                            buzz(HapticFeedbackType.TextHandleMove)
+                            rewindChoices = rewindVersions()
+                            rewindOffered = false
+                        }
+                    } else {
+                        rewindChoices.forEachIndexed { index, version ->
+                            Chip("⟲ ${version.label}", "rewind_$index") {
+                                buzz(HapticFeedbackType.LongPress)
+                                rewindChoices = emptyList()
+                                onRewind(version.text)
+                                gestureAlert = "Rewound ⟲"
+                            }
+                        }
+                    }
+                }
+            } else if (transformChips.isNotEmpty()) {
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -683,6 +732,12 @@ fun AgenticKeyboardLayout(
                     .first()
             }
             transformChips = emptyList()
+        }
+        androidx.compose.runtime.LaunchedEffect(rewindOffered, rewindChoices) {
+            if (!rewindOffered && rewindChoices.isEmpty()) return@LaunchedEffect
+            delay(if (rewindChoices.isEmpty()) 4000 else 10000)
+            rewindOffered = false
+            rewindChoices = emptyList()
         }
         androidx.compose.runtime.LaunchedEffect(gestureAlert) {
             val message = gestureAlert ?: return@LaunchedEffect
