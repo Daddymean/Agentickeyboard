@@ -22,6 +22,20 @@ internal val SpaceCursorSlideThreshold = 24.dp
 /** Pixels of further travel per cursor step once sliding (unchanged from before). */
 internal const val SPACE_CURSOR_STEP_PX = 48f
 
+/** LAB-011: travel per smart-select rung once the space bar is held. */
+internal val SmartSelectRungDistance = 36.dp
+
+/**
+ * LAB-011: callbacks for holding the space bar still, then sliding to climb the
+ * smart-select ladder. [onHold] returns false when there is nothing to select
+ * (sensitive field, empty field), and the press then behaves as before.
+ */
+class SpaceHoldCallbacks(
+    val onHold: () -> Boolean,
+    val onRung: (Int) -> Unit,
+    val onHoldEnd: () -> Unit
+)
+
 /**
  * One gesture for a key that can also slide the cursor. A release before the
  * finger has moved [SpaceCursorSlideThreshold] sideways is a tap, whatever the
@@ -32,7 +46,8 @@ internal const val SPACE_CURSOR_STEP_PX = 48f
 internal suspend fun PointerInputScope.detectTapOrHorizontalSlide(
     order: KeyPressOrder? = null,
     onTap: () -> Unit,
-    onSlide: (Int) -> Unit
+    onSlide: (Int) -> Unit,
+    hold: (() -> SpaceHoldCallbacks?)? = null
 ) = awaitEachGesture {
     val down = awaitFirstDown()
     down.consume()
@@ -44,16 +59,56 @@ internal suspend fun PointerInputScope.detectTapOrHorizontalSlide(
     var sliding = false
     var typedEarly = false
     var accumulated = 0f
+    val holdTimeout = viewConfiguration.longPressTimeoutMillis
+    val rungPx = SmartSelectRungDistance.toPx()
+    var holding: SpaceHoldCallbacks? = null
+    var orderDone = false
     while (true) {
-        val event = awaitPointerEvent()
+        val waitForHold = hold != null && holding == null && !sliding && !typedEarly && !orderDone &&
+            press?.committedEarly != true
+        val remaining = holdTimeout - (currentEvent.changes.firstOrNull()?.uptimeMillis ?: down.uptimeMillis) + down.uptimeMillis
+        val event = if (waitForHold) {
+            withTimeoutOrNull(remaining.coerceAtLeast(0L)) { awaitPointerEvent() }
+        } else awaitPointerEvent()
+        if (event == null) {
+            // LAB-011: the thumb rested on space without sliding: start smart select.
+            val callbacks = hold?.invoke()
+            if (stillOurs()) {
+                orderDone = true
+                if (callbacks != null && callbacks.onHold()) {
+                    holding = callbacks
+                    accumulated = 0f
+                }
+            } else {
+                typedEarly = true
+            }
+            continue
+        }
         val change = event.changes.firstOrNull { it.id == down.id }
         if (change == null) {
-            if (!sliding) stillOurs()
+            if (holding != null) holding.onHoldEnd()
+            else if (!sliding && !orderDone) stillOurs()
             return@awaitEachGesture
+        }
+        holding?.let { ladder ->
+            if (!change.pressed) {
+                change.consume()
+                ladder.onHoldEnd()
+                return@awaitEachGesture
+            }
+            // Read the travel before consuming: a consumed change reports zero.
+            accumulated += change.positionChange().x
+            change.consume()
+            val rungs = (accumulated / rungPx).toInt()
+            if (rungs != 0) {
+                ladder.onRung(rungs)
+                accumulated -= rungs * rungPx
+            }
+            continue
         }
         if (!change.pressed) {
             change.consume()
-            if (!sliding && !typedEarly && stillOurs()) onTap()
+            if (!sliding && !typedEarly && (orderDone || stillOurs())) onTap()
             return@awaitEachGesture
         }
         if (typedEarly || (press?.committedEarly == true && !sliding)) {
@@ -66,7 +121,7 @@ internal suspend fun PointerInputScope.detectTapOrHorizontalSlide(
         } else {
             val travel = change.position.x - down.position.x
             if (abs(travel) >= thresholdPx) {
-                if (!stillOurs()) {
+                if (!orderDone && !stillOurs()) {
                     typedEarly = true
                     change.consume()
                     continue

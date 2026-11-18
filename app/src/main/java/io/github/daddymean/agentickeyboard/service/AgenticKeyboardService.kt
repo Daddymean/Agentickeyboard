@@ -90,6 +90,8 @@ import io.github.daddymean.agentickeyboard.util.VisibleContextPolicy
 import io.github.daddymean.agentickeyboard.util.SelectionCommand
 import io.github.daddymean.agentickeyboard.util.SelectionPlanner
 import io.github.daddymean.agentickeyboard.util.SelectionRange
+import io.github.daddymean.agentickeyboard.util.SmartSelectLadder
+import io.github.daddymean.agentickeyboard.util.SmartSelectSession
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -322,6 +324,9 @@ class AgenticKeyboardService : InputMethodService(), LifecycleOwner, ViewModelSt
                                 onAction = { performEnterAction() },
                                 onMicPress = { switchToVoiceInput() },
                                 onCursorMove = { steps -> moveCursor(steps) },
+                                onSmartSelectStart = { startSmartSelect() },
+                                onSmartSelectRung = { delta -> moveSmartSelect(delta) },
+                                onSmartSelectEnd = { smartSelect = null },
                                 onSelectionCommand = { command -> applySelectionCommand(command) },
                                 onClipboardAction = { action -> performClipboardAction(action) },
                                 inputConnectionProvider = { trackedInputConnection(serveCachedReads = true) },
@@ -660,6 +665,41 @@ class AgenticKeyboardService : InputMethodService(), LifecycleOwner, ViewModelSt
             ic.sendKeyEvent(KeyEvent(KeyEvent.ACTION_DOWN, keyCode))
             ic.sendKeyEvent(KeyEvent(KeyEvent.ACTION_UP, keyCode))
         }
+    }
+
+    /** LAB-011: the current space-bar hold, if any. Memory only, dropped on release. */
+    private var smartSelect: SmartSelectSession? = null
+
+    /**
+     * LAB-011: the space bar was held still. Builds the smart-select ladder from
+     * the extracted text and selects the word under the caret. Off in sensitive
+     * fields and in fields that will not extract their text; returns the rung
+     * label, or null to let the press type a space as usual.
+     */
+    private fun startSmartSelect(): String? {
+        smartSelect = null
+        if (viewModel.isSensitiveField.value) return null
+        val ic = currentInputConnection ?: return null
+        val extracted = ic.getExtractedText(ExtractedTextRequest(), 0) ?: return null
+        val text = extracted.text?.toString() ?: return null
+        val start = extracted.selectionStart
+        val end = extracted.selectionEnd
+        if (start < 0 || end < 0) return null
+        val steps = SmartSelectLadder.ladder(text, minOf(start, end))
+        if (steps.isEmpty()) return null
+        val origin = SelectionPlanner.toDocumentRange(SelectionRange(start, end), extracted.startOffset)
+        val session = SmartSelectSession(steps, extracted.startOffset.coerceAtLeast(0), origin)
+        smartSelect = session
+        session.documentRange.let { ic.setSelection(it.start, it.end) }
+        return session.label
+    }
+
+    private fun moveSmartSelect(delta: Int): String? {
+        val session = smartSelect ?: return null
+        if (!session.move(delta)) return null
+        val ic = currentInputConnection ?: return null
+        session.documentRange.let { ic.setSelection(it.start, it.end) }
+        return session.label
     }
 
     /**

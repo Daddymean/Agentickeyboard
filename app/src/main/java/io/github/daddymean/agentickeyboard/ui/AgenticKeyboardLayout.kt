@@ -142,6 +142,12 @@ fun AgenticKeyboardLayout(
     onAction: () -> Unit = {},
     onMicPress: () -> Unit = {},
     onCursorMove: (Int) -> Unit = {},
+    // LAB-011: hold space, then slide to climb word -> link/amount/quote -> clause
+    // -> sentence -> paragraph -> all. Each returns the rung label, or null when
+    // nothing changed (start returns null when smart select is unavailable).
+    onSmartSelectStart: () -> String? = { null },
+    onSmartSelectRung: (Int) -> String? = { null },
+    onSmartSelectEnd: () -> Unit = {},
     onSelectionCommand: (SelectionCommand) -> Unit = {},
     onClipboardAction: (EditClipboardAction) -> Unit = {},
     inputConnectionProvider: () -> InputConnection? = { null },
@@ -2152,6 +2158,25 @@ fun AgenticKeyboardLayout(
                     handleSpace()
                 },
                 onHorizontalDrag = if (inPlaygroundMode) null else onCursorMove,
+                onSpaceHold = if (inPlaygroundMode) null else ({
+                    SpaceHoldCallbacks(
+                        onHold = {
+                            val label = onSmartSelectStart()
+                            if (label != null) {
+                                buzz(HapticFeedbackType.LongPress)
+                                gestureAlert = "Select: $label ⇆"
+                            }
+                            label != null
+                        },
+                        onRung = { delta ->
+                            onSmartSelectRung(delta)?.let { label ->
+                                buzz(HapticFeedbackType.TextHandleMove)
+                                gestureAlert = "Select: $label"
+                            }
+                        },
+                        onHoldEnd = { onSmartSelectEnd() }
+                    )
+                }),
                 modifier = Modifier
                     .weight(1f)
                     .testTag("key_space")

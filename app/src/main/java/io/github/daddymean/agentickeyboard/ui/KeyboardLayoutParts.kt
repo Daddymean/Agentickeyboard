@@ -162,7 +162,9 @@ fun KeyButton(
     longPressVariants: List<String> = emptyList(),
     onVariant: (String) -> Unit = {},
     onHorizontalDrag: ((Int) -> Unit)? = null,
-    onTapPosition: ((Offset) -> Unit)? = null
+    onTapPosition: ((Offset) -> Unit)? = null,
+    // LAB-011: hold-then-slide smart select (space bar only).
+    onSpaceHold: (() -> SpaceHoldCallbacks?)? = null
 ) {
     val colors = LocalKeyboardColors.current
     val keyMetrics = LocalKeyboardMetrics.current
@@ -187,6 +189,7 @@ fun KeyButton(
     val density = LocalDensity.current
 
     val currentOnHorizontalDrag by rememberUpdatedState(onHorizontalDrag)
+    val currentOnSpaceHold by rememberUpdatedState(onSpaceHold)
 
     val interactionModifier = when {
         // KEYBOARD-017: the space bar types a space unless the thumb clearly slides.
@@ -194,7 +197,8 @@ fun KeyButton(
             detectTapOrHorizontalSlide(
                 order = pressOrder,
                 onTap = { currentOnClick() },
-                onSlide = { steps -> currentOnHorizontalDrag?.invoke(steps) }
+                onSlide = { steps -> currentOnHorizontalDrag?.invoke(steps) },
+                hold = { currentOnSpaceHold?.invoke() }
             )
         }
         repeatOnHold -> Modifier.pointerInput(Unit) {
