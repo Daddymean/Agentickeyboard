@@ -7,6 +7,8 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performTouchInput
+import androidx.compose.ui.test.performClick
+import io.github.daddymean.agentickeyboard.util.SelectionTransform
 import androidx.lifecycle.ViewModelStore
 import androidx.lifecycle.viewModelScope
 import androidx.room.Room
@@ -45,6 +47,8 @@ class SmartSelectHoldTest {
     private var starts = 0
     private var ends = 0
     private var available = true
+    private val flicks = mutableListOf<Boolean>()
+    private val inserted = mutableListOf<String>()
     private val viewModelStore = ViewModelStore()
     private var viewModelJob: Job? = null
 
@@ -72,7 +76,9 @@ class SmartSelectHoldTest {
                         onCursorMove = { cursorMoves += it },
                         onSmartSelectStart = { starts++; if (available) "Word" else null },
                         onSmartSelectRung = { delta -> rungs += delta; "Rung" },
-                        onSmartSelectEnd = { ends++ }
+                        onInsertText = { inserted += it },
+                        onSmartSelectEnd = { flick -> ends++; flicks += flick
+                            if (flick) listOf(SelectionTransform("→ 7.77 mi", "7.77 mi")) else emptyList() }
                     )
                 }
             }
@@ -81,8 +87,8 @@ class SmartSelectHoldTest {
     }
 
     /** Presses space, waits [holdMs], slides [dxDp] in steps, releases. */
-    private fun press(holdMs: Long, dxDp: Float = 0f) {
-        typed.clear(); cursorMoves.clear(); rungs.clear(); starts = 0; ends = 0
+    private fun press(holdMs: Long, dxDp: Float = 0f, dyDp: Float = 0f) {
+        typed.clear(); cursorMoves.clear(); rungs.clear(); starts = 0; ends = 0; flicks.clear()
         val density = composeTestRule.density.density
         val key = composeTestRule.onNodeWithTag("key_space")
         val size = key.fetchSemanticsNode().size
@@ -99,7 +105,7 @@ class SmartSelectHoldTest {
             }
             for (i in 1..STEPS) {
                 advanceEventTime(10)
-                moveTo(start + Offset(dxDp * density * i / STEPS, 0f))
+                moveTo(start + Offset(dxDp * density * i / STEPS, dyDp * density * i / STEPS))
             }
             up()
         }
@@ -153,6 +159,22 @@ class SmartSelectHoldTest {
         assertEquals(1, starts)
         assertEquals(0, ends)
         assertEquals(listOf(" "), typed)
+    }
+
+    @Test
+    fun `a flick up at the end of a hold offers transform chips that replace the selection`() {
+        showKeyboard()
+        press(holdMs = 800)
+        assertEquals(listOf(false), flicks)
+        composeTestRule.onNodeWithTag("transform_chips").assertDoesNotExist()
+        press(holdMs = 800, dyDp = -60f)
+        assertEquals(listOf(true), flicks)
+        assertEquals(emptyList<Int>(), cursorMoves)
+        assertEquals(emptyList<String>(), typed)
+        composeTestRule.onNodeWithTag("transform_chip_0").performClick()
+        composeTestRule.waitForIdle()
+        assertEquals(listOf("7.77 mi"), inserted)
+        composeTestRule.onNodeWithTag("transform_chips").assertDoesNotExist()
     }
 
     private companion object {

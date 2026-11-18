@@ -33,8 +33,12 @@ internal val SmartSelectRungDistance = 36.dp
 class SpaceHoldCallbacks(
     val onHold: () -> Boolean,
     val onRung: (Int) -> Unit,
-    val onHoldEnd: () -> Unit
+    /** [flickUp] is true when the thumb lifted after flicking up: offer transforms. */
+    val onHoldEnd: (flickUp: Boolean) -> Unit
 )
+
+/** LAB-013: upward travel during a hold that counts as a flick. */
+internal val SmartSelectFlickDistance = 40.dp
 
 /**
  * One gesture for a key that can also slide the cursor. A release before the
@@ -62,6 +66,8 @@ internal suspend fun PointerInputScope.detectTapOrHorizontalSlide(
     val holdTimeout = viewConfiguration.longPressTimeoutMillis
     val rungPx = SmartSelectRungDistance.toPx()
     var holding: SpaceHoldCallbacks? = null
+    var holdStartY = 0f
+    val flickPx = SmartSelectFlickDistance.toPx()
     var orderDone = false
     while (true) {
         val waitForHold = hold != null && holding == null && !sliding && !typedEarly && !orderDone &&
@@ -78,6 +84,7 @@ internal suspend fun PointerInputScope.detectTapOrHorizontalSlide(
                 if (callbacks != null && callbacks.onHold()) {
                     holding = callbacks
                     accumulated = 0f
+                    holdStartY = currentEvent.changes.firstOrNull { it.id == down.id }?.position?.y ?: down.position.y
                 }
             } else {
                 typedEarly = true
@@ -86,14 +93,14 @@ internal suspend fun PointerInputScope.detectTapOrHorizontalSlide(
         }
         val change = event.changes.firstOrNull { it.id == down.id }
         if (change == null) {
-            if (holding != null) holding.onHoldEnd()
+            if (holding != null) holding.onHoldEnd(false)
             else if (!sliding && !orderDone) stillOurs()
             return@awaitEachGesture
         }
         holding?.let { ladder ->
             if (!change.pressed) {
                 change.consume()
-                ladder.onHoldEnd()
+                ladder.onHoldEnd(holdStartY - change.position.y >= flickPx)
                 return@awaitEachGesture
             }
             // Read the travel before consuming: a consumed change reports zero.
