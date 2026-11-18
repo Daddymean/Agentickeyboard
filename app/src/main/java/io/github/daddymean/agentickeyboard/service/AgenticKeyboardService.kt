@@ -92,6 +92,7 @@ import io.github.daddymean.agentickeyboard.util.SelectionPlanner
 import io.github.daddymean.agentickeyboard.util.SelectionRange
 import io.github.daddymean.agentickeyboard.util.SmartSelectLadder
 import io.github.daddymean.agentickeyboard.util.SmartSelectSession
+import io.github.daddymean.agentickeyboard.util.EditTimeline
 import io.github.daddymean.agentickeyboard.util.SelectionTransform
 import io.github.daddymean.agentickeyboard.util.SelectionTransforms
 import kotlinx.coroutines.CoroutineScope
@@ -110,6 +111,8 @@ class AgenticKeyboardService : InputMethodService(), LifecycleOwner, ViewModelSt
     private companion object {
         const val TAG = "AgenticKeyboardIME"
         const val CONTEXT_CHARS = 1000
+        /** LAB-014: a full 1,000-char read may be truncated, so the timeline stops one short. */
+        const val EDIT_TIMELINE_MAX_CHARS = CONTEXT_CHARS - 1
         const val MAX_CURSOR_STEPS = 20
         const val MOOD_SETTLE_MS = 300L
     }
@@ -329,6 +332,9 @@ class AgenticKeyboardService : InputMethodService(), LifecycleOwner, ViewModelSt
                                 onSmartSelectStart = { startSmartSelect() },
                                 onSmartSelectRung = { delta -> moveSmartSelect(delta) },
                                 onSmartSelectEnd = { flickUp -> endSmartSelect(flickUp) },
+                                hasRewind = { editTimeline.size > 0 },
+                                rewindVersions = { editTimeline.versions() },
+                                onRewind = { text -> rewindTo(text) },
                                 onSelectionCommand = { command -> applySelectionCommand(command) },
                                 onClipboardAction = { action -> performClipboardAction(action) },
                                 inputConnectionProvider = { trackedInputConnection(serveCachedReads = true) },
@@ -669,6 +675,30 @@ class AgenticKeyboardService : InputMethodService(), LifecycleOwner, ViewModelSt
         }
     }
 
+    /** LAB-014: checkpoints of this field's draft, in memory only. */
+    private val editTimeline = EditTimeline(maxChars = EDIT_TIMELINE_MAX_CHARS)
+
+    /**
+     * LAB-014: put the draft back to [target]. Only for a draft the keyboard
+     * fully sees (cursor at the end, under the timeline's length cap), so the
+     * replacement can never cut text it did not know about.
+     */
+    private fun rewindTo(target: String) {
+        if (viewModel.isSensitiveField.value) return
+        val ic = currentInputConnection ?: return
+        if (!ic.getTextAfterCursor(1, 0).isNullOrEmpty()) return
+        val before = ic.getTextBeforeCursor(EDIT_TIMELINE_MAX_CHARS + 1, 0)?.toString() ?: return
+        if (before.length > EDIT_TIMELINE_MAX_CHARS) return
+        editTimeline.checkpoint(before)
+        val now = System.currentTimeMillis()
+        twinSession.markOwnDelete(now)
+        twinSession.markInserted(now)
+        ic.beginBatchEdit()
+        ic.deleteSurroundingText(before.length, 0)
+        trackedInputConnection()?.commitInserted(target, 1) // twin: inserted
+        ic.endBatchEdit()
+    }
+
     /** LAB-011: the current space-bar hold, if any. Memory only, dropped on release. */
     private var smartSelect: SmartSelectSession? = null
     private var smartSelectText: String? = null
@@ -813,6 +843,8 @@ class AgenticKeyboardService : InputMethodService(), LifecycleOwner, ViewModelSt
         // LAB-009: a real read for a known caret; the layout's next reads reuse it.
         if (read != null) editorMirror.record(read, selStart, selEnd, ic) else editorMirror.invalidate()
         viewModel.setInputText(textBefore)
+        // LAB-014: memory-only draft timeline; never fed from sensitive fields.
+        if (viewModel.isSensitiveField.value) editTimeline.clear() else editTimeline.observe(textBefore)
         val selected = EditorSelectionProbe.selectedText(selStart, selEnd) { ic?.getSelectedText(0) }
         observeTwinText(textBefore, selectionActive = !selected.isNullOrEmpty())
         // Two different questions: whether an AI action has a meaningful target
@@ -1063,6 +1095,7 @@ class AgenticKeyboardService : InputMethodService(), LifecycleOwner, ViewModelSt
 
     override fun onFinishInput() {
         editorMirror.invalidate() // LAB-009
+        editTimeline.clear() // LAB-014: the draft history dies with the field
         // The field is gone: cancel any in-flight AI action so its result cannot
         // appear later in a different editor.
         viewModel.dismissResults()
