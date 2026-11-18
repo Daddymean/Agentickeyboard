@@ -26,4 +26,4 @@ Read at session start (with [DECISIONS.md](DECISIONS.md)) instead of exploring t
 | `docs/` | Feature design notes. Twin: `twin-handwriting.md`, `twin-owasp-llm-top10-2025.md`. Privacy: `cloud-redaction-guard.md` |
 | `ROADMAP.md` | Product roadmap |
 
-Coordination, tasks and ADRs live in [Daddymean/Nexus](https://github.com/Daddymean/Nexus) (`tasks/KEYBOARD-*.md`, `decisions/`, `projects/agentickeyboard/`).
+Coordination runs on Slack #agent-board; decisions are recorded in `docs/DECISIONS.md`. [Daddymean/Nexus](https://github.com/Daddymean/Nexus) is retired and read-only: older tasks (`tasks/KEYBOARD-*.md`) and full ADRs (`decisions/`) stay there for reference only.

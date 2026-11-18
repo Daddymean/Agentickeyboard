@@ -4,7 +4,7 @@ Stable instructions first so they stay prompt-cached. Changing details live in l
 
 ## Session start (read in this order)
 1. This file, then [docs/DECISIONS.md](docs/DECISIONS.md) and [docs/REPO_MAP.md](docs/REPO_MAP.md).
-2. Slack #agent-board (below), then the Nexus task: https://github.com/Daddymean/Nexus (START-HERE.md, `tasks/`).
+2. Slack #agent-board (below): open claims, handoffs and decisions.
 3. Only then open the code you need, in slices.
 
 ## Hard rules (never change without Keith)
@@ -29,7 +29,7 @@ Stable instructions first so they stay prompt-cached. Changing details live in l
 - Replies go in the post's thread. Reactions: 👀 ack, ✅ done, 🛑 needs Keith.
 - Coordination only: never post secrets, tokens, keys or personal data. Escalations still go to Keith (see Hard rules).
 
-## Review and token policy (Nexus ADR-0007, supersedes ADR-0005's two-review rule)
+## Review and token policy (ADR-0007, supersedes ADR-0005's two-review rule; see docs/DECISIONS.md)
 - **One reviewer per PR.** A second reviewer only for security-sensitive PRs: privacy, crypto, microphone/audio, secrets/keys, permissions.
 - **Local tests must pass before asking for review** (state the command and result; unrun checks are `not_run`).
 - **Prefer slightly larger slices with fewer review rounds:** one coherent, tested change per PR rather than many tiny ones.
@@ -37,8 +37,12 @@ Stable instructions first so they stay prompt-cached. Changing details live in l
 - **Lean sessions:** one task per session, read files in slices, edit instead of rewrite, don't re-read to verify, don't poll CI in loops (CI posts a one-line pass/fail summary per commit).
 - **Jules:** Keith must turn off the Jules schedule himself; agents must not change it.
 
-## Nexus process
-Claim the task in Nexus first, then write handoff JSONL under `communications/` and update `tasks/`. Use real `date -u` timestamps. Every commit ends with an `Agent: <name> (<runtime>)` trailer. Pair each app PR with its Nexus records PR.
+## Coordination and agent memory
+Nexus is retired (Keith, 2026-11-17): it is a frozen, read-only record. Do not open records, branches or PRs there, and do not pair app PRs with Nexus PRs.
+- **Claims and handoffs:** #agent-board only (format above). A `[HANDOFF]` post in the claim's thread replaces the old JSONL handoff.
+- **Decisions:** a dated line in [docs/DECISIONS.md](docs/DECISIONS.md), in the same PR as the change.
+- **Agent memory** (on Keith's box, where you have it): lessons in `/home/box/shared/agent-ops/lessons/<topic>.md`, tasks in `tasks.db` via `/workspace/agent-ops/tasks.py`. Scoped agent lessons only: no twin, personal or secret data. Cloud sessions without the box use the board and DECISIONS.md.
+- Use real `date -u` timestamps. Every commit ends with an `Agent: <name> (<runtime>)` trailer.
 
 ## Build and test
 - CI (`.github/workflows/android-build.yml`) is the source of truth: debug + release build, unit tests, screenshots, lint, then a pass/fail summary on the commit.
