@@ -68,12 +68,17 @@ data class ForgetResult(
 /** The "never learn" lists the viewer can add to: Keith's never-learn apps and forgotten phrases. */
 interface NeverLearnLists {
     fun addApp(packageName: String)
-    fun addPhrase(entry: String)
+    /** Adds [phrase] (as a keyed MAC, never in clear). Returns false when it has no usable words. */
+    fun addPhrase(phrase: String): Boolean
 
     companion object {
-        fun of(prefs: TwinPreferences) = object : NeverLearnLists {
+        fun of(prefs: TwinPreferences, key: PhraseKey = TwinLearning.phraseKey) = object : NeverLearnLists {
             override fun addApp(packageName: String) { prefs.secureApps = prefs.secureApps + packageName }
-            override fun addPhrase(entry: String) { prefs.neverLearnPhrases = prefs.neverLearnPhrases + entry }
+            override fun addPhrase(phrase: String): Boolean {
+                val entry = NeverLearnPhrases.entry(phrase, key) ?: return false
+                prefs.neverLearnPhrases = prefs.neverLearnPhrases + entry
+                return true
+            }
         }
     }
 }
@@ -242,7 +247,7 @@ class TwinLedger(
 
     /** Deletes every message and memory with [phrase]; with [neverAgain], the twin never stores it again. */
     fun forgetPhrase(phrase: String, neverAgain: Boolean): ForgetResult {
-        if (neverAgain) NeverLearnPhrases.entry(phrase)?.let { lists?.addPhrase(it) }
+        if (neverAgain) lists?.addPhrase(phrase)
         return forget(planPhrase(phrase))
     }
 

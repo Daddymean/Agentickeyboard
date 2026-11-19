@@ -109,7 +109,9 @@ class TwinMemoryActivity : Activity() {
     private suspend fun candidates(): List<Candidate> {
         val never = TwinPreferences(this).neverLearnPhrases
         return TwinLearning.onWorker {
-            LegacyVault.candidates(TwinVault.journal(this).all(), state).filterNot { NeverLearnPhrases.matches(it.text, never) }
+            LegacyVault.candidates(TwinVault.journal(this).all(), state).filterNot { c ->
+                never.isNotEmpty() && runCatching { NeverLearnPhrases.matches(c.text, never, TwinLearning.phraseKey) }.getOrDefault(true)
+            }
         }
     }
 

@@ -58,8 +58,9 @@ class TwinLedgerTest {
     private val phrases = LinkedHashSet<String>()
     private val lists = object : NeverLearnLists {
         override fun addApp(packageName: String) { apps += packageName }
-        override fun addPhrase(entry: String) { phrases += entry }
+        override fun addPhrase(phrase: String): Boolean = NeverLearnPhrases.entry(phrase, key)?.let { phrases += it; true } ?: false
     }
+    private val key = FakePhraseKey()
     private val pass = "correct horse battery staple".toCharArray()
     private var fishRecord = 0L
     private var dinnerRecord = 0L
@@ -225,11 +226,11 @@ class TwinLedgerTest {
         // Style phrases are computed from what is left, so the phrase is gone from them.
         val stats = TwinStyleStats.Builder().apply { twin.forEach { add(it.text) } }.build()
         assertTrue((stats.topBigrams + stats.topTrigrams).none { it.first.contains("lake") })
-        // The list stores a hash, never the phrase, and blocks it from now on.
+        // The list stores a keyed MAC, never the phrase, and blocks it from now on.
         assertEquals(1, phrases.size)
         assertFalse(phrases.single().contains("lake"))
-        assertTrue(NeverLearnPhrases.matches("ok, see you at the lake!", phrases))
-        assertFalse(NeverLearnPhrases.matches("see you at the lakehouse", phrases))
+        assertTrue(NeverLearnPhrases.matches("ok, see you at the lake!", phrases, key))
+        assertFalse(NeverLearnPhrases.matches("see you at the lakehouse", phrases, key))
     }
 
     @Test

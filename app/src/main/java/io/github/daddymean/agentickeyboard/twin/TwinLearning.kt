@@ -40,12 +40,18 @@ class TwinPreferences(context: Context) {
         set(value) = prefs.edit().putStringSet(KEY_SECURE_APPS, value.map { it.trim() }.filter { it.isNotEmpty() }.toSet()).apply()
 
     /**
-     * "Forget and never learn this again" phrases, kept only as [NeverLearnPhrases] hashes
-     * so the phrase itself is never stored in clear text.
+     * "Forget and never learn this again" phrases, kept only as [NeverLearnPhrases] HMACs
+     * under a Keystore key, so neither the phrase nor a guessable hash is stored.
      */
     var neverLearnPhrases: Set<String>
-        get() = prefs.getStringSet(KEY_NEVER_LEARN_PHRASES, null)?.toSet() ?: emptySet()
-        set(value) = prefs.edit().putStringSet(KEY_NEVER_LEARN_PHRASES, value.toSet()).apply()
+        get() {
+            val raw = prefs.getStringSet(KEY_NEVER_LEARN_PHRASES, null)?.toSet() ?: return emptySet()
+            // Older unkeyed entries can't be checked or recovered; drop them for good.
+            val current = NeverLearnPhrases.migrate(raw)
+            if (current.size != raw.size) prefs.edit().putStringSet(KEY_NEVER_LEARN_PHRASES, current).apply()
+            return current
+        }
+        set(value) = prefs.edit().putStringSet(KEY_NEVER_LEARN_PHRASES, NeverLearnPhrases.migrate(value)).apply()
 
     /** KEYBOARD-044: the floating quick-ask bubble; off by default. */
     var isBubbleEnabled: Boolean
@@ -79,6 +85,9 @@ object TwinLearning {
 
     @Volatile private var store: TwinStore? = null
 
+    /** The Keystore HMAC key for never-learn phrases. */
+    val phraseKey: PhraseKey by lazy { KeystorePhraseKey() }
+
     fun store(context: Context): TwinStore =
         store ?: synchronized(this) {
             store ?: TwinStore(context, TwinStore.storeFile(context), KeystoreTwinCipher()).also { store = it }
@@ -102,7 +111,8 @@ object TwinLearning {
             // Re-check: the user may have paused or deleted everything since the tap.
             if (!stillAllowed()) return@launch
             // "Forget and never learn this again": a message holding a forgotten phrase is skipped whole.
-            if (NeverLearnPhrases.matches(candidate.text, TwinPreferences(appContext).neverLearnPhrases)) return@launch
+            val never = TwinPreferences(appContext).neverLearnPhrases
+            if (never.isNotEmpty() && runCatching { NeverLearnPhrases.matches(candidate.text, never, phraseKey) }.getOrDefault(true)) return@launch
             val text = TwinTextFilter.prepare(candidate.text) ?: return@launch
             runCatching { writer(appContext).write(text, candidate.packageName, candidate.atMillis) }
                 .onFailure { SafeLog.w(TAG, "Twin entry was not stored", it) }
