@@ -110,6 +110,16 @@ object LegacyVault {
         return state.copy(memories = state.memories - m, rejected = state.rejected + m.source.key)
     }
 
+    /**
+     * A journal record is about to be deleted: drop its memories and mark every allowed field
+     * rejected, so it can't be offered for review again if the delete doesn't finish. Call
+     * [forgetRecord] once the row is gone.
+     */
+    fun tombstoneRecord(state: VaultState, recordId: Long): VaultState {
+        val keys = ALLOWED_FIELDS.values.flatten().toSet().map { SourceRef(recordId, it).key }
+        return state.copy(memories = state.memories.filterNot { it.source.recordId == recordId }, rejected = state.rejected + keys)
+    }
+
     /** A journal record was deleted: drop everything derived from it. */
     fun forgetRecord(state: VaultState, recordId: Long): VaultState {
         val prefix = "journal:$recordId:"

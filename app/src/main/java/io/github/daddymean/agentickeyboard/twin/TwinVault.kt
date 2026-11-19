@@ -69,9 +69,13 @@ object TwinVault {
         deleteJournalRecord(journal(context), memory(context), id, vectors(context))
 
     internal fun deleteJournalRecord(journal: JournalStore, memory: MemoryStore, id: Long, vectors: EncryptedVectorIndex? = null): Boolean {
-        val left = memory.update { LegacyVault.forgetRecord(it, id) }
+        // Tombstone first: if the delete doesn't finish, the answer is still never re-offered.
+        val left = memory.update { LegacyVault.tombstoneRecord(it, id) }
         vectors?.prune(left.memories.map { it.id }.toSet())
-        return journal.delete(id).also { TwinLedger.changed() }
+        val gone = journal.delete(id)
+        if (gone) memory.update { LegacyVault.forgetRecord(it, id) }
+        TwinLedger.changed()
+        return gone
     }
 
     /** Deletes every journal record and recording, the memories, the consent record, the time capsules, the dead-man state, every twin entry, and the key. Call on the twin worker. */

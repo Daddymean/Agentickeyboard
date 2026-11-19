@@ -68,7 +68,9 @@ data class ForgetResult(
     val vectors: Int = 0,
     val coreBlocks: Int = 0,
     val journalRecords: Int = 0,
-    val derivedMemories: Int = 0
+    val derivedMemories: Int = 0,
+    /** Steps (one per store or journal answer) that failed; 0 when everything went. */
+    val failedSteps: Int = 0
 )
 
 /** The "never learn" lists the viewer can add to: Keith's never-learn apps and forgotten phrases. */
@@ -225,35 +227,47 @@ class TwinLedger(
 
     // ---- deleting ------------------------------------------------------------------------
 
-    /** Deletes everything in [plan] from every store, then prunes leftover vectors. */
+    /**
+     * Deletes everything in [plan] from every store, then prunes leftover vectors.
+     *
+     * Journal answers use a tombstone: their memories go and their sources are marked
+     * rejected *before* the row is deleted, and the tombstone is cleared only once the row is
+     * gone (ids are AUTOINCREMENT, never reused). A crash or failure in between can't bring the
+     * answer back for review. Stores can't share a transaction, so each step runs on its own;
+     * [ForgetResult.failedSteps] counts the ones that failed, and the screen says so.
+     */
     fun forget(plan: ForgetPlan): ForgetResult {
-        val messages = twin?.deleteMany(plan.messageIds) ?: 0
+        var failed = 0
+        fun <T> step(default: T, block: () -> T): T = runCatching(block).getOrElse { failed++; default }
+        val messages = step(0) { twin?.deleteMany(plan.messageIds) ?: 0 }
         var memories = 0
         var core = 0
         var derived = 0
         var journals = 0
         val mem = memory
-        var left: VaultState? = null
-        if (mem != null && (plan.memoryIds.isNotEmpty() || plan.coreLabels.isNotEmpty() || plan.journalIds.isNotEmpty())) {
-            left = mem.update { s0 ->
+        if (mem != null && (plan.memoryIds.isNotEmpty() || plan.coreLabels.isNotEmpty() || plan.journalIds.isNotEmpty())) step(Unit) {
+            mem.update { s0 ->
                 var s = s0
-                for (id in plan.memoryIds) if (s.memory(id) != null) { s = LegacyVault.remove(s, id); memories++ }
+                var m = 0; var c = 0; var d = 0
+                for (id in plan.memoryIds) if (s.memory(id) != null) { s = LegacyVault.remove(s, id); m++ }
                 for (label in plan.coreLabels) if (s.coreBlock(label)?.value?.isNotEmpty() == true) {
-                    s = LegacyVault.setCore(s, label, "", clock()); core++
+                    s = LegacyVault.setCore(s, label, "", clock()); c++
                 }
                 for (rid in plan.journalIds) {
                     val before = s.memories.size
-                    s = LegacyVault.forgetRecord(s, rid)
-                    derived += before - s.memories.size
+                    s = LegacyVault.tombstoneRecord(s, rid)
+                    d += before - s.memories.size
                 }
+                memories = m; core = c; derived = d
                 s
             }
         }
-        for (rid in plan.journalIds) if (journal?.delete(rid) == true) journals++
-        val keep = (left ?: mem?.load())?.memories?.map { it.id }?.toSet() ?: emptySet()
-        val pruned = if (mem != null) vectors?.prune(keep) ?: 0 else 0
+        val gone = HashSet<Long>()
+        for (rid in plan.journalIds) step(Unit) { if (journal?.delete(rid) == true) { journals++; gone += rid } }
+        if (mem != null && gone.isNotEmpty()) step(Unit) { mem.update { s -> gone.fold(s) { acc, rid -> LegacyVault.forgetRecord(acc, rid) } } }
+        val pruned = if (mem != null) step(0) { vectors?.prune(mem.load().memories.map { it.id }.toSet()) ?: 0 } else 0
         changed()
-        return ForgetResult(messages, memories, pruned, core, journals, derived)
+        return ForgetResult(messages, memories, pruned, core, journals, derived, failed)
     }
 
     fun forgetKeys(keys: Collection<String>): ForgetResult = forget(planKeys(keys))

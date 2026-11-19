@@ -286,6 +286,28 @@ class TwinLedgerTest {
         }
     }
 
+    @Test
+    fun journalTombstoneSurvivesAnInterruptedDelete() {
+        // Killed after the vault step, before the journal row went.
+        memory.update { LegacyVault.tombstoneRecord(it, dinnerRecord) }
+        assertTrue(journal.all().any { it.id == dinnerRecord })
+        assertTrue(memory.load().memories.none { it.id == "m-dinner" })
+        assertTrue("never re-offered", LegacyVault.candidates(journal.all(), memory.load()).none { it.source.recordId == dinnerRecord })
+        // Retrying finishes the delete and only then clears the tombstone.
+        val r = ledger().forgetKeys(listOf("journal:$dinnerRecord"))
+        assertEquals(1, r.journalRecords); assertEquals(0, r.failedSteps)
+        assertTrue(memory.load().rejected.none { it.startsWith("journal:$dinnerRecord:") })
+    }
+
+    @Test
+    fun aFailingStoreIsCountedAndTheOthersStillDelete() {
+        File(dir, "memory-vectors.sealed").writeBytes(ByteArray(64) { 7 })
+        val r = ledger().forgetKeys(listOf("m:m-fish", "msg:1"))
+        assertEquals(1, r.failedSteps)
+        assertEquals(1, r.memories); assertEquals(1, r.messages)
+        assertTrue(memory.load().memories.none { it.id == "m-fish" })
+    }
+
     // ---- exports, archives and re-index ------------------------------------------------------
 
     private fun unzip(bytes: ByteArray, reader: (ByteArray) -> java.io.InputStream): String {

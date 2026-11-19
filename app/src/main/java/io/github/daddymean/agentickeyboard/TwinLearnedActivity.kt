@@ -217,8 +217,11 @@ class TwinLearnedActivity : Activity() {
                     val n = never?.isChecked == true
                     scope.launch {
                         runCatching { TwinLearning.onWorker { run(ledger(), n) } }
-                            .onSuccess { toast("Deleted. " + summary(it, n)) }
-                            .onFailure { SafeLog.w(TAG, "Twin delete failed", it); toast("Couldn't delete. Nothing was changed for items that failed.") }
+                            .onSuccess {
+                                if (it.failedSteps == 0) toast("Deleted. " + summary(it, n))
+                                else toast("Some items couldn't be deleted. Check the list for what's left and try again.")
+                            }
+                            .onFailure { SafeLog.w(TAG, "Twin delete failed", it); toast("Some items may not have been deleted. Check the list and try again.") }
                         selected.clear()
                         reload()
                     }
