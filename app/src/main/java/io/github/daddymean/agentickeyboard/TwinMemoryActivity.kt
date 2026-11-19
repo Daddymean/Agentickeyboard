@@ -17,6 +17,8 @@ import android.widget.TextView
 import android.widget.Toast
 import io.github.daddymean.agentickeyboard.twin.NeverLearnPhrases
 import io.github.daddymean.agentickeyboard.twin.TwinLearning
+import io.github.daddymean.agentickeyboard.twin.secureTwinWindow
+import io.github.daddymean.agentickeyboard.twin.showSecure
 import io.github.daddymean.agentickeyboard.twin.TwinLedger
 import io.github.daddymean.agentickeyboard.twin.TwinPreferences
 import io.github.daddymean.agentickeyboard.twin.TwinVault
@@ -63,6 +65,7 @@ class TwinMemoryActivity : Activity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         window.setFlags(WindowManager.LayoutParams.FLAG_SECURE, WindowManager.LayoutParams.FLAG_SECURE)
+        secureTwinWindow()
         root = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(pad, pad, pad, pad) }
         setContentView(ScrollView(this).apply { addView(root) })
         scope.launch { reload(); if (intent?.getBooleanExtra(EXTRA_OPEN_ASK, false) == true) whoIsAsking() else home() }
@@ -168,7 +171,7 @@ class TwinMemoryActivity : Activity() {
                     scope.launch { decide { LegacyVault.approve(it, c, System.currentTimeMillis(), edited) }; review() }
                 }
             }
-            .setNegativeButton("Cancel", null).show()
+            .setNegativeButton("Cancel", null).showSecure()
     }
 
     private fun core() {
@@ -285,13 +288,13 @@ class TwinMemoryActivity : Activity() {
                 "Are you 18 or older? If not, a guardian needs to be with you.")
             .setPositiveButton("I'm 18 or older") { _, _ -> consentChange { TwinConsent.optIn(it, kid, adult = true, guardianPresent = false, now = System.currentTimeMillis()) } }
             .setNeutralButton("Under 18, a guardian is with me") { _, _ -> consentChange { TwinConsent.optIn(it, kid, adult = false, guardianPresent = true, now = System.currentTimeMillis()) } }
-            .setNegativeButton("Cancel", null).show()
+            .setNegativeButton("Cancel", null).showSecure()
     }
 
     /** KEYBOARD-036: a guardian names themselves. The phone can't verify this; the log records who. */
     private fun pickGuardian(title: String, then: (String) -> Unit) {
         val names = TwinConsent.GUARDIANS.toTypedArray()
-        AlertDialog.Builder(this).setTitle(title).setItems(names) { _, i -> then(names[i]) }.setNegativeButton("Cancel", null).show()
+        AlertDialog.Builder(this).setTitle(title).setItems(names) { _, i -> then(names[i]) }.setNegativeButton("Cancel", null).showSecure()
     }
 
     private fun turned18(kid: String) {
@@ -301,14 +304,14 @@ class TwinMemoryActivity : Activity() {
                 val birth = runCatching { java.time.LocalDate.parse(f.text.toString().trim()) }.getOrNull()
                 if (birth == null) toast("Use YYYY-MM-DD.")
                 else consentChange { TwinConsent.becomeAdult(it, kid, birth, java.time.LocalDate.now(), System.currentTimeMillis()) }
-            }.setNegativeButton("Cancel", null).show()
+            }.setNegativeButton("Cancel", null).showSecure()
     }
 
     private fun bringBack(kid: String) {
         val f = field("Type ${TwinConsent.BRING_BACK}", 1)
         AlertDialog.Builder(this).setTitle("Bring the twin back for $kid?").setView(f)
             .setPositiveButton("Continue") { _, _ -> consentChange { TwinConsent.bringBack(it, kid, f.text.toString(), System.currentTimeMillis()) } }
-            .setNegativeButton("Cancel", null).show()
+            .setNegativeButton("Cancel", null).showSecure()
     }
 
     private fun consentChange(f: (ConsentState) -> ConsentState) {
@@ -364,7 +367,7 @@ class TwinMemoryActivity : Activity() {
             ref.startsWith("core:") -> state.coreBlock(ref.removePrefix("core:"))?.let { "Core memory: ${it.title}\n\n${it.value}" }
             else -> null
         } ?: "This source no longer exists."
-        AlertDialog.Builder(this).setTitle("Source").setMessage(msg).setPositiveButton("OK", null).show()
+        AlertDialog.Builder(this).setTitle("Source").setMessage(msg).setPositiveButton("OK", null).showSecure()
     }
 
     // ---- ui helpers -------------------------------------------------------------------
@@ -394,7 +397,7 @@ class TwinMemoryActivity : Activity() {
     }
     private fun toast(t: String) = Toast.makeText(this, t, Toast.LENGTH_LONG).show()
     private fun confirm(message: String, ok: () -> Unit) {
-        AlertDialog.Builder(this).setMessage(message).setPositiveButton("Continue") { _, _ -> ok() }.setNegativeButton("Cancel", null).show()
+        AlertDialog.Builder(this).setMessage(message).setPositiveButton("Continue") { _, _ -> ok() }.setNegativeButton("Cancel", null).showSecure()
     }
     private fun date(ms: Long) = DateFormat.format("yyyy-MM-dd", Date(ms)).toString()
 

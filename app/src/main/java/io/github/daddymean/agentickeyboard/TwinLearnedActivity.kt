@@ -20,6 +20,8 @@ import io.github.daddymean.agentickeyboard.twin.LearnedGroup
 import io.github.daddymean.agentickeyboard.twin.LearnedItem
 import io.github.daddymean.agentickeyboard.twin.NeverLearnLists
 import io.github.daddymean.agentickeyboard.twin.TwinLearning
+import io.github.daddymean.agentickeyboard.twin.secureTwinWindow
+import io.github.daddymean.agentickeyboard.twin.showSecure
 import io.github.daddymean.agentickeyboard.twin.TwinLedger
 import io.github.daddymean.agentickeyboard.twin.TwinPreferences
 import io.github.daddymean.agentickeyboard.twin.TwinVault
@@ -57,6 +59,7 @@ class TwinLearnedActivity : Activity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         window.setFlags(WindowManager.LayoutParams.FLAG_SECURE, WindowManager.LayoutParams.FLAG_SECURE)
+        secureTwinWindow()
         root = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(pad, pad, pad, pad) }
         setContentView(ScrollView(this).apply { addView(root) })
     }
@@ -155,7 +158,7 @@ class TwinLearnedActivity : Activity() {
         AlertDialog.Builder(this).setTitle("Delete everything learned from which app?")
             .setItems(labels) { _, i -> val pkg = apps[i].first
                 planThenConfirm({ it.planApp(pkg) }, "Never learn in $pkg again") { l, never -> l.forgetApp(pkg, never) } }
-            .setNegativeButton("Cancel", null).show()
+            .setNegativeButton("Cancel", null).showSecure()
     }
 
     private fun pickRange() {
@@ -173,7 +176,7 @@ class TwinLearnedActivity : Activity() {
                 val start = a.atStartOfDay(zone).toInstant().toEpochMilli()
                 val end = b.plusDays(1).atStartOfDay(zone).toInstant().toEpochMilli()
                 planThenConfirm({ it.planRange(start, end) }, null) { l, _ -> l.forgetRange(start, end) }
-            }.setNegativeButton("Cancel", null).show()
+            }.setNegativeButton("Cancel", null).showSecure()
     }
 
     private fun askPhrase() {
@@ -183,7 +186,7 @@ class TwinLearnedActivity : Activity() {
                 "that contains these words in a row. You see the counts before anything is deleted.")
             .setView(f)
             .setPositiveButton("Continue") { _, _ -> confirmPhrase(f.text.toString(), false) }
-            .setNegativeButton("Cancel", null).show()
+            .setNegativeButton("Cancel", null).showSecure()
     }
 
     private fun confirmPhrase(phrase: String, neverAgainDefault: Boolean) {
@@ -226,7 +229,7 @@ class TwinLearnedActivity : Activity() {
                         reload()
                     }
                 }
-                .setNegativeButton("Cancel", null).show()
+                .setNegativeButton("Cancel", null).showSecure()
         }
     }
 

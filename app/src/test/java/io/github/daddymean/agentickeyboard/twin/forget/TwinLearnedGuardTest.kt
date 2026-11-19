@@ -53,4 +53,18 @@ class TwinLearnedGuardTest {
             assertTrue("$name checks TwinLedger.generation on resume", resume.contains("TwinLedger.generation"))
         }
     }
+
+    @Test
+    fun twinDialogsAreSecureToo() {
+        for (name in listOf("TwinLearnedActivity", "TwinMemoryActivity")) {
+            val src = File(base, "java/io/github/daddymean/agentickeyboard/$name.kt").readText()
+            assertTrue(src.contains("secureTwinWindow()"))
+            val shown = Regex("AlertDialog\\.Builder").findAll(src).count()
+            assertTrue(shown > 0)
+            assertEquals("$name: every AlertDialog uses showSecure()", 0,
+                src.lines().count { it.contains(".show()") && !it.contains("Toast.makeText") })
+        }
+        val helper = File(base, "java/io/github/daddymean/agentickeyboard/twin/SecureDialogs.kt").readText()
+        assertTrue(helper.contains("it.window?.setFlags(WindowManager.LayoutParams.FLAG_SECURE") && helper.contains("setRecentsScreenshotEnabled(false)"))
+    }
 }

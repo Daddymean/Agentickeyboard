@@ -26,7 +26,7 @@ object TwinActionGate {
                 }
                 AlertDialog.Builder(activity).setTitle("${action.label}?").setMessage(detail).setView(remember)
                     .setPositiveButton("Allow") { _, _ -> policy.approved(action, remember.isChecked); allowed() }
-                    .setNegativeButton("Cancel", null).show()
+                    .setNegativeButton("Cancel", null).showSecure()
             }
             TwinActionPolicy.Decision.ASK_ALWAYS -> {
                 val kind = if (action.risk == TwinActionPolicy.Risk.DANGEROUS) {
@@ -37,7 +37,7 @@ object TwinActionGate {
                 AlertDialog.Builder(activity).setTitle("${action.label}?")
                     .setMessage(listOfNotNull(detail, "$kind You'll be asked every time.").joinToString("\n\n"))
                     .setPositiveButton("Allow this time") { _, _ -> allowed() }
-                    .setNegativeButton("Cancel", null).show()
+                    .setNegativeButton("Cancel", null).showSecure()
             }
         }
     }
