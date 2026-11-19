@@ -1,5 +1,6 @@
 package io.github.daddymean.agentickeyboard
 
+import io.github.daddymean.agentickeyboard.twin.showSecure
 import io.github.daddymean.agentickeyboard.twin.TwinAction
 import io.github.daddymean.agentickeyboard.twin.TwinActionGate
 import android.app.Activity
@@ -231,7 +232,7 @@ class DeadManActivity : Activity() {
                 val birth = try { LocalDate.parse(field.text.toString().trim()) } catch (e: DateTimeParseException) { null }
                 if (birth == null) toast("Use the form YYYY-MM-DD.") else rekey(x, label, birth)
             }
-            .setNegativeButton("Cancel", null).show()
+            .setNegativeButton("Cancel", null).showSecure()
     }
 
     private fun rekey(x: Int, label: String, birth: LocalDate?) {

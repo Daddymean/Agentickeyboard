@@ -10,6 +10,7 @@ import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.Switch
 import android.widget.TextView
+import io.github.daddymean.agentickeyboard.twin.showSecure
 import io.github.daddymean.agentickeyboard.twin.TwinLedger
 import io.github.daddymean.agentickeyboard.twin.TwinLearning
 import io.github.daddymean.agentickeyboard.twin.TwinPreferences
@@ -233,7 +234,7 @@ class TwinActivity : Activity() {
                 }
             }
             .setNegativeButton("Cancel", null)
-            .show()
+            .showSecure()
     }
 
     private fun describe(s: TwinStyleStats): String {

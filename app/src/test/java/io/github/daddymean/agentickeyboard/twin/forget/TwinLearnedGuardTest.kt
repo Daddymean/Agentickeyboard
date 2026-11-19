@@ -91,4 +91,16 @@ class TwinLearnedGuardTest {
         assertTrue(activity.substringAfter("private fun confirmPlan").substringBefore("private fun pickApp").contains("SETTINGS_KEPT"))
         assertTrue(activity.substringAfter("private fun planThenConfirm").contains("note?.let"))
     }
+
+    @Test
+    fun everyTwinScreenShowsDialogsSecurely() {
+        val dir = File(base, "java/io/github/daddymean/agentickeyboard")
+        val screens = (dir.listFiles { f -> f.name.matches(Regex("Twin.*Activity\\.kt")) }!!.toList() +
+            listOf("JournalActivity.kt", "DeadManActivity.kt").map { File(dir, it) })
+        assertTrue(screens.size >= 7)
+        for (f in screens) {
+            val raw = f.readText().lines().filter { it.contains(".show()") && !it.contains("Toast.makeText") }
+            assertTrue("${f.name} shows a dialog without showSecure(): $raw", raw.isEmpty())
+        }
+    }
 }
