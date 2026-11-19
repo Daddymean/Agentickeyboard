@@ -240,6 +240,52 @@ class TwinLedgerTest {
         assertEquals(listOf("m-dinner"), memory.load().memories.map { it.id })
     }
 
+    @Test
+    fun forgetAPhraseAlsoTakesJournalAnswersRecordingsAndCoreBlocks() {
+        val (audio, w) = journal.newRecording()
+        w.use { it.write("fLaC-not-really-PloverVoice".toByteArray()) }
+        val plover = journal.add(JournalKinds.ANSWER, JSONObject().put("prompt", "Where did you grow up?")
+            .put("text", "By the PloverMarsh, near the river.").put("audio", JSONArray().put(JSONObject().put("file", audio).put("ms", 900))), t0 + 6 * day)
+        val settings = journal.add(JournalKinds.SETTINGS, JSONObject().put("children", JSONArray().put("PloverMarsh")), t0 + 6 * day)
+        memory.update { s0 ->
+            val c = LegacyVault.candidates(journal.all(), s0).single { it.source.recordId == plover }
+            val s = LegacyVault.approve(s0, c, t0 + 7 * day, id = "m-plover")
+            LegacyVault.setCore(s, LegacyVault.ABOUT_MY_KIDS, "We camp at PloverMarsh every summer.", t0)
+        }
+        twin.add("heading to ploverMARSH now", "com.whatsapp", t0 + 7 * day)
+        searcher(memory.load()).use { it.sync(memory.load()) }
+
+        val plan = ledger().planPhrase("plovermarsh")
+        assertEquals(1, plan.messageIds.size); assertEquals(setOf("m-plover"), plan.memoryIds)
+        assertEquals(setOf(LegacyVault.ABOUT_MY_KIDS), plan.coreLabels); assertEquals(setOf(plover), plan.journalIds)
+        assertEquals(1, plan.recordings)
+        assertEquals("1 typed message, 1 approved memory, 1 core memory (cleared whole), 1 journal answer, 1 recording", plan.describe())
+
+        val r = ledger().forgetPhrase("PloverMarsh", neverAgain = true)
+        assertEquals(1, r.messages); assertEquals(1, r.memories); assertEquals(1, r.coreBlocks); assertEquals(1, r.journalRecords)
+        assertTrue(journal.all().none { it.id == plover })
+        assertTrue("settings are never deleted here", journal.all().any { it.id == settings })
+        assertTrue(runCatching { journal.readRecording(audio) }.isFailure)
+        assertEquals("", memory.load().coreBlock(LegacyVault.ABOUT_MY_KIDS)!!.value)
+        assertTrue(vectors.load().entries.none { it.memoryId == "m-plover" })
+        assertTrue(ledger().list().none { it.group != LearnedGroup.PHRASES && it.text.contains("PloverMarsh", ignoreCase = true) })
+        assertTrue(NeverLearnPhrases.matches("PloverMarsh again", phrases, key))
+
+        // Neither the export nor the dead-man release archive carries it.
+        val out = ByteArrayOutputStream()
+        val s = TwinExporter(twin, journal, memory).export(out, pass.copyOf(), t0, 100_000)
+        assertEquals(0, s.recordings)
+        val plain = unzip(out.toByteArray()) { PassphraseArchive.Reader(it.inputStream(), TwinExporter.normalize(pass)) }
+        val dm = DeadManSwitch.create(DeadManSwitch.GUARDIANS, LocalDate.of(2026, 11, 19))
+        val rel = ByteArrayOutputStream()
+        TwinExporter(twin, journal, memory).exportRelease(rel, PassphraseArchive.dataKeyParams(dm.state.dataKey, dm.state.archiveId), t0)
+        val released = unzip(rel.toByteArray()) { PassphraseArchive.Reader(it.inputStream(), dm.state.dataKey) }
+        for (archive in listOf(plain, released)) {
+            assertFalse(archive.contains("PloverMarsh, near") || archive.contains("camp at PloverMarsh") || archive.contains("m-plover"))
+            assertFalse(archive.contains("PloverVoice") || archive.contains("ploverMARSH"))
+        }
+    }
+
     // ---- exports, archives and re-index ------------------------------------------------------
 
     private fun unzip(bytes: ByteArray, reader: (ByteArray) -> java.io.InputStream): String {

@@ -138,7 +138,7 @@ class TwinLearnedActivity : Activity() {
         })
         item.why?.let { text("Why: $it", 12f) }
         if (item.group == LearnedGroup.PHRASES) {
-            row("Delete messages with it" to { confirmPlan(listOf(item.key)) }, "Forget, never learn again" to { confirmPhrase(item.text, true) })
+            row("Delete everything with it" to { confirmPlan(listOf(item.key)) }, "Forget, never learn again" to { confirmPhrase(item.text, true) })
         } else {
             button("Delete") { confirmPlan(listOf(item.key)) }
         }
@@ -178,7 +178,10 @@ class TwinLearnedActivity : Activity() {
 
     private fun askPhrase() {
         val f = field("A word or phrase (up to 8 words)", 1)
-        AlertDialog.Builder(this).setTitle("Forget a phrase").setView(f)
+        AlertDialog.Builder(this).setTitle("Forget a phrase")
+            .setMessage("Finds every typed message, approved memory, core memory and journal answer (with its recordings) " +
+                "that contains these words in a row. You see the counts before anything is deleted.")
+            .setView(f)
             .setPositiveButton("Continue") { _, _ -> confirmPhrase(f.text.toString(), false) }
             .setNegativeButton("Cancel", null).show()
     }
@@ -252,7 +255,7 @@ class TwinLearnedActivity : Activity() {
         private const val PAGE = 50
         const val NOTICE =
             "Everything your twin keeps on this phone, with where and when it came from and why. Tick items to delete several, " +
-                "or delete everything from one app, from a date range, or every message with a phrase. Each delete asks first and " +
+                "or delete everything from one app, from a date range, or everything that holds a phrase. Each delete asks first and " +
                 "removes the item from every place the twin keeps it: the encrypted stores, the search index and the embedding " +
                 "vectors. Nothing here leaves the phone."
     }

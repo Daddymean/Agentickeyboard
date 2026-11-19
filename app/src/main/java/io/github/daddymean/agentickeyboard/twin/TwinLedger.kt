@@ -8,7 +8,9 @@ import io.github.daddymean.agentickeyboard.twin.memory.LegacyVault
 import io.github.daddymean.agentickeyboard.twin.memory.MemoryIndex
 import io.github.daddymean.agentickeyboard.twin.memory.MemoryStore
 import io.github.daddymean.agentickeyboard.twin.memory.VaultState
+import io.github.daddymean.agentickeyboard.twin.export.TwinExporter
 import org.json.JSONArray
+import org.json.JSONObject
 import java.util.concurrent.atomic.AtomicLong
 
 /** The groups on the "What the twin has learned" screen, in display order. */
@@ -41,15 +43,19 @@ data class ForgetPlan(
     val messageIds: Set<Long> = emptySet(),
     val memoryIds: Set<String> = emptySet(),
     val coreLabels: Set<String> = emptySet(),
-    val journalIds: Set<Long> = emptySet()
+    val journalIds: Set<Long> = emptySet(),
+    /** Sealed recordings the journal answers in [journalIds] point to; they go with them. */
+    val recordings: Int = 0
 ) {
     val isEmpty: Boolean get() = messageIds.isEmpty() && memoryIds.isEmpty() && coreLabels.isEmpty() && journalIds.isEmpty()
-    operator fun plus(o: ForgetPlan) = ForgetPlan(messageIds + o.messageIds, memoryIds + o.memoryIds, coreLabels + o.coreLabels, journalIds + o.journalIds)
+    operator fun plus(o: ForgetPlan) =
+        ForgetPlan(messageIds + o.messageIds, memoryIds + o.memoryIds, coreLabels + o.coreLabels, journalIds + o.journalIds)
 
-    /** "3 typed messages, 1 memory" for the confirmation. Counts only, never content. */
+    /** "3 typed messages, 1 approved memory, 1 journal answer, 2 recordings" for the confirmation. Counts only, never content. */
     fun describe(): String = listOfNotNull(
         count(messageIds.size, "typed message"), count(memoryIds.size, "approved memory", "approved memories"),
-        count(coreLabels.size, "core memory", "core memories"), count(journalIds.size, "journal answer")
+        count(coreLabels.size, "core memory (cleared whole)", "core memories (each cleared whole)"),
+        count(journalIds.size, "journal answer"), count(recordings, "recording")
     ).joinToString(", ").ifEmpty { "nothing" }
 
     private fun count(n: Int, one: String, many: String = one + "s") = if (n == 0) null else "$n ${if (n == 1) one else many}"
@@ -174,7 +180,7 @@ class TwinLedger(
         }
         plan += ForgetPlan(msgs, mems, core, journals)
         for (p in phrases) plan += planPhrase(p)
-        return plan
+        return withRecordings(plan)
     }
 
     /** Every typed message from [packageName]. */
@@ -193,13 +199,28 @@ class TwinLedger(
         return ForgetPlan(messageIds = ids, memoryIds = mems)
     }
 
-    /** Every typed message and approved memory that holds [phrase] (whole words, in a row). */
+    /**
+     * Every place the twin still holds [phrase] (whole words, in a row): typed messages,
+     * approved memories (their text or the original answer), core blocks (cleared whole),
+     * and journal answers, which take their recordings and derived memories with them.
+     * Journal settings records are never deleted here.
+     */
     fun planPhrase(phrase: String): ForgetPlan {
         if (NeverLearnPhrases.words(phrase).isEmpty()) return ForgetPlan()
+        fun has(t: String?) = t != null && NeverLearnPhrases.contains(t, phrase)
         val ids = HashSet<Long>()
-        twin?.forEach { if (NeverLearnPhrases.contains(it.text, phrase)) ids += it.id }
-        val mems = memory?.load()?.memories.orEmpty().filter { NeverLearnPhrases.contains(it.text, phrase) }.map { it.id }.toSet()
-        return ForgetPlan(messageIds = ids, memoryIds = mems)
+        twin?.forEach { if (has(it.text)) ids += it.id }
+        val vault = memory?.load()
+        val mems = vault?.memories.orEmpty().filter { has(it.text) || has(it.sourceText) || has(it.prompt) }.map { it.id }.toSet()
+        val core = vault?.core.orEmpty().filter { has(it.value) }.map { it.label }.toSet()
+        val journals = journal?.all().orEmpty().filter { it.kind != JournalKinds.SETTINGS && freeText(it.body).any(::has) }.map { it.id }.toSet()
+        return withRecordings(ForgetPlan(ids, mems, core, journals))
+    }
+
+    private fun withRecordings(plan: ForgetPlan): ForgetPlan {
+        if (plan.journalIds.isEmpty()) return plan
+        val n = journal?.all().orEmpty().filter { it.id in plan.journalIds }.sumOf { JournalStore.audioIds(it.body).size }
+        return plan.copy(recordings = n)
     }
 
     // ---- deleting ------------------------------------------------------------------------
@@ -249,6 +270,20 @@ class TwinLedger(
     fun forgetPhrase(phrase: String, neverAgain: Boolean): ForgetResult {
         if (neverAgain) lists?.addPhrase(phrase)
         return forget(planPhrase(phrase))
+    }
+
+    /** Every free-text string in a journal body, as the export scrubs them (structural keys skipped). */
+    private fun freeText(body: JSONObject): List<String> {
+        val out = ArrayList<String>()
+        fun walk(v: Any?, key: String?) {
+            when (v) {
+                is JSONObject -> for (k in v.keys()) walk(v.get(k), k)
+                is JSONArray -> for (i in 0 until v.length()) walk(v.get(i), key)
+                is String -> if (key !in TwinExporter.STRUCTURAL && v.isNotBlank()) out += v
+            }
+        }
+        walk(body, null)
+        return out
     }
 
     private fun journalText(r: JournalRecord): String? {
