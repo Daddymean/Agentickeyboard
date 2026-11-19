@@ -53,6 +53,11 @@
             android:label="Twin memories"
             android:theme="@style/Theme.MyApplication" />
         <activity
+            android:name=".TwinLearnedActivity"
+            android:exported="false"
+            android:label="What the twin has learned"
+            android:theme="@style/Theme.MyApplication" />
+        <activity
             android:name=".TwinCapsuleActivity"
             android:exported="false"
             android:label="Time capsules"

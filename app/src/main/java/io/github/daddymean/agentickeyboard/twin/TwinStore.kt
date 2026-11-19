@@ -107,6 +107,22 @@ class TwinStore(
     @Synchronized
     fun delete(id: Long): Boolean = file.exists() && db().delete(TABLE, "$COL_ID = ?", arrayOf(id.toString())) > 0
 
+    /** Deletes [ids] in one transaction (`secure_delete` overwrites them). Returns how many rows went. */
+    @Synchronized
+    fun deleteMany(ids: Collection<Long>): Int {
+        if (ids.isEmpty() || !file.exists()) return 0
+        val db = db()
+        var n = 0
+        db.beginTransaction()
+        try {
+            for (id in ids) n += db.delete(TABLE, "$COL_ID = ?", arrayOf(id.toString()))
+            db.setTransactionSuccessful()
+        } finally {
+            db.endTransaction()
+        }
+        return n
+    }
+
     /** Deletes every row, the database files and the encryption key. */
     @Synchronized
     fun deleteAll() {

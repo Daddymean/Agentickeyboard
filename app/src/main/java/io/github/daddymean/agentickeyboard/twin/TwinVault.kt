@@ -40,6 +40,14 @@ object TwinVault {
             memory ?: MemoryStore(MemoryStore.file(context), KeystoreTwinCipher()).also { memory = it }
         }
 
+    @Volatile private var vectors: EncryptedVectorIndex? = null
+
+    /** The on-device embedding vectors of approved memories (ids and floats only), sealed with the same key. */
+    fun vectors(context: Context): EncryptedVectorIndex =
+        vectors ?: synchronized(this) {
+            vectors ?: EncryptedVectorIndex(EncryptedVectorIndex.file(context), KeystoreTwinCipher()).also { vectors = it }
+        }
+
     @Volatile private var consent: ConsentStore? = null
 
     /** KEYBOARD-033: each kid's opt-in, pause and retirement, sealed with the same key. */
@@ -57,11 +65,13 @@ object TwinVault {
         }
 
     /** Deletes one journal record, its recordings, and every memory derived from it. Call on the twin worker. */
-    fun deleteJournalRecord(context: Context, id: Long): Boolean = deleteJournalRecord(journal(context), memory(context), id)
+    fun deleteJournalRecord(context: Context, id: Long): Boolean =
+        deleteJournalRecord(journal(context), memory(context), id, vectors(context))
 
-    internal fun deleteJournalRecord(journal: JournalStore, memory: MemoryStore, id: Long): Boolean {
-        memory.update { LegacyVault.forgetRecord(it, id) }
-        return journal.delete(id)
+    internal fun deleteJournalRecord(journal: JournalStore, memory: MemoryStore, id: Long, vectors: EncryptedVectorIndex? = null): Boolean {
+        val left = memory.update { LegacyVault.forgetRecord(it, id) }
+        vectors?.prune(left.memories.map { it.id }.toSet())
+        return journal.delete(id).also { TwinLedger.changed() }
     }
 
     /** Deletes every journal record and recording, the memories, the consent record, the time capsules, the dead-man state, every twin entry, and the key. Call on the twin worker. */
@@ -88,5 +98,6 @@ object TwinVault {
         deadMan?.delete()
         vectorIndex?.let { it.delete(); File(it.path + ".tmp").delete() }
         store.deleteAll() // also destroys the shared Keystore key
+        TwinLedger.changed()
     }
 }

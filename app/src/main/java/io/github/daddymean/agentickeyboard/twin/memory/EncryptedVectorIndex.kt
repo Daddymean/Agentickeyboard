@@ -67,6 +67,23 @@ class EncryptedVectorIndex(private val file: File, private val cipher: TwinCiphe
     @Synchronized
     fun update(change: (Payload) -> Payload): Payload = change(load()).also(::save)
 
+    fun exists(): Boolean = file.exists()
+
+    /**
+     * Drops every vector whose memory is not in [keep] (deleted or never approved).
+     * Works without the embedding model, so a delete never leaves a vector behind.
+     * Writes only when something changed. Returns how many vectors went.
+     */
+    @Synchronized
+    fun prune(keep: Set<String>): Int {
+        if (!file.exists()) return 0
+        val current = load()
+        val next = current.copy(entries = current.entries.filter { it.memoryId in keep })
+        val removed = current.entries.size - next.entries.size
+        if (removed > 0) save(next)
+        return removed
+    }
+
     @Synchronized
     fun delete() {
         file.delete()

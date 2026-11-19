@@ -15,7 +15,9 @@ import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.TextView
 import android.widget.Toast
+import io.github.daddymean.agentickeyboard.twin.NeverLearnPhrases
 import io.github.daddymean.agentickeyboard.twin.TwinLearning
+import io.github.daddymean.agentickeyboard.twin.TwinLedger
 import io.github.daddymean.agentickeyboard.twin.TwinPreferences
 import io.github.daddymean.agentickeyboard.twin.TwinVault
 import io.github.daddymean.agentickeyboard.twin.consent.ConsentState
@@ -56,6 +58,7 @@ class TwinMemoryActivity : Activity() {
     private var consent = ConsentState()
     private var searcher: SemanticMemorySearch? = null
     private val pad by lazy { (20 * resources.displayMetrics.density).toInt() }
+    private var loadedGeneration = -1L
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -63,6 +66,13 @@ class TwinMemoryActivity : Activity() {
         root = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(pad, pad, pad, pad) }
         setContentView(ScrollView(this).apply { addView(root) })
         scope.launch { reload(); if (intent?.getBooleanExtra(EXTRA_OPEN_ASK, false) == true) whoIsAsking() else home() }
+    }
+
+    override fun onResume() {
+        super.onResume()
+        // Something was deleted in the viewer: drop the cached vault and search index so a
+        // deleted memory can't be shown, searched or cited.
+        if (loadedGeneration != -1L && loadedGeneration != TwinLedger.generation) scope.launch { reload(); home() }
     }
 
     override fun onDestroy() {
@@ -73,6 +83,7 @@ class TwinMemoryActivity : Activity() {
     }
 
     private suspend fun reload() {
+        loadedGeneration = TwinLedger.generation
         val loaded = runCatching { TwinLearning.onWorker { TwinVault.memory(this).load() } }
             .onFailure { SafeLog.w(TAG, "Memory vault unreadable", it) }.getOrNull() ?: VaultState()
         setState(loaded)
@@ -84,17 +95,23 @@ class TwinMemoryActivity : Activity() {
         state = s
         val old = searcher
         searcher = TwinLearning.onWorker {
-            SemanticMemorySearch.open(this, s, TwinPreferences(this).secureApps).also { it.sync(s) }
+            SemanticMemorySearch.open(this, s, TwinPreferences(this).secureApps, vectorIndex = TwinVault.vectors(this)).also { it.sync(s) }
         }
         TwinLearning.onWorker { old?.close() }
     }
+
+    private fun ledger() = TwinLedger(null, TwinVault.memory(this), null, TwinVault.vectors(this))
 
     private suspend fun change(f: (VaultState) -> VaultState) {
         setState(TwinLearning.onWorker { TwinVault.memory(this).update(f) })
     }
 
-    private suspend fun candidates(): List<Candidate> =
-        TwinLearning.onWorker { LegacyVault.candidates(TwinVault.journal(this).all(), state) }
+    private suspend fun candidates(): List<Candidate> {
+        val never = TwinPreferences(this).neverLearnPhrases
+        return TwinLearning.onWorker {
+            LegacyVault.candidates(TwinVault.journal(this).all(), state).filterNot { NeverLearnPhrases.matches(it.text, never) }
+        }
+    }
 
     // ---- screens ----------------------------------------------------------------------
 
@@ -109,6 +126,9 @@ class TwinMemoryActivity : Activity() {
             button("Approved memories (${state.memories.size})") { vault("") }
             button("Ask the twin") { whoIsAsking() }
             button("Kids: turn the twin on, pause or retire it") { consentHome() }
+            button("Everything the twin has learned: view, search, delete") {
+                startActivity(android.content.Intent(this@TwinMemoryActivity, TwinLearnedActivity::class.java))
+            }
         }
     }
 
@@ -180,7 +200,12 @@ class TwinMemoryActivity : Activity() {
             text(m.text, 15f)
             button("Remove from the vault") {
                 confirm("Remove this memory? The journal answer stays; it won't be offered for review again.") {
-                    scope.launch { change { LegacyVault.remove(it, m.id) }; vault(query) }
+                    scope.launch {
+                        // Through the ledger, so its embedding vector goes too.
+                        runCatching { TwinLearning.onWorker { ledger().forgetKeys(listOf("m:${m.id}")) } }
+                            .onFailure { toast(it.message ?: "Couldn't remove.") }
+                        reload(); vault(query)
+                    }
                 }
             }
         }
