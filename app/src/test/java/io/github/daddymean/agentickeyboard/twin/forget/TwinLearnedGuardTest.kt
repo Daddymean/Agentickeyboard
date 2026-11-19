@@ -67,4 +67,12 @@ class TwinLearnedGuardTest {
         val helper = File(base, "java/io/github/daddymean/agentickeyboard/twin/SecureDialogs.kt").readText()
         assertTrue(helper.contains("it.window?.setFlags(WindowManager.LayoutParams.FLAG_SECURE") && helper.contains("setRecentsScreenshotEnabled(false)"))
     }
+
+    @Test
+    fun noExceptionMessageOnScreen() {
+        for (name in listOf("TwinLearnedActivity", "TwinMemoryActivity")) {
+            val src = File(base, "java/io/github/daddymean/agentickeyboard/$name.kt").readText()
+            assertFalse("$name shows an exception message", Regex("\\bit\\.message\\b|\\.localizedMessage|\\{it\\.message").containsMatchIn(src))
+        }
+    }
 }

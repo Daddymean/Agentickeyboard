@@ -20,6 +20,7 @@ import io.github.daddymean.agentickeyboard.twin.TwinLearning
 import io.github.daddymean.agentickeyboard.twin.secureTwinWindow
 import io.github.daddymean.agentickeyboard.twin.showSecure
 import io.github.daddymean.agentickeyboard.twin.TwinLedger
+import io.github.daddymean.agentickeyboard.twin.TwinUserError
 import io.github.daddymean.agentickeyboard.twin.TwinPreferences
 import io.github.daddymean.agentickeyboard.twin.TwinVault
 import io.github.daddymean.agentickeyboard.twin.consent.ConsentState
@@ -159,7 +160,7 @@ class TwinMemoryActivity : Activity() {
     }
 
     private suspend fun decide(f: (VaultState) -> VaultState) {
-        runCatching { change(f) }.onFailure { toast(it.message ?: "Couldn't save.") }
+        runCatching { change(f) }.onFailure { toast(TwinUserError.userMessage(it, "Couldn't save. Please try again.")) }
     }
 
     private fun editThenApprove(c: Candidate) {
@@ -186,7 +187,7 @@ class TwinMemoryActivity : Activity() {
             val now = System.currentTimeMillis()
             scope.launch {
                 runCatching { change { s -> fields.fold(s) { acc, (label, f) -> LegacyVault.setCore(acc, label, f.text.toString(), now) } } }
-                    .onSuccess { toast("Saved."); home() }.onFailure { toast(it.message ?: "Couldn't save.") }
+                    .onSuccess { toast("Saved."); home() }.onFailure { toast(TwinUserError.userMessage(it, "Couldn't save. Please try again.")) }
             }
         }
         button("Back") { home() }
@@ -208,7 +209,7 @@ class TwinMemoryActivity : Activity() {
                     scope.launch {
                         // Through the ledger, so its embedding vector goes too.
                         runCatching { TwinLearning.onWorker { ledger().forgetKeys(listOf("m:${m.id}")) } }
-                            .onFailure { toast(it.message ?: "Couldn't remove.") }
+                            .onFailure { toast(TwinUserError.userMessage(it, "Couldn't remove it. Please try again.")) }
                         reload(); vault(query)
                     }
                 }
@@ -317,7 +318,7 @@ class TwinMemoryActivity : Activity() {
     private fun consentChange(f: (ConsentState) -> ConsentState) {
         scope.launch {
             runCatching { TwinLearning.onWorker { TwinVault.consent(this@TwinMemoryActivity).update(f) } }
-                .onSuccess { consent = it }.onFailure { toast(it.message ?: "Couldn't save.") }
+                .onSuccess { consent = it }.onFailure { toast(TwinUserError.userMessage(it, "Couldn't save. Please try again.")) }
             consentHome()
         }
     }

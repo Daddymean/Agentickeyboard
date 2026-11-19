@@ -71,3 +71,14 @@ class NeverLearnPhrasesTest {
         raw.edit().clear().commit()
     }
 }
+
+class TwinUserErrorTest {
+    @Test
+    fun onlyFixedTwinTextReachesTheScreen() {
+        val fallback = "Couldn't save. Please try again."
+        assertEquals("already decided", io.github.daddymean.agentickeyboard.twin.TwinUserError.userMessage(
+            io.github.daddymean.agentickeyboard.twin.TwinUserError("already decided"), fallback))
+        assertEquals(fallback, io.github.daddymean.agentickeyboard.twin.TwinUserError.userMessage(
+            IllegalStateException("my password is hunter2"), fallback))
+    }
+}
