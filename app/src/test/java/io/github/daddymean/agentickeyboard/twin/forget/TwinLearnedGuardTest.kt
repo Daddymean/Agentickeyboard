@@ -75,4 +75,11 @@ class TwinLearnedGuardTest {
             assertFalse("$name shows an exception message", Regex("\\bit\\.message\\b|\\.localizedMessage|\\{it\\.message").containsMatchIn(src))
         }
     }
+
+    @Test
+    fun neverLearnCoversEditedApprovalsAndCoreEdits() {
+        val src = File(base, "java/io/github/daddymean/agentickeyboard/TwinMemoryActivity.kt").readText()
+        assertTrue(src.substringAfter("private fun editThenApprove").substringBefore("private fun core()").contains("neverLearnHolds(edited)"))
+        assertTrue(src.substringAfter("private fun core()").substringBefore("private fun vault(").contains("neverLearnHolds("))
+    }
 }

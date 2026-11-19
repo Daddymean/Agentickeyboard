@@ -110,6 +110,13 @@ class TwinMemoryActivity : Activity() {
         setState(TwinLearning.onWorker { TwinVault.memory(this).update(f) })
     }
 
+    /** True when [text] holds a phrase Keith asked the twin never to learn (fails closed). */
+    private suspend fun neverLearnHolds(text: String): Boolean {
+        val never = TwinPreferences(this).neverLearnPhrases
+        if (never.isEmpty()) return false
+        return TwinLearning.onWorker { runCatching { NeverLearnPhrases.matches(text, never, TwinLearning.phraseKey) }.getOrDefault(true) }
+    }
+
     private suspend fun candidates(): List<Candidate> {
         val never = TwinPreferences(this).neverLearnPhrases
         return TwinLearning.onWorker {
@@ -169,7 +176,10 @@ class TwinMemoryActivity : Activity() {
             .setPositiveButton("Approve") { _, _ ->
                 val edited = field.text.toString()
                 TwinActionGate.run(this@TwinMemoryActivity, TwinAction.APPROVE_MEMORY) { _ ->
-                    scope.launch { decide { LegacyVault.approve(it, c, System.currentTimeMillis(), edited) }; review() }
+                    scope.launch {
+                        if (neverLearnHolds(edited)) { toast(NEVER_LEARN_REFUSED); return@launch }
+                        decide { LegacyVault.approve(it, c, System.currentTimeMillis(), edited) }; review()
+                    }
                 }
             }
             .setNegativeButton("Cancel", null).showSecure()
@@ -186,6 +196,7 @@ class TwinMemoryActivity : Activity() {
         button("Save", TwinAction.EDIT_CORE_MEMORIES) {
             val now = System.currentTimeMillis()
             scope.launch {
+                if (fields.any { (_, f) -> neverLearnHolds(f.text.toString()) }) { toast(NEVER_LEARN_REFUSED); return@launch }
                 runCatching { change { s -> fields.fold(s) { acc, (label, f) -> LegacyVault.setCore(acc, label, f.text.toString(), now) } } }
                     .onSuccess { toast("Saved."); home() }.onFailure { toast(TwinUserError.userMessage(it, "Couldn't save. Please try again.")) }
             }
@@ -405,6 +416,7 @@ class TwinMemoryActivity : Activity() {
     companion object {
         /** KEYBOARD-044: opened from the quick-ask bubble, go straight to "Ask the twin". */
         const val EXTRA_OPEN_ASK = "open_ask"
+        const val NEVER_LEARN_REFUSED = "Not saved: it holds a phrase you asked the twin never to learn."
         private const val TAG = "TwinMemory"
         const val NOTICE =
             "Your twin answers only from memories you approve, plus your two core memories. Every answer shows where it " +
