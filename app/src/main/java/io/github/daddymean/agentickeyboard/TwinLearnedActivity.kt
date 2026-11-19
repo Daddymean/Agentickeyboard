@@ -149,7 +149,8 @@ class TwinLearnedActivity : Activity() {
 
     // ---- deletes, each confirmed ---------------------------------------------------------
 
-    private fun confirmPlan(keys: List<String>) = planThenConfirm({ it.planKeys(keys) }, null) { l, _ -> l.forgetKeys(keys) }
+    private fun confirmPlan(keys: List<String>) =
+        planThenConfirm({ it.planKeys(keys) }, null, note = if (keys.any { it.startsWith("phrase:") }) SETTINGS_KEPT else null) { l, _ -> l.forgetKeys(keys) }
 
     private fun pickApp() {
         val apps = TwinLedger.apps(items)
@@ -191,7 +192,7 @@ class TwinLearnedActivity : Activity() {
 
     private fun confirmPhrase(phrase: String, neverAgainDefault: Boolean) {
         if (io.github.daddymean.agentickeyboard.twin.NeverLearnPhrases.words(phrase).isEmpty()) { toast("Type 1 to 8 words."); return }
-        planThenConfirm({ it.planPhrase(phrase) }, "Never learn messages with this phrase again", neverAgainDefault, allowEmpty = true) { l, never ->
+        planThenConfirm({ it.planPhrase(phrase) }, "Never learn messages with this phrase again", neverAgainDefault, allowEmpty = true, note = SETTINGS_KEPT) { l, never ->
             l.forgetPhrase(phrase, never)
         }
     }
@@ -205,6 +206,7 @@ class TwinLearnedActivity : Activity() {
         neverLabel: String?,
         neverDefault: Boolean = false,
         allowEmpty: Boolean = false,
+        note: String? = null,
         run: (TwinLedger, Boolean) -> ForgetResult
     ) {
         scope.launch {
@@ -214,7 +216,8 @@ class TwinLearnedActivity : Activity() {
             AlertDialog.Builder(this@TwinLearnedActivity).setTitle("Delete for good?")
                 .setMessage("This deletes ${p.describe()} from this phone, with their search index entries and on-device embedding " +
                     "vectors, and any memories made from deleted journal answers. Exports and dead-man archives you save from now on " +
-                    "won't include them; archives you already saved elsewhere aren't changed. This can't be undone.")
+                    "won't include them; archives you already saved elsewhere aren't changed. This can't be undone." +
+                    (note?.let { "\n\n$it" } ?: ""))
                 .apply { never?.let { setView(LinearLayout(this@TwinLearnedActivity).apply { setPadding(pad, 0, pad, 0); addView(it) }) } }
                 .setPositiveButton("Delete") { _, _ ->
                     val n = never?.isChecked == true
@@ -259,6 +262,9 @@ class TwinLearnedActivity : Activity() {
     companion object {
         private const val TAG = "TwinLearned"
         private const val PAGE = 50
+        /** Forget-a-phrase never deletes journal settings records (kids' names, schedule). */
+        const val SETTINGS_KEPT =
+            "Journal settings records (your kids' names and journal schedule) are kept, even if they contain the phrase."
         const val NOTICE =
             "Everything your twin keeps on this phone, with where and when it came from and why. Tick items to delete several, " +
                 "or delete everything from one app, from a date range, or everything that holds a phrase. Each delete asks first and " +

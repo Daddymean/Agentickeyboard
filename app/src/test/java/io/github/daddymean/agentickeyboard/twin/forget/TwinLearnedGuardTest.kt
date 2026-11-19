@@ -82,4 +82,13 @@ class TwinLearnedGuardTest {
         assertTrue(src.substringAfter("private fun editThenApprove").substringBefore("private fun core()").contains("neverLearnHolds(edited)"))
         assertTrue(src.substringAfter("private fun core()").substringBefore("private fun vault(").contains("neverLearnHolds("))
     }
+
+    @Test
+    fun forgetPhraseConfirmationSaysSettingsAreKept() {
+        assertTrue(activity.contains("Journal settings records"))
+        val phrase = activity.substringAfter("private fun confirmPhrase").substringBefore("private fun planThenConfirm")
+        assertTrue(phrase.contains("note = SETTINGS_KEPT"))
+        assertTrue(activity.substringAfter("private fun confirmPlan").substringBefore("private fun pickApp").contains("SETTINGS_KEPT"))
+        assertTrue(activity.substringAfter("private fun planThenConfirm").contains("note?.let"))
+    }
 }
