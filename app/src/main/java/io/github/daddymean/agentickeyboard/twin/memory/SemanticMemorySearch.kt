@@ -62,8 +62,9 @@ class SemanticMemorySearch(
 
     /** Rebuilds missing vectors for approved memories and drops ids that left the vault. */
     fun sync(state: VaultState) {
-        val engine = embedder ?: return
         val approved = state.memories.associateBy { it.id }
+        // Without the model nothing new is embedded, but vectors of deleted memories still go.
+        val engine = embedder ?: run { vectors.prune(approved.keys); return }
         vectors.update { current ->
             var next = current.copy(modelId = modelId).let { p ->
                 p.copy(entries = p.entries.filter { it.memoryId in approved })
@@ -97,14 +98,15 @@ class SemanticMemorySearch(
             allowMainThread: Boolean = false,
             models: ModelManager = ModelManager.forApp(context),
             embedderOverride: TextEmbedder? = null,
-            cacheDir: File = File(context.noBackupFilesDir, "models/cache")
+            cacheDir: File = File(context.noBackupFilesDir, "models/cache"),
+            vectorIndex: EncryptedVectorIndex? = null
         ): SemanticMemorySearch {
             val keyword = MemoryIndex.build(context, state, allowMainThread = allowMainThread)
             val spec = ModelCatalog.EMBEDDING_GEMMA_2
             val file = if (models.isOptedIn(spec.id)) models.verifiedFile(spec) else null
             val embedder = embedderOverride ?: file?.let { LiteRtTextEmbedder(it, cacheDir) }
             return SemanticMemorySearch(
-                vectors = EncryptedVectorIndex(EncryptedVectorIndex.file(context), cipher),
+                vectors = vectorIndex ?: EncryptedVectorIndex(EncryptedVectorIndex.file(context), cipher),
                 keyword = keyword,
                 memories = state.memories,
                 embedder = embedder,

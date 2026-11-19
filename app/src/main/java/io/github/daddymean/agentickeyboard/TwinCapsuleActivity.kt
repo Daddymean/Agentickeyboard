@@ -1,5 +1,6 @@
 package io.github.daddymean.agentickeyboard
 
+import io.github.daddymean.agentickeyboard.twin.showSecure
 import io.github.daddymean.agentickeyboard.twin.TwinAction
 import io.github.daddymean.agentickeyboard.twin.TwinActionGate
 import android.Manifest
@@ -140,7 +141,7 @@ class TwinCapsuleActivity : Activity() {
     private fun withMic(action: () -> Unit) {
         if (checkSelfPermission(Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) { action(); return }
         AlertDialog.Builder(this).setMessage("Voice takes use the microphone permission you grant in the Journal. Open the Journal, record once there, then come back. Text capsules work without it.")
-            .setPositiveButton("OK", null).show()
+            .setPositiveButton("OK", null).showSecure()
     }
 
     private fun text(t: String, size: Float) = TextView(this).apply { textSize = size; text = t; setPadding(0, pad / 4, 0, pad / 4) }.also(root::addView)

@@ -23,6 +23,14 @@ data class TwinEntry(val id: Long, val atMillis: Long, val text: String, val pac
  * overwrites deleted rows. [deleteAll] deletes the database files and destroys the
  * Keystore key.
  *
+ * Residue (review of #230): SQLite runs in its default rollback-journal (DELETE) mode. While
+ * a delete runs, `twin_store.db-journal` holds the pre-images of the changed pages, and when
+ * the journal is unlinked those bytes (AES-GCM ciphertext, never plaintext) can stay in free
+ * storage until it is reused. `secure_delete` only zeroes the main database file. The journal
+ * mode is left alone on purpose, because the alternatives (MEMORY, OFF) risk corruption on a
+ * crash. **Destroying the Keystore key ([deleteAll]) is the real guarantee:** without the key,
+ * any leftover ciphertext can't be opened. [JournalStore] works the same way.
+ *
  * **Nothing is ever deleted automatically** (legacy purpose): rows go only when Keith
  * deletes one or deletes everything. Growth is handled by [TwinStoragePolicy]
  * warnings and, in slice 3, export. Every method does disk or Keystore work, so it
@@ -106,6 +114,22 @@ class TwinStore(
 
     @Synchronized
     fun delete(id: Long): Boolean = file.exists() && db().delete(TABLE, "$COL_ID = ?", arrayOf(id.toString())) > 0
+
+    /** Deletes [ids] in one transaction (`secure_delete` overwrites them). Returns how many rows went. */
+    @Synchronized
+    fun deleteMany(ids: Collection<Long>): Int {
+        if (ids.isEmpty() || !file.exists()) return 0
+        val db = db()
+        var n = 0
+        db.beginTransaction()
+        try {
+            for (id in ids) n += db.delete(TABLE, "$COL_ID = ?", arrayOf(id.toString()))
+            db.setTransactionSuccessful()
+        } finally {
+            db.endTransaction()
+        }
+        return n
+    }
 
     /** Deletes every row, the database files and the encryption key. */
     @Synchronized

@@ -3,7 +3,6 @@ package io.github.daddymean.agentickeyboard
 import android.app.Activity
 import android.app.AlertDialog
 import android.os.Bundle
-import android.text.format.DateFormat
 import android.view.WindowManager
 import android.widget.Button
 import android.widget.CompoundButton
@@ -11,7 +10,8 @@ import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.Switch
 import android.widget.TextView
-import io.github.daddymean.agentickeyboard.twin.TwinEntry
+import io.github.daddymean.agentickeyboard.twin.showSecure
+import io.github.daddymean.agentickeyboard.twin.TwinLedger
 import io.github.daddymean.agentickeyboard.twin.TwinLearning
 import io.github.daddymean.agentickeyboard.twin.TwinPreferences
 import io.github.daddymean.agentickeyboard.twin.TwinStoragePolicy
@@ -28,7 +28,6 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import java.util.Date
 import java.util.Locale
 
 /**
@@ -42,9 +41,7 @@ class TwinActivity : Activity() {
     private lateinit var prefs: TwinPreferences
     private lateinit var status: TextView
     private lateinit var style: TextView
-    private lateinit var entries: LinearLayout
-    private lateinit var more: Button
-    private var shown = 0
+    private var shownGeneration = -1L
 
     @Suppress("DEPRECATION")
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -61,6 +58,10 @@ class TwinActivity : Activity() {
         layout.addView(Button(this).apply {
             text = "Journal & interview"
             setOnClickListener { startActivity(android.content.Intent(this@TwinActivity, JournalActivity::class.java)) }
+        })
+        layout.addView(Button(this).apply {
+            text = "What the twin has learned (view, search, delete)"
+            setOnClickListener { startActivity(android.content.Intent(this@TwinActivity, TwinLearnedActivity::class.java)) }
         })
         layout.addView(Button(this).apply {
             text = "Memories & ask the twin (approve, core blocks, cited answers)"
@@ -159,17 +160,17 @@ class TwinActivity : Activity() {
         layout.addView(TextView(this).apply { textSize = 18f; text = "Your writing style" })
         style = TextView(this).apply { textSize = 14f; setPadding(0, 0, 0, pad / 2) }
         layout.addView(style)
-        layout.addView(TextView(this).apply { textSize = 18f; text = "Recent entries" })
-        entries = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
-        layout.addView(entries)
-        more = Button(this).apply { text = "Show more"; setOnClickListener { loadPage() } }
-        layout.addView(more)
         layout.addView(Button(this).apply {
             text = "Delete all twin data"
             setOnClickListener { confirmDeleteAll() }
         })
         setContentView(ScrollView(this).apply { addView(layout) })
-        refresh()
+    }
+
+    override fun onResume() {
+        super.onResume()
+        // Counts and style stats come from the store; recompute after a delete in the viewer.
+        if (shownGeneration != TwinLedger.generation) refresh()
     }
 
     override fun onDestroy() {
@@ -186,8 +187,7 @@ class TwinActivity : Activity() {
         }
 
     private fun refresh() {
-        entries.removeAllViews()
-        shown = 0
+        shownGeneration = TwinLedger.generation
         scope.launch {
             val (count, bytes, stats) = runCatching {
                 TwinLearning.onWorker {
@@ -214,40 +214,7 @@ class TwinActivity : Activity() {
                 if (tier >= 1) append("\n\n⚠ " + TwinStoragePolicy.sizeNotice(tier))
             }
             style.text = stats?.let(::describe) ?: "Nothing learned yet."
-            loadPage()
         }
-    }
-
-    private fun loadPage() {
-        val offset = shown
-        scope.launch {
-            val page = runCatching {
-                TwinLearning.onWorker { TwinLearning.store(this@TwinActivity).recent(PAGE, offset) }
-            }.getOrDefault(emptyList())
-            page.forEach { entries.addView(row(it)) }
-            shown += page.size
-            more.isEnabled = page.size == PAGE
-        }
-    }
-
-    private fun row(entry: TwinEntry): LinearLayout = LinearLayout(this).apply {
-        orientation = LinearLayout.VERTICAL
-        setPadding(0, 12, 0, 12)
-        val whenText = DateFormat.format("yyyy-MM-dd HH:mm", Date(entry.atMillis))
-        addView(TextView(context).apply {
-            textSize = 12f
-            text = "$whenText · ${entry.packageName ?: "unknown app"}"
-        })
-        addView(TextView(context).apply { textSize = 15f; text = entry.text })
-        addView(Button(context).apply {
-            text = "Delete"
-            setOnClickListener {
-                scope.launch {
-                    TwinLearning.onWorker { TwinLearning.store(this@TwinActivity).delete(entry.id) }
-                    refresh()
-                }
-            }
-        })
     }
 
     private fun confirmDeleteAll() {
@@ -267,7 +234,7 @@ class TwinActivity : Activity() {
                 }
             }
             .setNegativeButton("Cancel", null)
-            .show()
+            .showSecure()
     }
 
     private fun describe(s: TwinStyleStats): String {
@@ -288,7 +255,6 @@ class TwinActivity : Activity() {
 
     companion object {
         private const val TAG = "TwinActivity"
-        private const val PAGE = 50
 
         const val PRIVACY_NOTICE =
             "Your legacy twin learns how you write so that, one day, it can talk with your kids in your own words.\n\n" +
@@ -310,7 +276,7 @@ class TwinActivity : Activity() {
                 "may be missed, so check the viewer below.\n\n" +
                 "Where it lives: only on this phone, encrypted with a key kept in Android's secure key store. It is not " +
                 "backed up, not transferred to a new phone and never sent to the cloud. You can view every saved entry " +
-                "here, delete single entries, or delete everything, which also destroys the key. You can also turn it " +
+                "in \"What the twin has learned\", delete single entries, everything from one app or a date range, or everything, which also destroys the key. You can also turn it " +
                 "off or pause it.\n\n" +
                 "Encrypted export: only when you start it. It writes one passphrase-encrypted file to a folder on this " +
                 "phone, scrubbed again more strictly first; nothing is uploaded. Copying it off the phone is up to you, " +

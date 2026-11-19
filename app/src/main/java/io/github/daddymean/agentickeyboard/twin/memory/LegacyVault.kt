@@ -1,6 +1,7 @@
 package io.github.daddymean.agentickeyboard.twin.memory
 
 import io.github.daddymean.agentickeyboard.twin.TwinExportScrubber
+import io.github.daddymean.agentickeyboard.twin.TwinUserError
 import io.github.daddymean.agentickeyboard.twin.journal.JournalKinds
 import io.github.daddymean.agentickeyboard.twin.journal.JournalRecord
 import org.json.JSONArray
@@ -94,10 +95,10 @@ object LegacyVault {
 
     /** Keith approves a candidate, optionally edited. The edit is scrubbed too. */
     fun approve(state: VaultState, c: Candidate, now: Long, editedText: String? = null, id: String = UUID.randomUUID().toString()): VaultState {
-        require(c.source.key !in state.rejected && state.memories.none { it.source.key == c.source.key }) { "already decided" }
+        if (c.source.key in state.rejected || state.memories.any { it.source.key == c.source.key }) throw TwinUserError("already decided")
         val edited = editedText?.trim()?.takeIf { it.isNotEmpty() && it != c.text }
         val text = edited?.let { TwinExportScrubber.scrub(it)?.trim()?.take(MEMORY_LIMIT) } ?: if (edited == null) c.text else null
-        requireNotNull(text) { "nothing left to save after removing identifiers" }
+        if (text == null) throw TwinUserError("nothing left to save after removing identifiers")
         val m = Memory(id, text, c.source, c.text, c.prompt, c.child, c.atMillis, now, edited != null)
         return state.copy(memories = state.memories + m)
     }
@@ -110,6 +111,16 @@ object LegacyVault {
         return state.copy(memories = state.memories - m, rejected = state.rejected + m.source.key)
     }
 
+    /**
+     * A journal record is about to be deleted: drop its memories and mark every allowed field
+     * rejected, so it can't be offered for review again if the delete doesn't finish. Call
+     * [forgetRecord] once the row is gone.
+     */
+    fun tombstoneRecord(state: VaultState, recordId: Long): VaultState {
+        val keys = ALLOWED_FIELDS.values.flatten().toSet().map { SourceRef(recordId, it).key }
+        return state.copy(memories = state.memories.filterNot { it.source.recordId == recordId }, rejected = state.rejected + keys)
+    }
+
     /** A journal record was deleted: drop everything derived from it. */
     fun forgetRecord(state: VaultState, recordId: Long): VaultState {
         val prefix = "journal:$recordId:"
@@ -117,8 +128,8 @@ object LegacyVault {
     }
 
     fun setCore(state: VaultState, label: String, value: String, now: Long): VaultState {
-        val title = CORE_LABELS.firstOrNull { it.first == label }?.second ?: throw IllegalArgumentException("unknown core block")
-        require(value.length <= CORE_LIMIT) { "$title is limited to $CORE_LIMIT characters" }
+        val title = CORE_LABELS.firstOrNull { it.first == label }?.second ?: throw TwinUserError("unknown core block")
+        if (value.length > CORE_LIMIT) throw TwinUserError("$title is limited to $CORE_LIMIT characters")
         val block = CoreBlock(label, title, value.trim(), now)
         return state.copy(core = CORE_LABELS.map { (l, _) -> if (l == label) block else state.coreBlock(l) ?: CoreBlock(l, title(l), "", 0L) })
     }
