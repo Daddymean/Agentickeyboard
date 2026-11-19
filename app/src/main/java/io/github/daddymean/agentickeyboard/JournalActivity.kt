@@ -87,6 +87,7 @@ class JournalActivity : Activity() {
     private var pendingRecordStart: (() -> Unit)? = null
     private var onStopRecording: (() -> Unit)? = null
     private val pad by lazy { (16 * resources.displayMetrics.density).toInt() }
+    private var loadedGeneration = -1L
 
     @Suppress("DEPRECATION")
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -114,6 +115,14 @@ class JournalActivity : Activity() {
         }
     }
 
+    override fun onResume() {
+        super.onResume()
+        // A journal answer deleted in "What the twin has learned" must not stay on screen here.
+        if (loadedGeneration != -1L && loadedGeneration != io.github.daddymean.agentickeyboard.twin.TwinLedger.generation && !recorder.isRecording) {
+            scope.launch { home() } // home() reloads
+        }
+    }
+
     override fun onStop() {
         // Never record in the background.
         if (recorder.isRecording) onStopRecording?.invoke()
@@ -138,6 +147,7 @@ class JournalActivity : Activity() {
     // ---- data -------------------------------------------------------------------------
 
     private suspend fun reload() {
+        loadedGeneration = io.github.daddymean.agentickeyboard.twin.TwinLedger.generation
         records = runCatching { TwinLearning.onWorker { store.all() } }
             .onFailure { SafeLog.w(TAG, "Journal store unavailable", it) }.getOrDefault(emptyList())
     }

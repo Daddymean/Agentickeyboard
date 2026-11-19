@@ -44,4 +44,13 @@ class TwinLearnedGuardTest {
         val memories = File(base, "java/io/github/daddymean/agentickeyboard/TwinMemoryActivity.kt").readText()
         assertTrue(twin.contains("TwinLearnedActivity::class.java") && memories.contains("TwinLearnedActivity::class.java"))
     }
+
+    @Test
+    fun otherTwinScreensDropCachesAfterADelete() {
+        for (name in listOf("JournalActivity", "TwinMemoryActivity", "TwinActivity")) {
+            val src = File(base, "java/io/github/daddymean/agentickeyboard/$name.kt").readText()
+            val resume = src.substringAfter("override fun onResume()").substringBefore("\n    }")
+            assertTrue("$name checks TwinLedger.generation on resume", resume.contains("TwinLedger.generation"))
+        }
+    }
 }
