@@ -23,6 +23,14 @@ data class TwinEntry(val id: Long, val atMillis: Long, val text: String, val pac
  * overwrites deleted rows. [deleteAll] deletes the database files and destroys the
  * Keystore key.
  *
+ * Residue (review of #230): SQLite runs in its default rollback-journal (DELETE) mode. While
+ * a delete runs, `twin_store.db-journal` holds the pre-images of the changed pages, and when
+ * the journal is unlinked those bytes (AES-GCM ciphertext, never plaintext) can stay in free
+ * storage until it is reused. `secure_delete` only zeroes the main database file. The journal
+ * mode is left alone on purpose, because the alternatives (MEMORY, OFF) risk corruption on a
+ * crash. **Destroying the Keystore key ([deleteAll]) is the real guarantee:** without the key,
+ * any leftover ciphertext can't be opened. [JournalStore] works the same way.
+ *
  * **Nothing is ever deleted automatically** (legacy purpose): rows go only when Keith
  * deletes one or deletes everything. Growth is handled by [TwinStoragePolicy]
  * warnings and, in slice 3, export. Every method does disk or Keystore work, so it
