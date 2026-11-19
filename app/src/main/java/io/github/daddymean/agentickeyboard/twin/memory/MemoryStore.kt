@@ -1,6 +1,7 @@
 package io.github.daddymean.agentickeyboard.twin.memory
 
 import android.content.Context
+import io.github.daddymean.agentickeyboard.twin.SecureFiles
 import io.github.daddymean.agentickeyboard.twin.TwinCipher
 import org.json.JSONObject
 import java.io.DataInputStream
@@ -16,6 +17,7 @@ import java.io.File
 class MemoryStore(private val file: File, private val cipher: TwinCipher) {
     @Synchronized
     fun load(): VaultState {
+        SecureFiles.recover(file)
         if (!file.exists()) return VaultState()
         return DataInputStream(file.inputStream().buffered()).use { inp ->
             val iv = ByteArray(inp.readUnsignedByte()).also(inp::readFully)
@@ -34,7 +36,7 @@ class MemoryStore(private val file: File, private val cipher: TwinCipher) {
         DataOutputStream(tmp.outputStream().buffered()).use { o ->
             o.writeByte(sealed.iv.size); o.write(sealed.iv); o.writeInt(sealed.ciphertext.size); o.write(sealed.ciphertext)
         }
-        check(tmp.renameTo(file)) { "could not save" }
+        SecureFiles.replace(tmp, file)
     }
 
     /** Load, change, save, under one lock. */
@@ -43,8 +45,7 @@ class MemoryStore(private val file: File, private val cipher: TwinCipher) {
 
     @Synchronized
     fun delete() {
-        file.delete()
-        File(file.path + ".tmp").delete()
+        SecureFiles.wipeAll(file)
     }
 
     companion object {

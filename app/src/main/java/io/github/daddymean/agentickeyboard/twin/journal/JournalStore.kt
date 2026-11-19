@@ -4,6 +4,7 @@ import android.content.ContentValues
 import android.content.Context
 import android.database.sqlite.SQLiteDatabase
 import android.database.sqlite.SQLiteOpenHelper
+import io.github.daddymean.agentickeyboard.twin.SecureFiles
 import io.github.daddymean.agentickeyboard.twin.TwinCipher
 import org.json.JSONObject
 import java.io.File
@@ -86,8 +87,9 @@ class JournalStore(
     fun readRecording(fileId: String): ByteArray =
         audioFile(fileId).inputStream().buffered().use { SealedAudioReader.readAll(it, cipher, fileId) }
 
+    /** Overwrites the sealed recording before deleting it (best effort on flash; see [SecureFiles]). */
     fun deleteAudio(fileId: String) {
-        audioFile(fileId).delete()
+        SecureFiles.wipe(audioFile(fileId))
     }
 
     /**

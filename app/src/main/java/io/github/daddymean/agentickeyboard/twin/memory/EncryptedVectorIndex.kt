@@ -1,6 +1,7 @@
 package io.github.daddymean.agentickeyboard.twin.memory
 
 import android.content.Context
+import io.github.daddymean.agentickeyboard.twin.SecureFiles
 import io.github.daddymean.agentickeyboard.twin.TwinCipher
 import java.io.ByteArrayInputStream
 import java.io.ByteArrayOutputStream
@@ -34,6 +35,7 @@ class EncryptedVectorIndex(private val file: File, private val cipher: TwinCiphe
 
     @Synchronized
     fun load(): Payload {
+        SecureFiles.recover(file)
         if (!file.exists()) return Payload("", 0, emptyList())
         return DataInputStream(file.inputStream().buffered()).use { inp ->
             val magic = ByteArray(MAGIC.size).also(inp::readFully)
@@ -61,13 +63,13 @@ class EncryptedVectorIndex(private val file: File, private val cipher: TwinCiphe
             o.writeInt(sealed.ciphertext.size)
             o.write(sealed.ciphertext)
         }
-        check(tmp.renameTo(file)) { "could not save vector index" }
+        SecureFiles.replace(tmp, file)
     }
 
     @Synchronized
     fun update(change: (Payload) -> Payload): Payload = change(load()).also(::save)
 
-    fun exists(): Boolean = file.exists()
+    fun exists(): Boolean = file.exists() || SecureFiles.old(file).exists()
 
     /**
      * Drops every vector whose memory is not in [keep] (deleted or never approved).
@@ -76,6 +78,7 @@ class EncryptedVectorIndex(private val file: File, private val cipher: TwinCiphe
      */
     @Synchronized
     fun prune(keep: Set<String>): Int {
+        SecureFiles.recover(file)
         if (!file.exists()) return 0
         val current = load()
         val next = current.copy(entries = current.entries.filter { it.memoryId in keep })
@@ -86,8 +89,7 @@ class EncryptedVectorIndex(private val file: File, private val cipher: TwinCiphe
 
     @Synchronized
     fun delete() {
-        file.delete()
-        File(file.path + ".tmp").delete()
+        SecureFiles.wipeAll(file)
     }
 
     fun search(query: FloatArray, memories: List<Memory>, limit: Int): List<SearchHit> {
