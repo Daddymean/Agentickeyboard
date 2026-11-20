@@ -391,19 +391,13 @@ class KeyboardViewModel(
         // instead of collect{} means the "Clear" actions in the Style Hub are not
         // immediately undone by a re-seeding collector.
         viewModelScope.launch {
+            // Runs before the shortcut seed so "shortcuts exist" still means "not first run".
+            seedCorrectionsOnce()
             if (repository.allShortcuts.first().isEmpty()) {
                 repository.insertShortcut(ShortcutTemplate(shortcut = "omw", template = "On my way! Running late."))
                 repository.insertShortcut(ShortcutTemplate(shortcut = "gr", template = "Great! Talk to you soon."))
                 repository.insertShortcut(ShortcutTemplate(shortcut = "ty", template = "Thank you so much! Really appreciate it."))
                 repository.insertShortcut(ShortcutTemplate(shortcut = "brb", template = "Be right back! Just in a quick meeting."))
-            }
-        }
-
-        viewModelScope.launch {
-            if (repository.allCorrections.first().isEmpty()) {
-                repository.insertCorrection(LearnedCorrection(typo = "teh", correction = "the", count = 15))
-                repository.insertCorrection(LearnedCorrection(typo = "tomorow", correction = "tomorrow", count = 8))
-                repository.insertCorrection(LearnedCorrection(typo = "definately", correction = "definitely", count = 5))
             }
         }
 
@@ -414,6 +408,28 @@ class KeyboardViewModel(
                 repository.deleteLogsOlderThan(System.currentTimeMillis() - days * DAY_MS)
             }
         }
+    }
+
+    /**
+     * KEYBOARD-047 (#231 review blocker 1): the three starter auto-correct rules are seeded
+     * once per install, behind a persisted flag, so clearing them on the learned-data screen
+     * (or the Style Hub) is permanent. Installs from before the flag count as seeded when
+     * they already have rules, shortcuts (seeded on the same first run) or learned words.
+     * Without settings (unit tests) the old empty-table seed is kept.
+     */
+    private suspend fun seedCorrectionsOnce() {
+        val s = settings
+        if (s != null && s.isCorrectionsSeeded) return
+        val hasRules = repository.allCorrections.first().isNotEmpty()
+        val existingInstall = hasRules || repository.allShortcuts.first().isNotEmpty() ||
+            repository.topVocabulary.first().isNotEmpty()
+        val seed = if (s == null) !hasRules else !existingInstall
+        if (seed) {
+            repository.insertCorrection(LearnedCorrection(typo = "teh", correction = "the", count = 15))
+            repository.insertCorrection(LearnedCorrection(typo = "tomorow", correction = "tomorrow", count = 8))
+            repository.insertCorrection(LearnedCorrection(typo = "definately", correction = "definitely", count = 5))
+        }
+        s?.isCorrectionsSeeded = true
     }
 
     override fun onCleared() {

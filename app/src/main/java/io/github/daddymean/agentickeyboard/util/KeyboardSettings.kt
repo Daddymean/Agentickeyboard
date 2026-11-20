@@ -57,12 +57,18 @@ class KeyboardSettings(context: Context) {
         const val KEY_LOCAL_GEMMA_CELLULAR = "local_gemma_e2b_allow_cellular"
         const val KEY_LOCAL_GEMMA_SIZE_ACK = "local_gemma_e2b_size_ack"
         const val KEY_TOUCH_CALIBRATION = "touch_calibration_v1"
+        const val KEY_CORRECTIONS_SEEDED = "starter_corrections_seeded"
     }
 
     /** Per-letter normalized tap offsets only; no typed text or raw touch history. */
     var touchCalibration: String
         get() = prefs.getString(KEY_TOUCH_CALIBRATION, "").orEmpty()
         set(value) = prefs.edit().putString(KEY_TOUCH_CALIBRATION, value).apply()
+
+    /** The starter auto-correct rules were seeded once; never re-seed (KEYBOARD-047). */
+    var isCorrectionsSeeded: Boolean
+        get() = prefs.getBoolean(KEY_CORRECTIONS_SEEDED, false)
+        set(value) = prefs.edit().putBoolean(KEY_CORRECTIONS_SEEDED, value).apply()
 
     var isOfflineMode: Boolean
         get() = prefs.getBoolean(KEY_OFFLINE_MODE, false)
