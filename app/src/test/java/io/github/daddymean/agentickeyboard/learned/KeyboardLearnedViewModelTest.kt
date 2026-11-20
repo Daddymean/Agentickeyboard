@@ -88,4 +88,24 @@ class KeyboardLearnedViewModelTest {
         repeat(20) { shadowOf(Looper.getMainLooper()).idle(); Thread.sleep(10) }
         assertEquals(0, corrections())
     }
+
+    @Test
+    fun deletedPerAppStyleStopsApplyingToTheCurrentEditor() {
+        runBlocking { repo.upsertAppPersonas(listOf(AppPersona("com.slack", "Professional", "Slack"))) }
+        val vm = newVm()
+        vm.onEditorStarted("com.slack", "Slack", InputType.TYPE_CLASS_TEXT)
+        waitFor("stored style applied") { vm.userPersonaPreference.value == "Professional" }
+
+        val entry = runBlocking { data().entries(KeyboardStore.APP_STYLES, 10).single() }
+        assertEquals(1, runBlocking { data().delete(entry) })
+        waitFor("style dropped") { vm.userPersonaPreference.value == settings.persona }
+        assertEquals(KeyboardViewModel.DEFAULT_PERSONA, vm.userPersonaPreference.value)
+
+        // Clear works the same way.
+        runBlocking { repo.upsertAppPersonas(listOf(AppPersona("com.slack", "Casual", "Slack"))) }
+        vm.onEditorStarted("com.slack", "Slack", InputType.TYPE_CLASS_TEXT)
+        waitFor("stored style applied again") { vm.userPersonaPreference.value == "Casual" }
+        assertTrue(runBlocking { data().clear(KeyboardStore.APP_STYLES) } == 1)
+        waitFor("style dropped after clear") { vm.userPersonaPreference.value == KeyboardViewModel.DEFAULT_PERSONA }
+    }
 }

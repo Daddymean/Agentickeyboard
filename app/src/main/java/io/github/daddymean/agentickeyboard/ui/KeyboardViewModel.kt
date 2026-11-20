@@ -72,6 +72,7 @@ class KeyboardViewModel(
         private const val PERSONAL_WORD_MIN_COUNT = 3
         private val NON_ALPHA_REGEX = "[^a-zA-Z]".toRegex()
         private val WHITESPACE_REGEX = "\\s+".toRegex()
+        const val DEFAULT_PERSONA = "Match my history"
         val PERSONAS = listOf("Match my history", "Professional", "Joyful", "Empathetic", "Casual")
         /** Keyboard palette override choices (see KeyboardSettings.themeOverride). */
         val THEME_MODES = listOf("System", "Light", "Dark")
@@ -128,7 +129,7 @@ class KeyboardViewModel(
         .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
     // Selected style persona preference (Match history, Professional, Joyful, Empathetic, Casual)
-    private val _userPersonaPreference = MutableStateFlow(settings?.persona ?: "Match my history")
+    private val _userPersonaPreference = MutableStateFlow(settings?.persona ?: DEFAULT_PERSONA)
     val userPersonaPreference = _userPersonaPreference.asStateFlow()
 
     // Real-time predictive autocomplete completions
@@ -401,6 +402,12 @@ class KeyboardViewModel(
             }
         }
 
+        // KEYBOARD-047 (#231 review): a per-app style deleted on the learned-data screen
+        // (or in the Style Hub) stops applying to the current editor right away.
+        viewModelScope.launch {
+            repository.allAppPersonas.collect { rows -> dropDeletedActivePersona(rows) }
+        }
+
         // Data retention: expire old writing logs
         viewModelScope.launch {
             val days = settings?.logRetentionDays ?: 30
@@ -430,6 +437,14 @@ class KeyboardViewModel(
             repository.insertCorrection(LearnedCorrection(typo = "definately", correction = "definitely", count = 5))
         }
         s?.isCorrectionsSeeded = true
+    }
+
+    /** The active app's stored style is gone: fall back to the global persona setting. */
+    private fun dropDeletedActivePersona(rows: List<AppPersona>) {
+        val pkg = activeAppPackage ?: return
+        if (rows.any { it.packageName == pkg }) return
+        val global = settings?.persona ?: DEFAULT_PERSONA
+        if (_userPersonaPreference.value != global) _userPersonaPreference.value = global
     }
 
     override fun onCleared() {
