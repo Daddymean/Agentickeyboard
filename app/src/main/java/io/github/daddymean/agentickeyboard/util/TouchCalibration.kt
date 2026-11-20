@@ -58,5 +58,21 @@ class TouchCalibration(encoded: String = "") {
     }
     fun clear() = biases.clear()
     fun encode(): String = biases.entries.sortedBy { it.key }.joinToString(";") { (key, b) -> "$key,${b.x},${b.y},${b.count}" }
-    companion object { val TRAINING_KEYS = "qwertyuiopasdfghjklzxcvbnm".repeat(3) }
+
+    companion object {
+        val TRAINING_KEYS = "qwertyuiopasdfghjklzxcvbnm".repeat(3)
+
+        /** Letters with a learned offset and how many taps each holds (KEYBOARD-047 viewer). */
+        fun letters(encoded: String): List<Pair<Char, Int>> =
+            TouchCalibration(encoded).biases.entries.sortedBy { it.key }.map { it.key to it.value.count }
+
+        /** [encoded] re-encoded without [letter]. */
+        fun withoutLetter(encoded: String, letter: Char): String {
+            val c = TouchCalibration(encoded)
+            c.biases.remove(letter)
+            return c.encode()
+        }
+
+        fun normalize(encoded: String): String = TouchCalibration(encoded).encode()
+    }
 }

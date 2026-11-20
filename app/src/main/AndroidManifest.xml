@@ -79,6 +79,11 @@
             android:windowSoftInputMode="adjustResize"
             android:theme="@style/Theme.MyApplication" />
         <activity
+            android:name=".KeyboardLearnedActivity"
+            android:exported="false"
+            android:label="What the keyboard has learned"
+            android:theme="@style/Theme.MyApplication" />
+        <activity
             android:name=".ClipboardHistoryActivity"
             android:exported="false"
             android:label="Clipboard History"

@@ -212,6 +212,28 @@ fun SetupTab(viewModel: KeyboardViewModel) {
         }
 
         item {
+            // KEYBOARD-047 (Keith, 2026-11-19, #230 item 9): the keyboard's own learned data
+            // gets its own viewer and delete screen, separate from the twin's.
+            SetupStepCard(
+                stepNumber = "7",
+                title = "What the keyboard has learned",
+                description = "See and delete what the keyboard learned from your typing: words, next-word predictions, auto-correct rules, the writing log, per-app styles, clipboard history and touch calibration. On this phone only.",
+                actionLabel = "Open learned data",
+                onAction = {
+                    runCatching {
+                        context.startActivity(Intent(context, KeyboardLearnedActivity::class.java))
+                    }.onFailure {
+                        Toast.makeText(
+                            context,
+                            "Unable to open learned data.",
+                            Toast.LENGTH_SHORT
+                        ).show()
+                    }
+                }
+            )
+        }
+
+        item {
             Spacer(modifier = Modifier.height(16.dp))
         }
     }

@@ -373,6 +373,9 @@ class KeyboardViewModel(
                 _isMasteryEnabled.value = s.isMasteryEnabled
                 _masteryState.value = _masteryState.value.copy(enabled = s.isMasteryEnabled)
             }
+            // KEYBOARD-047: a calibration cleared on the learned-data screen must not be
+            // written back from this process's in-memory copy.
+            KeyboardSettings.KEY_TOUCH_CALIBRATION -> touchCalibration.restore(s.touchCalibration)
             KeyboardSettings.KEY_MASTERY_STATE -> {
                 _masteryState.value = MasteryStateCodec.decode(
                     s.masteryState, enabledFallback = s.isMasteryEnabled
