@@ -160,6 +160,16 @@ interface WritingLogDao {
 
     @Query("DELETE FROM writing_logs")
     suspend fun clearAll()
+
+    // --- Keyboard learned-data screen (KEYBOARD-047) ---
+    @Query("SELECT COUNT(*) FROM writing_logs")
+    suspend fun count(): Int
+
+    @Query("SELECT * FROM writing_logs ORDER BY timestamp DESC, id DESC LIMIT :limit")
+    suspend fun recent(limit: Int): List<WritingLog>
+
+    @Query("DELETE FROM writing_logs WHERE id = :id")
+    suspend fun deleteById(id: Int): Int
 }
 
 @Dao
@@ -183,6 +193,19 @@ interface WordBigramDao {
 
     @Query("DELETE FROM word_bigrams")
     suspend fun clearAll()
+
+    @Query("SELECT COUNT(*) FROM word_bigrams")
+    suspend fun count(): Int
+
+    @Query("SELECT * FROM word_bigrams ORDER BY count DESC, firstWord ASC, secondWord ASC LIMIT :limit")
+    suspend fun top(limit: Int): List<WordBigram>
+
+    @Query("DELETE FROM word_bigrams WHERE firstWord = :first AND secondWord = :second")
+    suspend fun delete(first: String, second: String): Int
+
+    /** Every pair a forgotten word is part of, so it is never predicted again. */
+    @Query("DELETE FROM word_bigrams WHERE firstWord = :word OR secondWord = :word")
+    suspend fun deleteWithWord(word: String): Int
 }
 
 @Dao
@@ -204,6 +227,15 @@ interface AppPersonaDao {
 
     @Query("DELETE FROM app_personas WHERE packageName IN (:packageNames)")
     suspend fun deleteAll(packageNames: List<String>)
+
+    @Query("SELECT COUNT(*) FROM app_personas")
+    suspend fun count(): Int
+
+    @Query("SELECT * FROM app_personas ORDER BY appLabel COLLATE NOCASE ASC, packageName ASC")
+    suspend fun getAllOnce(): List<AppPersona>
+
+    @Query("DELETE FROM app_personas")
+    suspend fun clearAll(): Int
 }
 
 @Dao
@@ -279,6 +311,9 @@ interface ClipboardHistoryDao {
 
     @Query("DELETE FROM clipboard_history")
     suspend fun clearAll()
+
+    @Query("SELECT COUNT(*) FROM clipboard_history")
+    suspend fun count(): Int
 }
 
 @Dao
@@ -306,6 +341,9 @@ interface LearnedCorrectionDao {
 
     @Query("DELETE FROM learned_corrections")
     suspend fun clearAll()
+
+    @Query("SELECT COUNT(*) FROM learned_corrections")
+    suspend fun count(): Int
 }
 
 @Dao
@@ -341,6 +379,15 @@ interface UserVocabularyDao {
 
     @Query("DELETE FROM user_vocabulary")
     suspend fun clearAll()
+
+    @Query("SELECT COUNT(*) FROM user_vocabulary")
+    suspend fun count(): Int
+
+    @Query("SELECT * FROM user_vocabulary ORDER BY count DESC, word ASC LIMIT :limit")
+    suspend fun top(limit: Int): List<UserVocabulary>
+
+    @Query("DELETE FROM user_vocabulary WHERE word = :word")
+    suspend fun deleteWord(word: String): Int
 }
 
 @Database(
@@ -435,6 +482,32 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
+        /**
+         * KEYBOARD-047: deleted rows (learned words, writing log, clipboard clips) are
+         * overwritten with zeros instead of left in free pages. `secure_delete` is per
+         * connection; it is set inside a transaction so it lands on the primary (writer)
+         * connection, the only one Android uses for writes. See [KeyboardLearnedData] for
+         * the WAL checkpoint and the residue that remains.
+         */
+        val SECURE_DELETE = object : RoomDatabase.Callback() {
+            override fun onOpen(db: SupportSQLiteDatabase) {
+                enableSecureDelete(db)
+            }
+        }
+
+        /** Turns `secure_delete` on for the writer connection; true when SQLite reports it on. */
+        fun enableSecureDelete(db: SupportSQLiteDatabase): Boolean {
+            var on = false
+            db.beginTransaction()
+            try {
+                db.query("PRAGMA secure_delete = ON").use { if (it.moveToFirst()) on = it.getInt(0) == 1 }
+                db.setTransactionSuccessful()
+            } finally {
+                db.endTransaction()
+            }
+            return on
+        }
+
         fun getDatabase(context: Context): AppDatabase {
             return INSTANCE ?: synchronized(this) {
                 val instance = Room.databaseBuilder(
@@ -447,6 +520,7 @@ abstract class AppDatabase : RoomDatabase() {
                 // schemas that shipped before migrations existed.
                 .addMigrations(MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8)
                 .fallbackToDestructiveMigrationFrom(true, 1, 2, 3)
+                .addCallback(SECURE_DELETE)
                 .build()
                 INSTANCE = instance
                 instance
