@@ -14,7 +14,7 @@ import java.util.Date
  * learned from Keith's typing or use. KEYBOARD-047, follow-up to #230 item 9.
  */
 enum class KeyboardStore(val title: String, val what: String) {
-    WORDS("Learned words", "Words you type, counted, used for suggestions and to stop auto-fix changing them. Deleting a word also deletes its next-word pairs."),
+    WORDS("Learned words", "Words you type, counted, used for suggestions and to stop auto-fix changing them. Deleting a word also deletes its next-word pairs; clearing all words clears all next-word pairs."),
     WORD_PAIRS("Next-word pairs", "Which word you tend to type after another, used for next-word predictions."),
     CORRECTIONS("Auto-correct rules", "Typos you corrected and the word the keyboard now puts in their place."),
     REMOVED_RULES("Removed rules kept for Restore", "Rules the one-time cleanup removed (KEYBOARD-008), kept so Settings can put them back."),
@@ -152,7 +152,12 @@ class KeyboardLearnedData(
     private suspend fun clearNoScrub(store: KeyboardStore, inTx: Boolean = false): Int {
         suspend fun room(block: suspend () -> Int) = if (inTx) block() else secureTx { block() }
         return when (store) {
-            KeyboardStore.WORDS -> room { db.userVocabularyDao().count().also { db.userVocabularyDao().clearAll() } }
+            // Every next-word pair is made of learned words, so clearing words clears the pairs too
+            // (#231 review blocker 2), like deleting one word drops its pairs.
+            KeyboardStore.WORDS -> room {
+                val words = db.userVocabularyDao().count().also { db.userVocabularyDao().clearAll() }
+                words + db.wordBigramDao().count().also { db.wordBigramDao().clearAll() }
+            }
             KeyboardStore.WORD_PAIRS -> room { db.wordBigramDao().count().also { db.wordBigramDao().clearAll() } }
             KeyboardStore.CORRECTIONS -> room { db.learnedCorrectionDao().count().also { db.learnedCorrectionDao().clearAll() } }
             KeyboardStore.WRITING_LOG -> room { db.writingLogDao().count().also { db.writingLogDao().clearAll() } }

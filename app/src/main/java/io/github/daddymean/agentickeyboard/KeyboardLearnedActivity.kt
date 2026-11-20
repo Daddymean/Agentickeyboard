@@ -137,7 +137,11 @@ class KeyboardLearnedActivity : Activity() {
 
     private fun confirmClear(store: KeyboardStore) = confirm(
         "Delete all ${counts[store] ?: 0} from ${store.title.lowercase()}?" +
-            if (store == KeyboardStore.CLIPBOARD) " Pinned clips go too." else ""
+            when (store) {
+                KeyboardStore.CLIPBOARD -> " Pinned clips go too."
+                KeyboardStore.WORDS -> " All ${counts[KeyboardStore.WORD_PAIRS] ?: 0} next-word pairs go too."
+                else -> ""
+            }
     ) { it.clear(store) }
 
     private fun confirmClearAll() {

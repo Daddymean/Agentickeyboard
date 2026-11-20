@@ -77,8 +77,19 @@ class KeyboardLearnedDataTest {
         assertEquals(null, repo.getWord("hello"))
         assertEquals(emptyList<String>(), repo.nextWords("hello"))
         assertEquals(listOf("morning"), repo.nextWords("good"))
-        assertEquals(2, data.clear(KeyboardStore.WORDS))
+        // 2 words + the 1 pair left ("good → morning"): clearing words leaves no pairs (#231 review blocker 2).
+        assertEquals(3, data.clear(KeyboardStore.WORDS))
         assertEquals(0, data.count(KeyboardStore.WORDS))
+        assertEquals(0, data.count(KeyboardStore.WORD_PAIRS))
+        assertEquals(emptyList<String>(), repo.nextWords("good"))
+    }
+
+    @Test
+    fun clearingWordsAloneLeavesNoPairs() = runBlocking {
+        assertEquals(6, data.clear(KeyboardStore.WORDS)) // 3 words + 3 pairs
+        assertEquals(0, db.wordBigramDao().count())
+        assertEquals(emptyList<String>(), repo.nextWords("hello"))
+        assertEquals(emptyList<String>(), repo.nextWords("good"))
     }
 
     @Test
@@ -153,6 +164,8 @@ class KeyboardLearnedDataTest {
         val gone = data.clearAll()
         assertEquals(20, gone.values.sum())
         assertTrue(data.counts().values.all { it == 0 })
+        assertEquals(0, db.wordBigramDao().count())
+        assertEquals(0, db.userVocabularyDao().count())
         assertEquals(0, data.clearAll().values.sum())
         // Deleting an entry that's already gone is a no-op, not an error.
         assertEquals(0, data.delete(KeyboardEntry(KeyboardStore.CLIPBOARD, "999", "", "")))
