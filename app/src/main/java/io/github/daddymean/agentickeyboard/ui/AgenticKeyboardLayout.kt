@@ -161,6 +161,9 @@ fun AgenticKeyboardLayout(
     onSelectionCommand: (SelectionCommand) -> Unit = {},
     onClipboardAction: (EditClipboardAction) -> Unit = {},
     inputConnectionProvider: () -> InputConnection? = { null },
+    // A read that always asks the editor, even where inputConnectionProvider is served
+    // from the LAB-009 mirror: for taps that size a delete from the text before the caret.
+    freshTextBeforeCursor: (Int) -> CharSequence? = { n -> inputConnectionProvider()?.getTextBeforeCursor(n, 0) },
     inPlaygroundMode: Boolean = false,
     playgroundTextState: String = "",
     onPlaygroundTextChange: (String) -> Unit = {},
@@ -285,10 +288,17 @@ fun AgenticKeyboardLayout(
 
     // Fresh editor text for event handlers: reading the InputConnection at event
     // time avoids acting on a stale snapshot captured during composition.
-    fun currentText(): String = if (inPlaygroundMode) {
+    //
+    // [fresh] skips the LAB-009 mirror. The mirror is current for the keyboard's own
+    // edits, but an app's own change to the field (a mention picker, a cleared draft)
+    // only reaches it with the next onUpdateSelection. Per-keystroke paths delete at
+    // most a word and keep the cached read; taps that delete up to the whole window
+    // pay one editor read so the delete is sized from what the field holds now.
+    fun currentText(fresh: Boolean = false): String = if (inPlaygroundMode) {
         playgroundTextState
     } else {
-        inputConnectionProvider()?.getTextBeforeCursor(1000, 0)?.toString() ?: trackedInputTextState.value
+        val read = if (fresh) freshTextBeforeCursor(1000) else inputConnectionProvider()?.getTextBeforeCursor(1000, 0)
+        read?.toString() ?: trackedInputTextState.value
     }
 
     // Text the user has selected in the active editor, or null when nothing is
@@ -316,14 +326,14 @@ fun AgenticKeyboardLayout(
      * replaces a selection, so only the no-selection case needs a delete first.
      */
     fun replaceActiveText(newText: String, cursorOffset: Int? = null) {
-        val original = aiSourceText()
+        val original = selectedText() ?: currentText(fresh = true)
         var editorUndo: CommittedEditUndo? = null
         if (inPlaygroundMode) {
             onPlaygroundTextChange(newText)
         } else {
             inputConnectionProvider()?.let { conn ->
                 if (conn.getSelectedText(0).isNullOrEmpty()) {
-                    conn.deleteSurroundingText(currentText().length, 0)
+                    conn.deleteSurroundingText(currentText(fresh = true).length, 0)
                 }
                 conn.commitTextWithCaret(newText, cursorOffset) // twin: inserted (AI apply, template, palette)
                 editorUndo = conn.captureCommittedEditUndo(original, newText, cursorOffset)
@@ -1274,11 +1284,12 @@ fun AgenticKeyboardLayout(
                                             val suggestion = chip.word
                                             Box(
                                                 modifier = Modifier
+                                                    .testTag("suggestion_chip")
                                                     .clip(RoundedCornerShape(8.dp))
                                                     .background(keyboardColors.chipAlt)
                                                     .clickable {
                                                         buzz(HapticFeedbackType.TextHandleMove)
-                                                        val text = currentText()
+                                                        val text = currentText(fresh = true)
                                                         val lastWord = text.takeLastWhile { !it.isWhitespace() }
                                                         if (inPlaygroundMode) {
                                                             onPlaygroundTextChange(text.dropLast(lastWord.length) + suggestion + " ")

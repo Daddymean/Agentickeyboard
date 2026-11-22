@@ -338,6 +338,7 @@ class AgenticKeyboardService : InputMethodService(), LifecycleOwner, ViewModelSt
                                 onSelectionCommand = { command -> applySelectionCommand(command) },
                                 onClipboardAction = { action -> performClipboardAction(action) },
                                 inputConnectionProvider = { trackedInputConnection(serveCachedReads = true) },
+                                freshTextBeforeCursor = { n -> currentInputConnection?.getTextBeforeCursor(n, 0) },
                                 navigationBarInset = navigationBarInset,
                                 onOpenSettings = { openKeyboardSettings() }
                             )
@@ -1095,6 +1096,8 @@ class AgenticKeyboardService : InputMethodService(), LifecycleOwner, ViewModelSt
 
     override fun onFinishInput() {
         editorMirror.invalidate() // LAB-009
+        mirroredFor = null // drop the finished field's connection
+        mirroredConnection = null
         editTimeline.clear() // LAB-014: the draft history dies with the field
         // The field is gone: cancel any in-flight AI action so its result cannot
         // appear later in a different editor.
