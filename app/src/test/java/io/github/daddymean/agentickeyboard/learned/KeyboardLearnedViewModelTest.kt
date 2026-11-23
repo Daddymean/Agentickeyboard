@@ -105,7 +105,44 @@ class KeyboardLearnedViewModelTest {
         runBlocking { repo.upsertAppPersonas(listOf(AppPersona("com.slack", "Casual", "Slack"))) }
         vm.onEditorStarted("com.slack", "Slack", InputType.TYPE_CLASS_TEXT)
         waitFor("stored style applied again") { vm.userPersonaPreference.value == "Casual" }
+        waitFor("row seen") { rows().any { it.packageName == "com.slack" } }
+        settle()
         assertTrue(runBlocking { data().clear(KeyboardStore.APP_STYLES) } == 1)
         waitFor("style dropped after clear") { vm.userPersonaPreference.value == KeyboardViewModel.DEFAULT_PERSONA }
+    }
+
+    /** The stored rows; waiting on them then [settle] lets the ViewModel's collector catch up. */
+    private fun rows() = runBlocking { repo.allAppPersonas.first() }
+
+    /** Spins the main looper a while so anything the ViewModel would do has happened. */
+    private fun settle() = repeat(30) { shadowOf(Looper.getMainLooper()).idle(); Thread.sleep(10) }
+
+    @Test
+    fun editingAnotherAppsStyleNeverResetsAnEditorWithNoStoredRow() {
+        // #231 nit 1: only a row that existed and is now gone resets the open editor.
+        runBlocking {
+            repo.upsertAppPersonas(listOf(AppPersona("com.slack", "Professional", "Slack"), AppPersona("com.mail", "Joyful", "Mail")))
+        }
+        val vm = newVm()
+        vm.onEditorStarted("com.slack", "Slack", InputType.TYPE_CLASS_TEXT)
+        waitFor("stored style applied") { vm.userPersonaPreference.value == "Professional" }
+        waitFor("rows seen") { rows().size == 2 }
+        settle()
+
+        // An app with no stored row keeps the style it is using.
+        vm.onEditorStarted("com.notes", "Notes", InputType.TYPE_CLASS_TEXT)
+        settle()
+        assertEquals("Professional", vm.userPersonaPreference.value)
+
+        // Editing, adding or deleting other apps' styles doesn't touch it.
+        vm.setAppPersonaOverride("com.mail", "Mail", "Casual")
+        waitFor("edit seen") { rows().any { it.packageName == "com.mail" && it.persona == "Casual" } }
+        settle()
+        assertEquals("Professional", vm.userPersonaPreference.value)
+
+        runBlocking { data().delete(data().entries(KeyboardStore.APP_STYLES, 10).first { it.key == "com.slack" }) }
+        waitFor("delete seen") { rows().none { it.packageName == "com.slack" } }
+        settle()
+        assertEquals("Professional", vm.userPersonaPreference.value)
     }
 }

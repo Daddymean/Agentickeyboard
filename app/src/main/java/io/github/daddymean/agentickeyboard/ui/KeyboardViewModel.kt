@@ -439,10 +439,20 @@ class KeyboardViewModel(
         s?.isCorrectionsSeeded = true
     }
 
-    /** The active app's stored style is gone: fall back to the global persona setting. */
+    /** Apps that had a stored style at the last `app_personas` emission; null before the first. */
+    private var lastStyledApps: Set<String>? = null
+
+    /**
+     * The active app's stored style row was just deleted: fall back to the global persona.
+     * Only a row that existed and is now gone counts (#231 nit 1), so editing another app's
+     * style, or an app that never had a row, never resets the open editor.
+     */
     private fun dropDeletedActivePersona(rows: List<AppPersona>) {
+        val now = rows.mapTo(HashSet()) { it.packageName }
+        val before = lastStyledApps
+        lastStyledApps = now
         val pkg = activeAppPackage ?: return
-        if (rows.any { it.packageName == pkg }) return
+        if (before == null || pkg !in before || pkg in now) return
         val global = settings?.persona ?: DEFAULT_PERSONA
         if (_userPersonaPreference.value != global) _userPersonaPreference.value = global
     }
