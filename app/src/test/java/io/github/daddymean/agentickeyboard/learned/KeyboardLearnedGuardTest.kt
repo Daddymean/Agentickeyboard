@@ -67,4 +67,21 @@ class KeyboardLearnedGuardTest {
         val vm = File(base, "java/io/github/daddymean/agentickeyboard/ui/KeyboardViewModel.kt").readText()
         assertTrue(vm.contains("KeyboardSettings.KEY_TOUCH_CALIBRATION -> touchCalibration.restore("))
     }
+
+    @Test
+    fun everyClipboardCaptureAndDeleteGoesThroughTheCutoff() {
+        // #231 second review: one capture path, and every clipboard-history delete sets the cutoff.
+        val java = File(base, "java")
+        val sources = java.walkTopDown().filter { it.extension == "kt" }.associate { it.relativeTo(java).path to it.readText() }
+        val capturers = sources.filter { (_, src) -> src.contains("repository.captureClipboard(") || src.contains("repo.captureClipboard(") }.keys
+        assertEquals(setOf("io/github/daddymean/agentickeyboard/util/ClipboardCutoff.kt"), capturers)
+        val deleters = sources.filter { (_, src) -> Regex("\\b(deleteClipboardItem|clearClipboardHistory)\\(").containsMatchIn(src) }.keys
+        assertEquals(setOf("io/github/daddymean/agentickeyboard/util/ClipboardCutoff.kt", "io/github/daddymean/agentickeyboard/db/DatabaseModels.kt"), deleters)
+        val service = sources.getValue("io/github/daddymean/agentickeyboard/service/AgenticKeyboardService.kt")
+        assertTrue(service.contains("ClipboardCapture.capture(snapshot, settings, repository)"))
+        assertTrue(service.contains("addPrimaryClipChangedListener(primaryClipChanged)"))
+        // The learned-data screen marks the cutoff before deleting a clip or clearing clips.
+        assertEquals(2, Regex("ClipboardCutoff\\.markCleared\\(settings\\)").findAll(data).count())
+    }
 }
+

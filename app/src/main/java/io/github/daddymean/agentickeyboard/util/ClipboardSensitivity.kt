@@ -3,8 +3,12 @@ package io.github.daddymean.agentickeyboard.util
 import android.content.ClipData
 import android.content.ClipboardManager
 
-/** The primary clip's text and sensitivity flag, read from one [ClipData]. */
-data class ClipSnapshot(val text: String?, val flaggedSensitive: Boolean)
+/**
+ * The primary clip's text, sensitivity flag and copy time, read from one [ClipData].
+ * [copiedAt] is `ClipDescription.getTimestamp()` (System.currentTimeMillis() base), or 0 when
+ * the clip carries none.
+ */
+data class ClipSnapshot(val text: String?, val flaggedSensitive: Boolean, val copiedAt: Long = 0L)
 
 /**
  * Honors the "sensitive clip" flag a source app sets on its ClipDescription
@@ -36,7 +40,8 @@ object ClipboardSensitivity {
         text = clip.takeIf { it.itemCount > 0 }?.getItemAt(0)?.text?.toString(),
         flaggedSensitive = isFlaggedSensitive { key ->
             clip.description?.extras?.getBoolean(key, false) == true
-        }
+        },
+        copiedAt = runCatching { clip.description?.timestamp ?: 0L }.getOrDefault(0L).coerceAtLeast(0L)
     )
 
     /** Reads the primary clip exactly once; null when there is no clip. */

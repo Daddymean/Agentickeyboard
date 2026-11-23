@@ -3,6 +3,7 @@ package io.github.daddymean.agentickeyboard.learned
 import android.content.SharedPreferences
 import androidx.room.withTransaction
 import io.github.daddymean.agentickeyboard.db.AppDatabase
+import io.github.daddymean.agentickeyboard.util.ClipboardCutoff
 import io.github.daddymean.agentickeyboard.util.KeyboardSettings
 import io.github.daddymean.agentickeyboard.util.LearnedRuleCleanup
 import io.github.daddymean.agentickeyboard.util.TouchCalibration
@@ -21,7 +22,7 @@ enum class KeyboardStore(val title: String, val what: String) {
     NEVER_AUTOFIX("Words auto-fix leaves alone", "Words you undid an auto-fix on twice. Deleting one lets auto-fix correct it again."),
     WRITING_LOG("Writing log", "Text you ran through grammar fix or tone check, with its tone, kept for the Style Hub and personal-model export. Also pruned by its retention setting."),
     APP_STYLES("Style per app", "The writing style you picked in each app, remembered for next time."),
-    CLIPBOARD("Clipboard history", "Clips the keyboard kept after you turned clipboard history on, pinned ones too."),
+    CLIPBOARD("Clipboard history", "Clips the keyboard kept after you turned clipboard history on, pinned ones too. A deleted clip that's still on your clipboard isn't saved again; only a new copy is."),
     TOUCH_CALIBRATION("Touch calibration", "How far from each key's centre you tend to tap, per letter. No text.")
 }
 
@@ -136,11 +137,15 @@ class KeyboardLearnedData(
             db.appPersonaDao().delete(entry.key)
             before - db.appPersonaDao().count()
         }
-        KeyboardStore.CLIPBOARD -> secureTx {
-            val id = entry.key.toIntOrNull() ?: return@secureTx 0
-            val before = db.clipboardHistoryDao().count()
-            db.clipboardHistoryDao().deleteById(id)
-            before - db.clipboardHistoryDao().count()
+        KeyboardStore.CLIPBOARD -> {
+            // Cutoff first, so the clip isn't re-captured from the system clipboard (#231 review).
+            ClipboardCutoff.markCleared(settings)
+            secureTx {
+                val id = entry.key.toIntOrNull() ?: return@secureTx 0
+                val before = db.clipboardHistoryDao().count()
+                db.clipboardHistoryDao().deleteById(id)
+                before - db.clipboardHistoryDao().count()
+            }
         }
         KeyboardStore.TOUCH_CALIBRATION -> {
             val letter = entry.key.singleOrNull() ?: return 0
@@ -189,7 +194,11 @@ class KeyboardLearnedData(
             KeyboardStore.CORRECTIONS -> room { db.learnedCorrectionDao().count().also { db.learnedCorrectionDao().clearAll() } }
             KeyboardStore.WRITING_LOG -> room { db.writingLogDao().count().also { db.writingLogDao().clearAll() } }
             KeyboardStore.APP_STYLES -> room { db.appPersonaDao().clearAll() }
-            KeyboardStore.CLIPBOARD -> room { db.clipboardHistoryDao().count().also { db.clipboardHistoryDao().clearAll() } }
+            KeyboardStore.CLIPBOARD -> {
+                // Cutoff first, so no clip is re-captured from the system clipboard (#231 review).
+                ClipboardCutoff.markCleared(settings)
+                room { db.clipboardHistoryDao().count().also { db.clipboardHistoryDao().clearAll() } }
+            }
             KeyboardStore.REMOVED_RULES -> LearnedRuleCleanup.clearBackup(cleanupPrefs)
             KeyboardStore.NEVER_AUTOFIX -> settings.autoFixNeverWords.size.also { if (it > 0) settings.autoFixNeverWords = emptySet() }
             KeyboardStore.TOUCH_CALIBRATION -> TouchCalibration.letters(settings.touchCalibration).size.also {

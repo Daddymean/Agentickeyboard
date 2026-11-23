@@ -63,7 +63,9 @@ import io.github.daddymean.agentickeyboard.ui.TrustPrismBanner
 import io.github.daddymean.agentickeyboard.util.AppLabelCache
 import io.github.daddymean.agentickeyboard.util.EditorSelectionProbe
 import io.github.daddymean.agentickeyboard.util.EditorTextMirror
-import io.github.daddymean.agentickeyboard.util.ClipboardCaptureDecision
+import io.github.daddymean.agentickeyboard.util.ClipboardCapture
+import io.github.daddymean.agentickeyboard.util.ClipboardCaptureOutcome
+import io.github.daddymean.agentickeyboard.util.ClipboardCutoff
 import io.github.daddymean.agentickeyboard.util.SafeLog
 import io.github.daddymean.agentickeyboard.util.LatencyMeter
 import io.github.daddymean.agentickeyboard.util.commitTextWithCaret
@@ -76,7 +78,6 @@ import io.github.daddymean.agentickeyboard.twin.TwinLearning
 import io.github.daddymean.agentickeyboard.twin.TwinPreferences
 import io.github.daddymean.agentickeyboard.twin.TwinTextWindow
 import io.github.daddymean.agentickeyboard.twin.TwinTrackingInputConnection
-import io.github.daddymean.agentickeyboard.util.ClipboardHistoryPolicy
 import io.github.daddymean.agentickeyboard.util.ClipboardSensitivity
 import io.github.daddymean.agentickeyboard.util.KeyboardSettings
 import io.github.daddymean.agentickeyboard.util.EditClipboardAction
@@ -139,6 +140,14 @@ class AgenticKeyboardService : InputMethodService(), LifecycleOwner, ViewModelSt
     private val clipboardHistoryEnabled = MutableStateFlow(false)
     private val clipboardHistoryPaused = MutableStateFlow(false)
     private val clipboardStatus = MutableStateFlow<String?>(null)
+
+    /**
+     * Content-free: only tells ClipboardCutoff the system clipboard changed, so a clip with no
+     * copy time copied after a clear can be saved again. Reads nothing from the clip.
+     */
+    private val primaryClipChanged = ClipboardManager.OnPrimaryClipChangedListener {
+        ClipboardCutoff.onPrimaryClipChanged(settings)
+    }
     private val navigationBarInsetPx = MutableStateFlow(0)
 
     override val lifecycle: Lifecycle get() = lifecycleRegistry
@@ -164,6 +173,8 @@ class AgenticKeyboardService : InputMethodService(), LifecycleOwner, ViewModelSt
         contextClient = ContextClient(this)
         twinPrefs = TwinPreferences(this)
         refreshClipboardSettings()
+        runCatching { (getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager).addPrimaryClipChangedListener(primaryClipChanged) }
+            .onFailure { SafeLog.w(TAG, "Clipboard change listener unavailable", it) }
         viewModel = ViewModelProvider(
             this,
             KeyboardViewModelFactory(repository, settings, contextClient)
@@ -613,30 +624,16 @@ class AgenticKeyboardService : InputMethodService(), LifecycleOwner, ViewModelSt
         viewModel.observeClipboard(text, flaggedSensitive)
 
         if (text == null) {
-            if (!silent) clipboardStatus.value = "Clipboard is unavailable or has no plain text."
+            if (!silent) clipboardStatus.value = ClipboardCapture.message(ClipboardCaptureOutcome.NoText)
             return
         }
 
-        when (val decision = ClipboardHistoryPolicy.evaluate(text, flaggedSensitive)) {
-            is ClipboardCaptureDecision.Accept -> {
-                serviceScope.launch {
-                    runCatching {
-                        repository.captureClipboard(
-                            content = decision.content,
-                            contentHash = decision.contentHash,
-                            retentionDays = settings.clipboardRetentionDays
-                        )
-                    }.onFailure {
-                        SafeLog.e(TAG, "Clipboard history write failed", it)
-                    }
-                }
-                if (!silent) clipboardStatus.value = "Saved locally. Duplicate clips collapse automatically."
-            }
-            is ClipboardCaptureDecision.Reject -> {
-                if (!silent) {
-                    clipboardStatus.value = ClipboardHistoryPolicy.rejectionMessage(decision.reason)
-                }
-            }
+        // One capture path (ClipboardCapture): skips clips copied at or before the last
+        // clipboard-history delete/clear, so a deleted clip isn't saved again (#231 review).
+        serviceScope.launch {
+            runCatching { ClipboardCapture.capture(snapshot, settings, repository) }
+                .onSuccess { if (!silent) clipboardStatus.value = ClipboardCapture.message(it) }
+                .onFailure { SafeLog.e(TAG, "Clipboard history write failed", it) }
         }
     }
 
@@ -1108,6 +1105,7 @@ class AgenticKeyboardService : InputMethodService(), LifecycleOwner, ViewModelSt
     }
 
     override fun onDestroy() {
+        runCatching { (getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager).removePrimaryClipChangedListener(primaryClipChanged) }
         clearConversationContext()
         clearIncomingMood()
         viewModel.setReplyContextValidator(null)

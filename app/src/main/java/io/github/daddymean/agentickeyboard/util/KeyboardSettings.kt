@@ -43,6 +43,8 @@ class KeyboardSettings(context: Context) {
         const val KEY_CLIPBOARD_HISTORY_ENABLED = "clipboard_history_enabled"
         const val KEY_CLIPBOARD_HISTORY_PAUSED = "clipboard_history_paused"
         const val KEY_CLIPBOARD_RETENTION_DAYS = "clipboard_retention_days"
+        const val KEY_CLIPBOARD_CLEARED_AT = "clipboard_cleared_at"
+        const val KEY_CLIPBOARD_SKIP_UNTIMESTAMPED = "clipboard_skip_untimestamped"
         const val KEY_STAT_AUTOCORRECTIONS = "stat_autocorrections"
         const val KEY_STAT_SWIPE_WORDS = "stat_swipe_words"
         const val KEY_STAT_AI_APPLIES = "stat_ai_applies"
@@ -213,6 +215,20 @@ class KeyboardSettings(context: Context) {
     var isClipboardHistoryPaused: Boolean
         get() = prefs.getBoolean(KEY_CLIPBOARD_HISTORY_PAUSED, false)
         set(value) = prefs.edit().putBoolean(KEY_CLIPBOARD_HISTORY_PAUSED, value).apply()
+
+    /**
+     * When clipboard history was last deleted from or cleared (System.currentTimeMillis()).
+     * Content-free: no text or hash of any clip. See ClipboardCutoff (#231 review).
+     * Written with commit() so a delete's cutoff survives the process dying right after.
+     */
+    var clipboardClearedAt: Long
+        get() = prefs.getLong(KEY_CLIPBOARD_CLEARED_AT, 0L)
+        set(value) { prefs.edit().putLong(KEY_CLIPBOARD_CLEARED_AT, value).commit() }
+
+    /** After a clear, skip clips that carry no copy time until the system clipboard changes. */
+    var clipboardSkipUntimestamped: Boolean
+        get() = prefs.getBoolean(KEY_CLIPBOARD_SKIP_UNTIMESTAMPED, false)
+        set(value) { prefs.edit().putBoolean(KEY_CLIPBOARD_SKIP_UNTIMESTAMPED, value).commit() }
 
     var clipboardRetentionDays: Int
         get() = prefs.getInt(
