@@ -240,7 +240,12 @@ class KeyboardViewModel(
     /** Words whose auto-fix the user undid in this text field; cleared by onNewInputSession. */
     private val autoFixKeptThisSession = mutableSetOf<String>()
 
-    /** Words whose auto-fix was undone at least once since the keyboard started. */
+    /**
+     * Words whose auto-fix was undone at least once since the keyboard started. In memory only:
+     * after a word is deleted from "Words auto-fix leaves alone", one more undo of it in the
+     * same keyboard session (not two) puts it back. That takes a new undo by the user, so it is
+     * accepted rather than cleared on delete (#231 review 2, note 1).
+     */
     private val autoFixUndoneBefore = mutableSetOf<String>()
 
     /** Words the user undid twice: never auto-fixed again (kept in settings). */
@@ -1404,20 +1409,9 @@ class KeyboardViewModel(
 
         if (toProcess.isEmpty()) return
 
-        val typos = toProcess.map { it.first }
-        val existingList = repository.getCorrectionsForTypos(typos)
-        val existingMap = existingList.associateBy { it.typo }
-
-        val toInsert = toProcess.map { (oWord, cWord) ->
-            val existing = existingMap[oWord]
-            if (existing != null) {
-                existing.copy(correction = cWord, count = existing.count + 1)
-            } else {
-                LearnedCorrection(typo = oWord, correction = cWord)
-            }
-        }
-
-        repository.insertCorrections(toInsert)
+        // Read and write in one transaction, so a rule deleted on the learned-data screen
+        // can't be written back from a stale read (#231 review 2, note 2).
+        repository.learnCorrections(toProcess)
     }
 
     /**

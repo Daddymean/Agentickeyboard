@@ -705,6 +705,23 @@ class KeyboardRepository(private val db: AppDatabase) {
         db.learnedCorrectionDao().insertCorrections(corrections)
     }
 
+    /**
+     * Learns typo → correction pairs: bumps the count of an existing rule or adds a new one.
+     * The read and the write share one transaction, so a rule deleted meanwhile can't be
+     * written back from a stale read (#231 review 2, note 2).
+     */
+    suspend fun learnCorrections(pairs: List<Pair<String, String>>) {
+        if (pairs.isEmpty()) return
+        db.withTransaction {
+            val dao = db.learnedCorrectionDao()
+            val existing = dao.getCorrectionsForTypos(pairs.map { it.first }).associateBy { it.typo }
+            dao.insertCorrections(pairs.map { (typo, correction) ->
+                existing[typo]?.copy(correction = correction, count = existing.getValue(typo).count + 1)
+                    ?: LearnedCorrection(typo = typo, correction = correction)
+            })
+        }
+    }
+
     suspend fun deleteCorrectionById(id: Int) {
         db.learnedCorrectionDao().deleteById(id)
     }

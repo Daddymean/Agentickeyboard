@@ -133,7 +133,9 @@ class KeyboardLearnedActivity : Activity() {
     // ---- deletes, each confirmed ---------------------------------------------------------
 
     private fun confirmDelete(e: KeyboardEntry) = confirm(
-        "Delete this from ${e.store.title.lowercase()}?" + if (e.store == KeyboardStore.WORDS) " Its next-word pairs go too." else ""
+        // Name the entry (#231 review 2, note 3); the dialog is FLAG_SECURE via showSecure().
+        "Delete \u201C${preview(e.text)}\u201D from ${e.store.title.lowercase()}?" +
+            if (e.store == KeyboardStore.WORDS) " Its next-word pairs go too." else ""
     ) { it.deleteCounted(e) }
 
     private fun confirmClear(store: KeyboardStore) = confirm(
@@ -183,9 +185,16 @@ class KeyboardLearnedActivity : Activity() {
         inputType = InputType.TYPE_CLASS_TEXT
         imeOptions = EditorInfo.IME_FLAG_NO_PERSONALIZED_LEARNING
     }
+    /** One line, at most [PREVIEW_CHARS] characters, for a confirm dialog. */
+    private fun preview(text: String): String {
+        val line = text.replace(Regex("\\s+"), " ").trim()
+        return if (line.length <= PREVIEW_CHARS) line else line.take(PREVIEW_CHARS - 1).trimEnd() + "\u2026"
+    }
+
     private fun toast(t: String) = Toast.makeText(this, t, Toast.LENGTH_LONG).show()
 
     companion object {
+        private const val PREVIEW_CHARS = 60
         private const val TAG = "KeyboardLearned"
         private const val PAGE = 50
         const val AFTER = "This deletes it from this phone and can't be undone. The keyboard stops using it right away. " +

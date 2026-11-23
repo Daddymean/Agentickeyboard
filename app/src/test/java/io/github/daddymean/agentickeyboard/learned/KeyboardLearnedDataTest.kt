@@ -206,4 +206,18 @@ class KeyboardLearnedDataTest {
         assertEquals(3, gone[KeyboardStore.WORDS])
         assertEquals(3, gone[KeyboardStore.WORD_PAIRS])
     }
+
+    @Test
+    fun learningCorrectionsBumpsOrAddsInOneTransaction() = runBlocking {
+        // #231 review 2, note 2: proofread learning reads and writes in one transaction.
+        repo.learnCorrections(listOf("teh" to "the", "recieve" to "receive"))
+        assertEquals(5, repo.getCorrectionForTypo("teh")?.count)
+        assertEquals("receive", repo.getCorrectionForTypo("recieve")?.correction)
+        assertEquals(3, data.count(KeyboardStore.CORRECTIONS))
+        // A rule deleted before learning runs is added fresh, never with its old count.
+        data.delete(one(KeyboardStore.CORRECTIONS, "teh → the"))
+        repo.learnCorrections(listOf("teh" to "the"))
+        assertEquals(1, repo.getCorrectionForTypo("teh")?.count)
+    }
 }
+
