@@ -11,6 +11,8 @@ import android.content.SharedPreferences
  */
 class KeyboardSettings(context: Context) {
 
+    private val appContext: Context = context.applicationContext
+
     private val prefs: SharedPreferences =
         context.applicationContext.getSharedPreferences("keyboard_settings", Context.MODE_PRIVATE)
 
@@ -64,6 +66,16 @@ class KeyboardSettings(context: Context) {
     var touchCalibration: String
         get() = prefs.getString(KEY_TOUCH_CALIBRATION, "").orEmpty()
         set(value) = prefs.edit().putString(KEY_TOUCH_CALIBRATION, value).apply()
+
+    /**
+     * True when this install was updated after it was first installed (not a fresh install).
+     * The starter-rule seed uses it to tell an emptied old install from a new one (#231 nit 3).
+     */
+    val isUpgradedInstall: Boolean
+        get() = runCatching {
+            val info = appContext.packageManager.getPackageInfo(appContext.packageName, 0)
+            info.lastUpdateTime > info.firstInstallTime
+        }.getOrDefault(false)
 
     /** The starter auto-correct rules were seeded once; never re-seed (KEYBOARD-047). */
     var isCorrectionsSeeded: Boolean

@@ -425,7 +425,9 @@ class KeyboardViewModel(
      * KEYBOARD-047 (#231 review blocker 1): the three starter auto-correct rules are seeded
      * once per install, behind a persisted flag, so clearing them on the learned-data screen
      * (or the Style Hub) is permanent. Installs from before the flag count as seeded when
-     * they already have rules, shortcuts (seeded on the same first run) or learned words. The check and the
+     * they already have rules, shortcuts (seeded on the same first run) or learned words, or
+     * when the app was updated rather than freshly installed (#231 nit 3: an upgraded install
+     * whose user had emptied everything isn't handed the starter rules). The check and the
      * seed run under [seedLock], so two ViewModels starting together seed once (#231 nit 2).
      * Without settings (unit tests) the old empty-table seed is kept.
      */
@@ -437,7 +439,7 @@ class KeyboardViewModel(
             !hasRules
         } else {
             val existingInstall = hasRules || repository.allShortcuts.first().isNotEmpty() ||
-                repository.topVocabulary.first().isNotEmpty()
+                repository.topVocabulary.first().isNotEmpty() || s.isUpgradedInstall
             !existingInstall
         }
         if (seed) {

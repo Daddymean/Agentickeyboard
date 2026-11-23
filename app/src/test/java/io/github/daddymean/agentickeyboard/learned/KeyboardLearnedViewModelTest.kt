@@ -154,4 +154,19 @@ class KeyboardLearnedViewModelTest {
         settle()
         assertEquals(3, corrections())
     }
+
+    @Test
+    fun anUpgradedInstallWithNothingLearnedIsNotSeeded() {
+        // #231 nit 3: an old install the user had emptied (no rules, shortcuts or words) isn't
+        // handed the starter rules on upgrade; a fresh install still gets them (first test).
+        shadowOf(context.packageManager).getInternalMutablePackageInfo(context.packageName).apply {
+            firstInstallTime = 1_000L
+            lastUpdateTime = 2_000L
+        }
+        assertTrue(settings.isUpgradedInstall)
+        newVm()
+        waitFor("flag") { settings.isCorrectionsSeeded }
+        settle()
+        assertEquals(0, corrections())
+    }
 }
