@@ -183,4 +183,27 @@ class KeyboardLearnedDataTest {
         assertTrue(data.scrubWal())
         assertFalse(data.entries(KeyboardStore.WRITING_LOG, 10).any { it.text.contains("secret") })
     }
+
+    @Test
+    fun clearingWordsReportsWordsAndPairsApart() = runBlocking {
+        // #231 nit 4: the toast counts words as words, not words plus pairs.
+        val gone = data.clearCounted(KeyboardStore.WORDS)
+        assertEquals(mapOf(KeyboardStore.WORDS to 3, KeyboardStore.WORD_PAIRS to 3), gone)
+        assertEquals("Deleted learned words: 3, next-word pairs: 3.", deletedMessage(gone))
+        assertEquals("Nothing was left to delete.", deletedMessage(data.clearCounted(KeyboardStore.WORDS)))
+    }
+
+    @Test
+    fun deletingOneWordReportsItsPairsApart() = runBlocking {
+        val gone = data.deleteCounted(one(KeyboardStore.WORDS, "hello"))
+        assertEquals(mapOf(KeyboardStore.WORDS to 1, KeyboardStore.WORD_PAIRS to 2), gone)
+        assertEquals("Deleted learned words: 1, next-word pairs: 2.", deletedMessage(gone))
+    }
+
+    @Test
+    fun clearAllCountsPairsUnderPairs() = runBlocking {
+        val gone = data.clearAll()
+        assertEquals(3, gone[KeyboardStore.WORDS])
+        assertEquals(3, gone[KeyboardStore.WORD_PAIRS])
+    }
 }

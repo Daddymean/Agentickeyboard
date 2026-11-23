@@ -93,71 +93,98 @@ class KeyboardLearnedData(
     }
 
     /** Deletes one entry; returns how many records went (0 if it was already gone). */
-    suspend fun delete(entry: KeyboardEntry): Int {
-        val n = when (entry.store) {
-            KeyboardStore.WORDS -> secureTx { db.userVocabularyDao().deleteWord(entry.key) + db.wordBigramDao().deleteWithWord(entry.key) }
-            KeyboardStore.WORD_PAIRS -> {
-                val (a, b) = splitPair(entry.key) ?: return 0
-                secureTx { db.wordBigramDao().delete(a, b) }
+    suspend fun delete(entry: KeyboardEntry): Int = deleteCounted(entry).values.sum()
+
+    /**
+     * Deletes one entry; returns what each store lost, so a learned word and the next-word
+     * pairs that went with it are reported apart (#231 nit 4).
+     */
+    suspend fun deleteCounted(entry: KeyboardEntry): Map<KeyboardStore, Int> {
+        val counts = when (entry.store) {
+            KeyboardStore.WORDS -> secureTx {
+                mapOf(
+                    KeyboardStore.WORDS to db.userVocabularyDao().deleteWord(entry.key),
+                    KeyboardStore.WORD_PAIRS to db.wordBigramDao().deleteWithWord(entry.key),
+                )
             }
-            KeyboardStore.CORRECTIONS -> secureTx {
-                val id = entry.key.toIntOrNull() ?: return@secureTx 0
-                val before = db.learnedCorrectionDao().count()
-                db.learnedCorrectionDao().deleteById(id)
-                before - db.learnedCorrectionDao().count()
-            }
-            KeyboardStore.REMOVED_RULES -> LearnedRuleCleanup.forgetBackupEntry(cleanupPrefs, entry.key)
-            KeyboardStore.NEVER_AUTOFIX -> {
-                val now = settings.autoFixNeverWords
-                if (entry.key !in now) 0 else { settings.autoFixNeverWords = now - entry.key; 1 }
-            }
-            KeyboardStore.WRITING_LOG -> secureTx { entry.key.toIntOrNull()?.let { db.writingLogDao().deleteById(it) } ?: 0 }
-            KeyboardStore.APP_STYLES -> secureTx {
-                val before = db.appPersonaDao().count()
-                db.appPersonaDao().delete(entry.key)
-                before - db.appPersonaDao().count()
-            }
-            KeyboardStore.CLIPBOARD -> secureTx {
-                val id = entry.key.toIntOrNull() ?: return@secureTx 0
-                val before = db.clipboardHistoryDao().count()
-                db.clipboardHistoryDao().deleteById(id)
-                before - db.clipboardHistoryDao().count()
-            }
-            KeyboardStore.TOUCH_CALIBRATION -> {
-                val letter = entry.key.singleOrNull() ?: return 0
-                val now = settings.touchCalibration
-                val kept = TouchCalibration.withoutLetter(now, letter)
-                if (kept == TouchCalibration.normalize(now)) 0 else { settings.touchCalibration = kept; 1 }
-            }
+            else -> mapOf(entry.store to deleteOne(entry))
         }
-        if (n > 0 && entry.store.inRoom) scrubWal()
-        return n
+        if (counts.values.sum() > 0 && entry.store.inRoom) scrubWal()
+        return counts
     }
 
-    /** Clears one store; returns how many records went. */
-    suspend fun clear(store: KeyboardStore): Int {
-        val n = clearNoScrub(store)
-        if (n > 0 && store.inRoom) scrubWal()
-        return n
+    private suspend fun deleteOne(entry: KeyboardEntry): Int = when (entry.store) {
+        KeyboardStore.WORDS -> error("words are deleted with their pairs in deleteCounted")
+        KeyboardStore.WORD_PAIRS -> {
+            val (a, b) = splitPair(entry.key) ?: return 0
+            secureTx { db.wordBigramDao().delete(a, b) }
+        }
+        KeyboardStore.CORRECTIONS -> secureTx {
+            val id = entry.key.toIntOrNull() ?: return@secureTx 0
+            val before = db.learnedCorrectionDao().count()
+            db.learnedCorrectionDao().deleteById(id)
+            before - db.learnedCorrectionDao().count()
+        }
+        KeyboardStore.REMOVED_RULES -> LearnedRuleCleanup.forgetBackupEntry(cleanupPrefs, entry.key)
+        KeyboardStore.NEVER_AUTOFIX -> {
+            val now = settings.autoFixNeverWords
+            if (entry.key !in now) 0 else { settings.autoFixNeverWords = now - entry.key; 1 }
+        }
+        KeyboardStore.WRITING_LOG -> secureTx { entry.key.toIntOrNull()?.let { db.writingLogDao().deleteById(it) } ?: 0 }
+        KeyboardStore.APP_STYLES -> secureTx {
+            val before = db.appPersonaDao().count()
+            db.appPersonaDao().delete(entry.key)
+            before - db.appPersonaDao().count()
+        }
+        KeyboardStore.CLIPBOARD -> secureTx {
+            val id = entry.key.toIntOrNull() ?: return@secureTx 0
+            val before = db.clipboardHistoryDao().count()
+            db.clipboardHistoryDao().deleteById(id)
+            before - db.clipboardHistoryDao().count()
+        }
+        KeyboardStore.TOUCH_CALIBRATION -> {
+            val letter = entry.key.singleOrNull() ?: return 0
+            val now = settings.touchCalibration
+            val kept = TouchCalibration.withoutLetter(now, letter)
+            if (kept == TouchCalibration.normalize(now)) 0 else { settings.touchCalibration = kept; 1 }
+        }
+    }
+
+    /** Clears one store; returns how many records went (for WORDS, the cleared pairs too). */
+    suspend fun clear(store: KeyboardStore): Int = clearCounted(store).values.sum()
+
+    /**
+     * Clears one store; returns what each store lost. Clearing learned words also clears every
+     * next-word pair, reported under WORD_PAIRS rather than added to the word count (#231 nit 4).
+     */
+    suspend fun clearCounted(store: KeyboardStore): Map<KeyboardStore, Int> {
+        val counts = clearNoScrub(store)
+        if (counts.values.sum() > 0 && store.inRoom) scrubWal()
+        return counts
     }
 
     /** Clears every store; returns what each lost. Room stores go in one transaction. */
     suspend fun clearAll(): Map<KeyboardStore, Int> {
-        val room = secureTx { KeyboardStore.values().filter { it.inRoom }.associateWith { clearNoScrub(it, inTx = true) } }
-        val other = KeyboardStore.values().filter { !it.inRoom }.associateWith { clearNoScrub(it) }
-        if (room.values.any { it > 0 }) scrubWal()
-        return KeyboardStore.values().associateWith { room[it] ?: other[it] ?: 0 }
+        val room = secureTx { KeyboardStore.values().filter { it.inRoom }.map { clearNoScrub(it, inTx = true) } }
+        val other = KeyboardStore.values().filter { !it.inRoom }.map { clearNoScrub(it) }
+        if (room.any { m -> m.values.any { it > 0 } }) scrubWal()
+        val total = (room + other).flatMap { it.entries }.groupBy({ it.key }, { it.value }).mapValues { it.value.sum() }
+        return KeyboardStore.values().associateWith { total[it] ?: 0 }
     }
 
-    private suspend fun clearNoScrub(store: KeyboardStore, inTx: Boolean = false): Int {
+    private suspend fun clearNoScrub(store: KeyboardStore, inTx: Boolean = false): Map<KeyboardStore, Int> {
         suspend fun room(block: suspend () -> Int) = if (inTx) block() else secureTx { block() }
-        return when (store) {
+        if (store == KeyboardStore.WORDS) {
             // Every next-word pair is made of learned words, so clearing words clears the pairs too
             // (#231 review blocker 2), like deleting one word drops its pairs.
-            KeyboardStore.WORDS -> room {
-                val words = db.userVocabularyDao().count().also { db.userVocabularyDao().clearAll() }
-                words + db.wordBigramDao().count().also { db.wordBigramDao().clearAll() }
-            }
+            suspend fun both(): Map<KeyboardStore, Int> = mapOf(
+                KeyboardStore.WORDS to db.userVocabularyDao().count().also { db.userVocabularyDao().clearAll() },
+                KeyboardStore.WORD_PAIRS to db.wordBigramDao().count().also { db.wordBigramDao().clearAll() },
+            )
+            return if (inTx) both() else secureTx { both() }
+        }
+        return mapOf(store to when (store) {
+            KeyboardStore.WORDS -> 0 // handled above
             KeyboardStore.WORD_PAIRS -> room { db.wordBigramDao().count().also { db.wordBigramDao().clearAll() } }
             KeyboardStore.CORRECTIONS -> room { db.learnedCorrectionDao().count().also { db.learnedCorrectionDao().clearAll() } }
             KeyboardStore.WRITING_LOG -> room { db.writingLogDao().count().also { db.writingLogDao().clearAll() } }
@@ -168,7 +195,7 @@ class KeyboardLearnedData(
             KeyboardStore.TOUCH_CALIBRATION -> TouchCalibration.letters(settings.touchCalibration).size.also {
                 if (it > 0 || settings.touchCalibration.isNotEmpty()) settings.touchCalibration = ""
             }
-        }
+        })
     }
 
     /** Runs [block] in one transaction with `secure_delete` on for the writer connection. */
@@ -202,3 +229,14 @@ class KeyboardLearnedData(
 /** Stores kept in the Room database (the rest are SharedPreferences). */
 val KeyboardStore.inRoom: Boolean
     get() = this != KeyboardStore.REMOVED_RULES && this != KeyboardStore.NEVER_AUTOFIX && this != KeyboardStore.TOUCH_CALIBRATION
+
+/**
+ * The toast after a delete, one count per store, so clearing learned words reads
+ * "Deleted learned words: 3, next-word pairs: 3." instead of one total (#231 nit 4).
+ */
+fun deletedMessage(counts: Map<KeyboardStore, Int>): String {
+    val parts = KeyboardStore.values().mapNotNull { s ->
+        counts[s]?.takeIf { it > 0 }?.let { "${s.title.lowercase()}: $it" }
+    }
+    return if (parts.isEmpty()) "Nothing was left to delete." else "Deleted ${parts.joinToString(", ")}."
+}

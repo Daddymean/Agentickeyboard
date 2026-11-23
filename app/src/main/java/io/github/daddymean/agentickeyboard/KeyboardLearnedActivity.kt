@@ -16,6 +16,7 @@ import io.github.daddymean.agentickeyboard.db.AppDatabase
 import io.github.daddymean.agentickeyboard.learned.KeyboardEntry
 import io.github.daddymean.agentickeyboard.learned.KeyboardLearnedData
 import io.github.daddymean.agentickeyboard.learned.KeyboardStore
+import io.github.daddymean.agentickeyboard.learned.deletedMessage
 import io.github.daddymean.agentickeyboard.twin.secureTwinWindow
 import io.github.daddymean.agentickeyboard.twin.showSecure
 import io.github.daddymean.agentickeyboard.util.KeyboardSettings
@@ -133,7 +134,7 @@ class KeyboardLearnedActivity : Activity() {
 
     private fun confirmDelete(e: KeyboardEntry) = confirm(
         "Delete this from ${e.store.title.lowercase()}?" + if (e.store == KeyboardStore.WORDS) " Its next-word pairs go too." else ""
-    ) { it.delete(e) }
+    ) { it.deleteCounted(e) }
 
     private fun confirmClear(store: KeyboardStore) = confirm(
         "Delete all ${counts[store] ?: 0} from ${store.title.lowercase()}?" +
@@ -142,24 +143,24 @@ class KeyboardLearnedActivity : Activity() {
                 KeyboardStore.WORDS -> " All ${counts[KeyboardStore.WORD_PAIRS] ?: 0} next-word pairs go too."
                 else -> ""
             }
-    ) { it.clear(store) }
+    ) { it.clearCounted(store) }
 
     private fun confirmClearAll() {
         val parts = KeyboardStore.values().filter { (counts[it] ?: 0) > 0 }.map { "${counts[it]} ${it.title.lowercase()}" }
         if (parts.isEmpty()) { toast("Nothing to delete."); return }
         confirm("Delete everything the keyboard has learned: ${parts.joinToString(", ")}? The twin's data isn't touched; it has its own screen.") {
-            it.clearAll().values.sum()
+            it.clearAll()
         }
     }
 
     /** Shows what goes and waits for "Delete". Only then runs [run] off the main thread and reloads. */
-    private fun confirm(message: String, run: suspend (KeyboardLearnedData) -> Int) {
+    private fun confirm(message: String, run: suspend (KeyboardLearnedData) -> Map<KeyboardStore, Int>) {
         AlertDialog.Builder(this).setTitle("Delete for good?")
             .setMessage("$message\n\n$AFTER")
             .setPositiveButton("Delete") { _, _ ->
                 scope.launch {
                     runCatching { withContext(Dispatchers.IO) { run(data()) } }
-                        .onSuccess { toast(if (it == 0) "Nothing was left to delete." else "Deleted $it.") }
+                        .onSuccess { toast(deletedMessage(it)) }
                         .onFailure { SafeLog.w(TAG, "Keyboard data delete failed", it); toast("Some items may not have been deleted. Check the list and try again.") }
                     reload()
                 }

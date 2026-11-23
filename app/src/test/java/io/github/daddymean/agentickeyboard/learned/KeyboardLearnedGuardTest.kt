@@ -40,7 +40,7 @@ class KeyboardLearnedGuardTest {
 
     @Test
     fun everyDeleteRunsOnlyFromTheConfirmation() {
-        val calls = Regex("\\bit\\.(delete|clear|clearAll)\\(").findAll(activity).toList()
+        val calls = Regex("\\bit\\.(delete|clear|clearAll|deleteCounted|clearCounted)\\(").findAll(activity).toList()
         assertEquals(3, calls.size)
         for (m in calls) assertTrue(activity.substring(maxOf(0, m.range.first - 400), m.range.first).contains("confirm("))
         assertTrue(activity.substringAfter("private fun confirm(").contains("setPositiveButton(\"Delete\")"))
