@@ -145,4 +145,13 @@ class KeyboardLearnedViewModelTest {
         settle()
         assertEquals("Professional", vm.userPersonaPreference.value)
     }
+
+    @Test
+    fun twoViewModelsStartingTogetherSeedTheStarterRulesOnce() {
+        // #231 nit 2: the IME and the Style Hub starting at once on first run.
+        repeat(4) { newVm() }
+        waitFor("first-run seed") { settings.isCorrectionsSeeded && corrections() > 0 }
+        settle()
+        assertEquals(3, corrections())
+    }
 }

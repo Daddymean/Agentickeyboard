@@ -58,6 +58,8 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 
 class KeyboardViewModel(
     private val repository: KeyboardRepository,
@@ -73,6 +75,8 @@ class KeyboardViewModel(
         private val NON_ALPHA_REGEX = "[^a-zA-Z]".toRegex()
         private val WHITESPACE_REGEX = "\\s+".toRegex()
         const val DEFAULT_PERSONA = "Match my history"
+        /** One starter-rule seed at a time per process (IME + Style Hub starting together, #231 nit 2). */
+        private val seedLock = Mutex()
         val PERSONAS = listOf("Match my history", "Professional", "Joyful", "Empathetic", "Casual")
         /** Keyboard palette override choices (see KeyboardSettings.themeOverride). */
         val THEME_MODES = listOf("System", "Light", "Dark")
@@ -421,20 +425,29 @@ class KeyboardViewModel(
      * KEYBOARD-047 (#231 review blocker 1): the three starter auto-correct rules are seeded
      * once per install, behind a persisted flag, so clearing them on the learned-data screen
      * (or the Style Hub) is permanent. Installs from before the flag count as seeded when
-     * they already have rules, shortcuts (seeded on the same first run) or learned words.
+     * they already have rules, shortcuts (seeded on the same first run) or learned words. The check and the
+     * seed run under [seedLock], so two ViewModels starting together seed once (#231 nit 2).
      * Without settings (unit tests) the old empty-table seed is kept.
      */
-    private suspend fun seedCorrectionsOnce() {
+    private suspend fun seedCorrectionsOnce() = seedLock.withLock {
         val s = settings
-        if (s != null && s.isCorrectionsSeeded) return
+        if (s != null && s.isCorrectionsSeeded) return@withLock
         val hasRules = repository.allCorrections.first().isNotEmpty()
-        val existingInstall = hasRules || repository.allShortcuts.first().isNotEmpty() ||
-            repository.topVocabulary.first().isNotEmpty()
-        val seed = if (s == null) !hasRules else !existingInstall
+        val seed = if (s == null) {
+            !hasRules
+        } else {
+            val existingInstall = hasRules || repository.allShortcuts.first().isNotEmpty() ||
+                repository.topVocabulary.first().isNotEmpty()
+            !existingInstall
+        }
         if (seed) {
-            repository.insertCorrection(LearnedCorrection(typo = "teh", correction = "the", count = 15))
-            repository.insertCorrection(LearnedCorrection(typo = "tomorow", correction = "tomorrow", count = 8))
-            repository.insertCorrection(LearnedCorrection(typo = "definately", correction = "definitely", count = 5))
+            repository.insertCorrections(
+                listOf(
+                    LearnedCorrection(typo = "teh", correction = "the", count = 15),
+                    LearnedCorrection(typo = "tomorow", correction = "tomorrow", count = 8),
+                    LearnedCorrection(typo = "definately", correction = "definitely", count = 5),
+                )
+            )
         }
         s?.isCorrectionsSeeded = true
     }
