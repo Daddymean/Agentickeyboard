@@ -7,6 +7,8 @@ import android.view.inputmethod.BaseInputConnection
 import android.view.inputmethod.InputConnection
 import android.view.inputmethod.InputConnectionWrapper
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.onAllNodesWithTag
+import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performTouchInput
 import androidx.test.core.app.ApplicationProvider
@@ -15,6 +17,7 @@ import io.github.daddymean.agentickeyboard.db.KeyboardRepository
 import io.github.daddymean.agentickeyboard.ui.theme.MyApplicationTheme
 import io.github.daddymean.agentickeyboard.util.EditorTextMirror
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
@@ -120,6 +123,75 @@ class EditorTextMirrorSessionTest {
         report("after", run)
         assertEquals("same text in the editor as without the mirror", EXPECTED_TEXT, run.text)
         assertTrue("layout reads served", run.served > 0)
+    }
+
+    /**
+     * The app edits the field itself (a mention picker completing "sa" to "Sam Lee ")
+     * and the keyboard has not yet processed the onUpdateSelection for it, so the
+     * mirror still holds "Hi sa". The user taps a suggestion chip. Returns the field.
+     */
+    private fun pickChipAfterAppEdit(freshChipRead: Boolean): String {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        val raw = BaseInputConnection(View(context), true)
+        val editor = CountingEditor(raw)
+        val mirror = EditorTextMirror(CONTEXT_CHARS)
+        val viewModel = KeyboardViewModel(KeyboardRepository(AppDatabase.getDatabase(context)))
+
+        fun onUpdateSelection() {
+            val editable = raw.editable
+            val read = editor.getTextBeforeCursor(CONTEXT_CHARS, 0)?.toString()
+            viewModel.setInputText(read.orEmpty())
+            val start = Selection.getSelectionStart(editable)
+            val end = Selection.getSelectionEnd(editable)
+            if (read != null) mirror.record(read, start, end, editor) else mirror.invalidate()
+        }
+        fun conn(serve: Boolean) = mirror.wrap(editor, editor, serve)
+
+        rule.setContent {
+            MyApplicationTheme {
+                ProvideKeyboardMetrics(keyHeightScale = 1f) {
+                    AgenticKeyboardLayout(
+                        viewModel = viewModel,
+                        onKeyPress = { conn(false).commitText(it, 1); onUpdateSelection() },
+                        onDelete = { conn(false).deleteSurroundingText(1, 0); onUpdateSelection() },
+                        inputConnectionProvider = { conn(true) },
+                        // The service's wiring: currentInputConnection never serves from the mirror.
+                        freshTextBeforeCursor = { n -> conn(serve = !freshChipRead).getTextBeforeCursor(n, 0) }
+                    )
+                }
+            }
+        }
+        rule.waitForIdle()
+        onUpdateSelection()
+        for (ch in "hi sa") {
+            val tag = if (ch == ' ') "key_space" else "key_$ch"
+            rule.onNodeWithTag(tag).performTouchInput { down(center); up() }
+            rule.mainClock.advanceTimeBy(500)
+            rule.waitForIdle()
+        }
+        assertEquals("Hi sa", raw.editable.toString())
+
+        // The app's own edit: no IME call, so nothing invalidates the mirror.
+        val field = raw.editable!!
+        field.replace(3, 5, "Sam Lee ")
+        Selection.setSelection(field, field.length)
+
+        rule.onAllNodesWithTag("suggestion_chip")[0].performClick()
+        rule.waitForIdle()
+        return raw.editable.toString()
+    }
+
+    @Test
+    fun chipPickAfterAnAppEditKeepsTheAppsText() {
+        val text = pickChipAfterAppEdit(freshChipRead = true)
+        assertTrue("the app's \"Sam Lee \" survives the pick, got \"$text\"", text.startsWith("Hi Sam Lee "))
+    }
+
+    /** Sensitivity check: sized from the stale mirror, the same pick eats the app's text. */
+    @Test
+    fun chipPickSizedFromTheStaleMirrorWouldEatTheAppsText() {
+        val text = pickChipAfterAppEdit(freshChipRead = false)
+        assertFalse("stale read deletes into \"Sam Lee \", got \"$text\"", text.startsWith("Hi Sam Lee "))
     }
 
     private companion object {

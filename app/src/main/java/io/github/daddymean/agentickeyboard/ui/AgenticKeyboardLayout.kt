@@ -161,6 +161,9 @@ fun AgenticKeyboardLayout(
     onSelectionCommand: (SelectionCommand) -> Unit = {},
     onClipboardAction: (EditClipboardAction) -> Unit = {},
     inputConnectionProvider: () -> InputConnection? = { null },
+    // A read that always asks the editor, even where inputConnectionProvider is served
+    // from the LAB-009 mirror: for taps that size a delete from the text before the caret.
+    freshTextBeforeCursor: (Int) -> CharSequence? = { n -> inputConnectionProvider()?.getTextBeforeCursor(n, 0) },
     inPlaygroundMode: Boolean = false,
     playgroundTextState: String = "",
     onPlaygroundTextChange: (String) -> Unit = {},
@@ -285,10 +288,19 @@ fun AgenticKeyboardLayout(
 
     // Fresh editor text for event handlers: reading the InputConnection at event
     // time avoids acting on a stale snapshot captured during composition.
-    fun currentText(): String = if (inPlaygroundMode) {
+    //
+    // [fresh] skips the LAB-009 mirror. The mirror is current for the keyboard's own
+    // edits, but an app's own change to the field (a mention picker, a cleared draft)
+    // only reaches it with the next onUpdateSelection. Per-keystroke paths delete at
+    // most a word and keep the cached read; taps that delete up to the whole window
+    // pay one editor read so the delete is sized from what the field holds now.
+    // Either way the read is the last 1,000 characters before the caret: a longer
+    // draft is truncated to that window, so AI actions see and replace only that.
+    fun currentText(fresh: Boolean = false): String = if (inPlaygroundMode) {
         playgroundTextState
     } else {
-        inputConnectionProvider()?.getTextBeforeCursor(1000, 0)?.toString() ?: trackedInputTextState.value
+        val read = if (fresh) freshTextBeforeCursor(1000) else inputConnectionProvider()?.getTextBeforeCursor(1000, 0)
+        read?.toString() ?: trackedInputTextState.value
     }
 
     // Text the user has selected in the active editor, or null when nothing is
@@ -300,7 +312,8 @@ fun AgenticKeyboardLayout(
     }
 
     // Source text for AI actions: the selection when one exists, else the draft.
-    fun aiSourceText(): String = selectedText() ?: currentText()
+    // [fresh] for checks that guard an edit (see currentText).
+    fun aiSourceText(fresh: Boolean = false): String = selectedText() ?: currentText(fresh)
 
     // Uppercase rendering combines explicit shift with auto-capitalization, which
     // never applies in a password, sensitive or incognito field (KEYBOARD-007).
@@ -316,14 +329,17 @@ fun AgenticKeyboardLayout(
      * replaces a selection, so only the no-selection case needs a delete first.
      */
     fun replaceActiveText(newText: String, cursorOffset: Int? = null) {
-        val original = aiSourceText()
+        // One fresh read serves both the undo record and the delete length.
+        val selection = selectedText()
+        val before = if (selection == null) currentText(fresh = true) else null
+        val original = selection ?: before.orEmpty()
         var editorUndo: CommittedEditUndo? = null
         if (inPlaygroundMode) {
             onPlaygroundTextChange(newText)
         } else {
             inputConnectionProvider()?.let { conn ->
                 if (conn.getSelectedText(0).isNullOrEmpty()) {
-                    conn.deleteSurroundingText(currentText().length, 0)
+                    conn.deleteSurroundingText((before ?: currentText(fresh = true)).length, 0)
                 }
                 conn.commitTextWithCaret(newText, cursorOffset) // twin: inserted (AI apply, template, palette)
                 editorUndo = conn.captureCommittedEditUndo(original, newText, cursorOffset)
@@ -352,12 +368,15 @@ fun AgenticKeyboardLayout(
     fun applyAiResult(result: String): Boolean {
         // A result is bound to the draft it was generated from; never write it over
         // text the user typed or selected afterwards.
-        if (AiApplyGuard.isStale(viewModel.aiResultSource, aiSourceText())) {
+        // Fresh: an app's own edit since the result was generated must fail this check,
+        // and the mirror may not have seen it yet.
+        val source = aiSourceText(fresh = true)
+        if (AiApplyGuard.isStale(viewModel.aiResultSource, source)) {
             buzz(HapticFeedbackType.LongPress)
             gestureAlert = AiApplyGuard.STALE_MESSAGE
             return false
         }
-        val introduced = RedactionApplyGuard.introducedMarkers(aiSourceText(), result)
+        val introduced = RedactionApplyGuard.introducedMarkers(source, result)
         if (introduced.isNotEmpty()) {
             buzz(HapticFeedbackType.LongPress)
             gestureAlert = RedactionApplyGuard.blockedMessage(introduced)
@@ -1274,11 +1293,12 @@ fun AgenticKeyboardLayout(
                                             val suggestion = chip.word
                                             Box(
                                                 modifier = Modifier
+                                                    .testTag("suggestion_chip")
                                                     .clip(RoundedCornerShape(8.dp))
                                                     .background(keyboardColors.chipAlt)
                                                     .clickable {
                                                         buzz(HapticFeedbackType.TextHandleMove)
-                                                        val text = currentText()
+                                                        val text = currentText(fresh = true)
                                                         val lastWord = text.takeLastWhile { !it.isWhitespace() }
                                                         if (inPlaygroundMode) {
                                                             onPlaygroundTextChange(text.dropLast(lastWord.length) + suggestion + " ")

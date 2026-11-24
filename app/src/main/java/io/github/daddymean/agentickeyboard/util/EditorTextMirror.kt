@@ -31,6 +31,12 @@ import java.util.function.IntConsumer
  *
  * Anything else falls through to the editor as before. Reads never change what
  * the editor holds, so a fall-through is only ever slower, never different.
+ *
+ * Not covered: the app changing the field itself (a mention picker, clearing a sent
+ * draft). That moves the caret, so the next onUpdateSelection re-records, but until
+ * it is processed the mirror still holds the old text. Callers that size a large
+ * delete from a read on a tap read the editor directly (AgenticKeyboardLayout's
+ * `currentText(fresh = true)`); per-keystroke reads keep the mirror.
  */
 class EditorTextMirror(private val window: Int) {
 
