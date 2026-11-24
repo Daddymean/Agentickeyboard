@@ -2,6 +2,7 @@
 
 Short, dated, newest first. This file is now the record of decisions. Current merge and review rules: [2026-11-17 entry](#merge-rules-2026-11-17) (confirmed by Keith on 2026-11-17). Older full records (read-only, Nexus is retired): [Nexus decisions/](https://github.com/Daddymean/Nexus/tree/main/decisions) and [projects/agentickeyboard/DECISIONS.md](https://github.com/Daddymean/Nexus/blob/main/projects/agentickeyboard/DECISIONS.md). Add a line here in the same PR as any new decision.
 
+- **2026-11-19** — Keith answered #230's open questions ("1.yes 2.yes 3.yes", 11:55 PM PT): the keyboard's own learned data gets its own viewer/delete screen, separate from the twin's (KEYBOARD-047, `KeyboardLearnedActivity`); the twin's date-range delete keeps sparing core memories and journal answers; the never-learn phrase list stays hash-only and can't show its phrases. Keyboard DB deletes run with `secure_delete` and a WAL TRUNCATE checkpoint.
 - **2026-11-17** — <a id="merge-rules-2026-11-17"></a>**Confirmed by Keith on 2026-11-17.** Replaces ADR-0007 §9 ("agents never merge"). Current review and merge rules, recorded after Keith's Nov 14, 2026 8:21 PM PT open-ended mandate (his words: "Yes, give them the open-ended mandate"):
   - Agents may keep improving, refactoring and upgrading Agentickeyboard, Nexus and Vault, and may propose features themselves.
   - Agents may merge with green CI. Agentickeyboard `main` still needs Keith's admin merge because of the admin-only ("Nopush") ruleset.

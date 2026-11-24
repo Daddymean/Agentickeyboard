@@ -11,6 +11,8 @@ import android.content.SharedPreferences
  */
 class KeyboardSettings(context: Context) {
 
+    private val appContext: Context = context.applicationContext
+
     private val prefs: SharedPreferences =
         context.applicationContext.getSharedPreferences("keyboard_settings", Context.MODE_PRIVATE)
 
@@ -41,6 +43,8 @@ class KeyboardSettings(context: Context) {
         const val KEY_CLIPBOARD_HISTORY_ENABLED = "clipboard_history_enabled"
         const val KEY_CLIPBOARD_HISTORY_PAUSED = "clipboard_history_paused"
         const val KEY_CLIPBOARD_RETENTION_DAYS = "clipboard_retention_days"
+        const val KEY_CLIPBOARD_CLEARED_AT = "clipboard_cleared_at"
+        const val KEY_CLIPBOARD_SKIP_UNTIMESTAMPED = "clipboard_skip_untimestamped"
         const val KEY_STAT_AUTOCORRECTIONS = "stat_autocorrections"
         const val KEY_STAT_SWIPE_WORDS = "stat_swipe_words"
         const val KEY_STAT_AI_APPLIES = "stat_ai_applies"
@@ -56,12 +60,29 @@ class KeyboardSettings(context: Context) {
         const val KEY_PROJECT_GLOSSARY = "project_glossary"
         const val KEY_LOCAL_GEMMA_CELLULAR = "local_gemma_e2b_allow_cellular"
         const val KEY_LOCAL_GEMMA_SIZE_ACK = "local_gemma_e2b_size_ack"
+        const val KEY_TOUCH_CALIBRATION = "touch_calibration_v1"
+        const val KEY_CORRECTIONS_SEEDED = "starter_corrections_seeded"
     }
 
     /** Per-letter normalized tap offsets only; no typed text or raw touch history. */
     var touchCalibration: String
-        get() = prefs.getString("touch_calibration_v1", "").orEmpty()
-        set(value) = prefs.edit().putString("touch_calibration_v1", value).apply()
+        get() = prefs.getString(KEY_TOUCH_CALIBRATION, "").orEmpty()
+        set(value) = prefs.edit().putString(KEY_TOUCH_CALIBRATION, value).apply()
+
+    /**
+     * True when this install was updated after it was first installed (not a fresh install).
+     * The starter-rule seed uses it to tell an emptied old install from a new one (#231 nit 3).
+     */
+    val isUpgradedInstall: Boolean
+        get() = runCatching {
+            val info = appContext.packageManager.getPackageInfo(appContext.packageName, 0)
+            info.lastUpdateTime > info.firstInstallTime
+        }.getOrDefault(false)
+
+    /** The starter auto-correct rules were seeded once; never re-seed (KEYBOARD-047). */
+    var isCorrectionsSeeded: Boolean
+        get() = prefs.getBoolean(KEY_CORRECTIONS_SEEDED, false)
+        set(value) = prefs.edit().putBoolean(KEY_CORRECTIONS_SEEDED, value).apply()
 
     var isOfflineMode: Boolean
         get() = prefs.getBoolean(KEY_OFFLINE_MODE, false)
@@ -194,6 +215,20 @@ class KeyboardSettings(context: Context) {
     var isClipboardHistoryPaused: Boolean
         get() = prefs.getBoolean(KEY_CLIPBOARD_HISTORY_PAUSED, false)
         set(value) = prefs.edit().putBoolean(KEY_CLIPBOARD_HISTORY_PAUSED, value).apply()
+
+    /**
+     * When clipboard history was last deleted from or cleared (System.currentTimeMillis()).
+     * Content-free: no text or hash of any clip. See ClipboardCutoff (#231 review).
+     * Written with commit() so a delete's cutoff survives the process dying right after.
+     */
+    var clipboardClearedAt: Long
+        get() = prefs.getLong(KEY_CLIPBOARD_CLEARED_AT, 0L)
+        set(value) { prefs.edit().putLong(KEY_CLIPBOARD_CLEARED_AT, value).commit() }
+
+    /** After a clear, skip clips that carry no copy time until the system clipboard changes. */
+    var clipboardSkipUntimestamped: Boolean
+        get() = prefs.getBoolean(KEY_CLIPBOARD_SKIP_UNTIMESTAMPED, false)
+        set(value) { prefs.edit().putBoolean(KEY_CLIPBOARD_SKIP_UNTIMESTAMPED, value).commit() }
 
     var clipboardRetentionDays: Int
         get() = prefs.getInt(

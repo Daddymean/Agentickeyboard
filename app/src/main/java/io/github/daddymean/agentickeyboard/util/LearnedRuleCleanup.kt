@@ -47,6 +47,31 @@ object LearnedRuleCleanup {
         return toInsert.size
     }
 
+    /** The removed rules still kept for "Restore" (KEYBOARD-047 lists them). */
+    fun backupEntries(prefs: SharedPreferences): List<LearnedCorrection> = readBackup(prefs)
+
+    /** Drops the backed-up rule for [typo]; returns how many went. */
+    fun forgetBackupEntry(prefs: SharedPreferences, typo: String): Int {
+        val all = readBackup(prefs)
+        val kept = all.filter { it.typo != typo }
+        if (kept.size == all.size) return 0
+        writeBackup(prefs, kept)
+        return all.size - kept.size
+    }
+
+    /** Empties the backup; returns how many rules it held. */
+    fun clearBackup(prefs: SharedPreferences): Int {
+        val n = readBackup(prefs).size
+        if (n > 0) prefs.edit().putString(KEY_BACKUP, "[]").commit()
+        return n
+    }
+
+    private fun writeBackup(prefs: SharedPreferences, rules: List<LearnedCorrection>) {
+        val backup = JSONArray()
+        rules.forEach { backup.put(JSONObject().put("typo", it.typo).put("correction", it.correction).put("count", it.count)) }
+        prefs.edit().putString(KEY_BACKUP, backup.toString()).commit()
+    }
+
     private fun readBackup(prefs: SharedPreferences): List<LearnedCorrection> {
         val json = prefs.getString(KEY_BACKUP, null) ?: return emptyList()
         return try {

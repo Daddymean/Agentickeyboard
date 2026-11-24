@@ -58,6 +58,8 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 
 class KeyboardViewModel(
     private val repository: KeyboardRepository,
@@ -72,6 +74,9 @@ class KeyboardViewModel(
         private const val PERSONAL_WORD_MIN_COUNT = 3
         private val NON_ALPHA_REGEX = "[^a-zA-Z]".toRegex()
         private val WHITESPACE_REGEX = "\\s+".toRegex()
+        const val DEFAULT_PERSONA = "Match my history"
+        /** One starter-rule seed at a time per process (IME + Style Hub starting together, #231 nit 2). */
+        private val seedLock = Mutex()
         val PERSONAS = listOf("Match my history", "Professional", "Joyful", "Empathetic", "Casual")
         /** Keyboard palette override choices (see KeyboardSettings.themeOverride). */
         val THEME_MODES = listOf("System", "Light", "Dark")
@@ -128,7 +133,7 @@ class KeyboardViewModel(
         .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
     // Selected style persona preference (Match history, Professional, Joyful, Empathetic, Casual)
-    private val _userPersonaPreference = MutableStateFlow(settings?.persona ?: "Match my history")
+    private val _userPersonaPreference = MutableStateFlow(settings?.persona ?: DEFAULT_PERSONA)
     val userPersonaPreference = _userPersonaPreference.asStateFlow()
 
     // Real-time predictive autocomplete completions
@@ -235,7 +240,12 @@ class KeyboardViewModel(
     /** Words whose auto-fix the user undid in this text field; cleared by onNewInputSession. */
     private val autoFixKeptThisSession = mutableSetOf<String>()
 
-    /** Words whose auto-fix was undone at least once since the keyboard started. */
+    /**
+     * Words whose auto-fix was undone at least once since the keyboard started. In memory only:
+     * after a word is deleted from "Words auto-fix leaves alone", one more undo of it in the
+     * same keyboard session (not two) puts it back. That takes a new undo by the user, so it is
+     * accepted rather than cleared on delete (#231 review 2, note 1).
+     */
     private val autoFixUndoneBefore = mutableSetOf<String>()
 
     /** Words the user undid twice: never auto-fixed again (kept in settings). */
@@ -373,6 +383,9 @@ class KeyboardViewModel(
                 _isMasteryEnabled.value = s.isMasteryEnabled
                 _masteryState.value = _masteryState.value.copy(enabled = s.isMasteryEnabled)
             }
+            // KEYBOARD-047: a calibration cleared on the learned-data screen must not be
+            // written back from this process's in-memory copy.
+            KeyboardSettings.KEY_TOUCH_CALIBRATION -> touchCalibration.restore(s.touchCalibration)
             KeyboardSettings.KEY_MASTERY_STATE -> {
                 _masteryState.value = MasteryStateCodec.decode(
                     s.masteryState, enabledFallback = s.isMasteryEnabled
@@ -388,6 +401,8 @@ class KeyboardViewModel(
         // instead of collect{} means the "Clear" actions in the Style Hub are not
         // immediately undone by a re-seeding collector.
         viewModelScope.launch {
+            // Runs before the shortcut seed so "shortcuts exist" still means "not first run".
+            seedCorrectionsOnce()
             if (repository.allShortcuts.first().isEmpty()) {
                 repository.insertShortcut(ShortcutTemplate(shortcut = "omw", template = "On my way! Running late."))
                 repository.insertShortcut(ShortcutTemplate(shortcut = "gr", template = "Great! Talk to you soon."))
@@ -396,12 +411,10 @@ class KeyboardViewModel(
             }
         }
 
+        // KEYBOARD-047 (#231 review): a per-app style deleted on the learned-data screen
+        // (or in the Style Hub) stops applying to the current editor right away.
         viewModelScope.launch {
-            if (repository.allCorrections.first().isEmpty()) {
-                repository.insertCorrection(LearnedCorrection(typo = "teh", correction = "the", count = 15))
-                repository.insertCorrection(LearnedCorrection(typo = "tomorow", correction = "tomorrow", count = 8))
-                repository.insertCorrection(LearnedCorrection(typo = "definately", correction = "definitely", count = 5))
-            }
+            repository.allAppPersonas.collect { rows -> dropDeletedActivePersona(rows) }
         }
 
         // Data retention: expire old writing logs
@@ -411,6 +424,57 @@ class KeyboardViewModel(
                 repository.deleteLogsOlderThan(System.currentTimeMillis() - days * DAY_MS)
             }
         }
+    }
+
+    /**
+     * KEYBOARD-047 (#231 review blocker 1): the three starter auto-correct rules are seeded
+     * once per install, behind a persisted flag, so clearing them on the learned-data screen
+     * (or the Style Hub) is permanent. Installs from before the flag count as seeded when
+     * they already have rules, shortcuts (seeded on the same first run) or learned words, or
+     * when the app was updated rather than freshly installed (#231 nit 3: an upgraded install
+     * whose user had emptied everything isn't handed the starter rules). The check and the
+     * seed run under [seedLock], so two ViewModels starting together seed once (#231 nit 2).
+     * Without settings (unit tests) the old empty-table seed is kept.
+     */
+    private suspend fun seedCorrectionsOnce() = seedLock.withLock {
+        val s = settings
+        if (s != null && s.isCorrectionsSeeded) return@withLock
+        val hasRules = repository.allCorrections.first().isNotEmpty()
+        val seed = if (s == null) {
+            !hasRules
+        } else {
+            val existingInstall = hasRules || repository.allShortcuts.first().isNotEmpty() ||
+                repository.topVocabulary.first().isNotEmpty() || s.isUpgradedInstall
+            !existingInstall
+        }
+        if (seed) {
+            repository.insertCorrections(
+                listOf(
+                    LearnedCorrection(typo = "teh", correction = "the", count = 15),
+                    LearnedCorrection(typo = "tomorow", correction = "tomorrow", count = 8),
+                    LearnedCorrection(typo = "definately", correction = "definitely", count = 5),
+                )
+            )
+        }
+        s?.isCorrectionsSeeded = true
+    }
+
+    /** Apps that had a stored style at the last `app_personas` emission; null before the first. */
+    private var lastStyledApps: Set<String>? = null
+
+    /**
+     * The active app's stored style row was just deleted: fall back to the global persona.
+     * Only a row that existed and is now gone counts (#231 nit 1), so editing another app's
+     * style, or an app that never had a row, never resets the open editor.
+     */
+    private fun dropDeletedActivePersona(rows: List<AppPersona>) {
+        val now = rows.mapTo(HashSet()) { it.packageName }
+        val before = lastStyledApps
+        lastStyledApps = now
+        val pkg = activeAppPackage ?: return
+        if (before == null || pkg !in before || pkg in now) return
+        val global = settings?.persona ?: DEFAULT_PERSONA
+        if (_userPersonaPreference.value != global) _userPersonaPreference.value = global
     }
 
     override fun onCleared() {
@@ -1345,20 +1409,9 @@ class KeyboardViewModel(
 
         if (toProcess.isEmpty()) return
 
-        val typos = toProcess.map { it.first }
-        val existingList = repository.getCorrectionsForTypos(typos)
-        val existingMap = existingList.associateBy { it.typo }
-
-        val toInsert = toProcess.map { (oWord, cWord) ->
-            val existing = existingMap[oWord]
-            if (existing != null) {
-                existing.copy(correction = cWord, count = existing.count + 1)
-            } else {
-                LearnedCorrection(typo = oWord, correction = cWord)
-            }
-        }
-
-        repository.insertCorrections(toInsert)
+        // Read and write in one transaction, so a rule deleted on the learned-data screen
+        // can't be written back from a stale read (#231 review 2, note 2).
+        repository.learnCorrections(toProcess)
     }
 
     /**

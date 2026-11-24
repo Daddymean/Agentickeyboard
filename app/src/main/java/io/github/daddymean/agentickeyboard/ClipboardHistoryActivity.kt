@@ -51,9 +51,9 @@ import androidx.compose.ui.unit.sp
 import io.github.daddymean.agentickeyboard.db.ClipboardHistoryItem
 import io.github.daddymean.agentickeyboard.db.KeyboardRepository
 import io.github.daddymean.agentickeyboard.ui.theme.MyApplicationTheme
-import io.github.daddymean.agentickeyboard.util.ClipboardCaptureDecision
+import io.github.daddymean.agentickeyboard.util.ClipboardCapture
+import io.github.daddymean.agentickeyboard.util.ClipboardCutoff
 import io.github.daddymean.agentickeyboard.util.ClipboardHistoryLimits
-import io.github.daddymean.agentickeyboard.util.ClipboardHistoryPolicy
 import io.github.daddymean.agentickeyboard.util.ClipboardSensitivity
 import io.github.daddymean.agentickeyboard.util.KeyboardSettings
 import kotlinx.coroutines.launch
@@ -100,24 +100,11 @@ private fun ClipboardHistoryManagerScreen(
         val manager = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
         // One read: text and sensitivity flag come from the same ClipData.
         val snapshot = ClipboardSensitivity.readPrimaryClip(manager)
-        val text = snapshot?.text
-        val flaggedSensitive = snapshot?.flaggedSensitive ?: false
-        if (text == null) {
-            feedback = "Clipboard has no plain text to retain."
-            return
-        }
-        when (val decision = ClipboardHistoryPolicy.evaluate(text, flaggedSensitive)) {
-            is ClipboardCaptureDecision.Accept -> scope.launch {
-                repository.captureClipboard(
-                    content = decision.content,
-                    contentHash = decision.contentHash,
-                    retentionDays = retentionDays
-                )
-                feedback = "Saved locally. Duplicate clips collapse automatically."
-            }
-            is ClipboardCaptureDecision.Reject -> {
-                feedback = ClipboardHistoryPolicy.rejectionMessage(decision.reason)
-            }
+        // The shared capture path: a clip copied before the last delete/clear isn't saved again.
+        scope.launch {
+            feedback = ClipboardCapture.message(
+                ClipboardCapture.capture(snapshot, settings, repository, retentionDays = retentionDays)
+            )
         }
     }
 
@@ -308,7 +295,7 @@ private fun ClipboardHistoryManagerScreen(
                             Button(
                                 onClick = {
                                     scope.launch {
-                                        repository.clearClipboardHistory()
+                                        ClipboardCutoff.clearHistory(settings, repository)
                                         confirmClear = false
                                         feedback = "Clipboard history cleared."
                                     }
@@ -358,7 +345,7 @@ private fun ClipboardHistoryManagerScreen(
                     },
                     onDelete = {
                         scope.launch {
-                            repository.deleteClipboardItem(item.id)
+                            ClipboardCutoff.deleteClip(settings, repository, item.id)
                             feedback = "Clip deleted."
                         }
                     }
