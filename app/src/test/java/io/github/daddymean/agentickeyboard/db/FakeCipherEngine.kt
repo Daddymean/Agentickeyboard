@@ -19,6 +19,7 @@ class FakeCipherEngine : KeyboardDbEngine {
     var exportFails = false
     var corruptCopy = false
     var exports = 0
+    var forcedProbe: OpenProbe? = null
 
     override fun load() {
         if (loadFails) throw UnsatisfiedLinkError("no sqlcipher here")
@@ -50,7 +51,7 @@ class FakeCipherEngine : KeyboardDbEngine {
     }
 
     override fun verify(file: File, sqlKey: ByteArray): DbSnapshot {
-        check(canOpen(file, sqlKey))
+        check(canOpen(file, sqlKey) == OpenProbe.Ok)
         val db = SQLiteDatabase.openDatabase(file.path, null, SQLiteDatabase.OPEN_READONLY)
         try {
             db.rawQuery("PRAGMA integrity_check", null).use { check(it.moveToFirst() && it.getString(0) == "ok") }
@@ -60,21 +61,30 @@ class FakeCipherEngine : KeyboardDbEngine {
         }
     }
 
-    override fun canOpen(file: File, sqlKey: ByteArray): Boolean = runCatching {
+    override fun snapshotPlaintext(file: File): DbSnapshot {
         val db = SQLiteDatabase.openDatabase(file.path, null, SQLiteDatabase.OPEN_READONLY)
-        try {
-            db.rawQuery("SELECT k FROM $KEY_TABLE", null).use { it.moveToFirst() && it.getBlob(0).contentEquals(sqlKey) }
-        } finally {
-            db.close()
-        }
-    }.getOrDefault(false)
+        try { return snapshot(db) } finally { db.close() }
+    }
+
+    override fun canOpen(file: File, sqlKey: ByteArray): OpenProbe {
+        forcedProbe?.let { return it }
+        val ok = runCatching {
+            val db = SQLiteDatabase.openDatabase(file.path, null, SQLiteDatabase.OPEN_READONLY)
+            try {
+                db.rawQuery("SELECT k FROM $KEY_TABLE", null).use { it.moveToFirst() && it.getBlob(0).contentEquals(sqlKey) }
+            } finally {
+                db.close()
+            }
+        }.getOrDefault(false)
+        return if (ok) OpenProbe.Ok else OpenProbe.Unopenable
+    }
 
     override fun isEncrypted(file: File): Boolean = runCatching {
         RandomAccessFile(file, "r").use { f -> f.seek(68); f.readInt() == APP_ID }
     }.getOrDefault(false)
 
     /** Room gets the framework helper; a database it creates is stamped "encrypted" with [sqlKey]. */
-    override fun factory(sqlKey: ByteArray): SupportSQLiteOpenHelper.Factory = SupportSQLiteOpenHelper.Factory { config ->
+    override fun factory(sqlKey: ByteArray, onCorruption: (File) -> Unit): SupportSQLiteOpenHelper.Factory = SupportSQLiteOpenHelper.Factory { config ->
         val cb = config.callback
         val stamping = object : SupportSQLiteOpenHelper.Callback(cb.version) {
             override fun onConfigure(db: SupportSQLiteDatabase) = cb.onConfigure(db)
@@ -102,10 +112,14 @@ class FakeCipherEngine : KeyboardDbEngine {
 
     private fun snapshot(db: SQLiteDatabase): DbSnapshot {
         val version = db.rawQuery("PRAGMA user_version", null).use { it.moveToFirst(); it.getInt(0) }
+        val schemaEntries = db.rawQuery(
+            "SELECT count(*) FROM sqlite_master WHERE name != '$KEY_TABLE'", null
+        ).use { it.moveToFirst(); it.getInt(0) }
         val tables = db.rawQuery(
-            "SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%' AND name != '$KEY_TABLE' ORDER BY name", null
+            "SELECT name FROM sqlite_master WHERE type = 'table' AND (name NOT LIKE 'sqlite_%' OR name = 'sqlite_sequence') AND name != '$KEY_TABLE' ORDER BY name",
+            null
         ).use { c -> buildList { while (c.moveToNext()) add(c.getString(0)) } }
-        return DbSnapshot(version, tables.associateWith { t -> db.rawQuery("SELECT count(*) FROM `$t`", null).use { it.moveToFirst(); it.getLong(0) } })
+        return DbSnapshot(version, tables.associateWith { t -> db.rawQuery("SELECT count(*) FROM `$t`", null).use { it.moveToFirst(); it.getLong(0) } }, schemaEntries)
     }
 
     companion object {
@@ -119,6 +133,7 @@ class FakeKeyWrapper : DbKeyWrapper {
     var present = true
     var failUnwraps = 0
     var unwraps = 0
+    var throwInvalidKey = false
 
     override fun wrap(raw: ByteArray): TwinCipher.Sealed {
         present = true
@@ -128,6 +143,7 @@ class FakeKeyWrapper : DbKeyWrapper {
     override fun unwrap(sealed: TwinCipher.Sealed): ByteArray {
         unwraps++
         check(present) { "key is gone" }
+        if (throwInvalidKey) throw java.security.InvalidKeyException("permanently invalidated")
         if (failUnwraps > 0) { failUnwraps--; error("keystore busy") }
         return sealed.ciphertext.map { (it.toInt() xor 0x5a).toByte() }.toByteArray()
     }

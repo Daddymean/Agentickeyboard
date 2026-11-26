@@ -69,6 +69,10 @@ class KeyboardDbKey(private val file: File, private val wrapper: DbKeyWrapper, p
                 wrapper.unwrap(sealed)
             } catch (e: javax.crypto.AEADBadTagException) {
                 return Read.Lost
+            } catch (e: java.security.InvalidKeyException) {
+                // Includes KeyPermanentlyInvalidatedException: the alias may still be present
+                // but this wrapping key can never unwrap the blob.
+                return Read.Lost
             } catch (e: Exception) {
                 null
             }
@@ -82,8 +86,19 @@ class KeyboardDbKey(private val file: File, private val wrapper: DbKeyWrapper, p
         return Read.Unavailable
     }
 
-    /** Makes and stores a new key. Only call when no encrypted database depends on the old one. */
+    /** Renames the wrapped-key file to `*.lost-<stamp>` so [create] never overwrites it. */
+    fun moveAside(stamp: Long): File? {
+        if (!file.isFile) return null
+        val dest = File("${file.path}.lost-$stamp")
+        if (!file.renameTo(dest)) return null
+        syncDir(file.parentFile)
+        capKeyAsides(file)
+        return dest
+    }
+
+    /** Makes and stores a new key. Refuses to overwrite an existing wrapped-key file. */
     fun create(): ByteArray {
+        check(!file.isFile) { "won't overwrite an existing key" }
         val raw = ByteArray(KEY_BYTES).also(random::nextBytes)
         try {
             val blob = encode(wrapper.wrap(raw))
@@ -106,6 +121,14 @@ class KeyboardDbKey(private val file: File, private val wrapper: DbKeyWrapper, p
 
         /** Production key file: never backed up, never transferred. */
         fun keyFile(noBackupDir: File) = File(noBackupDir, "keyboard_db/agentic_keyboard_database.key")
+
+        /** Keeps the newest [KeyboardDbHealth.ASIDE_CAP] `*.lost-*` key files; shreds older ones. */
+        fun capKeyAsides(keyFile: File) {
+            val prefix = keyFile.name + ".lost-"
+            val files = keyFile.parentFile?.listFiles()?.filter { it.name.startsWith(prefix) }
+                ?.sortedByDescending { it.lastModified() } ?: return
+            files.drop(KeyboardDbHealth.ASIDE_CAP).forEach { KeyboardDbMigrator.shred(it) }
+        }
 
         /** SQLCipher raw-key syntax: `x'<64 hex digits>'` as bytes. */
         fun sqlKey(raw: ByteArray): ByteArray {

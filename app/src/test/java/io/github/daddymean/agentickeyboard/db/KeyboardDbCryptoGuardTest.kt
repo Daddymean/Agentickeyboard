@@ -18,14 +18,16 @@ class KeyboardDbCryptoGuardTest {
     @Test
     fun everySqlCipherOpenKeepsTheFileOnError() {
         val opens = Regex("SQLiteDatabase\\.openDatabase\\(([^\\n]*)\\)").findAll(engine).map { it.groupValues[1] }.toList()
-        assertEquals(3, opens.size)
+        assertEquals(4, opens.size)
         assertTrue(opens.all { it.contains("KeepFile") })
-        assertTrue(Regex("object KeepFile : DatabaseErrorHandler \\{\\s*override fun onCorruption\\([^)]*\\) = Unit").containsMatchIn(engine))
+        assertTrue(engine.contains("class KeepFile"))
+        assertTrue(engine.contains("SqlCipherOpenHelperFactory"))
+        assertFalse(engine.contains("SupportOpenHelperFactory"))
     }
 
     @Test
     fun keyboardDatabaseOpensThroughTheEncryptingFactory() {
-        assertTrue(models.contains(".openHelperFactory(encryptedFactory(context.applicationContext))"))
+        assertTrue(models.contains(".openHelperFactory(encryptedFactory(app))"))
         assertTrue(models.contains(".addCallback(SECURE_DELETE)"))
         assertTrue(models.contains("engine: KeyboardDbEngine = SqlCipherEngine()"))
         assertTrue(models.contains("wrapper: DbKeyWrapper = KeystoreDbKeyWrapper()"))
@@ -53,5 +55,31 @@ class KeyboardDbCryptoGuardTest {
         assertTrue(versions.contains("name = \"sqlcipher-android\""))
         // Only the maintained sqlcipher-android artifact, not the deprecated android-database-sqlcipher.
         assertFalse(versions.contains("android-database-sqlcipher"))
+    }
+
+    @Test
+    fun versionCodeWasBumpedSoOldApksCannotDowngradeOntoTheEncryptedFile() {
+        val gradle = File(root, "app/build.gradle.kts").readText()
+        val code = gradle.lineSequence()
+            .map { it.trim() }
+            .first { it.startsWith("versionCode") }
+            .substringAfter("=").trim().toInt()
+        assertTrue("versionCode must be > 1, was $code", code > 1)
+    }
+
+    @Test
+    fun ephemeralInstancesAreNotCachedAndTheDeleteScreenRefuses() {
+        val models = src("db/DatabaseModels.kt")
+        assertTrue(models.contains("shouldRecycle(lastStatus)"))
+        assertTrue(models.contains("fun resetBrokenDatabase"))
+        val app = src("AgenticKeyboardApplication.kt")
+        assertTrue(app.contains("val database get()"))
+        assertFalse(app.contains("val database by lazy"))
+        val activity = src("KeyboardLearnedActivity.kt")
+        assertTrue(activity.contains("KeyboardDbUserStatus.banner"))
+        assertTrue(activity.contains("refuseDelete"))
+        assertTrue(activity.contains("confirmReset()"))
+        assertTrue(activity.substringAfter("private fun confirmReset()").contains(".showSecure()"))
+        assertTrue(activity.substringAfter("private fun confirm(").contains("refuseDelete"))
     }
 }

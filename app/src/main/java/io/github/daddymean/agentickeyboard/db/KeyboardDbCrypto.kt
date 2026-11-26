@@ -1,15 +1,17 @@
 package io.github.daddymean.agentickeyboard.db
 
+import android.content.ContentValues
 import android.content.Context
 import android.os.SystemClock
 import androidx.sqlite.db.SupportSQLiteDatabase
 import androidx.sqlite.db.SupportSQLiteOpenHelper
+import androidx.sqlite.db.SupportSQLiteStatement
 import androidx.sqlite.db.framework.FrameworkSQLiteOpenHelperFactory
 import java.io.File
 import java.io.RandomAccessFile
 
-/** A copy of a database's shape: user_version and the row count of every table. */
-data class DbSnapshot(val userVersion: Int, val counts: Map<String, Long>)
+/** A copy of a database's shape: user_version, row counts (including sqlite_sequence) and schema size. */
+data class DbSnapshot(val userVersion: Int, val counts: Map<String, Long>, val schemaEntries: Int = 0)
 
 /**
  * The SQLCipher calls the migration needs. [SqlCipherEngine] in the app; tests use a stand-in,
@@ -28,10 +30,13 @@ interface KeyboardDbEngine {
     /** Opens encrypted [file] with [sqlKey], runs the integrity checks and returns its snapshot. Throws on any failure. */
     fun verify(file: File, sqlKey: ByteArray): DbSnapshot
 
-    /** Cheap check that [sqlKey] opens [file]. Must never delete or change the file, even when it fails. */
-    fun canOpen(file: File, sqlKey: ByteArray): Boolean
+    /** Snapshot of a plaintext SQLite file (empty key). */
+    fun snapshotPlaintext(file: File): DbSnapshot
 
-    fun factory(sqlKey: ByteArray): SupportSQLiteOpenHelper.Factory
+    /** Probe that [sqlKey] opens [file]. Must never delete or change the file, even when it fails. */
+    fun canOpen(file: File, sqlKey: ByteArray): OpenProbe
+
+    fun factory(sqlKey: ByteArray, onCorruption: (File) -> Unit = {}): SupportSQLiteOpenHelper.Factory
 
     /** True when non-empty [file] is not a plaintext SQLite file (SQLCipher starts with a random salt). */
     fun isEncrypted(file: File): Boolean = !KeyboardDbMigrator.startsWithMagic(file, 0)
@@ -48,33 +53,39 @@ interface KeyboardDbEngine {
  *
  *  1. **Recover** from an earlier interrupted run: if the plaintext was already moved aside
  *     (`.kbcrypt-plain`) but the encrypted copy never took its place, the plaintext goes back.
- *     If the swap finished, the leftover plaintext is shredded. A partial `.kbcrypt-tmp` copy
+ *     If the swap finished, the leftover plaintext is shredded only after the new file verifies
+ *     (integrity check plus row counts and schema size). A partial `.kbcrypt-tmp` copy
  *     (ciphertext only) is deleted.
  *  2. **Copy**: checkpoint and empty the WAL, then `sqlcipher_export` into `.kbcrypt-tmp`.
  *  3. **Verify**: open the copy with the key, `cipher_integrity_check` + `integrity_check`, and
- *     compare user_version and every table's row count with the source. Any difference stops here.
+ *     compare user_version, every table's row count and the sqlite_master entry count with the
+ *     source. Any difference stops here.
  *  4. **Swap**: rename plaintext → `.kbcrypt-plain`, copy → database (each rename is atomic,
  *     directory fsynced). The plaintext's `-wal`, `-shm` and `-journal` (already empty) go first.
  *  5. **Shred**: overwrite `.kbcrypt-plain` with zeros, fsync, delete.
  *
  * Any failure before step 4 deletes the copy and keeps the plaintext database working; the next
- * launch tries again. A crash at any point is repaired by step 1. Already encrypted, or a fresh
- * install: no copy at all, SQLCipher opens or creates the file directly.
+ * launch retries after a backoff. A crash at any point is repaired by step 1. Already encrypted,
+ * or a fresh install: no copy at all, SQLCipher opens or creates the file directly.
  *
  * The key is only handed to Room after [KeyboardDbEngine.canOpen] has opened the file with it,
- * because a wrong key looks like corruption and Room's default corruption handling deletes the
- * database. If the key is gone for good, the unreadable file is moved aside (never deleted) and a
- * new database starts; if it's only unavailable right now, this launch runs on an in-memory
- * database and the file is left alone.
+ * and only a permanent failure (not a transient I/O error) moves the file aside. If the key is
+ * gone for good, the unreadable file and the old wrapped-key file are moved aside (never
+ * deleted) and a new database starts; if it's only unavailable right now, this launch runs on
+ * an in-memory database with writes blocked, the file is left alone, and the next open retries.
+ * After several unavailable opens, the learned-data screen offers a one-tap reset.
  *
  * Residue: flash storage doesn't overwrite in place, so the zeros written in step 5 (and
  * `secure_delete`) may land on new blocks while the old plaintext blocks wait for the flash
- * controller to erase them. They are still covered by Android's file-based encryption.
+ * controller to erase them. They are still covered by Android's file-based encryption. The
+ * SQLCipher raw key is held in memory for the process lifetime so pooled connections can
+ * reopen; `cipher_memory_security` is left off (a keyboard can't pay that cost on every key).
  */
 class KeyboardDbMigrator(
     private val key: KeyboardDbKey,
     private val engine: KeyboardDbEngine,
-    private val now: () -> Long = System::currentTimeMillis
+    private val now: () -> Long = System::currentTimeMillis,
+    internal val health: KeyboardDbHealth = KeyboardDbHealth(File(System.getProperty("java.io.tmpdir"), "kbdb-health"), now),
 ) {
     enum class Kind { MISSING, PLAINTEXT, ENCRYPTED }
 
@@ -82,21 +93,36 @@ class KeyboardDbMigrator(
         /** Open with SQLCipher and [sqlKey]. [migrated] when this run converted a plaintext file. */
         class Encrypted(val sqlKey: ByteArray, val migrated: Boolean) : Outcome
 
-        /** The plaintext database stays in use this launch; migration is retried next launch. */
+        /** The plaintext database stays in use this launch; migration is retried after backoff. */
         data class Plaintext(val reason: String) : Outcome
 
-        /** The encrypted file can't be opened right now: run in memory, leave the file untouched. */
+        /** The encrypted file can't be opened right now: in-memory, writes blocked, file untouched. */
         data class InMemory(val reason: String) : Outcome
     }
 
     fun prepare(main: File): Outcome {
         val engineOk = runCatching { engine.load() }.isSuccess
-        recover(main)
+        val recovered = recover(main)
+        if (recovered == Recovered.Stuck) {
+            health.recordMigrationFailure("recover")
+            return Outcome.InMemory("recover")
+        }
         val kind = kind(main)
         if (kind == Kind.MISSING) companions(main).forEach(::shred)
-        if (!engineOk) return if (kind == Kind.ENCRYPTED) Outcome.InMemory("engine") else Outcome.Plaintext("engine")
+        if (!engineOk) {
+            return if (kind == Kind.ENCRYPTED) {
+                health.recordMigrationFailure("engine")
+                Outcome.InMemory("engine")
+            } else {
+                health.recordMigrationFailure("engine")
+                Outcome.Plaintext("engine")
+            }
+        }
         return when (kind) {
-            Kind.MISSING -> keyForNewDatabase()?.let { Outcome.Encrypted(it, migrated = false) } ?: Outcome.Plaintext("key")
+            Kind.MISSING -> keyForNewDatabase()?.let {
+                health.recordSuccess()
+                Outcome.Encrypted(it, migrated = false)
+            } ?: Outcome.Plaintext("key")
             Kind.ENCRYPTED -> openEncrypted(main)
             Kind.PLAINTEXT -> migrate(main)
         }
@@ -105,21 +131,38 @@ class KeyboardDbMigrator(
     private fun openEncrypted(main: File): Outcome {
         val sqlKey = when (val r = key.read()) {
             is KeyboardDbKey.Read.Ok -> r.sqlKey
-            KeyboardDbKey.Read.Unavailable -> return Outcome.InMemory("key")
+            KeyboardDbKey.Read.Unavailable -> {
+                health.recordUnavailable()
+                return Outcome.InMemory("key")
+            }
             KeyboardDbKey.Read.Lost -> null
         }
-        if (sqlKey != null && engine.canOpen(main, sqlKey)) return Outcome.Encrypted(sqlKey, migrated = false)
-        // The key can't open this file and never will (lost key, or a damaged file). Keep the
-        // file, out of the way, and start a new database so the keyboard keeps working.
+        if (sqlKey != null) {
+            when (engine.canOpen(main, sqlKey)) {
+                OpenProbe.Ok -> {
+                    health.recordSuccess()
+                    return Outcome.Encrypted(sqlKey, migrated = false)
+                }
+                OpenProbe.Transient -> return Outcome.InMemory("transient")
+                OpenProbe.Unopenable -> Unit
+            }
+        }
         setAside(main)
-        return (sqlKey ?: runCatching { key.create() }.getOrNull())
-            ?.let { Outcome.Encrypted(it, migrated = false) } ?: Outcome.InMemory("key")
+        val newKey = if (sqlKey != null) sqlKey else {
+            key.moveAside(now())
+            runCatching { key.create() }.getOrNull()
+        }
+        return newKey?.let {
+            health.recordSuccess()
+            Outcome.Encrypted(it, migrated = false)
+        } ?: Outcome.InMemory("key")
     }
 
     private fun migrate(main: File): Outcome {
+        if (!health.shouldRetryMigration()) return Outcome.Plaintext("backoff")
         val tmp = sibling(main, TMP)
         val old = sibling(main, OLD)
-        val sqlKey = keyForNewDatabase() ?: return Outcome.Plaintext("key")
+        val sqlKey = keyForNewDatabase() ?: return Outcome.Plaintext("key").also { health.recordMigrationFailure("key") }
         try {
             listOf(tmp).plus(companions(tmp)).forEach { it.delete() }
             val source = engine.exportEncrypted(main, tmp, sqlKey)
@@ -129,6 +172,7 @@ class KeyboardDbMigrator(
             fsync(tmp)
         } catch (t: Throwable) {
             listOf(tmp).plus(companions(tmp)).forEach { it.delete() }
+            health.recordMigrationFailure("copy")
             return Outcome.Plaintext("copy")
         }
         try {
@@ -138,10 +182,17 @@ class KeyboardDbMigrator(
             check(tmp.renameTo(main)) { "rename" }
             syncDir(main.parentFile)
         } catch (t: Throwable) {
-            recover(main)
-            return if (kind(main) == Kind.ENCRYPTED) Outcome.Encrypted(sqlKey, migrated = true) else Outcome.Plaintext("swap")
+            val recovered = recover(main)
+            if (recovered == Recovered.Swapped || kind(main) == Kind.ENCRYPTED && validReplacement(main, old)) {
+                shredAll(old)
+                health.recordSuccess()
+                return Outcome.Encrypted(sqlKey, migrated = true)
+            }
+            health.recordMigrationFailure("swap")
+            return if (recovered == Recovered.Stuck) Outcome.InMemory("swap") else Outcome.Plaintext("swap")
         }
         shredAll(old)
+        health.recordSuccess()
         return Outcome.Encrypted(sqlKey, migrated = true)
     }
 
@@ -158,40 +209,89 @@ class KeyboardDbMigrator(
         return if (startsWithMagic(wal, (WAL_HEADER + FRAME_HEADER).toLong())) Kind.PLAINTEXT else Kind.ENCRYPTED
     }
 
-    /** Finishes or rolls back a swap a crash interrupted, and clears partial copies. Idempotent. */
-    internal fun recover(main: File) {
+    enum class Recovered { Ok, Swapped, Stuck }
+
+    /**
+     * Finishes or rolls back a swap a crash interrupted, and clears partial copies. Idempotent.
+     * The leftover plaintext is shredded only after [main] verifies as an encrypted copy with
+     * matching integrity, row counts and schema size.
+     */
+    internal fun recover(main: File): Recovered {
         val tmp = sibling(main, TMP)
         val old = sibling(main, OLD)
+        var result = Recovered.Ok
         if (old.exists()) {
             if (!main.exists()) {
-                // Crashed between the two renames: put the plaintext back; the copy is redone.
                 companions(main).forEach(::shred)
-                if (old.renameTo(main)) syncDir(main.parentFile)
-            } else {
-                // The swap finished (or main is newer than the moved-aside copy): shred the old plaintext.
+                result = if (old.renameTo(main)) {
+                    syncDir(main.parentFile)
+                    Recovered.Ok
+                } else {
+                    Recovered.Stuck
+                }
+            } else if (validReplacement(main, old)) {
                 shredAll(old)
+                result = Recovered.Swapped
+            } else {
+                // main is not a verified replacement: get the plaintext back in place.
+                val junk = File(main.path + ".$UNCONFIRMED-${now()}")
+                companions(main).forEach { f -> f.renameTo(File(junk.path + f.name.removePrefix(main.name))) }
+                result = if (main.renameTo(junk) && old.renameTo(main)) {
+                    syncDir(main.parentFile)
+                    capAsides(main.parentFile, "${main.name}.$UNCONFIRMED-")
+                    Recovered.Ok
+                } else {
+                    Recovered.Stuck
+                }
             }
         }
         listOf(tmp).plus(companions(tmp)).forEach { it.delete() }
+        return result
+    }
+
+    /** Integrity check plus row counts and schema size: [main] is a complete encrypted copy of [old]. */
+    internal fun validReplacement(main: File, old: File): Boolean {
+        val sqlKey = (key.read() as? KeyboardDbKey.Read.Ok)?.sqlKey ?: return false
+        if (kind(main) != Kind.ENCRYPTED) return false
+        val copy = runCatching { engine.verify(main, sqlKey) }.getOrNull() ?: return false
+        val source = runCatching { engine.snapshotPlaintext(old) }.getOrNull() ?: return false
+        return copy == source
     }
 
     /** The current key when one opens, otherwise a new one (only safe when no encrypted file needs the old key). */
-    private fun keyForNewDatabase(): ByteArray? =
-        (key.read() as? KeyboardDbKey.Read.Ok)?.sqlKey ?: runCatching { key.create() }.getOrNull()
+    private fun keyForNewDatabase(): ByteArray? = when (val r = key.read()) {
+        is KeyboardDbKey.Read.Ok -> r.sqlKey
+        KeyboardDbKey.Read.Lost -> {
+            key.moveAside(now())
+            runCatching { key.create() }.getOrNull()
+        }
+        KeyboardDbKey.Read.Unavailable -> null
+    }
 
-    private fun setAside(main: File) {
+    fun setAside(main: File) {
         val stamp = now()
         val aside = File(main.path + ".$UNREADABLE-$stamp")
         if (main.renameTo(aside)) {
             companions(main).forEach { f -> f.renameTo(File(aside.path + f.name.removePrefix(main.name))) }
             syncDir(main.parentFile)
+            capAsides(main.parentFile, "${main.name}.$UNREADABLE-")
         }
+    }
+
+    /** Moves the live DB and its wrapped key aside and starts a new encrypted database. */
+    fun resetBroken(main: File): Outcome {
+        setAside(main)
+        key.moveAside(now())
+        health.clear()
+        val sqlKey = runCatching { key.create() }.getOrNull() ?: return Outcome.InMemory("key")
+        return Outcome.Encrypted(sqlKey, migrated = false)
     }
 
     companion object {
         internal const val TMP = "kbcrypt-tmp"
         internal const val OLD = "kbcrypt-plain"
         internal const val UNREADABLE = "kbcrypt-unreadable"
+        internal const val UNCONFIRMED = "kbcrypt-unconfirmed"
         internal val MAGIC = "SQLite format 3\u0000".toByteArray(Charsets.US_ASCII)
         internal const val WAL_HEADER = 32
         internal const val FRAME_HEADER = 24
@@ -237,12 +337,56 @@ class KeyboardDbMigrator(
             syncDir(db.parentFile)
         }
 
+        /** Keeps the newest [KeyboardDbHealth.ASIDE_CAP] asides with [prefix]; shreds older ones. */
+        fun capAsides(dir: File?, prefix: String, cap: Int = KeyboardDbHealth.ASIDE_CAP) {
+            if (dir == null) return
+            val files = dir.listFiles()?.filter { it.name.startsWith(prefix) }
+                ?.sortedByDescending { it.lastModified() } ?: return
+            files.drop(cap).forEach(::shred)
+        }
+
         private fun fsync(file: File) = RandomAccessFile(file, "rw").use { it.fd.sync() }
     }
 }
 
 /** Where the last open landed, for tests and the learned-data screen. */
-data class KeyboardDbStatus(val state: String, val migrated: Boolean, val prepareMillis: Long)
+data class KeyboardDbStatus(
+    val state: String,
+    val migrated: Boolean,
+    val prepareMillis: Long,
+    val unavailableCount: Int = 0,
+    val migrationFailures: Int = 0,
+    val lastFailure: String? = null,
+) {
+    val kind: String get() = state.substringBefore(':')
+    /** True when writes and deletes reach the on-disk database (encrypted or still-plaintext). */
+    val writesReachDisk: Boolean get() = kind == "encrypted" || kind == "plaintext"
+    /** In-memory fallback that must not be cached for the process lifetime. */
+    val ephemeral: Boolean get() = kind == "memory"
+    val offerReset: Boolean get() = unavailableCount >= KeyboardDbHealth.RESET_AFTER
+}
+
+/** User-visible copy for the learned-data screen. No secrets, no file paths. */
+object KeyboardDbUserStatus {
+    fun banner(status: KeyboardDbStatus?): String? = when {
+        status == null || status.kind == "encrypted" -> null
+        status.kind == "memory" ->
+            "The keyboard couldn't open its encrypted data this time. Nothing new is being saved to the phone, and deleting here wouldn't change what's stored."
+        status.state == "plaintext:backoff" || status.kind == "plaintext" ->
+            "The keyboard is still using the unencrypted database while it retries encryption."
+        else -> "The keyboard's saved data isn't in its usual encrypted state."
+    }
+
+    fun refuseDelete(status: KeyboardDbStatus?): String? =
+        if (status?.writesReachDisk == true) null
+        else "The keyboard's saved data isn't available right now, so nothing was deleted on the phone."
+
+    fun resetLabel(status: KeyboardDbStatus?): String? =
+        if (status?.offerReset == true) "Start a new encrypted database" else null
+
+    const val RESET_EXPLAIN =
+        "The unreadable file and its key are moved aside, not deleted. A new empty encrypted database starts. You can only do this after several failed opens."
+}
 
 /**
  * Room's open-helper factory for the keyboard database. Nothing happens at `build()`: the
@@ -285,27 +429,108 @@ class KeyboardDbOpenHelperFactory(
         }
 
         private fun open(): SupportSQLiteOpenHelper {
-            val name = config.name ?: return FrameworkSQLiteOpenHelperFactory().create(config)
+            val name = config.name ?: return neverDeleteFramework().create(config)
             val started = SystemClock.elapsedRealtime()
-            val outcome = migrator(config.context).prepare(config.context.getDatabasePath(name))
+            val migrator = migrator(config.context)
+            val outcome = migrator.prepare(config.context.getDatabasePath(name))
             val ms = SystemClock.elapsedRealtime() - started
             return when (outcome) {
                 is KeyboardDbMigrator.Outcome.Encrypted -> {
-                    onStatus(KeyboardDbStatus("encrypted", outcome.migrated, ms))
-                    engine.factory(outcome.sqlKey).create(config)
+                    onStatus(status("encrypted", outcome.migrated, ms, migrator.health))
+                    engine.factory(outcome.sqlKey) { file -> migrator.setAside(file) }.create(config)
                 }
                 is KeyboardDbMigrator.Outcome.Plaintext -> {
-                    onStatus(KeyboardDbStatus("plaintext:${outcome.reason}", false, ms))
-                    FrameworkSQLiteOpenHelperFactory().create(config)
+                    onStatus(status("plaintext:${outcome.reason}", false, ms, migrator.health))
+                    neverDeleteFramework { file -> migrator.setAside(file) }.create(config)
                 }
                 is KeyboardDbMigrator.Outcome.InMemory -> {
-                    onStatus(KeyboardDbStatus("memory:${outcome.reason}", false, ms))
-                    FrameworkSQLiteOpenHelperFactory().create(
-                        SupportSQLiteOpenHelper.Configuration.builder(config.context)
-                            .name(null).callback(config.callback).noBackupDirectory(config.useNoBackupDirectory).build()
+                    onStatus(status("memory:${outcome.reason}", false, ms, migrator.health))
+                    WriteBlockingOpenHelper(
+                        neverDeleteFramework().create(
+                            SupportSQLiteOpenHelper.Configuration.builder(config.context)
+                                .name(null).callback(config.callback)
+                                .noBackupDirectory(config.useNoBackupDirectory)
+                                .allowDataLossOnRecovery(config.allowDataLossOnRecovery)
+                                .build()
+                        )
                     )
                 }
             }
         }
     }
+}
+
+internal fun status(state: String, migrated: Boolean, ms: Long, health: KeyboardDbHealth?) = KeyboardDbStatus(
+    state = state,
+    migrated = migrated,
+    prepareMillis = ms,
+    unavailableCount = health?.unavailableCount ?: 0,
+    migrationFailures = health?.migrationFailures ?: 0,
+    lastFailure = health?.lastReason,
+)
+
+/** Framework factory whose Room callback never deletes the file on corruption. */
+internal fun neverDeleteFramework(onCorruption: (File) -> Unit = {}): SupportSQLiteOpenHelper.Factory =
+    SupportSQLiteOpenHelper.Factory { config ->
+        val cb = config.callback
+        val wrapped = object : SupportSQLiteOpenHelper.Callback(cb.version) {
+            override fun onConfigure(db: SupportSQLiteDatabase) = cb.onConfigure(db)
+            override fun onCreate(db: SupportSQLiteDatabase) = cb.onCreate(db)
+            override fun onUpgrade(db: SupportSQLiteDatabase, oldVersion: Int, newVersion: Int) = cb.onUpgrade(db, oldVersion, newVersion)
+            override fun onDowngrade(db: SupportSQLiteDatabase, oldVersion: Int, newVersion: Int) = cb.onDowngrade(db, oldVersion, newVersion)
+            override fun onOpen(db: SupportSQLiteDatabase) = cb.onOpen(db)
+            override fun onCorruption(db: SupportSQLiteDatabase) {
+                val path = db.path ?: return
+                if (path.isEmpty() || path == ":memory:") return
+                onCorruption(File(path))
+            }
+        }
+        FrameworkSQLiteOpenHelperFactory().create(
+            SupportSQLiteOpenHelper.Configuration.builder(config.context)
+                .name(config.name)
+                .callback(wrapped)
+                .noBackupDirectory(config.useNoBackupDirectory)
+                .allowDataLossOnRecovery(config.allowDataLossOnRecovery)
+                .build()
+        )
+    }
+
+/** An in-memory helper whose writes are no-ops, so nothing is silently "learned" or "deleted". */
+internal class WriteBlockingOpenHelper(private val inner: SupportSQLiteOpenHelper) : SupportSQLiteOpenHelper {
+    override val databaseName: String? get() = inner.databaseName
+    override fun setWriteAheadLoggingEnabled(enabled: Boolean) = inner.setWriteAheadLoggingEnabled(enabled)
+    override val writableDatabase: SupportSQLiteDatabase get() = WriteBlockingDatabase(inner.writableDatabase)
+    override val readableDatabase: SupportSQLiteDatabase get() = WriteBlockingDatabase(inner.readableDatabase)
+    override fun close() = inner.close()
+}
+
+internal class WriteBlockingDatabase(private val inner: SupportSQLiteDatabase) : SupportSQLiteDatabase by inner {
+    override fun insert(table: String, conflictAlgorithm: Int, values: ContentValues): Long = -1L
+    override fun delete(table: String, whereClause: String?, whereArgs: Array<out Any?>?): Int = 0
+    override fun update(table: String, conflictAlgorithm: Int, values: ContentValues, whereClause: String?, whereArgs: Array<out Any?>?): Int = 0
+    override fun execSQL(sql: String) { if (!isMutatingSql(sql)) inner.execSQL(sql) }
+    override fun execSQL(sql: String, bindArgs: Array<out Any?>) { if (!isMutatingSql(sql)) inner.execSQL(sql, bindArgs) }
+    override fun compileStatement(sql: String): SupportSQLiteStatement =
+        if (isMutatingSql(sql)) NoOpStatement else inner.compileStatement(sql)
+}
+
+internal fun isMutatingSql(sql: String): Boolean {
+    val head = sql.trimStart().takeWhile { it.isLetter() }.uppercase()
+    if (head in setOf("SELECT", "PRAGMA", "BEGIN", "COMMIT", "END", "ROLLBACK", "SAVEPOINT", "RELEASE", "EXPLAIN")) return false
+    return Regex("(?is)\\b(INSERT|UPDATE|DELETE|REPLACE|CREATE|DROP|ALTER)\\b").containsMatchIn(sql)
+}
+
+private object NoOpStatement : SupportSQLiteStatement {
+    override fun execute() = Unit
+    override fun executeUpdateDelete() = 0
+    override fun executeInsert() = -1L
+    override fun simpleQueryForLong() = 0L
+    override fun simpleQueryForString(): String? = null
+    override fun bindNull(index: Int) = Unit
+    override fun bindLong(index: Int, value: Long) = Unit
+    override fun bindDouble(index: Int, value: Double) = Unit
+    override fun bindString(index: Int, value: String) = Unit
+    override fun bindBlob(index: Int, value: ByteArray) = Unit
+    override fun clearBindings() = Unit
+    override fun close() = Unit
 }

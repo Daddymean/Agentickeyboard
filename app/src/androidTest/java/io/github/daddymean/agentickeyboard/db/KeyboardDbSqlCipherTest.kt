@@ -56,6 +56,7 @@ class KeyboardDbSqlCipherTest {
         val db = build(encrypted = true)
         assertEquals(500, db.userVocabularyDao().count())
         assertEquals("encrypted", status?.state)
+        android.util.Log.i("KeyboardDbSqlCipherTest", "migrate prepare ms=${status!!.prepareMillis}")
         assertTrue(status!!.migrated)
         assertTrue(AppDatabase.enableSecureDelete(db.openHelper.writableDatabase))
         db.close()
@@ -77,7 +78,29 @@ class KeyboardDbSqlCipherTest {
     fun wrongKeyNeverDeletesTheFile() {
         build(encrypted = true).apply { runBlocking { KeyboardRepository(this@apply).insertWords(listOf(UserVocabulary("a", 1, 1))) }; close() }
         val bytes = main.readBytes()
-        assertFalse(SqlCipherEngine().canOpen(main, KeyboardDbKey.sqlKey(ByteArray(32))))
+        assertEquals(OpenProbe.Unopenable, SqlCipherEngine().canOpen(main, KeyboardDbKey.sqlKey(ByteArray(32))))
         assertTrue(bytes.contentEquals(main.readBytes()))
+    }
+
+    @Test
+    fun aDamagedPageDoesNotDeleteTheDatabase() = runBlocking {
+        val db = build(encrypted = true)
+        KeyboardRepository(db).insertWords((1..800).map { UserVocabulary("word$it", it, it.toLong()) })
+        db.close()
+        val original = main.readBytes()
+        require(original.size > 8192)
+        java.io.RandomAccessFile(main, "rw").use { f ->
+            f.seek(6000)
+            f.write(byteArrayOf(0x5A, 0x5A, 0x5A, 0x5A, 0x5A, 0x5A, 0x5A, 0x5A))
+        }
+        val again = build(encrypted = true)
+        runCatching { again.userVocabularyDao().count() }
+        again.close()
+        val survivors = main.parentFile!!.listFiles()!!.filter {
+            it.name.startsWith(name) && !it.name.endsWith("-shm") && it.length() >= original.size / 2
+        }
+        assertTrue("encrypted file must survive a damaged page, found ${survivors.map { it.name }}", survivors.isNotEmpty())
+        // The damaged bytes are still on disk (original path or an aside), never deleted.
+        assertTrue(survivors.any { f -> f.readBytes().let { it.size >= 6008 && it[6000] == 0x5A.toByte() } || f == main })
     }
 }

@@ -508,24 +508,41 @@ abstract class AppDatabase : RoomDatabase() {
             return on
         }
 
+        const val NAME = "agentic_keyboard_database"
+
         /** Where the last open of the keyboard database landed (encrypted, plaintext fallback, in memory). */
         @Volatile
         var lastStatus: KeyboardDbStatus? = null
-            private set
+            internal set
 
-        internal fun encryptedFactory(app: Context, engine: KeyboardDbEngine = SqlCipherEngine(), wrapper: DbKeyWrapper = KeystoreDbKeyWrapper()) =
-            KeyboardDbOpenHelperFactory(
-                migrator = { KeyboardDbMigrator(KeyboardDbKey(KeyboardDbKey.keyFile(app.noBackupFilesDir), wrapper), engine) },
-                engine = engine,
-                onStatus = { lastStatus = it }
-            )
+        internal fun encryptedFactory(
+            app: Context,
+            engine: KeyboardDbEngine = SqlCipherEngine(),
+            wrapper: DbKeyWrapper = KeystoreDbKeyWrapper(),
+            now: () -> Long = System::currentTimeMillis,
+            health: KeyboardDbHealth = KeyboardDbHealth(KeyboardDbHealth.file(KeyboardDbKey.keyFile(app.noBackupFilesDir).parentFile!!), now),
+        ) = KeyboardDbOpenHelperFactory(
+            migrator = { KeyboardDbMigrator(KeyboardDbKey(KeyboardDbKey.keyFile(app.noBackupFilesDir), wrapper), engine, now, health) },
+            engine = engine,
+            onStatus = { lastStatus = it }
+        )
+
+        /** True when a cached instance was opened only as a temporary in-memory fallback. */
+        internal fun shouldRecycle(status: KeyboardDbStatus?): Boolean = status?.ephemeral == true
 
         fun getDatabase(context: Context): AppDatabase {
-            return INSTANCE ?: synchronized(this) {
+            val app = context.applicationContext
+            synchronized(this) {
+                val existing = INSTANCE
+                if (existing != null && !shouldRecycle(lastStatus)) return existing
+                if (existing != null) {
+                    runCatching { existing.close() }
+                    INSTANCE = null
+                }
                 val instance = Room.databaseBuilder(
-                    context.applicationContext,
+                    app,
                     AppDatabase::class.java,
-                    "agentic_keyboard_database"
+                    NAME
                 )
                 // Learned vocabulary/corrections ARE the product: real migrations
                 // from v4 on. Destructive fallback stays only for the pre-v4
@@ -535,11 +552,33 @@ abstract class AppDatabase : RoomDatabase() {
                 .addCallback(SECURE_DELETE)
                 // KEYBOARD-048: SQLCipher, with a one-time in-place migration of the old
                 // plaintext file. secure_delete and the post-delete WAL checkpoint work as before.
-                .openHelperFactory(encryptedFactory(context.applicationContext))
+                .openHelperFactory(encryptedFactory(app))
                 .build()
                 INSTANCE = instance
-                instance
+                return instance
             }
+        }
+
+        /**
+         * One-tap recovery after several failed key opens: the unreadable file and its key are
+         * moved aside (never deleted) and a new empty encrypted database starts.
+         */
+        fun resetBrokenDatabase(context: Context): Boolean = synchronized(this) {
+            val app = context.applicationContext
+            INSTANCE?.let { runCatching { it.close() } }
+            INSTANCE = null
+            val engine = SqlCipherEngine()
+            val wrapper = KeystoreDbKeyWrapper()
+            val keyFile = KeyboardDbKey.keyFile(app.noBackupFilesDir)
+            val now = System::currentTimeMillis
+            val health = KeyboardDbHealth(KeyboardDbHealth.file(keyFile.parentFile!!), now)
+            val outcome = KeyboardDbMigrator(KeyboardDbKey(keyFile, wrapper), engine, now, health)
+                .resetBroken(app.getDatabasePath(NAME))
+            lastStatus = status(
+                if (outcome is KeyboardDbMigrator.Outcome.Encrypted) "encrypted" else "memory:key",
+                false, 0, health
+            )
+            outcome is KeyboardDbMigrator.Outcome.Encrypted
         }
     }
 }

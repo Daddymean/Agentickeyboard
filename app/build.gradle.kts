@@ -18,7 +18,10 @@ android {
     // older devices.
     minSdk = 34
     targetSdk = 36
-    versionCode = 1
+    // KEYBOARD-048: must be > any pre-encryption APK (all of which shipped as 1).
+    // Android then refuses a downgrade instead of letting an old build open the
+    // encrypted file with framework SQLite and delete it as "corrupt".
+    versionCode = 2
     versionName = "1.0"
 
     testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"

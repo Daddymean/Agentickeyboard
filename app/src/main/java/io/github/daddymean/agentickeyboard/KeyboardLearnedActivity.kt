@@ -13,6 +13,7 @@ import android.widget.ScrollView
 import android.widget.TextView
 import android.widget.Toast
 import io.github.daddymean.agentickeyboard.db.AppDatabase
+import io.github.daddymean.agentickeyboard.db.KeyboardDbUserStatus
 import io.github.daddymean.agentickeyboard.learned.KeyboardEntry
 import io.github.daddymean.agentickeyboard.learned.KeyboardLearnedData
 import io.github.daddymean.agentickeyboard.learned.KeyboardStore
@@ -92,6 +93,10 @@ class KeyboardLearnedActivity : Activity() {
         root.removeAllViews()
         text("What the keyboard has learned", 22f)
         text(NOTICE, 14f)
+        KeyboardDbUserStatus.banner(AppDatabase.lastStatus)?.let { text(it, 14f) }
+        KeyboardDbUserStatus.resetLabel(AppDatabase.lastStatus)?.let { label ->
+            button(label) { confirmReset() }
+        }
         val search = field("Filter the lists you've opened").apply { setText(query); root.addView(this) }
         row("Filter" to { query = search.text.toString().trim(); render() }, "Clear filter" to { query = ""; render() })
         for (store in KeyboardStore.values()) {
@@ -155,8 +160,22 @@ class KeyboardLearnedActivity : Activity() {
         }
     }
 
+    private fun confirmReset() {
+        AlertDialog.Builder(this).setTitle("Start a new encrypted database?")
+            .setMessage(KeyboardDbUserStatus.RESET_EXPLAIN)
+            .setPositiveButton("Start new") { _, _ ->
+                scope.launch {
+                    val ok = withContext(Dispatchers.IO) { AppDatabase.resetBrokenDatabase(this@KeyboardLearnedActivity) }
+                    toast(if (ok) "Started a new encrypted database. The old file was moved aside, not deleted." else "Couldn't start a new database. Try again later.")
+                    reload()
+                }
+            }
+            .setNegativeButton("Cancel", null).showSecure()
+    }
+
     /** Shows what goes and waits for "Delete". Only then runs [run] off the main thread and reloads. */
     private fun confirm(message: String, run: suspend (KeyboardLearnedData) -> Map<KeyboardStore, Int>) {
+        KeyboardDbUserStatus.refuseDelete(AppDatabase.lastStatus)?.let { toast(it); return }
         AlertDialog.Builder(this).setTitle("Delete for good?")
             .setMessage("$message\n\n$AFTER")
             .setPositiveButton("Delete") { _, _ ->
