@@ -576,13 +576,6 @@ abstract class AppDatabase : RoomDatabase() {
         internal val databaseLock = ReentrantLock()
 
         fun getDatabase(context: Context): AppDatabase {
-            // Robolectric starts AgenticKeyboardApplication, whose IO scope can
-            // call getDatabase via LearnedRuleCleanup. That uninstrumented open
-            // would overwrite lastStatus (often as plaintext) and flake tests.
-            if (testIsolation && engineForTests == null) {
-                INSTANCE?.let { return it }
-                error("AppDatabase.getDatabase is blocked during unit tests unless engineForTests is set")
-            }
             val app = context.applicationContext
             val onMain = isCallingThreadMain()
             if (onMain) {
@@ -652,7 +645,10 @@ abstract class AppDatabase : RoomDatabase() {
 
         private fun buildDatabase(app: Context): AppDatabase {
             databaseBuildCount++
-            val generation = openGeneration.get()
+            // During unit-test isolation, an uninstrumented open (no test engine) must
+            // still succeed for later UI tests in the same JVM, but must not overwrite
+            // lastStatus (Robolectric Application cleanup used to flake the db suite).
+            val generation = if (testIsolation && engineForTests == null) -1 else openGeneration.get()
             return Room.databaseBuilder(
                 app,
                 AppDatabase::class.java,
