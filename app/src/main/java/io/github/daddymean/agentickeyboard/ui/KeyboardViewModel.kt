@@ -933,6 +933,28 @@ class KeyboardViewModel(
         !_isLearningPaused.value && !_isSensitiveField.value
 
     /**
+     * Grammar fix and tone check write a writing-log row only when learning is
+     * allowed: not paused, and not in a password, incognito, sensitive or
+     * never-learn (twin privacy-blocked) field. User-initiated imports are
+     * not routed through this helper.
+     */
+    private suspend fun maybeSaveWritingLog(
+        originalText: String,
+        sentiment: String,
+        toneScore: Float
+    ) {
+        if (!isLearningAllowed()) return
+        repository.insertLog(
+            WritingLog(
+                originalText = originalText,
+                sentiment = sentiment,
+                toneScore = toneScore,
+                wordCount = originalText.wordCount()
+            )
+        )
+    }
+
+    /**
      * Parse word usage and count them on-device
      */
     fun recordWordUsage(text: String) {
@@ -1362,15 +1384,8 @@ class KeyboardViewModel(
                     recordWordUsage(result.corrected)
                 }
 
-                // Save log for personalized model export
-                repository.insertLog(
-                    WritingLog(
-                        originalText = text,
-                        sentiment = "Corrected",
-                        toneScore = 0.9f,
-                        wordCount = text.wordCount()
-                    )
-                )
+                // Save log for personalized model export (skipped while learning is paused)
+                maybeSaveWritingLog(text, "Corrected", 0.9f)
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
@@ -1695,15 +1710,8 @@ class KeyboardViewModel(
                 // Record word usage of what was analyzed
                 recordWordUsage(text)
 
-                // Save log for personalized style insights
-                repository.insertLog(
-                    WritingLog(
-                        originalText = text,
-                        sentiment = result.sentiment,
-                        toneScore = result.toneScore,
-                        wordCount = text.wordCount()
-                    )
-                )
+                // Save log for personalized style insights (skipped while learning is paused)
+                maybeSaveWritingLog(text, result.sentiment, result.toneScore)
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {

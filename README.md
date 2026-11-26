@@ -39,7 +39,7 @@ flight.
 - **Password fields are detected automatically** — AI features, logging, and learning all shut off in secure fields.
 - **Offline mode toggle** blocks all cloud calls; local fallbacks keep the tools functional. The toggle (and all settings) persist across restarts.
 - **Always-on cloud request redaction** — every string value in the outgoing Gemini request is sanitized immediately before transmission (the JSON stays valid), replacing labelled secrets (`password=`, `api_key:`) and bare credential tokens (private keys, `Bearer`, JWT, Google API/OAuth, GitHub classic and fine-grained, GitLab, Slack, Stripe, OpenAI and AWS keys), emails, phone numbers, financial identifiers, SSNs, IP addresses, URLs, and long numeric IDs with neutral markers.
-- **Pause learning** — an incognito switch for the personalization engine.
+- **Pause learning** — an incognito switch for the personalization engine: stops vocabulary, word-pair and correction learning, and stops grammar fix and tone check from saving to the writing log.
 - **Data retention** — writing logs auto-expire after 7/30/90 days (your choice).
 - **Cloud backup and device transfer disabled** — your typing history never leaves the device via Android cloud backup or phone-to-phone transfer (all data domains are excluded in `data_extraction_rules.xml` and `backup_rules.xml`).
 - **No request logging in release builds**; the API key is sent as a header and redacted from debug logs.
