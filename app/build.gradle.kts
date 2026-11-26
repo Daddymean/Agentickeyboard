@@ -162,6 +162,9 @@ dependencies {
     exclude(group = "org.jetbrains.kotlin", module = "kotlin-reflect")
   }
   implementation(libs.moshi.core)
+  // KEYBOARD-048: SQLCipher 4 (BSD-3-Clause, Zetetic LLC) encrypts agentic_keyboard_database
+  // with a random key wrapped by the Android Keystore; see db/KeyboardDbCrypto.kt.
+  implementation(libs.sqlcipher.android)
   implementation(libs.okhttp)
   // implementation(libs.play.services.location)
   implementation(libs.retrofit)

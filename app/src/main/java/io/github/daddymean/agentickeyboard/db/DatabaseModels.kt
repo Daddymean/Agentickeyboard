@@ -508,6 +508,18 @@ abstract class AppDatabase : RoomDatabase() {
             return on
         }
 
+        /** Where the last open of the keyboard database landed (encrypted, plaintext fallback, in memory). */
+        @Volatile
+        var lastStatus: KeyboardDbStatus? = null
+            private set
+
+        internal fun encryptedFactory(app: Context, engine: KeyboardDbEngine = SqlCipherEngine(), wrapper: DbKeyWrapper = KeystoreDbKeyWrapper()) =
+            KeyboardDbOpenHelperFactory(
+                migrator = { KeyboardDbMigrator(KeyboardDbKey(KeyboardDbKey.keyFile(app.noBackupFilesDir), wrapper), engine) },
+                engine = engine,
+                onStatus = { lastStatus = it }
+            )
+
         fun getDatabase(context: Context): AppDatabase {
             return INSTANCE ?: synchronized(this) {
                 val instance = Room.databaseBuilder(
@@ -521,6 +533,9 @@ abstract class AppDatabase : RoomDatabase() {
                 .addMigrations(MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8)
                 .fallbackToDestructiveMigrationFrom(true, 1, 2, 3)
                 .addCallback(SECURE_DELETE)
+                // KEYBOARD-048: SQLCipher, with a one-time in-place migration of the old
+                // plaintext file. secure_delete and the post-delete WAL checkpoint work as before.
+                .openHelperFactory(encryptedFactory(context.applicationContext))
                 .build()
                 INSTANCE = instance
                 instance
