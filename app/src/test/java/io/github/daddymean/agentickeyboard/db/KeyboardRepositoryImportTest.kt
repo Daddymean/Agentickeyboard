@@ -34,6 +34,7 @@ class KeyboardRepositoryImportTest {
 
     @Before
     fun setUp() {
+        AppDatabase.resetForTests()
         val context = ApplicationProvider.getApplicationContext<Context>()
         db = Room.inMemoryDatabaseBuilder(context, AppDatabase::class.java).build()
         repository = KeyboardRepository(db)
@@ -42,7 +43,7 @@ class KeyboardRepositoryImportTest {
     @After
     fun tearDown() {
         db.close()
-        AppDatabase.lastStatus = null
+        AppDatabase.resetForTests()
     }
 
     @Test
@@ -163,6 +164,7 @@ class KeyboardRepositoryImportTest {
         }
         assertTrue(exported.isFailure)
         assertTrue(exported.exceptionOrNull()!!.message!!.contains("isn't available"))
+        AppDatabase.lastStatus = KeyboardDbStatus("memory:key", false, 0, unavailableCount = 3)
         val imported = runCatching { transfer.apply(opened, KeyboardPassportImportMode.MERGE) }
         assertTrue(imported.isFailure)
         assertTrue(imported.exceptionOrNull()!!.message!!.contains("isn't available"))

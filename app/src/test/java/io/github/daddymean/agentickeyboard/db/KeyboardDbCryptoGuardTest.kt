@@ -33,7 +33,7 @@ class KeyboardDbCryptoGuardTest {
 
     @Test
     fun keyboardDatabaseOpensThroughTheEncryptingFactory() {
-        assertTrue(models.contains(".openHelperFactory(encryptedFactory(app, engineForTests ?: SqlCipherEngine(), wrapperForTests ?: KeystoreDbKeyWrapper()))"))
+        assertTrue(models.contains(".openHelperFactory(encryptedFactory(app, engineForTests ?: SqlCipherEngine(), wrapperForTests ?: KeystoreDbKeyWrapper(), statusGeneration = generation))"))
         assertTrue(models.contains(".addCallback(SECURE_DELETE)"))
         assertTrue(models.contains("engine: KeyboardDbEngine = SqlCipherEngine()"))
         assertTrue(models.contains("wrapper: DbKeyWrapper = KeystoreDbKeyWrapper()"))

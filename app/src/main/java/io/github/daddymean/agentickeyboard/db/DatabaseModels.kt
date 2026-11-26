@@ -25,6 +25,7 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.flatMapLatest
 import java.util.concurrent.Executor
+import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.locks.ReentrantLock
 
 @Entity(tableName = "shortcut_templates")
@@ -519,9 +520,14 @@ abstract class AppDatabase : RoomDatabase() {
         const val NAME = "agentic_keyboard_database"
 
         /** Where the last open of the keyboard database landed (encrypted, plaintext fallback, in memory). */
+        internal val statusLock = Any()
         @Volatile
-        var lastStatus: KeyboardDbStatus? = null
-            internal set
+        private var lastStatusField: KeyboardDbStatus? = null
+        var lastStatus: KeyboardDbStatus?
+            get() = lastStatusField
+            internal set(value) {
+                synchronized(statusLock) { lastStatusField = value }
+            }
 
         internal fun encryptedFactory(
             app: Context,
@@ -529,10 +535,13 @@ abstract class AppDatabase : RoomDatabase() {
             wrapper: DbKeyWrapper = KeystoreDbKeyWrapper(),
             now: () -> Long = System::currentTimeMillis,
             health: KeyboardDbHealth = KeyboardDbHealth(KeyboardDbHealth.file(KeyboardDbKey.keyFile(app.noBackupFilesDir).parentFile!!), now),
+            statusGeneration: Int? = null,
         ) = KeyboardDbOpenHelperFactory(
             migrator = { KeyboardDbMigrator(KeyboardDbKey(KeyboardDbKey.keyFile(app.noBackupFilesDir), wrapper), engine, now, health) },
             engine = engine,
-            onStatus = { lastStatus = it }
+            onStatus = { status ->
+                if (statusGeneration == null || statusGeneration == openGeneration.get()) lastStatus = status
+            }
         )
 
         /**
@@ -551,8 +560,14 @@ abstract class AppDatabase : RoomDatabase() {
             val main = Looper.getMainLooper()
             main != null && main.thread == Thread.currentThread()
         }
+        internal var fallbackRetryDelay: (Long) -> Unit = { ms -> if (ms > 0) Thread.sleep(ms) }
+        @Volatile private var fallbackRetryThread: Thread? = null
         internal var fallbackRetryExecutor: Executor = Executor { r ->
-            Thread(r, "kb-db-fallback").apply { isDaemon = true }.start()
+            Thread(r, "kb-db-fallback").apply {
+                isDaemon = true
+                fallbackRetryThread = this
+                start()
+            }
         }
         @Volatile private var fallbackRetryScheduled = false
         @Volatile private var fallbackApp: Context? = null
@@ -561,6 +576,13 @@ abstract class AppDatabase : RoomDatabase() {
         internal val databaseLock = ReentrantLock()
 
         fun getDatabase(context: Context): AppDatabase {
+            // Robolectric starts AgenticKeyboardApplication, whose IO scope can
+            // call getDatabase via LearnedRuleCleanup. That uninstrumented open
+            // would overwrite lastStatus (often as plaintext) and flake tests.
+            if (testIsolation && engineForTests == null) {
+                INSTANCE?.let { return it }
+                error("AppDatabase.getDatabase is blocked during unit tests unless engineForTests is set")
+            }
             val app = context.applicationContext
             val onMain = isCallingThreadMain()
             if (onMain) {
@@ -613,12 +635,14 @@ abstract class AppDatabase : RoomDatabase() {
             fallbackApp = app.applicationContext
             if (fallbackRetryScheduled) return
             fallbackRetryScheduled = true
+            val generation = openGeneration.get()
             fallbackRetryExecutor.execute {
                 try {
                     val last = lastFallbackRetryElapsed
                     val wait = if (last == 0L) FALLBACK_RETRY_INTERVAL_MS
                     else (FALLBACK_RETRY_INTERVAL_MS - (nowElapsed() - last)).coerceAtLeast(0L)
-                    if (wait > 0) Thread.sleep(wait)
+                    if (wait > 0) fallbackRetryDelay(wait)
+                    if (generation != openGeneration.get()) return@execute
                     fallbackApp?.let { getDatabase(it) }
                 } finally {
                     fallbackRetryScheduled = false
@@ -628,6 +652,7 @@ abstract class AppDatabase : RoomDatabase() {
 
         private fun buildDatabase(app: Context): AppDatabase {
             databaseBuildCount++
+            val generation = openGeneration.get()
             return Room.databaseBuilder(
                 app,
                 AppDatabase::class.java,
@@ -641,7 +666,7 @@ abstract class AppDatabase : RoomDatabase() {
             .addCallback(SECURE_DELETE)
             // KEYBOARD-048: SQLCipher, with a one-time in-place migration of the old
             // plaintext file. secure_delete and the post-delete WAL checkpoint work as before.
-            .openHelperFactory(encryptedFactory(app, engineForTests ?: SqlCipherEngine(), wrapperForTests ?: KeystoreDbKeyWrapper()))
+            .openHelperFactory(encryptedFactory(app, engineForTests ?: SqlCipherEngine(), wrapperForTests ?: KeystoreDbKeyWrapper(), statusGeneration = generation))
             .build()
         }
 
@@ -649,56 +674,96 @@ abstract class AppDatabase : RoomDatabase() {
         internal var engineForTests: KeyboardDbEngine? = null
         @Volatile
         internal var wrapperForTests: DbKeyWrapper? = null
+        @Volatile
+        internal var testIsolation: Boolean = false
+        private val openGeneration = AtomicInteger(0)
 
-        internal fun clearInstanceForTests() {
+        /**
+         * Test-only: drop cached instances and statics, join or disable background retry /
+         * integrity work, and install a deterministic clock and no-op executors so one
+         * test cannot leak state into the next.
+         */
+        internal fun resetForTests() {
+            testIsolation = true
+            openGeneration.incrementAndGet()
+            fallbackApp = null
+            fallbackRetryDelay = { }
+            fallbackRetryExecutor = Executor { }
+            fallbackRetryThread?.let { t ->
+                t.interrupt()
+                runCatching { t.join(2_000) }
+            }
+            fallbackRetryThread = null
+            Thread.getAllStackTraces().keys
+                .filter { it.name.startsWith("kb-db-") && it != Thread.currentThread() }
+                .forEach { t ->
+                    t.interrupt()
+                    runCatching { t.join(2_000) }
+                }
+            KeyboardDbMigrator.scheduleFullIntegrity = false
+            KeyboardDbMigrator.fullIntegrityScheduledThisProcess = false
+            KeyboardDbMigrator.fullIntegrityExecutor = Executor { }
+            INSTANCE?.let { runCatching { it.close() } }
             INSTANCE = null
             lastStatus = null
             lastFallbackRetryElapsed = 0L
             fallbackRetryScheduled = false
-            fallbackApp = null
             databaseBuildCount = 0
-            nowElapsed = { SystemClock.elapsedRealtime() }
-            isCallingThreadMain = {
-                val main = Looper.getMainLooper()
-                main != null && main.thread == Thread.currentThread()
-            }
-            KeyboardDbMigrator.scheduleFullIntegrity = false
-            KeyboardDbMigrator.fullIntegrityScheduledThisProcess = false
+            engineForTests = null
+            wrapperForTests = null
+            nowElapsed = { 0L }
+            isCallingThreadMain = { false }
+            fallbackRetryExecutor = Executor { }
+            fallbackRetryDelay = { }
+            KeyboardDbHealth.newLaunch()
+        }
+
+        internal fun clearInstanceForTests() = resetForTests()
+
+        private fun migratorFor(app: Context): KeyboardDbMigrator {
+            val keyFile = KeyboardDbKey.keyFile(app.noBackupFilesDir)
+            return KeyboardDbMigrator(
+                KeyboardDbKey(keyFile, wrapperForTests ?: KeystoreDbKeyWrapper()),
+                engineForTests ?: SqlCipherEngine(),
+            )
         }
 
         fun hasKeptOlderCopies(context: Context): Boolean = keptOlderCopyCount(context) > 0
 
         fun keptOlderCopyCount(context: Context): Int {
             val app = context.applicationContext
-            return KeyboardDbMigrator.listKeptCopies(
-                app.getDatabasePath(NAME),
-                KeyboardDbKey.keyFile(app.noBackupFilesDir),
-            ).size
+            return migratorFor(app).listKeptCopies(app.getDatabasePath(NAME)).size
         }
 
         /** Securely deletes set-aside copies and leftover plaintext. Never touches the live database. */
         fun deleteKeptOlderCopies(context: Context): Boolean {
-            val app = context.applicationContext
-            val main = app.getDatabasePath(NAME)
-            val keyFile = KeyboardDbKey.keyFile(app.noBackupFilesDir)
-            val key = KeyboardDbKey(keyFile, wrapperForTests ?: KeystoreDbKeyWrapper())
-            val engine = engineForTests ?: SqlCipherEngine()
-            val removed = KeyboardDbMigrator(key, engine).shredKeptAsides(main)
-            refreshKeptCopyStatus(app)
-            return removed
+            databaseLock.lock()
+            try {
+                val app = context.applicationContext
+                val removed = migratorFor(app).shredKeptAsides(app.getDatabasePath(NAME))
+                refreshKeptCopyStatus(app)
+                return removed
+            } finally {
+                if (databaseLock.isHeldByCurrentThread) databaseLock.unlock()
+            }
         }
 
         /** Updates the learned-data banner after a delete; does not reopen the database. */
         fun refreshKeptCopyStatus(context: Context) {
-            val current = lastStatus ?: return
             val app = context.applicationContext
             val main = app.getDatabasePath(NAME)
-            val keyFile = KeyboardDbKey.keyFile(app.noBackupFilesDir)
-            lastStatus = current.copy(
-                keptOlderCount = KeyboardDbMigrator.listKeptCopies(main, keyFile).size,
-                plaintextLeftover = KeyboardDbMigrator.leftoverPlaintextExists(main),
-                corruptionFlagged = KeyboardDbMigrator.corruptionFlagged(main),
-            )
+            val migrator = migratorFor(app)
+            val kept = migrator.listKeptCopies(main).size
+            val leftover = migrator.leftoverPlaintextExists(main)
+            val flagged = KeyboardDbMigrator.corruptionFlagged(main)
+            synchronized(statusLock) {
+                val current = lastStatus ?: return
+                lastStatus = current.copy(
+                    keptOlderCount = kept,
+                    plaintextLeftover = leftover,
+                    corruptionFlagged = flagged,
+                )
+            }
         }
 
         /**
@@ -724,7 +789,7 @@ abstract class AppDatabase : RoomDatabase() {
                     when (probe) {
                         OpenProbe.Ok -> {
                             health.recordSuccess()
-                            lastStatus = copiesStatus("encrypted", health, main, keyFile)
+                            lastStatus = copiesStatus("encrypted", health, main, keyFile, migrator)
                             INSTANCE = null
                             instanceGeneration.value = instanceGeneration.value + 1
                             return KeyboardDbResetResult.KeyWorksAgain
@@ -740,7 +805,7 @@ abstract class AppDatabase : RoomDatabase() {
             val outcome = migrator.resetBroken(main)
             lastStatus = copiesStatus(
                 if (outcome is KeyboardDbMigrator.Outcome.Encrypted) "encrypted" else "memory:key",
-                health, main, keyFile,
+                health, main, keyFile, migrator,
             )
             INSTANCE = null
             instanceGeneration.value = instanceGeneration.value + 1
@@ -755,10 +820,16 @@ abstract class AppDatabase : RoomDatabase() {
 /** Outcome of a user-confirmed reset offer on the learned-data screen. */
 enum class KeyboardDbResetResult { CreatedNew, KeyWorksAgain, Failed }
 
-private fun copiesStatus(state: String, health: KeyboardDbHealth, main: java.io.File, keyFile: java.io.File) = status(
+private fun copiesStatus(
+    state: String,
+    health: KeyboardDbHealth,
+    main: java.io.File,
+    keyFile: java.io.File,
+    migrator: KeyboardDbMigrator,
+) = status(
     state, false, 0, health,
-    keptOlderCount = KeyboardDbMigrator.listKeptCopies(main, keyFile).size,
-    plaintextLeftover = KeyboardDbMigrator.leftoverPlaintextExists(main),
+    keptOlderCount = migrator.listKeptCopies(main).size,
+    plaintextLeftover = migrator.leftoverPlaintextExists(main),
     corruptionFlagged = KeyboardDbMigrator.corruptionFlagged(main),
 )
 

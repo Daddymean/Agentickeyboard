@@ -42,10 +42,19 @@ class KeyboardDbEncryptionTest {
 
     @Before
     fun clean() {
-        KeyboardDbMigrator.scheduleFullIntegrity = false
-        KeyboardDbMigrator.fullIntegrityScheduledThisProcess = false
-        AppDatabase.clearInstanceForTests()
-        KeyboardDbHealth.newLaunch()
+        AppDatabase.resetForTests()
+        wrapper.present = true
+        wrapper.failUnwraps = 0
+        wrapper.unwraps = 0
+        wrapper.throwInvalidKey = false
+        wrapper.throwPermanentlyInvalidated = false
+        engine.loadFails = false
+        engine.exportFails = false
+        engine.corruptCopy = false
+        engine.exports = 0
+        engine.forcedProbe = null
+        engine.integrityError = null
+        engine.integrityForced = null
         main.parentFile?.listFiles()?.filter { it.name.startsWith(name) }?.forEach { it.delete() }
         keyFile.parentFile?.listFiles()?.forEach { it.delete() }
         keyFile.delete()
@@ -55,9 +64,7 @@ class KeyboardDbEncryptionTest {
     @After
     fun close() {
         open.forEach { it.close() }
-        AppDatabase.engineForTests = null
-        AppDatabase.wrapperForTests = null
-        AppDatabase.clearInstanceForTests()
+        AppDatabase.resetForTests()
     }
 
     private fun migrator() = KeyboardDbMigrator(KeyboardDbKey(keyFile, wrapper), engine, { clock }, health)
@@ -902,15 +909,50 @@ class KeyboardDbEncryptionTest {
 
         val leftover = File(main.path + ".kbcrypt-plain")
         leftover.writeBytes(ByteArray(8) { 5 })
-        assertEquals(4, KeyboardDbMigrator.listKeptCopies(main, keyFile).size)
+        val m = KeyboardDbMigrator(KeyboardDbKey(keyFile, wrapper), engine, { clock }, health)
+        // main is still plaintext, so the leftover must not be listed or shredded (M1).
+        assertEquals(3, m.listKeptCopies(main).size)
+        assertFalse(m.leftoverPlaintextExists(main))
+        assertTrue(leftover.isFile)
         main.delete()
-        val withoutMain = KeyboardDbMigrator.listKeptCopies(main, keyFile)
+        val withoutMain = m.listKeptCopies(main)
         assertTrue(withoutMain.none { it.db?.name?.endsWith(".kbcrypt-plain") == true || it.db == leftover })
         assertTrue(leftover.isFile)
-        val m = KeyboardDbMigrator(KeyboardDbKey(keyFile, wrapper), engine, { clock }, health)
         m.shredKeptAsides(main)
         assertTrue("only remaining plaintext must be kept", leftover.isFile)
         leftover.delete()
+    }
+
+    @Test
+    fun leftoverPlaintextIsNotListedOrShreddedUnlessMainIsVerifiedEncrypted() = runBlocking {
+        seedPlaintext()
+        val leftover = File(main.path + ".kbcrypt-plain")
+        leftover.writeBytes(main.readBytes())
+        // Unverified main (recover() would return Stuck if the rename-back failed):
+        // junk bytes next to the only good plaintext copy.
+        main.writeBytes(ByteArray(64) { 0xAB.toByte() })
+        val m = migrator()
+        assertFalse(m.verifiedEncrypted(main))
+        assertFalse(m.leftoverPlaintextExists(main))
+        assertTrue(m.listKeptCopies(main).none { it.db == leftover || it.db?.name?.endsWith(".kbcrypt-plain") == true })
+        val leftoverBytes = leftover.readBytes()
+        m.shredKeptAsides(main)
+        assertTrue("Stuck-recovery leftover must be kept", leftover.isFile)
+        assertArrayEquals(leftoverBytes, leftover.readBytes())
+        assertTrue(main.isFile)
+
+        // Once main is a verified encrypted database, the leftover is listed and shredded.
+        leftover.delete()
+        main.delete()
+        seedPlaintext()
+        encrypted().done()
+        leftover.writeBytes(ByteArray(16) { 3 })
+        assertTrue(migrator().verifiedEncrypted(main))
+        assertTrue(migrator().leftoverPlaintextExists(main))
+        assertTrue(migrator().listKeptCopies(main).any { it.db == leftover })
+        assertTrue(migrator().shredKeptAsides(main))
+        assertFalse(leftover.exists())
+        assertTrue(main.isFile)
     }
 
     @Test

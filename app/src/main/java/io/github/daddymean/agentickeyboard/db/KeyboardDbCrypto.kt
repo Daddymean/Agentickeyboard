@@ -417,8 +417,10 @@ class KeyboardDbMigrator(
             return
         }
         // Kind first: a still-plaintext file (failed migration / backoff) must be
-        // re-checked with the empty key. Opening it with the SQLCipher key fails
-        // with "not a database", which is not corruption.
+        // re-checked with an empty key via integrityPlaintext. Opening it with the
+        // SQLCipher key would fail with "not a database" even when the file is healthy.
+        // After the empty-key probe, "not a database" means the plaintext file is
+        // actually damaged, so that result is correctly Corrupt.
         val probe = when (kind(main)) {
             Kind.MISSING -> {
                 runCatching { marker.delete() }
@@ -473,18 +475,27 @@ class KeyboardDbMigrator(
     /** True when a leftover `.kbcrypt-plain` or any set-aside copy is still on the phone. */
     fun hasKeptAsides(main: File): Boolean = keptAsideCount(main) > 0
 
-    fun keptAsideCount(main: File): Int = listKeptCopies(main, key.file).size
+    fun keptAsideCount(main: File): Int = listKeptCopies(main).size
+
+    /** Set-aside copies, including a leftover `.kbcrypt-plain` only when [main] is verified encrypted. */
+    fun listKeptCopies(main: File): List<KeptCopy> =
+        listKeptCopies(main, key.file, includeLeftoverPlain = leftoverPlaintextExists(main))
+
+    /** True when a leftover plaintext sits next to a verified encrypted [main]. */
+    fun leftoverPlaintextExists(main: File): Boolean =
+        sibling(main, OLD).isFile && verifiedEncrypted(main)
 
     /**
      * Securely deletes set-aside DB/key units and leftover plaintext that is not the only
      * remaining copy. Never touches the live database, the live key, a mid-migration
-     * `.kbcrypt-tmp`, a shredding leftover, or a `.kbcrypt-plain` that is the only data
-     * (crash-recovery, main missing). Returns true when at least one file was removed.
+     * `.kbcrypt-tmp`, a shredding leftover, or a `.kbcrypt-plain` unless [main] is a
+     * verified encrypted database (a leftover next to an unverified main may be the
+     * only good copy after a failed recover). Returns true when at least one file was removed.
      */
     fun shredKeptAsides(main: File): Boolean {
         val liveDb = runCatching { main.canonicalFile }.getOrDefault(main)
         val liveKey = runCatching { key.file.canonicalFile }.getOrDefault(key.file)
-        val copies = listKeptCopies(main, key.file)
+        val copies = listKeptCopies(main)
         var removed = false
         fun safe(file: File, live: File, liveName: String): Boolean {
             val canon = runCatching { file.canonicalFile }.getOrDefault(file)
@@ -680,16 +691,18 @@ class KeyboardDbMigrator(
         )
 
         /**
-         * Set-aside DB units plus a leftover `.kbcrypt-plain` when the live main still exists.
+         * Set-aside DB units plus, when [includeLeftoverPlain] is true, a leftover
+         * `.kbcrypt-plain`. Callers that can verify [main] should pass that result;
+         * a leftover next to an unverified main may be the only good copy (`recover`
+         * returned Stuck) and must not be listed or shredded.
          * Unreadable and unconfirmed asides with the same stamp are separate entries.
          * Orphan `-wal`/`-shm`/`-journal` side files with no aside are listed.
          * A `.lost-*` key with no matching DB is not counted as a copy.
-         * A leftover plaintext is omitted when [main] is missing (it may be the only data).
          */
-        fun listKeptCopies(main: File, keyFile: File): List<KeptCopy> {
+        fun listKeptCopies(main: File, keyFile: File, includeLeftoverPlain: Boolean = false): List<KeptCopy> {
             val out = mutableListOf<KeptCopy>()
             val leftover = sibling(main, OLD)
-            if (leftover.isFile && main.isFile) out += KeptCopy(leftover, null)
+            if (leftover.isFile && includeLeftoverPlain) out += KeptCopy(leftover, null)
             val dbDir = main.parentFile
             val keyDir = keyFile.parentFile
             val dbAside = Regex("^${Regex.escape(main.name)}\\.(${UNREADABLE}|${UNCONFIRMED})-(\\d+)$")
@@ -726,7 +739,8 @@ class KeyboardDbMigrator(
             return out
         }
 
-        fun leftoverPlaintextExists(main: File): Boolean = sibling(main, OLD).isFile && main.isFile
+        fun leftoverPlaintextExists(main: File, verifiedEncryptedMain: Boolean): Boolean =
+            sibling(main, OLD).isFile && verifiedEncryptedMain
 
 
         fun corruptionFlagged(main: File): Boolean = sibling(main, CORRUPT).isFile
@@ -842,8 +856,8 @@ class KeyboardDbOpenHelperFactory(
             val dbFile = config.context.getDatabasePath(name)
             val outcome = migrator.prepare(dbFile)
             val ms = SystemClock.elapsedRealtime() - started
-            val copies = KeyboardDbMigrator.listKeptCopies(dbFile, KeyboardDbKey.keyFile(config.context.noBackupFilesDir))
-            val leftover = KeyboardDbMigrator.leftoverPlaintextExists(dbFile)
+            val copies = migrator.listKeptCopies(dbFile)
+            val leftover = migrator.leftoverPlaintextExists(dbFile)
             val flagged = KeyboardDbMigrator.corruptionFlagged(dbFile)
             fun report(state: String, migrated: Boolean) = status(
                 state, migrated, ms, migrator.health,

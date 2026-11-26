@@ -40,6 +40,7 @@ class AppDatabaseMigrationTest {
     @Before
     @After
     fun deleteDatabase() {
+        AppDatabase.resetForTests()
         context.deleteDatabase(TEST_DB)
     }
 
