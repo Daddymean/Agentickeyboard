@@ -24,7 +24,7 @@ import org.robolectric.annotation.Config
  * Keith, 2026-11-25 5:26 PM PT ("1. Yes"): pausing learning also stops grammar
  * fix and tone check from saving to the writing log. The checks themselves
  * still run; only the log row is skipped. Writes resume after learning is
- * unpaused. Password, incognito, sensitive and never-learn (twin privacy-
+ * unpaused. Password, incognito, OTP / one-time-code, and never-learn (twin privacy-
  * blocked) fields already refuse the checks, and must still leave the log empty.
  */
 @RunWith(RobolectricTestRunner::class)
@@ -127,6 +127,35 @@ class WritingLogPauseTest {
         vm.onEditorStarted("com.example.chat", "Chat", textType)
         assertFalse(vm.isSensitiveField.value)
         vm.applyTwinPrivacyBlock(true)
+        assertTrue(vm.isSensitiveField.value)
+        vm.fixGrammar("I recieve the note")
+        vm.analyzeTone("thanks, this is great")
+        assertStayedIdleWithNoLogs()
+    }
+
+    @Test
+    fun `otp and one-time-code fields write no log rows`() {
+        // EditorPrivacy treats these as sensitive: an autofill hint that names
+        // an OTP, and a number field whose hint mentions a code.
+        vm.onEditorStarted(
+            "com.example.bank",
+            "Bank",
+            textType,
+            0,
+            hints = listOf(null, "smsOTPCode")
+        )
+        assertTrue(vm.isSensitiveField.value)
+        vm.fixGrammar("I recieve the note")
+        vm.analyzeTone("thanks, this is great")
+        assertStayedIdleWithNoLogs()
+
+        vm.onEditorStarted(
+            "com.example.bank",
+            "Bank",
+            InputType.TYPE_CLASS_NUMBER,
+            0,
+            hints = listOf("Enter code")
+        )
         assertTrue(vm.isSensitiveField.value)
         vm.fixGrammar("I recieve the note")
         vm.analyzeTone("thanks, this is great")
