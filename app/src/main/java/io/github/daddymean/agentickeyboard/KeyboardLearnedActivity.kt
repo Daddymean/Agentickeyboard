@@ -13,6 +13,7 @@ import android.widget.ScrollView
 import android.widget.TextView
 import android.widget.Toast
 import io.github.daddymean.agentickeyboard.db.AppDatabase
+import io.github.daddymean.agentickeyboard.db.KeyboardDbResetResult
 import io.github.daddymean.agentickeyboard.db.KeyboardDbUserStatus
 import io.github.daddymean.agentickeyboard.learned.KeyboardEntry
 import io.github.daddymean.agentickeyboard.learned.KeyboardLearnedData
@@ -165,8 +166,12 @@ class KeyboardLearnedActivity : Activity() {
             .setMessage(KeyboardDbUserStatus.RESET_EXPLAIN)
             .setPositiveButton("Start new") { _, _ ->
                 scope.launch {
-                    val ok = withContext(Dispatchers.IO) { AppDatabase.resetBrokenDatabase(this@KeyboardLearnedActivity) }
-                    toast(if (ok) "Started a new encrypted database. The old file was moved aside, not deleted." else "Couldn't start a new database. Try again later.")
+                    val result = withContext(Dispatchers.IO) { AppDatabase.resetBrokenDatabase(this@KeyboardLearnedActivity) }
+                    toast(when (result) {
+                        KeyboardDbResetResult.CreatedNew -> "Started a new encrypted database. The old file was moved aside, not deleted."
+                        KeyboardDbResetResult.KeyWorksAgain -> "The keyboard opened its encrypted data again. Nothing was moved."
+                        KeyboardDbResetResult.Failed -> "Couldn't start a new database. Try again later."
+                    })
                     reload()
                 }
             }

@@ -70,10 +70,15 @@ interface KeyboardDbEngine {
  *
  * The key is only handed to Room after [KeyboardDbEngine.canOpen] has opened the file with it,
  * and only a permanent failure (not a transient I/O error) moves the file aside. If the key is
- * gone for good, the unreadable file and the old wrapped-key file are moved aside (never
- * deleted) and a new database starts; if it's only unavailable right now, this launch runs on
- * an in-memory database with writes blocked, the file is left alone, and the next open retries.
- * After several unavailable opens, the learned-data screen offers a one-tap reset.
+ * gone for good, the unreadable file and the old wrapped-key file are moved aside as a pair
+ * (never deleted while still readable) and a new database starts; if it's only unavailable
+ * right now, this launch runs on an in-memory database with writes blocked, the file is left
+ * alone, and the next launch retries. After several unavailable launches (counted once per
+ * process), the learned-data screen offers a one-tap reset. The newest 3 asides are kept
+ * together; an aside that is still readable is never shredded.
+ *
+ * A damaged page during an open only flags the file. The move-aside runs at the next
+ * [prepare], before any connection is opened, so in-use connections never see a renamed inode.
  *
  * Residue: flash storage doesn't overwrite in place, so the zeros written in step 5 (and
  * `secure_delete`) may land on new blocks while the old plaintext blocks wait for the flash
@@ -101,6 +106,13 @@ class KeyboardDbMigrator(
     }
 
     fun prepare(main: File): Outcome {
+        // N1: if a previous launch flagged corruption, move the file aside before anything opens.
+        if (consumeCorruptMarker(main) && main.isFile) {
+            val stamp = now()
+            setAside(main, stamp)
+            key.copyAside(stamp)
+            capPairedAsides(main)
+        }
         val engineOk = runCatching { engine.load() }.isSuccess
         val recovered = recover(main)
         if (recovered == Recovered.Stuck) {
@@ -119,7 +131,7 @@ class KeyboardDbMigrator(
             }
         }
         return when (kind) {
-            Kind.MISSING -> keyForNewDatabase()?.let {
+            Kind.MISSING -> keyForNewDatabase(main)?.let {
                 health.recordSuccess()
                 Outcome.Encrypted(it, migrated = false)
             } ?: Outcome.Plaintext("key")
@@ -140,6 +152,10 @@ class KeyboardDbMigrator(
         if (sqlKey != null) {
             when (engine.canOpen(main, sqlKey)) {
                 OpenProbe.Ok -> {
+                    if (runCatching { engine.verify(main, sqlKey) }.isFailure) {
+                        // Flag only: Room may still open this launch. Move-aside waits for the next prepare.
+                        flagCorruption(main)
+                    }
                     health.recordSuccess()
                     return Outcome.Encrypted(sqlKey, migrated = false)
                 }
@@ -147,11 +163,16 @@ class KeyboardDbMigrator(
                 OpenProbe.Unopenable -> Unit
             }
         }
-        setAside(main)
-        val newKey = if (sqlKey != null) sqlKey else {
-            key.moveAside(now())
+        val stamp = now()
+        setAside(main, stamp)
+        val newKey = if (sqlKey != null) {
+            key.copyAside(stamp)
+            sqlKey
+        } else {
+            key.moveAside(stamp)
             runCatching { key.create() }.getOrNull()
         }
+        capPairedAsides(main)
         return newKey?.let {
             health.recordSuccess()
             Outcome.Encrypted(it, migrated = false)
@@ -162,7 +183,7 @@ class KeyboardDbMigrator(
         if (!health.shouldRetryMigration()) return Outcome.Plaintext("backoff")
         val tmp = sibling(main, TMP)
         val old = sibling(main, OLD)
-        val sqlKey = keyForNewDatabase() ?: return Outcome.Plaintext("key").also { health.recordMigrationFailure("key") }
+        val sqlKey = keyForNewDatabase(main) ?: return Outcome.Plaintext("key").also { health.recordMigrationFailure("key") }
         try {
             listOf(tmp).plus(companions(tmp)).forEach { it.delete() }
             val source = engine.exportEncrypted(main, tmp, sqlKey)
@@ -184,14 +205,14 @@ class KeyboardDbMigrator(
         } catch (t: Throwable) {
             val recovered = recover(main)
             if (recovered == Recovered.Swapped || kind(main) == Kind.ENCRYPTED && validReplacement(main, old)) {
-                shredAll(old)
+                beginShred(main, old)
                 health.recordSuccess()
                 return Outcome.Encrypted(sqlKey, migrated = true)
             }
             health.recordMigrationFailure("swap")
             return if (recovered == Recovered.Stuck) Outcome.InMemory("swap") else Outcome.Plaintext("swap")
         }
-        shredAll(old)
+        beginShred(main, old)
         health.recordSuccess()
         return Outcome.Encrypted(sqlKey, migrated = true)
     }
@@ -213,78 +234,247 @@ class KeyboardDbMigrator(
 
     /**
      * Finishes or rolls back a swap a crash interrupted, and clears partial copies. Idempotent.
-     * The leftover plaintext is shredded only after [main] verifies as an encrypted copy with
-     * matching integrity, row counts and schema size.
+     * A verified encrypted [main] is always kept. The leftover plaintext is shredded only after
+     * that, or when the leftover no longer opens as plaintext (a kill in the middle of the
+     * zero pass). A file that is not a plaintext database is never restored over a good copy.
      */
     internal fun recover(main: File): Recovered {
         val tmp = sibling(main, TMP)
         val old = sibling(main, OLD)
+        val shredding = sibling(main, SHREDDING)
         var result = Recovered.Ok
-        if (old.exists()) {
-            if (!main.exists()) {
-                companions(main).forEach(::shred)
-                result = if (old.renameTo(main)) {
+        if (shredding.exists()) {
+            if (verifiedEncrypted(main)) {
+                shredAll(shredding)
+                result = Recovered.Swapped
+            } else if (!main.exists() && opensAsPlaintext(shredding)) {
+                result = if (shredding.renameTo(main)) {
                     syncDir(main.parentFile)
                     Recovered.Ok
                 } else {
                     Recovered.Stuck
                 }
-            } else if (validReplacement(main, old)) {
-                shredAll(old)
-                result = Recovered.Swapped
+            } else if (opensAsPlaintext(shredding) && !verifiedEncrypted(main) && main.exists()) {
+                // Should be rare after a swap. Keep the readable leftover; don't put it back
+                // over an encrypted main we couldn't verify this launch.
+                result = Recovered.Ok
             } else {
-                // main is not a verified replacement: get the plaintext back in place.
+                // Half-zeroed leftover, and no verified main: do not restore it.
+                result = if (main.exists()) Recovered.Ok else Recovered.Stuck
+            }
+        }
+        if (old.exists()) {
+            if (!main.exists()) {
+                if (opensAsPlaintext(old)) {
+                    companions(main).forEach(::shred)
+                    result = if (old.renameTo(main)) {
+                        syncDir(main.parentFile)
+                        Recovered.Ok
+                    } else {
+                        Recovered.Stuck
+                    }
+                } else {
+                    result = Recovered.Stuck
+                }
+            } else if (verifiedEncrypted(main)) {
+                if (!opensAsPlaintext(old) || snapshotsMatch(main, old)) {
+                    beginShred(main, old)
+                    result = Recovered.Swapped
+                } else {
+                    // main verifies but is not a complete copy of a still-readable plaintext:
+                    // get the plaintext back in place (M3).
+                    val junk = File(main.path + ".$UNCONFIRMED-${now()}")
+                    companions(main).forEach { f -> f.renameTo(File(junk.path + f.name.removePrefix(main.name))) }
+                    result = if (main.renameTo(junk) && old.renameTo(main)) {
+                        syncDir(main.parentFile)
+                        capPairedAsides(main)
+                        Recovered.Ok
+                    } else {
+                        Recovered.Stuck
+                    }
+                }
+            } else if (opensAsPlaintext(old)) {
                 val junk = File(main.path + ".$UNCONFIRMED-${now()}")
                 companions(main).forEach { f -> f.renameTo(File(junk.path + f.name.removePrefix(main.name))) }
                 result = if (main.renameTo(junk) && old.renameTo(main)) {
                     syncDir(main.parentFile)
-                    capAsides(main.parentFile, "${main.name}.$UNCONFIRMED-")
+                    capPairedAsides(main)
                     Recovered.Ok
                 } else {
                     Recovered.Stuck
                 }
+            } else {
+                // Don't restore a zeroed leftover over whatever is in main.
+                result = Recovered.Ok
             }
         }
         listOf(tmp).plus(companions(tmp)).forEach { it.delete() }
         return result
     }
 
-    /** Integrity check plus row counts and schema size: [main] is a complete encrypted copy of [old]. */
-    internal fun validReplacement(main: File, old: File): Boolean {
+    /** True when [file] still opens as a plaintext SQLite database (header intact). */
+    internal fun opensAsPlaintext(file: File): Boolean =
+        file.isFile && file.length() > 0 && startsWithMagic(file, 0)
+
+    /** [main] opens with the current key and passes the integrity checks. */
+    internal fun verifiedEncrypted(main: File): Boolean {
         val sqlKey = (key.read() as? KeyboardDbKey.Read.Ok)?.sqlKey ?: return false
         if (kind(main) != Kind.ENCRYPTED) return false
+        return runCatching { engine.verify(main, sqlKey) }.isSuccess
+    }
+
+    private fun snapshotsMatch(main: File, old: File): Boolean {
+        val sqlKey = (key.read() as? KeyboardDbKey.Read.Ok)?.sqlKey ?: return false
         val copy = runCatching { engine.verify(main, sqlKey) }.getOrNull() ?: return false
         val source = runCatching { engine.snapshotPlaintext(old) }.getOrNull() ?: return false
         return copy == source
     }
 
+    /** Integrity check plus row counts and schema size: [main] is a complete encrypted copy of [old]. */
+    internal fun validReplacement(main: File, old: File): Boolean =
+        verifiedEncrypted(main) && opensAsPlaintext(old) && snapshotsMatch(main, old)
+
+    /**
+     * Durably marks [old] as "shredding started" (rename + dir fsync) before any zero pass, so a
+     * kill mid-shred can never be mistaken for "restore the leftover plaintext".
+     */
+    internal fun beginShred(main: File, old: File) {
+        val dest = sibling(main, SHREDDING)
+        if (old.exists() && old.absolutePath != dest.absolutePath) {
+            companions(old).forEach { f ->
+                f.renameTo(File(dest.path + f.name.removePrefix(old.name)))
+            }
+            if (!old.renameTo(dest)) {
+                shredAll(old)
+                return
+            }
+            syncDir(main.parentFile)
+        }
+        shredAll(dest)
+        if (old.exists() && old.absolutePath != dest.absolutePath) shredAll(old)
+    }
+
     /** The current key when one opens, otherwise a new one (only safe when no encrypted file needs the old key). */
-    private fun keyForNewDatabase(): ByteArray? = when (val r = key.read()) {
+    private fun keyForNewDatabase(main: File): ByteArray? = when (val r = key.read()) {
         is KeyboardDbKey.Read.Ok -> r.sqlKey
         KeyboardDbKey.Read.Lost -> {
             key.moveAside(now())
+            capPairedAsides(main)
             runCatching { key.create() }.getOrNull()
         }
         KeyboardDbKey.Read.Unavailable -> null
     }
 
-    fun setAside(main: File) {
-        val stamp = now()
+    /** Renames [main] and its side files to `.kbcrypt-unreadable-<stamp>`. Does not cap. */
+    fun setAside(main: File, stamp: Long = now()): Boolean {
+        if (!main.isFile) return false
         val aside = File(main.path + ".$UNREADABLE-$stamp")
-        if (main.renameTo(aside)) {
-            companions(main).forEach { f -> f.renameTo(File(aside.path + f.name.removePrefix(main.name))) }
-            syncDir(main.parentFile)
-            capAsides(main.parentFile, "${main.name}.$UNREADABLE-")
+        if (!main.renameTo(aside)) return false
+        companions(main).forEach { f -> f.renameTo(File(aside.path + f.name.removePrefix(main.name))) }
+        syncDir(main.parentFile)
+        return true
+    }
+
+    /** Writes a marker so the next [prepare] moves [file] aside before opening anything. */
+    fun flagCorruption(file: File) {
+        if (!file.isFile) return
+        val marker = sibling(file, CORRUPT)
+        runCatching {
+            marker.writeText("1")
+            syncDir(file.parentFile)
         }
     }
 
-    /** Moves the live DB and its wrapped key aside and starts a new encrypted database. */
+    internal fun consumeCorruptMarker(main: File): Boolean {
+        val marker = sibling(main, CORRUPT)
+        if (!marker.isFile) return false
+        runCatching { marker.delete() }
+        return true
+    }
+
+    /** Moves the live DB and its wrapped key aside under one stamp and starts a new encrypted database. */
     fun resetBroken(main: File): Outcome {
-        setAside(main)
-        key.moveAside(now())
+        val stamp = now()
+        setAside(main, stamp)
+        key.moveAside(stamp)
+        capPairedAsides(main)
         health.clear()
         val sqlKey = runCatching { key.create() }.getOrNull() ?: return Outcome.InMemory("key")
         return Outcome.Encrypted(sqlKey, migrated = false)
+    }
+
+    /**
+     * Keeps all asides that are still readable, and the newest [KeyboardDbHealth.ASIDE_CAP]
+     * that are not. Database and key asides share a stamp and are kept or shredded together.
+     * Unpaired asides (no matching key) are shredded first. A still-readable aside, including
+     * a leftover plaintext `.kbcrypt-unconfirmed-*`, is never shredded.
+     */
+    internal fun capPairedAsides(main: File, cap: Int = KeyboardDbHealth.ASIDE_CAP) {
+        val dbDir = main.parentFile
+        val keyFile = key.file
+        val keyDir = keyFile.parentFile
+        val unreadable = Regex("^${Regex.escape(main.name)}\\.${UNREADABLE}-(\\d+)$")
+        val unconfirmed = Regex("^${Regex.escape(main.name)}\\.${UNCONFIRMED}-(\\d+)$")
+        val lostKey = Regex("^${Regex.escape(keyFile.name)}\\.lost-(\\d+)$")
+
+        data class Pair(
+            val stamp: String,
+            val db: File?,
+            val keyAside: File?,
+            val plaintext: Boolean,
+            val stampValue: Long,
+        )
+
+        val dbByStamp = mutableMapOf<String, Pair>()
+        fun putDb(stamp: String, file: File, plaintext: Boolean) {
+            val stampValue = stamp.toLongOrNull() ?: file.lastModified()
+            val prev = dbByStamp[stamp]
+            dbByStamp[stamp] = Pair(stamp, file, prev?.keyAside, plaintext, stampValue)
+        }
+        dbDir?.listFiles()?.forEach { f ->
+            unreadable.matchEntire(f.name)?.let { putDb(it.groupValues[1], f, plaintext = false) }
+            unconfirmed.matchEntire(f.name)?.let { putDb(it.groupValues[1], f, plaintext = true) }
+        }
+        keyDir?.listFiles()?.forEach { f ->
+            val m = lostKey.matchEntire(f.name) ?: return@forEach
+            val stamp = m.groupValues[1]
+            val stampValue = stamp.toLongOrNull() ?: f.lastModified()
+            val prev = dbByStamp[stamp]
+            dbByStamp[stamp] = Pair(stamp, prev?.db, f, prev?.plaintext == true, stampValue)
+        }
+        val pairs = dbByStamp.values.toList()
+        fun readable(p: Pair): Boolean {
+            if (p.db == null) return false
+            // Plaintext leftovers are still user data (L4). Anything else is only kept if a
+            // matching key still opens it; a random unreadable file is not treated as readable.
+            if (p.plaintext || startsWithMagic(p.db, 0)) return true
+            val keysToTry = buildList {
+                p.keyAside?.let { add(it) }
+                if (key.file.isFile) add(key.file)
+            }
+            for (kf in keysToTry) {
+                when (val r = key.readAside(kf)) {
+                    is KeyboardDbKey.Read.Ok -> {
+                        val probe = engine.canOpen(p.db, r.sqlKey)
+                        if (probe != OpenProbe.Unopenable) return true
+                    }
+                    KeyboardDbKey.Read.Unavailable -> return true // might be readable; don't shred
+                    KeyboardDbKey.Read.Lost -> Unit
+                }
+            }
+            return false
+        }
+        val keepReadable = pairs.filter(::readable)
+        val shreddable = pairs.filter { it !in keepReadable }
+        val (unpaired, paired) = shreddable.partition { it.db == null || it.keyAside == null }
+        val keepBudget = (cap - keepReadable.size).coerceAtLeast(0)
+        val keepShreddable = (paired.sortedByDescending { it.stampValue } +
+            unpaired.sortedByDescending { it.stampValue }).take(keepBudget)
+        val toShred = shreddable.filter { it !in keepShreddable }
+        for (p in toShred) {
+            p.db?.let { shredAll(it) }
+            p.keyAside?.let { shred(it) }
+        }
     }
 
     companion object {
@@ -292,6 +482,8 @@ class KeyboardDbMigrator(
         internal const val OLD = "kbcrypt-plain"
         internal const val UNREADABLE = "kbcrypt-unreadable"
         internal const val UNCONFIRMED = "kbcrypt-unconfirmed"
+        internal const val CORRUPT = "kbcrypt-corrupt"
+        internal const val SHREDDING = "kbcrypt-shredding"
         internal val MAGIC = "SQLite format 3\u0000".toByteArray(Charsets.US_ASCII)
         internal const val WAL_HEADER = 32
         internal const val FRAME_HEADER = 24
@@ -337,14 +529,6 @@ class KeyboardDbMigrator(
             syncDir(db.parentFile)
         }
 
-        /** Keeps the newest [KeyboardDbHealth.ASIDE_CAP] asides with [prefix]; shreds older ones. */
-        fun capAsides(dir: File?, prefix: String, cap: Int = KeyboardDbHealth.ASIDE_CAP) {
-            if (dir == null) return
-            val files = dir.listFiles()?.filter { it.name.startsWith(prefix) }
-                ?.sortedByDescending { it.lastModified() } ?: return
-            files.drop(cap).forEach(::shred)
-        }
-
         private fun fsync(file: File) = RandomAccessFile(file, "rw").use { it.fd.sync() }
     }
 }
@@ -361,7 +545,7 @@ data class KeyboardDbStatus(
     val kind: String get() = state.substringBefore(':')
     /** True when writes and deletes reach the on-disk database (encrypted or still-plaintext). */
     val writesReachDisk: Boolean get() = kind == "encrypted" || kind == "plaintext"
-    /** In-memory fallback that must not be cached for the process lifetime. */
+    /** In-memory fallback. Kept for this process so in-flight readers keep their handle. */
     val ephemeral: Boolean get() = kind == "memory"
     val offerReset: Boolean get() = unavailableCount >= KeyboardDbHealth.RESET_AFTER
 }
@@ -385,7 +569,7 @@ object KeyboardDbUserStatus {
         if (status?.offerReset == true) "Start a new encrypted database" else null
 
     const val RESET_EXPLAIN =
-        "The unreadable file and its key are moved aside, not deleted. A new empty encrypted database starts. You can only do this after several failed opens."
+        "The unreadable file and its key are moved aside together, not deleted. The newest 3 asides are kept; an aside that is still readable is never removed. A new empty encrypted database starts. You can only do this after several failed launches."
 }
 
 /**
@@ -437,11 +621,11 @@ class KeyboardDbOpenHelperFactory(
             return when (outcome) {
                 is KeyboardDbMigrator.Outcome.Encrypted -> {
                     onStatus(status("encrypted", outcome.migrated, ms, migrator.health))
-                    engine.factory(outcome.sqlKey) { file -> migrator.setAside(file) }.create(config)
+                    engine.factory(outcome.sqlKey) { file -> migrator.flagCorruption(file) }.create(config)
                 }
                 is KeyboardDbMigrator.Outcome.Plaintext -> {
                     onStatus(status("plaintext:${outcome.reason}", false, ms, migrator.health))
-                    neverDeleteFramework { file -> migrator.setAside(file) }.create(config)
+                    neverDeleteFramework { file -> migrator.flagCorruption(file) }.create(config)
                 }
                 is KeyboardDbMigrator.Outcome.InMemory -> {
                     onStatus(status("memory:${outcome.reason}", false, ms, migrator.health))
@@ -469,7 +653,7 @@ internal fun status(state: String, migrated: Boolean, ms: Long, health: Keyboard
     lastFailure = health?.lastReason,
 )
 
-/** Framework factory whose Room callback never deletes the file on corruption. */
+/** Framework factory whose Room callback never deletes or moves the file on corruption; it only flags. */
 internal fun neverDeleteFramework(onCorruption: (File) -> Unit = {}): SupportSQLiteOpenHelper.Factory =
     SupportSQLiteOpenHelper.Factory { config ->
         val cb = config.callback

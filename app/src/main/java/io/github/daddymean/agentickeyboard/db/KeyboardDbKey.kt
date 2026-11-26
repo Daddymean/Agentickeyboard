@@ -47,7 +47,7 @@ class KeystoreDbKeyWrapper(private val alias: String = KEY_ALIAS) : DbKeyWrapper
  * old file or the new one, never half of one. A new key is only ever created when no encrypted
  * database exists yet (see [KeyboardDbMigrator]).
  */
-class KeyboardDbKey(private val file: File, private val wrapper: DbKeyWrapper, private val random: SecureRandom = SecureRandom()) {
+class KeyboardDbKey(internal val file: File, private val wrapper: DbKeyWrapper, private val random: SecureRandom = SecureRandom()) {
 
     sealed interface Read {
         class Ok(val sqlKey: ByteArray) : Read
@@ -69,10 +69,15 @@ class KeyboardDbKey(private val file: File, private val wrapper: DbKeyWrapper, p
                 wrapper.unwrap(sealed)
             } catch (e: javax.crypto.AEADBadTagException) {
                 return Read.Lost
+            } catch (e: android.security.keystore.KeyPermanentlyInvalidatedException) {
+                // Only a permanent invalidation is Lost, and only when the alias
+                // check can be made. Any other InvalidKeyException (including
+                // UserNotAuthenticatedException and "Keystore operation failed")
+                // is a transient Keystore error.
+                if (runCatching { wrapper.keyExists() }.isFailure) null
+                else return Read.Lost
             } catch (e: java.security.InvalidKeyException) {
-                // Includes KeyPermanentlyInvalidatedException: the alias may still be present
-                // but this wrapping key can never unwrap the blob.
-                return Read.Lost
+                null
             } catch (e: Exception) {
                 null
             }
@@ -92,9 +97,24 @@ class KeyboardDbKey(private val file: File, private val wrapper: DbKeyWrapper, p
         val dest = File("${file.path}.lost-$stamp")
         if (!file.renameTo(dest)) return null
         syncDir(file.parentFile)
-        capKeyAsides(file)
         return dest
     }
+
+    /**
+     * Copies the wrapped-key file to `*.lost-<stamp>` and leaves the live file in place, so a
+     * database aside can be kept as a pair with the same stamp without abandoning the current key.
+     */
+    fun copyAside(stamp: Long): File? {
+        if (!file.isFile) return null
+        val dest = File("${file.path}.lost-$stamp")
+        if (dest.exists()) return dest
+        file.copyTo(dest, overwrite = false)
+        syncDir(file.parentFile)
+        return dest
+    }
+
+    /** Unwrap an aside of this key (same wrapping key, different file). */
+    internal fun readAside(aside: File): Read = KeyboardDbKey(aside, wrapper).read()
 
     /** Makes and stores a new key. Refuses to overwrite an existing wrapped-key file. */
     fun create(): ByteArray {
@@ -121,14 +141,6 @@ class KeyboardDbKey(private val file: File, private val wrapper: DbKeyWrapper, p
 
         /** Production key file: never backed up, never transferred. */
         fun keyFile(noBackupDir: File) = File(noBackupDir, "keyboard_db/agentic_keyboard_database.key")
-
-        /** Keeps the newest [KeyboardDbHealth.ASIDE_CAP] `*.lost-*` key files; shreds older ones. */
-        fun capKeyAsides(keyFile: File) {
-            val prefix = keyFile.name + ".lost-"
-            val files = keyFile.parentFile?.listFiles()?.filter { it.name.startsWith(prefix) }
-                ?.sortedByDescending { it.lastModified() } ?: return
-            files.drop(KeyboardDbHealth.ASIDE_CAP).forEach { KeyboardDbMigrator.shred(it) }
-        }
 
         /** SQLCipher raw-key syntax: `x'<64 hex digits>'` as bytes. */
         fun sqlKey(raw: ByteArray): ByteArray {

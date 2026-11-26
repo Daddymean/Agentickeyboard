@@ -23,10 +23,10 @@ import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.launch
 
 class AgenticKeyboardApplication : Application() {
-    // Getters, not lazy: if a launch couldn't open the encrypted database, the
-    // next access re-prepares (AppDatabase recycles an ephemeral instance).
+    // Getters, not lazy: the repository is a provider, so a recovered database is
+    // picked up without a process restart, and in-flight holders keep their handle.
     val database get() = AppDatabase.getDatabase(this)
-    val repository get() = KeyboardRepository(database)
+    val repository get() = KeyboardRepository { AppDatabase.getDatabase(this) }
     val settings by lazy { KeyboardSettings(this) }
 
     private val appScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)

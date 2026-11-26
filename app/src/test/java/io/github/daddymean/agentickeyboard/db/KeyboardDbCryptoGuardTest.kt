@@ -23,11 +23,17 @@ class KeyboardDbCryptoGuardTest {
         assertTrue(engine.contains("class KeepFile"))
         assertTrue(engine.contains("SqlCipherOpenHelperFactory"))
         assertFalse(engine.contains("SupportOpenHelperFactory"))
+        val crypto = src("db/KeyboardDbCrypto.kt")
+        assertTrue(crypto.contains("flagCorruption"))
+        assertTrue(crypto.contains("consumeCorruptMarker"))
+        assertTrue(crypto.contains("migrator.flagCorruption(file)"))
+        assertFalse("corruption handler must not rename under open connections",
+            crypto.contains("migrator.setAside(file)"))
     }
 
     @Test
     fun keyboardDatabaseOpensThroughTheEncryptingFactory() {
-        assertTrue(models.contains(".openHelperFactory(encryptedFactory(app))"))
+        assertTrue(models.contains(".openHelperFactory(encryptedFactory(app, engineForTests ?: SqlCipherEngine(), wrapperForTests ?: KeystoreDbKeyWrapper()))"))
         assertTrue(models.contains(".addCallback(SECURE_DELETE)"))
         assertTrue(models.contains("engine: KeyboardDbEngine = SqlCipherEngine()"))
         assertTrue(models.contains("wrapper: DbKeyWrapper = KeystoreDbKeyWrapper()"))
@@ -55,6 +61,19 @@ class KeyboardDbCryptoGuardTest {
         assertTrue(versions.contains("name = \"sqlcipher-android\""))
         // Only the maintained sqlcipher-android artifact, not the deprecated android-database-sqlcipher.
         assertFalse(versions.contains("android-database-sqlcipher"))
+    }
+
+    @Test
+    fun rawKeyNeverAppearsInSqlText() {
+        val export = engine.substringAfter("fun exportEncrypted").substringBefore("override fun verify")
+        assertFalse(export.contains("String(sqlKey"))
+        assertFalse(export.contains("KEY \""))
+        assertFalse(export.contains("KEY \""))
+        assertTrue(export.contains("KEY ''"))
+        assertTrue(export.contains("openOrCreateDatabase(dest, sqlKey"))
+        assertTrue(export.contains("withoutKey"))
+        assertTrue(engine.contains("fun withoutKey"))
+        assertTrue(engine.contains("fun isRawKey"))
     }
 
     @Test

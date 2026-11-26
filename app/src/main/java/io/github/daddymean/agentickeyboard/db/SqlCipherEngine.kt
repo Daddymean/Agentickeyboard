@@ -14,8 +14,13 @@ import java.io.File
  *
  * Every connection opened here uses [KeepFile] as its error handler, so a wrong key or a damaged
  * file is reported as a failure and never "repaired" by deleting the database. Room traffic goes
- * through [SqlCipherOpenHelperFactory], not the library factory that passes a null handler. In 4.20.0 the default handler also keeps a codec file, but the explicit handler is
- * the guarantee this code relies on.
+ * through [SqlCipherOpenHelperFactory], not the library factory that passes a null handler. In
+ * 4.20.0 the default handler also keeps a codec file, but the explicit handler is the guarantee
+ * this code relies on. [KeepFile] only flags corruption; the file is moved aside at the next
+ * [KeyboardDbMigrator.prepare], before any connection opens.
+ *
+ * The raw key is only ever passed as a `ByteArray` to SQLCipher's open APIs. It is never built
+ * into SQL text, and any failure is rethrown with the key stripped from the message chain.
  */
 class SqlCipherEngine : KeyboardDbEngine {
 
@@ -25,33 +30,34 @@ class SqlCipherEngine : KeyboardDbEngine {
 
     override fun exportEncrypted(plain: File, dest: File, sqlKey: ByteArray): DbSnapshot {
         require(!dest.exists()) { "copy target exists" }
-        val db = SQLiteDatabase.openDatabase(plain.path, ByteArray(0), null, SQLiteDatabase.OPEN_READWRITE, KeepFile(), null)
-        try {
+        require(isRawKey(sqlKey)) { "bad raw key format" }
+        val source = SQLiteDatabase.openDatabase(plain.path, ByteArray(0), null, SQLiteDatabase.OPEN_READWRITE, KeepFile(), null).use { db ->
             db.rawQuery("PRAGMA wal_checkpoint(TRUNCATE)", null).use { c ->
                 check(!c.moveToFirst() || c.getInt(0) == 0) { "checkpoint busy" }
             }
-            val source = snapshot(db)
-            // Bind the path; put the raw-key passphrase in the SQL. Binding the x'…' form as a
-            // BLOB makes SQLCipher treat it as a passphrase, not a raw key, and the export fails.
-            val passphrase = String(sqlKey, Charsets.US_ASCII)
-            require(passphrase.matches(Regex("x'[0-9a-f]{64}'"))) { "bad raw key format" }
-            dest.parentFile?.mkdirs()
-            // ATTACH of a missing file returned ENOENT on the device (SQLCipher didn't create it).
-            // Open-or-create the encrypted target first, then export into it.
-            check(!dest.exists()) { "copy target exists" }
-            SQLiteDatabase.openOrCreateDatabase(dest, sqlKey, null, KeepFile(), null).close()
-            val path = dest.canonicalPath.replace("'", "''")
-            db.execSQL("ATTACH DATABASE '" + path + "' AS $ALIAS KEY \"" + passphrase + "\"")
-            try {
-                db.rawQuery("SELECT sqlcipher_export('$ALIAS')", null).use { it.moveToFirst() }
-                db.execSQL("PRAGMA $ALIAS.user_version = ${source.userVersion}")
-            } finally {
-                db.execSQL("DETACH DATABASE $ALIAS")
-            }
-            return source
-        } finally {
-            db.close()
+            snapshot(db)
         }
+        dest.parentFile?.mkdirs()
+        check(!dest.exists()) { "copy target exists" }
+        // Open the encrypted target with the byte-array key API, then ATTACH the plaintext
+        // (no key) and export into it. The raw key never appears in SQL text.
+        try {
+            val destDb = SQLiteDatabase.openOrCreateDatabase(dest, sqlKey, null, KeepFile(), null)
+            try {
+                destDb.execSQL("ATTACH DATABASE ? AS $ALIAS KEY ''", arrayOf(plain.canonicalPath))
+                try {
+                    destDb.rawQuery("SELECT sqlcipher_export('main', '$ALIAS')", null).use { it.moveToFirst() }
+                    destDb.execSQL("PRAGMA user_version = ${source.userVersion}")
+                } finally {
+                    destDb.execSQL("DETACH DATABASE $ALIAS")
+                }
+            } finally {
+                destDb.close()
+            }
+        } catch (t: Throwable) {
+            throw withoutKey(t, sqlKey)
+        }
+        return source
     }
 
     override fun verify(file: File, sqlKey: ByteArray): DbSnapshot {
@@ -63,6 +69,8 @@ class SqlCipherEngine : KeyboardDbEngine {
                 check(c.moveToFirst() && c.getString(0) == "ok" && c.count == 1) { "integrity" }
             }
             return snapshot(db)
+        } catch (t: Throwable) {
+            throw withoutKey(t, sqlKey)
         } finally {
             db.close()
         }
@@ -87,7 +95,7 @@ class SqlCipherEngine : KeyboardDbEngine {
         }
         OpenProbe.Ok
     } catch (t: Throwable) {
-        classifyOpenFailure(t)
+        classifyOpenFailure(withoutKey(t, sqlKey))
     }
 
     override fun factory(sqlKey: ByteArray, onCorruption: (File) -> Unit): SupportSQLiteOpenHelper.Factory =
@@ -98,7 +106,7 @@ class SqlCipherEngine : KeyboardDbEngine {
     }
 
     private companion object {
-        const val ALIAS = "kbcrypt"
+        const val ALIAS = "kbplain"
     }
 }
 
@@ -142,9 +150,10 @@ internal fun snapshotOf(db: Any, query: (String, Array<String>?) -> android.data
 }
 
 /**
- * Room's open-helper factory for the encrypted keyboard database. Unlike the library's default Room factory, this passes [KeepFile] into `SQLiteOpenHelper` so a damaged page
- * or a wrong key never deletes the file. [onCorruption] may move it aside after the exception
- * has been reported.
+ * Room's open-helper factory for the encrypted keyboard database. Unlike the library's default
+ * Room factory, this passes [KeepFile] into `SQLiteOpenHelper` so a damaged page or a wrong key
+ * never deletes the file. [onCorruption] only flags the file; it must not rename or delete it
+ * while connections may still be open.
  */
 class SqlCipherOpenHelperFactory(
     private val sqlKey: ByteArray,
@@ -172,11 +181,51 @@ class SqlCipherOpenHelperFactory(
     }
 }
 
-/** Error handler that never deletes the database file. */
+/**
+ * Error handler that never deletes or moves the database file. A reported corruption is passed
+ * to [onCorrupt] so a persistent marker can be written; the move-aside happens at the next
+ * launch, before any connection opens.
+ */
 class KeepFile(private val onCorrupt: (String) -> Unit = {}) : DatabaseErrorHandler {
     override fun onCorruption(dbObj: SQLiteDatabase?, exception: SQLiteException?) {
         val path = dbObj?.path ?: return
         if (path.isEmpty() || path == ":memory:") return
         onCorrupt(path)
     }
+}
+
+/** True when [sqlKey] is the raw-key form `x'<64 hex digits>'` as US-ASCII bytes. */
+internal fun isRawKey(sqlKey: ByteArray): Boolean {
+    if (sqlKey.size != 67) return false
+    if (sqlKey[0] != 'x'.code.toByte() || sqlKey[1] != '\''.code.toByte() || sqlKey[66] != '\''.code.toByte()) return false
+    return (2 until 66).all { i ->
+        val c = sqlKey[i].toInt().toChar()
+        c in '0'..'9' || c in 'a'..'f'
+    }
+}
+
+/**
+ * Returns a new exception chain whose messages do not contain the raw-key bytes. The original
+ * throwable is not used as a cause, so a later log of this result cannot leak the key.
+ */
+internal fun withoutKey(t: Throwable, sqlKey: ByteArray): Throwable {
+    val needles = buildList {
+        val raw = String(sqlKey, Charsets.US_ASCII)
+        if (raw.isNotEmpty()) add(raw)
+        if (isRawKey(sqlKey)) add(sqlKey.decodeToString(2, 66))
+    }.filter { it.length >= 8 }.distinct()
+    if (needles.isEmpty()) return t
+    fun clean(s: String?): String? {
+        if (s == null) return null
+        var out: String = s
+        for (n in needles) out = out.replace(n, "<redacted>")
+        return out
+    }
+    fun copyAll(e: Throwable): Throwable {
+        val out = Exception(clean(e.message) ?: "error")
+        out.stackTrace = e.stackTrace
+        e.cause?.let { runCatching { out.initCause(copyAll(it)) } }
+        return out
+    }
+    return copyAll(t)
 }

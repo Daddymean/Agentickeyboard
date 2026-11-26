@@ -93,14 +93,49 @@ class KeyboardDbSqlCipherTest {
             f.seek(6000)
             f.write(byteArrayOf(0x5A, 0x5A, 0x5A, 0x5A, 0x5A, 0x5A, 0x5A, 0x5A))
         }
+        // First open after the damage: the live file must stay at its path (N1). A mid-file
+        // page leaves the header readable, so prepare does not move it; the handler only flags.
         val again = build(encrypted = true)
         runCatching { again.userVocabularyDao().count() }
         again.close()
-        val survivors = main.parentFile!!.listFiles()!!.filter {
-            it.name.startsWith(name) && !it.name.endsWith("-shm") && it.length() >= original.size / 2
+        assertTrue("live database must stay at its path while connections may still be open", main.isFile)
+        assertEquals(original.size.toLong(), main.length())
+        assertEquals(0x5A.toByte(), main.readBytes()[6000])
+        val movedOnFirstOpen = main.parentFile!!.listFiles()!!.any { it.name.contains("kbcrypt-unreadable") }
+        assertFalse("must not move the live file aside under open connections", movedOnFirstOpen)
+        assertTrue(File(main.path + ".kbcrypt-corrupt").isFile)
+
+        // Next launch, before any connection opens, the flagged file is moved aside and kept.
+        val third = build(encrypted = true)
+        runCatching { third.userVocabularyDao().count() }
+        third.close()
+        assertFalse(File(main.path + ".kbcrypt-corrupt").exists())
+        val aside = main.parentFile!!.listFiles()!!.single { it.name.startsWith("$name.kbcrypt-unreadable-") && !it.name.contains("-wal") && !it.name.contains("-shm") && !it.name.contains("-journal") }
+        assertEquals(0x5A.toByte(), aside.readBytes()[6000])
+        assertEquals(original.size.toLong(), aside.length())
+        if (main.isFile) {
+            val live = main.readBytes()
+            assertFalse(live.size > 6008 && live[6000] == 0x5A.toByte() && main.length() == original.size.toLong())
         }
-        assertTrue("encrypted file must survive a damaged page, found ${survivors.map { it.name }}", survivors.isNotEmpty())
-        // The damaged bytes are still on disk (original path or an aside), never deleted.
-        assertTrue(survivors.any { f -> f.readBytes().let { it.size >= 6008 && it[6000] == 0x5A.toByte() } || f == main })
+    }
+
+    @Test
+    fun aFailedExportMessageDoesNotContainTheKey() {
+        val plain = build(encrypted = false)
+        runBlocking { KeyboardRepository(plain).insertWords(listOf(UserVocabulary("a", 1, 1))) }
+        plain.close()
+        val sqlKey = KeyboardDbKey.sqlKey(ByteArray(32) { 0xab.toByte() })
+        val needle = String(sqlKey, Charsets.US_ASCII)
+        val blocked = File(context.cacheDir, "kbcrypt-not-a-dir").apply { writeText("x") }
+        val dest = File(blocked, "copy.db")
+        val error = runCatching { SqlCipherEngine().exportEncrypted(main, dest, sqlKey) }.exceptionOrNull()
+        assertTrue(error != null)
+        val text = (error!!.message ?: "") + (error.cause?.message ?: "") + error.stackTraceToString()
+        assertFalse(text.contains(needle))
+        assertFalse(text.contains("ab".repeat(32)))
+        // And the scrubber itself never lets the key through.
+        val cleaned = withoutKey(IllegalStateException("failed $needle"), sqlKey)
+        assertFalse(cleaned.message!!.contains(needle))
+        assertTrue(cleaned.message!!.contains("<redacted>"))
     }
 }

@@ -5,6 +5,8 @@ import java.io.File
 /**
  * Persistent counters for keyboard-database open and migration failures, kept next to the
  * wrapped key in `noBackupFilesDir`. Used for backoff (M4) and the one-tap reset offer (H2).
+ * An unavailable open is counted at most once per process, so a brief Keystore hiccup after
+ * boot cannot burn through the reset threshold in a single launch.
  */
 class KeyboardDbHealth(
     private val file: File,
@@ -32,6 +34,8 @@ class KeyboardDbHealth(
     }
 
     fun recordUnavailable(): Int {
+        if (unavailableCountedThisProcess) return unavailableCount
+        unavailableCountedThisProcess = true
         unavailableCount += 1
         lastReason = "key"
         lastAt = now()
@@ -52,7 +56,7 @@ class KeyboardDbHealth(
         migrationFailures = 0
         lastReason = null
         lastAt = 0L
-        file.delete()
+        runCatching { file.delete() }
     }
 
     fun clear() = recordSuccess()
@@ -66,26 +70,30 @@ class KeyboardDbHealth(
     }
 
     private fun load() {
-        if (!file.isFile) return
-        val map = file.readLines().mapNotNull { line ->
-            line.split('=', limit = 2).takeIf { it.size == 2 }?.let { it[0] to it[1] }
-        }.toMap()
-        unavailableCount = map["unavailable"]?.toIntOrNull() ?: 0
-        migrationFailures = map["migrations"]?.toIntOrNull() ?: 0
-        lastReason = map["reason"]?.ifEmpty { null }
-        lastAt = map["at"]?.toLongOrNull() ?: 0L
+        runCatching {
+            if (!file.isFile) return
+            val map = file.readLines().mapNotNull { line ->
+                line.split('=', limit = 2).takeIf { it.size == 2 }?.let { it[0] to it[1] }
+            }.toMap()
+            unavailableCount = map["unavailable"]?.toIntOrNull() ?: 0
+            migrationFailures = map["migrations"]?.toIntOrNull() ?: 0
+            lastReason = map["reason"]?.ifEmpty { null }
+            lastAt = map["at"]?.toLongOrNull() ?: 0L
+        }
     }
 
     private fun save() {
-        file.parentFile?.mkdirs()
-        val tmp = File(file.path + ".tmp")
-        tmp.writeText(
-            "unavailable=$unavailableCount\nmigrations=$migrationFailures\n" +
-                "reason=${lastReason.orEmpty()}\nat=$lastAt\n"
-        )
-        if (!tmp.renameTo(file)) {
-            file.writeText(tmp.readText())
-            tmp.delete()
+        runCatching {
+            file.parentFile?.mkdirs()
+            val tmp = File(file.path + ".tmp")
+            tmp.writeText(
+                "unavailable=$unavailableCount\nmigrations=$migrationFailures\n" +
+                    "reason=${lastReason.orEmpty()}\nat=$lastAt\n"
+            )
+            if (!tmp.renameTo(file)) {
+                file.writeText(tmp.readText())
+                tmp.delete()
+            }
         }
     }
 
@@ -94,6 +102,14 @@ class KeyboardDbHealth(
         const val MAX_BACKOFF_MS = 4 * 60 * 60 * 1000L
         const val RESET_AFTER = 3
         const val ASIDE_CAP = 3
+
+        @Volatile
+        private var unavailableCountedThisProcess = false
+
+        /** For tests: the next [recordUnavailable] counts as a new app launch. */
+        fun newLaunch() {
+            unavailableCountedThisProcess = false
+        }
 
         fun file(dir: File) = File(dir, "health")
     }

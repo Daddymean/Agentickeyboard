@@ -134,6 +134,7 @@ class FakeKeyWrapper : DbKeyWrapper {
     var failUnwraps = 0
     var unwraps = 0
     var throwInvalidKey = false
+    var throwPermanentlyInvalidated = false
 
     override fun wrap(raw: ByteArray): TwinCipher.Sealed {
         present = true
@@ -143,7 +144,8 @@ class FakeKeyWrapper : DbKeyWrapper {
     override fun unwrap(sealed: TwinCipher.Sealed): ByteArray {
         unwraps++
         check(present) { "key is gone" }
-        if (throwInvalidKey) throw java.security.InvalidKeyException("permanently invalidated")
+        if (throwPermanentlyInvalidated) throw android.security.keystore.KeyPermanentlyInvalidatedException("invalidated")
+        if (throwInvalidKey) throw java.security.InvalidKeyException("Keystore operation failed")
         if (failUnwraps > 0) { failUnwraps--; error("keystore busy") }
         return sealed.ciphertext.map { (it.toInt() xor 0x5a).toByte() }.toByteArray()
     }

@@ -42,6 +42,7 @@ class KeyboardDbEncryptionTest {
 
     @Before
     fun clean() {
+        KeyboardDbHealth.newLaunch()
         main.parentFile?.listFiles()?.filter { it.name.startsWith(name) }?.forEach { it.delete() }
         keyFile.parentFile?.listFiles()?.forEach { it.delete() }
         keyFile.delete()
@@ -412,11 +413,11 @@ class KeyboardDbEncryptionTest {
     }
 
     @Test
-    fun invalidKeyExceptionIsLostAndTheOldKeyFileIsKeptAside() = runBlocking {
+    fun permanentlyInvalidatedKeyIsLostAndTheOldKeyFileIsKeptAside() = runBlocking {
         seedPlaintext()
         encrypted().done()
         val oldKey = keyFile.readBytes()
-        wrapper.throwInvalidKey = true
+        wrapper.throwPermanentlyInvalidated = true
         val db = encrypted()
         assertEquals("encrypted", status?.state)
         assertEquals(0, db.userVocabularyDao().count())
@@ -427,13 +428,31 @@ class KeyboardDbEncryptionTest {
     }
 
     @Test
+    fun aGenericInvalidKeyExceptionIsUnavailableAndDoesNotSetTheDatabaseAside() = runBlocking {
+        seedPlaintext()
+        encrypted().done()
+        val bytes = main.readBytes()
+        val oldKey = keyFile.readBytes()
+        wrapper.throwInvalidKey = true
+        val db = encrypted()
+        assertEquals("memory:key", status?.state)
+        assertFalse(File(main.path + ".kbcrypt-unreadable-42").exists())
+        assertArrayEquals(bytes, main.readBytes())
+        assertArrayEquals(oldKey, keyFile.readBytes())
+        db.done()
+    }
+
+    @Test
     fun threeUnavailableOpensOfferAResetThatStartsFreshWithoutDeleting() = runBlocking {
         seedPlaintext()
         encrypted().done()
         val bytes = main.readBytes()
         val oldKey = keyFile.readBytes()
         wrapper.failUnwraps = 99
-        repeat(3) { encrypted().done() }
+        repeat(3) {
+            KeyboardDbHealth.newLaunch()
+            encrypted().done()
+        }
         assertTrue(status!!.offerReset)
         assertEquals(3, status!!.unavailableCount)
         assertEquals("The keyboard couldn't open its encrypted data this time. Nothing new is being saved to the phone, and deleting here wouldn't change what's stored.", KeyboardDbUserStatus.banner(status))
@@ -450,7 +469,7 @@ class KeyboardDbEncryptionTest {
     }
 
     @Test
-    fun getDatabaseRecyclesAnEphemeralInstance() {
+    fun getDatabaseRetriesAnEphemeralInstanceButNotAStableOne() {
         assertTrue(AppDatabase.shouldRecycle(KeyboardDbStatus("memory:key", false, 0, unavailableCount = 1)))
         assertFalse(AppDatabase.shouldRecycle(KeyboardDbStatus("encrypted", false, 0)))
         assertFalse(AppDatabase.shouldRecycle(KeyboardDbStatus("plaintext:copy", false, 0)))
@@ -493,13 +512,153 @@ class KeyboardDbEncryptionTest {
     }
 
     @Test
-    fun asidesAreCapped() {
-        val dir = File(context.cacheDir, "aside-cap").apply { mkdirs() }
-        dir.listFiles()?.forEach { it.delete() }
-        val files = (1..5).map { n -> File(dir, "db.kbcrypt-unreadable-$n").apply { writeText("x$n") } }
-        files.forEach { it.setLastModified(it.name.filter { c -> c.isDigit() }.toLong() * 1_000) }
-        KeyboardDbMigrator.capAsides(dir, "db.kbcrypt-unreadable-", cap = 3)
-        val left = dir.listFiles()!!.map { it.name }.sorted()
-        assertEquals(listOf("db.kbcrypt-unreadable-3", "db.kbcrypt-unreadable-4", "db.kbcrypt-unreadable-5"), left)
+    fun unavailableIsCountedAtMostOncePerLaunch() = runBlocking {
+        seedPlaintext()
+        encrypted().done()
+        wrapper.failUnwraps = 99
+        repeat(5) { encrypted().done() }
+        assertEquals(1, status!!.unavailableCount)
+        assertFalse(status!!.offerReset)
+        KeyboardDbHealth.newLaunch()
+        encrypted().done()
+        KeyboardDbHealth.newLaunch()
+        encrypted().done()
+        assertEquals(3, status!!.unavailableCount)
+        assertTrue(status!!.offerReset)
+    }
+
+    @Test
+    fun aCorruptMarkerMovesTheFileAsideOnTheNextPrepareBeforeOpening() {
+        seedPlaintext()
+        encrypted().done()
+        val bytes = main.readBytes()
+        migrator().flagCorruption(main)
+        assertTrue(File(main.path + ".kbcrypt-corrupt").isFile)
+        assertTrue(main.isFile)
+        val next = encrypted()
+        next.done()
+        assertFalse(File(main.path + ".kbcrypt-corrupt").exists())
+        val aside = File(main.path + ".kbcrypt-unreadable-42")
+        assertArrayEquals(bytes, aside.readBytes())
+        assertTrue(File(keyFile.path + ".lost-42").isFile)
+        assertTrue(keyFile.isFile)
+        // A new empty database was opened after the aside.
+        assertTrue(main.isFile || status?.state == "encrypted")
+    }
+
+    @Test
+    fun resetBrokenPairsDatabaseAndKeyUnderOneStamp() = runBlocking {
+        seedPlaintext()
+        encrypted().done()
+        val bytes = main.readBytes()
+        val oldKey = keyFile.readBytes()
+        val outcome = migrator().resetBroken(main)
+        assertTrue(outcome is KeyboardDbMigrator.Outcome.Encrypted)
+        assertArrayEquals(bytes, File(main.path + ".kbcrypt-unreadable-42").readBytes())
+        assertArrayEquals(oldKey, File(keyFile.path + ".lost-42").readBytes())
+        assertFalse(main.exists())
+    }
+
+    @Test
+    fun capNeverShredsAReadableAsideAndPairsKeyWithDatabase() {
+        // Five plaintext unconfirmed asides stay; they are still readable (L4).
+        val dbDir = main.parentFile!!
+        dbDir.mkdirs()
+        keyFile.parentFile!!.mkdirs()
+        (1..5).forEach { n ->
+            File(dbDir, "$name.kbcrypt-unconfirmed-$n").writeBytes("SQLite format 3\u0000".toByteArray(Charsets.US_ASCII) + ByteArray(16))
+        }
+        migrator().capPairedAsides(main, cap = 3)
+        val unconfirmed = dbDir.listFiles()!!.filter { it.name.contains("unconfirmed") }.map { it.name }.sorted()
+        assertEquals(5, unconfirmed.size)
+
+        // Unreadable encrypted-looking asides with no key are not readable and are capped.
+        dbDir.listFiles()!!.filter { it.name.contains("unconfirmed") }.forEach { it.delete() }
+        (1..5).forEach { n ->
+            // Random bytes: not a plaintext SQLite header, no matching key.
+            File(dbDir, "$name.kbcrypt-unreadable-$n").writeBytes(ByteArray(64) { n.toByte() })
+            File(keyFile.path + ".lost-$n").writeBytes(ByteArray(8) { n.toByte() })
+        }
+        // Damaged key asides won't unwrap, so the pairs are not readable. Cap keeps newest 3 pairs.
+        migrator().capPairedAsides(main, cap = 3)
+        val leftDb = dbDir.listFiles()!!.filter { it.name.contains("unreadable") }.map { it.name.substringAfter("unreadable-").toInt() }.sorted()
+        val leftKey = keyFile.parentFile!!.listFiles()!!.filter { it.name.contains(".lost-") }.map { it.name.substringAfter(".lost-").toInt() }.sorted()
+        assertEquals(listOf(3, 4, 5), leftDb)
+        assertEquals(listOf(3, 4, 5), leftKey)
+    }
+
+    @Test
+    fun healthLoadAndSaveFailuresDoNotThrow() {
+        val target = File(keyFile.parentFile, "health")
+        target.parentFile!!.mkdirs()
+        // A directory where a file is expected: load must not throw.
+        val asDir = File(keyFile.parentFile, "health-dir")
+        asDir.mkdirs()
+        File(asDir, "health").mkdirs()
+        KeyboardDbHealth(File(asDir, "health")) // load of a directory
+        // Save onto a path whose parent cannot be created as a directory (parent is a file).
+        val blocker = File(keyFile.parentFile, "blocked")
+        blocker.writeText("x")
+        KeyboardDbHealth(File(blocker, "health/file")).recordMigrationFailure("copy")
+    }
+
+
+    @Test
+    fun aKillDuringThePlaintextZeroPassKeepsTheEncryptedCopy() = runBlocking {
+        seedPlaintext()
+        val plainBytes = main.readBytes()
+        encrypted().done()
+        assertEquals(KeyboardDbMigrator.Kind.ENCRYPTED, migrator().kind(main))
+        val good = main.readBytes()
+        val old = File(main.path + ".kbcrypt-plain")
+        if (plainBytes.size > 8192) {
+            old.writeBytes(ByteArray(8192) { 0 } + plainBytes.copyOfRange(8192, plainBytes.size))
+        } else {
+            old.writeBytes(ByteArray(maxOf(plainBytes.size, 8192)) { 0 })
+        }
+        val db = encrypted()
+        assertSeedIntact(db)
+        assertEquals("encrypted", status?.state)
+        assertFalse(old.exists())
+        assertFalse(File(main.path + ".kbcrypt-shredding").exists())
+        assertFalse(main.parentFile!!.listFiles()!!.any { it.name.contains("unconfirmed") })
+        assertArrayEquals(good, main.readBytes())
+        db.done()
+    }
+
+    @Test
+    fun aRepositoryHeldAcrossARecycleUsesTheNewDatabaseAndTheOldHandleStaysOpen() = runBlocking {
+        val first = plaintext()
+        KeyboardRepository(first).insertWords(listOf(UserVocabulary("kept", 3, 1)))
+        var current: AppDatabase = first
+        val repo = KeyboardRepository { current }
+        assertEquals(3, repo.getWord("kept")?.count)
+        val secondName = name + "_recovered"
+        context.getDatabasePath(secondName).parentFile?.listFiles()?.filter { it.name.startsWith(secondName) }?.forEach { it.delete() }
+        val second = Room.databaseBuilder(context, AppDatabase::class.java, secondName)
+            .addCallback(AppDatabase.SECURE_DELETE)
+            .allowMainThreadQueries().build().also(open::add)
+        current = second
+        // In-flight handle: the previous instance was not closed.
+        assertEquals(3, first.userVocabularyDao().getWord("kept")?.count)
+        repo.insertWords(listOf(UserVocabulary("recovered", 1, 1)))
+        assertEquals(1, repo.getWord("recovered")?.count)
+        assertNull(repo.getWord("kept"))
+        assertEquals(3, first.userVocabularyDao().getWord("kept")?.count)
+        second.done()
+    }
+
+    @Test
+    fun withoutKeyStripsTheRawKeyFromAFailureMessage() {
+        val sqlKey = KeyboardDbKey.sqlKey(ByteArray(32) { 0xaa.toByte() })
+        val needle = String(sqlKey, Charsets.US_ASCII)
+        val hex = sqlKey.decodeToString(2, 66)
+        val inner = android.database.sqlite.SQLiteException("ATTACH failed for $needle key=$hex")
+        val outer = IllegalStateException("export: $needle", inner)
+        val cleaned = withoutKey(outer, sqlKey)
+        val text = cleaned.stackTraceToString() + cleaned.message + (cleaned.cause?.message ?: "")
+        assertFalse(text.contains(needle))
+        assertFalse(text.contains(hex))
+        assertTrue(cleaned.message!!.contains("<redacted>"))
     }
 }

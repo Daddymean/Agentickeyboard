@@ -20,6 +20,8 @@ import io.github.daddymean.agentickeyboard.util.ClipboardHistoryLimits
 import io.github.daddymean.agentickeyboard.util.ClipboardHistoryPruner
 import io.github.daddymean.agentickeyboard.util.ClipboardRetentionRecord
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.flatMapLatest
 
 @Entity(tableName = "shortcut_templates")
 data class ShortcutTemplate(
@@ -419,6 +421,8 @@ abstract class AppDatabase : RoomDatabase() {
     companion object {
         @Volatile
         private var INSTANCE: AppDatabase? = null
+        private val instanceGeneration = MutableStateFlow(0)
+        internal val instanceChanges: Flow<Int> get() = instanceGeneration
 
         /** v5 adds indices for the per-keystroke lookups; no data changes. */
         internal val MIGRATION_4_5 = object : Migration(4, 5) {
@@ -527,7 +531,12 @@ abstract class AppDatabase : RoomDatabase() {
             onStatus = { lastStatus = it }
         )
 
-        /** True when a cached instance was opened only as a temporary in-memory fallback. */
+        /**
+         * Retry a mid-process open only while the last instance was the in-memory fallback,
+         * so a recovered Keystore is picked up without a process restart. The previous
+         * instance is never closed: in-flight readers keep that handle, and holders go
+         * through [KeyboardRepository]'s provider to see the new one.
+         */
         internal fun shouldRecycle(status: KeyboardDbStatus?): Boolean = status?.ephemeral == true
 
         fun getDatabase(context: Context): AppDatabase {
@@ -535,64 +544,111 @@ abstract class AppDatabase : RoomDatabase() {
             synchronized(this) {
                 val existing = INSTANCE
                 if (existing != null && !shouldRecycle(lastStatus)) return existing
+                val instance = buildDatabase(app)
                 if (existing != null) {
-                    runCatching { existing.close() }
-                    INSTANCE = null
+                    // Force prepare so lastStatus is current before we decide.
+                    runCatching { instance.openHelper.writableDatabase }
+                    if (lastStatus?.ephemeral == true) {
+                        runCatching { instance.close() }
+                        return existing
+                    }
+                    // Key came back: install the recovered instance. Do not close [existing].
+                    INSTANCE = instance
+                    instanceGeneration.value = instanceGeneration.value + 1
+                    return instance
                 }
-                val instance = Room.databaseBuilder(
-                    app,
-                    AppDatabase::class.java,
-                    NAME
-                )
-                // Learned vocabulary/corrections ARE the product: real migrations
-                // from v4 on. Destructive fallback stays only for the pre-v4
-                // schemas that shipped before migrations existed.
-                .addMigrations(MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8)
-                .fallbackToDestructiveMigrationFrom(true, 1, 2, 3)
-                .addCallback(SECURE_DELETE)
-                // KEYBOARD-048: SQLCipher, with a one-time in-place migration of the old
-                // plaintext file. secure_delete and the post-delete WAL checkpoint work as before.
-                .openHelperFactory(encryptedFactory(app))
-                .build()
                 INSTANCE = instance
+                instanceGeneration.value = instanceGeneration.value + 1
                 return instance
             }
         }
 
-        /**
-         * One-tap recovery after several failed key opens: the unreadable file and its key are
-         * moved aside (never deleted) and a new empty encrypted database starts.
-         */
-        fun resetBrokenDatabase(context: Context): Boolean = synchronized(this) {
-            val app = context.applicationContext
-            INSTANCE?.let { runCatching { it.close() } }
+        private fun buildDatabase(app: Context): AppDatabase =
+            Room.databaseBuilder(
+                app,
+                AppDatabase::class.java,
+                NAME
+            )
+            // Learned vocabulary/corrections ARE the product: real migrations
+            // from v4 on. Destructive fallback stays only for the pre-v4
+            // schemas that shipped before migrations existed.
+            .addMigrations(MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8)
+            .fallbackToDestructiveMigrationFrom(true, 1, 2, 3)
+            .addCallback(SECURE_DELETE)
+            // KEYBOARD-048: SQLCipher, with a one-time in-place migration of the old
+            // plaintext file. secure_delete and the post-delete WAL checkpoint work as before.
+            .openHelperFactory(encryptedFactory(app, engineForTests ?: SqlCipherEngine(), wrapperForTests ?: KeystoreDbKeyWrapper()))
+            .build()
+
+        @Volatile
+        internal var engineForTests: KeyboardDbEngine? = null
+        @Volatile
+        internal var wrapperForTests: DbKeyWrapper? = null
+
+        internal fun clearInstanceForTests() {
             INSTANCE = null
-            val engine = SqlCipherEngine()
-            val wrapper = KeystoreDbKeyWrapper()
+            lastStatus = null
+        }
+
+        /**
+         * One-tap recovery after several failed key opens. Re-checks the key first so a
+         * stale "unavailable" status cannot move a healthy database aside. The previous
+         * Room instance is not closed; holders pick up the new one through the provider.
+         */
+        fun resetBrokenDatabase(context: Context): KeyboardDbResetResult = synchronized(this) {
+            val app = context.applicationContext
+            val engine = engineForTests ?: SqlCipherEngine()
+            val wrapper = wrapperForTests ?: KeystoreDbKeyWrapper()
             val keyFile = KeyboardDbKey.keyFile(app.noBackupFilesDir)
             val now = System::currentTimeMillis
             val health = KeyboardDbHealth(KeyboardDbHealth.file(keyFile.parentFile!!), now)
-            val outcome = KeyboardDbMigrator(KeyboardDbKey(keyFile, wrapper), engine, now, health)
-                .resetBroken(app.getDatabasePath(NAME))
+            val key = KeyboardDbKey(keyFile, wrapper)
+            val main = app.getDatabasePath(NAME)
+            val migrator = KeyboardDbMigrator(key, engine, now, health)
+            when (val read = key.read()) {
+                is KeyboardDbKey.Read.Ok -> {
+                    if (!main.isFile || engine.canOpen(main, read.sqlKey) == OpenProbe.Ok) {
+                        health.recordSuccess()
+                        lastStatus = status("encrypted", false, 0, health)
+                        INSTANCE = null
+                        instanceGeneration.value = instanceGeneration.value + 1
+                        return KeyboardDbResetResult.KeyWorksAgain
+                    }
+                }
+                else -> Unit
+            }
+            val outcome = migrator.resetBroken(main)
             lastStatus = status(
                 if (outcome is KeyboardDbMigrator.Outcome.Encrypted) "encrypted" else "memory:key",
                 false, 0, health
             )
-            outcome is KeyboardDbMigrator.Outcome.Encrypted
+            INSTANCE = null
+            instanceGeneration.value = instanceGeneration.value + 1
+            if (outcome is KeyboardDbMigrator.Outcome.Encrypted) KeyboardDbResetResult.CreatedNew else KeyboardDbResetResult.Failed
         }
     }
 }
 
-class KeyboardRepository(private val db: AppDatabase) {
-    val allShortcuts: Flow<List<ShortcutTemplate>> = db.shortcutDao().getAllShortcuts()
-    val allLogs: Flow<List<WritingLog>> = db.writingLogDao().getAllLogs()
-    val allCorrections: Flow<List<LearnedCorrection>> = db.learnedCorrectionDao().getAllCorrections()
-    val topVocabulary: Flow<List<UserVocabulary>> = db.userVocabularyDao().getTopVocabulary()
+/** Outcome of a user-confirmed reset offer on the learned-data screen. */
+enum class KeyboardDbResetResult { CreatedNew, KeyWorksAgain, Failed }
+
+class KeyboardRepository(private val database: () -> AppDatabase) {
+    constructor(db: AppDatabase) : this({ db })
+
+    private val db get() = database()
+
+    private fun <T> switching(flow: (AppDatabase) -> Flow<T>): Flow<T> =
+        AppDatabase.instanceChanges.flatMapLatest { flow(db) }
+
+    val allShortcuts: Flow<List<ShortcutTemplate>> get() = switching { it.shortcutDao().getAllShortcuts() }
+    val allLogs: Flow<List<WritingLog>> get() = switching { it.writingLogDao().getAllLogs() }
+    val allCorrections: Flow<List<LearnedCorrection>> get() = switching { it.learnedCorrectionDao().getAllCorrections() }
+    val topVocabulary: Flow<List<UserVocabulary>> get() = switching { it.userVocabularyDao().getTopVocabulary() }
     fun vocabularyWordsWithMinimumCount(minimumCount: Int): Flow<List<String>> =
-        db.userVocabularyDao().getWordsWithMinimumCount(minimumCount)
-    val allCustomCommands: Flow<List<CustomCommand>> = db.customCommandDao().getAll()
-    val allSavedSnippets: Flow<List<SavedSnippet>> = db.savedSnippetDao().getAll()
-    val allClipboardHistory: Flow<List<ClipboardHistoryItem>> = db.clipboardHistoryDao().getAll()
+        switching { it.userVocabularyDao().getWordsWithMinimumCount(minimumCount) }
+    val allCustomCommands: Flow<List<CustomCommand>> get() = switching { it.customCommandDao().getAll() }
+    val allSavedSnippets: Flow<List<SavedSnippet>> get() = switching { it.savedSnippetDao().getAll() }
+    val allClipboardHistory: Flow<List<ClipboardHistoryItem>> get() = switching { it.clipboardHistoryDao().getAll() }
 
     suspend fun insertShortcut(shortcut: ShortcutTemplate) {
         db.shortcutDao().insertShortcut(shortcut)
@@ -723,7 +779,7 @@ class KeyboardRepository(private val db: AppDatabase) {
 
     // --- Per-app persona memory ---
 
-    val allAppPersonas: Flow<List<AppPersona>> = db.appPersonaDao().getAllFlow()
+    val allAppPersonas: Flow<List<AppPersona>> get() = switching { it.appPersonaDao().getAllFlow() }
 
     suspend fun getAppPersona(packageName: String): String? {
         return db.appPersonaDao().getForApp(packageName)?.persona
