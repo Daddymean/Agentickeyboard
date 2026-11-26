@@ -18,7 +18,7 @@ class KeyboardDbCryptoGuardTest {
     @Test
     fun everySqlCipherOpenKeepsTheFileOnError() {
         val opens = Regex("SQLiteDatabase\\.openDatabase\\(([^\\n]*)\\)").findAll(engine).map { it.groupValues[1] }.toList()
-        assertEquals(4, opens.size)
+        assertEquals(5, opens.size)
         assertTrue(opens.all { it.contains("KeepFile") })
         assertTrue(engine.contains("class KeepFile"))
         assertTrue(engine.contains("SqlCipherOpenHelperFactory"))
@@ -100,5 +100,12 @@ class KeyboardDbCryptoGuardTest {
         assertTrue(activity.contains("confirmReset()"))
         assertTrue(activity.substringAfter("private fun confirmReset()").contains(".showSecure()"))
         assertTrue(activity.substringAfter("private fun confirm(").contains("refuseDelete"))
+        assertTrue(activity.contains("Delete kept older copies"))
+        assertTrue(activity.substringAfter("private fun confirmDeleteKeptCopies()").contains(".showSecure()"))
+        assertFalse(activity.substringAfter("private fun confirmDeleteKeptCopies()").substringBefore("private fun ").contains("refuseDelete"))
+        assertTrue(activity.contains("Older copies were deleted."))
+        assertTrue(src("db/KeyboardDbCrypto.kt").contains("fun shredKeptAsides"))
+        assertTrue(src("db/KeyboardDbCrypto.kt").contains("IntegrityProbe.Transient"))
+        assertTrue(models.contains("shouldAttemptFallbackRetry"))
     }
 }

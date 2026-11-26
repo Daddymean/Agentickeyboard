@@ -44,6 +44,8 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import io.github.daddymean.agentickeyboard.AgenticKeyboardApplication
+import io.github.daddymean.agentickeyboard.db.AppDatabase
+import io.github.daddymean.agentickeyboard.db.KeyboardDbUserStatus
 import io.github.daddymean.agentickeyboard.util.DEFAULT_PASSPORT_CATEGORIES
 import io.github.daddymean.agentickeyboard.util.KeyboardPassport
 import io.github.daddymean.agentickeyboard.util.KeyboardPassportImportMode
@@ -181,6 +183,18 @@ fun KeyboardPassportCard() {
                 lineHeight = 14.sp
             )
 
+            val diskBlocked = KeyboardDbUserStatus.passportBlocked(AppDatabase.lastStatus)
+            if (diskBlocked != null) {
+                Spacer(modifier = Modifier.height(8.dp))
+                Text(
+                    diskBlocked,
+                    color = Color(0xFFB3261E),
+                    fontSize = 10.sp,
+                    lineHeight = 14.sp,
+                    modifier = Modifier.testTag("passport_in_memory_warning"),
+                )
+            }
+
             Spacer(modifier = Modifier.height(14.dp))
             Text("CREATE PASSPORT", color = Color(0xFF6D28D9), fontSize = 10.sp, fontWeight = FontWeight.Bold)
             Text(
@@ -234,6 +248,10 @@ fun KeyboardPassportCard() {
 
             Button(
                 onClick = {
+                    KeyboardDbUserStatus.passportBlocked(AppDatabase.lastStatus)?.let {
+                        status = it
+                        return@Button
+                    }
                     if (encryptExport && exportPassphrase.length < MIN_PASSPHRASE_CHARS) {
                         status = "Enter a passphrase of at least $MIN_PASSPHRASE_CHARS characters, " +
                             "or turn encryption off."
@@ -469,6 +487,10 @@ fun KeyboardPassportCard() {
                     onClick = {
                         confirmImport = false
                         if (verified == null) return@Button
+                        KeyboardDbUserStatus.passportBlocked(AppDatabase.lastStatus)?.let {
+                            status = it
+                            return@Button
+                        }
                         scope.launch {
                             busy = true
                             runCatching { transfer.apply(verified, importMode, unverifiedReplaceAcknowledged) }

@@ -42,6 +42,9 @@ class KeyboardDbEncryptionTest {
 
     @Before
     fun clean() {
+        KeyboardDbMigrator.scheduleFullIntegrity = false
+        KeyboardDbMigrator.fullIntegrityScheduledThisProcess = false
+        AppDatabase.clearInstanceForTests()
         KeyboardDbHealth.newLaunch()
         main.parentFile?.listFiles()?.filter { it.name.startsWith(name) }?.forEach { it.delete() }
         keyFile.parentFile?.listFiles()?.forEach { it.delete() }
@@ -50,7 +53,12 @@ class KeyboardDbEncryptionTest {
     }
 
     @After
-    fun close() = open.forEach { it.close() }
+    fun close() {
+        open.forEach { it.close() }
+        AppDatabase.engineForTests = null
+        AppDatabase.wrapperForTests = null
+        AppDatabase.clearInstanceForTests()
+    }
 
     private fun migrator() = KeyboardDbMigrator(KeyboardDbKey(keyFile, wrapper), engine, { clock }, health)
 
@@ -480,7 +488,9 @@ class KeyboardDbEncryptionTest {
     fun classifyOpenFailureTreatsOnlyCorruptionAsUnopenable() {
         assertEquals(OpenProbe.Unopenable, classifyOpenFailure(android.database.sqlite.SQLiteDatabaseCorruptException("file is not a database")))
         assertEquals(OpenProbe.Unopenable, classifyOpenFailure(android.database.sqlite.SQLiteException("file is not a database (26)")))
+        assertEquals(OpenProbe.Unopenable, classifyOpenFailure(android.database.sqlite.SQLiteException("database disk image is malformed")))
         assertEquals(OpenProbe.Transient, classifyOpenFailure(android.database.sqlite.SQLiteException("database is locked")))
+        assertEquals(OpenProbe.Transient, classifyOpenFailure(android.database.sqlite.SQLiteDiskIOException("disk I/O error")))
         assertEquals(OpenProbe.Transient, classifyOpenFailure(OutOfMemoryError("heap")))
     }
 
@@ -528,22 +538,64 @@ class KeyboardDbEncryptionTest {
     }
 
     @Test
-    fun aCorruptMarkerMovesTheFileAsideOnTheNextPrepareBeforeOpening() {
+    fun aStaleCorruptionMarkerIsClearedIfTheFileNowChecksOut() = runBlocking {
         seedPlaintext()
         encrypted().done()
         val bytes = main.readBytes()
         migrator().flagCorruption(main)
         assertTrue(File(main.path + ".kbcrypt-corrupt").isFile)
+        val next = encrypted()
+        assertSeedIntact(next)
+        next.done()
+        assertFalse(File(main.path + ".kbcrypt-corrupt").exists())
+        assertFalse(leftovers().any { it.contains("unreadable") })
+        assertArrayEquals(bytes, main.readBytes())
+    }
+
+    @Test
+    fun aConfirmedIntegrityFailureMovesTheFileOnTheNextLaunch() = runBlocking {
+        seedPlaintext()
+        encrypted().done()
+        val bytes = main.readBytes()
+        engine.integrityForced = IntegrityProbe.Corrupt
+        val first = encrypted()
+        assertEquals("encrypted", status?.kind)
+        assertTrue(File(main.path + ".kbcrypt-corrupt").isFile)
         assertTrue(main.isFile)
+        assertSeedIntact(first)
+        assertTrue(status!!.corruptionFlagged)
+        first.done()
         val next = encrypted()
         next.done()
+        engine.integrityForced = null
         assertFalse(File(main.path + ".kbcrypt-corrupt").exists())
         val aside = File(main.path + ".kbcrypt-unreadable-42")
         assertArrayEquals(bytes, aside.readBytes())
         assertTrue(File(keyFile.path + ".lost-42").isFile)
         assertTrue(keyFile.isFile)
-        // A new empty database was opened after the aside.
-        assertTrue(main.isFile || status?.state == "encrypted")
+        assertTrue(main.isFile || status?.kind == "encrypted")
+        assertTrue((status?.keptOlderCount ?: 0) >= 1)
+        assertNotNull(KeyboardDbUserStatus.banner(status))
+        assertTrue(KeyboardDbUserStatus.banner(status)!!.contains("older copy"))
+    }
+
+    @Test
+    fun aTransientIntegrityErrorDoesNotFlagOrSetTheDatabaseAside() = runBlocking {
+        seedPlaintext()
+        encrypted().done()
+        engine.integrityError = android.database.sqlite.SQLiteDiskIOException("disk I/O error")
+        val first = encrypted()
+        assertEquals("encrypted", status?.kind)
+        assertFalse(File(main.path + ".kbcrypt-corrupt").exists())
+        assertFalse(leftovers().any { it.contains("unreadable") })
+        assertSeedIntact(first)
+        first.done()
+        val second = encrypted()
+        assertSeedIntact(second)
+        second.done()
+        assertFalse(File(main.path + ".kbcrypt-corrupt").exists())
+        assertFalse(leftovers().any { it.contains("unreadable") })
+        assertTrue(main.isFile)
     }
 
     @Test
@@ -660,5 +712,152 @@ class KeyboardDbEncryptionTest {
         assertFalse(text.contains(needle))
         assertFalse(text.contains(hex))
         assertTrue(cleaned.message!!.contains("<redacted>"))
+    }
+
+    @Test
+    fun withoutKeyKeepsTheCorruptExceptionClassAndClassifyStillSeesIt() {
+        val sqlKey = KeyboardDbKey.sqlKey(ByteArray(32) { 0xbb.toByte() })
+        val needle = String(sqlKey, Charsets.US_ASCII)
+        val original = android.database.sqlite.SQLiteDatabaseCorruptException(
+            "database disk image is malformed key=$needle"
+        )
+        val cleaned = withoutKey(original, sqlKey)
+        assertTrue(cleaned is android.database.sqlite.SQLiteDatabaseCorruptException)
+        assertFalse(cleaned.message!!.contains(needle))
+        assertEquals(OpenProbe.Unopenable, classifyOpenFailure(cleaned))
+        assertEquals(
+            OpenProbe.Unopenable,
+            classifyOpenFailure(android.database.sqlite.SQLiteException("database disk image is malformed")),
+        )
+        assertEquals(
+            IntegrityProbe.Transient,
+            FakeCipherEngine().apply {
+                integrityError = android.database.sqlite.SQLiteDiskIOException("disk I/O error")
+            }.integrity(File("."), sqlKey, quick = true),
+        )
+    }
+
+    @Test
+    fun fallbackRetriesAreThrottledAndSkippedOnTheMainThread() {
+        assertFalse(shouldAttemptFallbackRetry(20_000, 10_000, onMainThread = true))
+        assertFalse(shouldAttemptFallbackRetry(20_000, 10_000, onMainThread = false))
+        assertTrue(shouldAttemptFallbackRetry(30_000, 10_000, onMainThread = false))
+        assertTrue(shouldAttemptFallbackRetry(0, 0, onMainThread = false))
+
+        seedPlaintext()
+        val realMain = context.getDatabasePath(AppDatabase.NAME)
+        realMain.parentFile?.listFiles()?.filter { it.name.startsWith(AppDatabase.NAME) }?.forEach { it.delete() }
+        File(context.noBackupFilesDir, "keyboard_db").listFiles()?.forEach { it.delete() }
+        AppDatabase.clearInstanceForTests()
+        AppDatabase.engineForTests = engine
+        AppDatabase.wrapperForTests = wrapper
+        AppDatabase.fallbackRetryExecutor = java.util.concurrent.Executor { }
+        AppDatabase.isCallingThreadMain = { false }
+        AppDatabase.nowElapsed = { 0L }
+        val created = AppDatabase.getDatabase(context)
+        created.openHelper.writableDatabase
+        assertEquals("encrypted", AppDatabase.lastStatus?.kind)
+        created.close()
+        AppDatabase.clearInstanceForTests()
+        AppDatabase.engineForTests = engine
+        AppDatabase.wrapperForTests = wrapper
+        AppDatabase.fallbackRetryExecutor = java.util.concurrent.Executor { }
+        AppDatabase.isCallingThreadMain = { false }
+        AppDatabase.nowElapsed = { 0L }
+        wrapper.failUnwraps = 99
+        val first = AppDatabase.getDatabase(context)
+        first.openHelper.writableDatabase
+        assertEquals("memory", AppDatabase.lastStatus?.kind)
+        val builds = AppDatabase.databaseBuildCount
+        AppDatabase.isCallingThreadMain = { true }
+        AppDatabase.nowElapsed = { 60_000L }
+        assertTrue(first === AppDatabase.getDatabase(context))
+        assertEquals(builds, AppDatabase.databaseBuildCount)
+        AppDatabase.isCallingThreadMain = { false }
+        // last still 0, so the first off-main retry is allowed
+        AppDatabase.nowElapsed = { 1_000L }
+        val second = AppDatabase.getDatabase(context)
+        assertEquals("memory", AppDatabase.lastStatus?.kind)
+        assertTrue("still the cached fallback instance, status=${AppDatabase.lastStatus}", first === second)
+        assertEquals(builds + 1, AppDatabase.databaseBuildCount)
+        AppDatabase.nowElapsed = { 2_000L }
+        assertTrue(first === AppDatabase.getDatabase(context))
+        assertEquals(builds + 1, AppDatabase.databaseBuildCount)
+        AppDatabase.nowElapsed = { 20_000L }
+        assertTrue(first === AppDatabase.getDatabase(context))
+        assertEquals(builds + 2, AppDatabase.databaseBuildCount)
+        wrapper.failUnwraps = 0
+        AppDatabase.engineForTests = null
+        AppDatabase.wrapperForTests = null
+        AppDatabase.clearInstanceForTests()
+    }
+
+    @Test
+    fun resetDoesNotMoveTheFileOnATransientProbe() {
+        seedPlaintext()
+        val realMain = context.getDatabasePath(AppDatabase.NAME)
+        realMain.parentFile?.listFiles()?.filter { it.name.startsWith(AppDatabase.NAME) }?.forEach { it.delete() }
+        File(context.noBackupFilesDir, "keyboard_db").listFiles()?.forEach { it.delete() }
+        AppDatabase.clearInstanceForTests()
+        AppDatabase.engineForTests = engine
+        AppDatabase.wrapperForTests = wrapper
+        val db = AppDatabase.getDatabase(context)
+        db.openHelper.writableDatabase
+        assertTrue(realMain.isFile)
+        val bytes = realMain.readBytes()
+        val keyPath = KeyboardDbKey.keyFile(context.noBackupFilesDir)
+        val keyBytes = keyPath.readBytes()
+        engine.forcedProbe = OpenProbe.Transient
+        assertEquals(KeyboardDbResetResult.Failed, AppDatabase.resetBrokenDatabase(context))
+        assertArrayEquals(bytes, realMain.readBytes())
+        assertArrayEquals(keyBytes, keyPath.readBytes())
+        assertFalse(realMain.parentFile!!.listFiles()!!.any { it.name.contains("unreadable") })
+        engine.forcedProbe = null
+        AppDatabase.engineForTests = null
+        AppDatabase.wrapperForTests = null
+        AppDatabase.clearInstanceForTests()
+    }
+
+    @Test
+    fun shredKeptAsidesNeverTouchesTheLiveDatabaseOrKey() = runBlocking {
+        seedPlaintext()
+        encrypted().done()
+        val liveBytes = main.readBytes()
+        val liveKey = keyFile.readBytes()
+        val aside = File(main.path + ".kbcrypt-unreadable-7")
+        aside.writeBytes(ByteArray(32) { 9 })
+        File(aside.path + "-wal").writeBytes(ByteArray(8) { 1 })
+        val lost = File(keyFile.path + ".lost-7")
+        lost.writeBytes(ByteArray(8) { 2 })
+        val leftover = File(main.path + ".kbcrypt-plain")
+        leftover.writeBytes(ByteArray(16) { 3 })
+        assertTrue(migrator().hasKeptAsides(main))
+        assertEquals(2, migrator().keptAsideCount(main)) // leftover + aside/key unit
+        assertTrue(migrator().shredKeptAsides(main))
+        assertFalse(aside.exists())
+        assertFalse(File(aside.path + "-wal").exists())
+        assertFalse(lost.exists())
+        assertFalse(leftover.exists())
+        assertArrayEquals(liveBytes, main.readBytes())
+        assertArrayEquals(liveKey, keyFile.readBytes())
+        assertTrue(main.isFile)
+        assertTrue(keyFile.isFile)
+        assertFalse(migrator().hasKeptAsides(main))
+        assertFalse(migrator().shredKeptAsides(main))
+    }
+
+    @Test
+    fun bannerMentionsKeptCopiesAndALeftoverAndPassportIsBlockedInMemory() {
+        assertNull(KeyboardDbUserStatus.banner(KeyboardDbStatus("encrypted", false, 0)))
+        val kept = KeyboardDbUserStatus.banner(KeyboardDbStatus("encrypted", false, 0, keptOlderCount = 2))
+        assertNotNull(kept)
+        assertTrue(kept!!.contains("older copy"))
+        val leftover = KeyboardDbUserStatus.banner(KeyboardDbStatus("encrypted", false, 0, plaintextLeftover = true))
+        assertTrue(leftover!!.contains("leftover unencrypted copy"))
+        val flagged = KeyboardDbUserStatus.banner(KeyboardDbStatus("encrypted", false, 0, corruptionFlagged = true))
+        assertTrue(flagged!!.contains("problem in its saved data"))
+        assertNull(KeyboardDbUserStatus.passportBlocked(null))
+        assertNull(KeyboardDbUserStatus.passportBlocked(KeyboardDbStatus("encrypted", false, 0)))
+        assertNotNull(KeyboardDbUserStatus.passportBlocked(KeyboardDbStatus("memory:key", false, 0, unavailableCount = 3)))
     }
 }

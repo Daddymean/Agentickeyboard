@@ -1,6 +1,8 @@
 package io.github.daddymean.agentickeyboard.db
 
 import android.content.Context
+import android.os.Looper
+import android.os.SystemClock
 import androidx.room.Dao
 import androidx.room.Database
 import androidx.room.Delete
@@ -22,6 +24,7 @@ import io.github.daddymean.agentickeyboard.util.ClipboardRetentionRecord
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.flatMapLatest
+import java.util.concurrent.Executor
 
 @Entity(tableName = "shortcut_templates")
 data class ShortcutTemplate(
@@ -539,17 +542,40 @@ abstract class AppDatabase : RoomDatabase() {
          */
         internal fun shouldRecycle(status: KeyboardDbStatus?): Boolean = status?.ephemeral == true
 
+        @Volatile
+        internal var lastFallbackRetryElapsed: Long = 0L
+        internal const val FALLBACK_RETRY_INTERVAL_MS = 15_000L
+        internal var nowElapsed: () -> Long = { SystemClock.elapsedRealtime() }
+        internal var isCallingThreadMain: () -> Boolean = {
+            val main = Looper.getMainLooper()
+            main != null && main.thread == Thread.currentThread()
+        }
+        internal var fallbackRetryExecutor: Executor = Executor { r ->
+            Thread(r, "kb-db-fallback").apply { isDaemon = true }.start()
+        }
+        @Volatile private var fallbackRetryScheduled = false
+        @Volatile private var fallbackApp: Context? = null
+        @Volatile internal var databaseBuildCount: Int = 0
+
         fun getDatabase(context: Context): AppDatabase {
             val app = context.applicationContext
             synchronized(this) {
                 val existing = INSTANCE
                 if (existing != null && !shouldRecycle(lastStatus)) return existing
-                val instance = buildDatabase(app)
-                if (existing != null) {
+                if (existing != null && shouldRecycle(lastStatus)) {
+                    val now = nowElapsed()
+                    val onMain = isCallingThreadMain()
+                    if (!shouldAttemptFallbackRetry(now, lastFallbackRetryElapsed, onMain)) {
+                        scheduleFallbackRetryLocked(app)
+                        return existing
+                    }
+                    lastFallbackRetryElapsed = now
+                    val instance = buildDatabase(app)
                     // Force prepare so lastStatus is current before we decide.
                     runCatching { instance.openHelper.writableDatabase }
                     if (lastStatus?.ephemeral == true) {
                         runCatching { instance.close() }
+                        scheduleFallbackRetryLocked(app)
                         return existing
                     }
                     // Key came back: install the recovered instance. Do not close [existing].
@@ -557,14 +583,33 @@ abstract class AppDatabase : RoomDatabase() {
                     instanceGeneration.value = instanceGeneration.value + 1
                     return instance
                 }
+                val instance = buildDatabase(app)
                 INSTANCE = instance
                 instanceGeneration.value = instanceGeneration.value + 1
                 return instance
             }
         }
 
-        private fun buildDatabase(app: Context): AppDatabase =
-            Room.databaseBuilder(
+        private fun scheduleFallbackRetryLocked(app: Context) {
+            fallbackApp = app.applicationContext
+            if (fallbackRetryScheduled) return
+            fallbackRetryScheduled = true
+            fallbackRetryExecutor.execute {
+                try {
+                    val last = lastFallbackRetryElapsed
+                    val wait = if (last == 0L) FALLBACK_RETRY_INTERVAL_MS
+                    else (FALLBACK_RETRY_INTERVAL_MS - (nowElapsed() - last)).coerceAtLeast(0L)
+                    if (wait > 0) Thread.sleep(wait)
+                    fallbackApp?.let { getDatabase(it) }
+                } finally {
+                    fallbackRetryScheduled = false
+                }
+            }
+        }
+
+        private fun buildDatabase(app: Context): AppDatabase {
+            databaseBuildCount++
+            return Room.databaseBuilder(
                 app,
                 AppDatabase::class.java,
                 NAME
@@ -579,6 +624,7 @@ abstract class AppDatabase : RoomDatabase() {
             // plaintext file. secure_delete and the post-delete WAL checkpoint work as before.
             .openHelperFactory(encryptedFactory(app, engineForTests ?: SqlCipherEngine(), wrapperForTests ?: KeystoreDbKeyWrapper()))
             .build()
+        }
 
         @Volatile
         internal var engineForTests: KeyboardDbEngine? = null
@@ -588,6 +634,37 @@ abstract class AppDatabase : RoomDatabase() {
         internal fun clearInstanceForTests() {
             INSTANCE = null
             lastStatus = null
+            lastFallbackRetryElapsed = 0L
+            fallbackRetryScheduled = false
+            fallbackApp = null
+            databaseBuildCount = 0
+            nowElapsed = { SystemClock.elapsedRealtime() }
+            isCallingThreadMain = {
+                val main = Looper.getMainLooper()
+                main != null && main.thread == Thread.currentThread()
+            }
+            KeyboardDbMigrator.scheduleFullIntegrity = false
+            KeyboardDbMigrator.fullIntegrityScheduledThisProcess = false
+        }
+
+        fun hasKeptOlderCopies(context: Context): Boolean = keptOlderCopyCount(context) > 0
+
+        fun keptOlderCopyCount(context: Context): Int {
+            val app = context.applicationContext
+            return KeyboardDbMigrator.listKeptCopies(
+                app.getDatabasePath(NAME),
+                KeyboardDbKey.keyFile(app.noBackupFilesDir),
+            ).size
+        }
+
+        /** Securely deletes set-aside copies and leftover plaintext. Never touches the live database. */
+        fun deleteKeptOlderCopies(context: Context): Boolean {
+            val app = context.applicationContext
+            val main = app.getDatabasePath(NAME)
+            val keyFile = KeyboardDbKey.keyFile(app.noBackupFilesDir)
+            val key = KeyboardDbKey(keyFile, wrapperForTests ?: KeystoreDbKeyWrapper())
+            val engine = engineForTests ?: SqlCipherEngine()
+            return KeyboardDbMigrator(key, engine).shredKeptAsides(main)
         }
 
         /**
@@ -607,20 +684,27 @@ abstract class AppDatabase : RoomDatabase() {
             val migrator = KeyboardDbMigrator(key, engine, now, health)
             when (val read = key.read()) {
                 is KeyboardDbKey.Read.Ok -> {
-                    if (!main.isFile || engine.canOpen(main, read.sqlKey) == OpenProbe.Ok) {
-                        health.recordSuccess()
-                        lastStatus = status("encrypted", false, 0, health)
-                        INSTANCE = null
-                        instanceGeneration.value = instanceGeneration.value + 1
-                        return KeyboardDbResetResult.KeyWorksAgain
+                    val probe = if (!main.isFile) OpenProbe.Ok else engine.canOpen(main, read.sqlKey)
+                    when (probe) {
+                        OpenProbe.Ok -> {
+                            health.recordSuccess()
+                            lastStatus = copiesStatus("encrypted", health, main, keyFile)
+                            INSTANCE = null
+                            instanceGeneration.value = instanceGeneration.value + 1
+                            return KeyboardDbResetResult.KeyWorksAgain
+                        }
+                        // A transient I/O error is not enough to move a probably-fine file (L1).
+                        OpenProbe.Transient -> return KeyboardDbResetResult.Failed
+                        OpenProbe.Unopenable -> Unit
                     }
                 }
-                else -> Unit
+                KeyboardDbKey.Read.Lost -> Unit
+                KeyboardDbKey.Read.Unavailable -> Unit
             }
             val outcome = migrator.resetBroken(main)
-            lastStatus = status(
+            lastStatus = copiesStatus(
                 if (outcome is KeyboardDbMigrator.Outcome.Encrypted) "encrypted" else "memory:key",
-                false, 0, health
+                health, main, keyFile,
             )
             INSTANCE = null
             instanceGeneration.value = instanceGeneration.value + 1
@@ -631,6 +715,28 @@ abstract class AppDatabase : RoomDatabase() {
 
 /** Outcome of a user-confirmed reset offer on the learned-data screen. */
 enum class KeyboardDbResetResult { CreatedNew, KeyWorksAgain, Failed }
+
+private fun copiesStatus(state: String, health: KeyboardDbHealth, main: java.io.File, keyFile: java.io.File) = status(
+    state, false, 0, health,
+    keptOlderCount = KeyboardDbMigrator.listKeptCopies(main, keyFile).size,
+    plaintextLeftover = KeyboardDbMigrator.leftoverPlaintextExists(main),
+    corruptionFlagged = KeyboardDbMigrator.corruptionFlagged(main),
+)
+
+/**
+ * Fallback reopen policy: never retry on the caller's main thread, and at most once per
+ * [intervalMs]. Callers cache the existing in-memory instance when this is false.
+ */
+internal fun shouldAttemptFallbackRetry(
+    nowElapsed: Long,
+    lastAttemptElapsed: Long,
+    onMainThread: Boolean,
+    intervalMs: Long = AppDatabase.FALLBACK_RETRY_INTERVAL_MS,
+): Boolean {
+    if (onMainThread) return false
+    if (lastAttemptElapsed != 0L && nowElapsed - lastAttemptElapsed < intervalMs) return false
+    return true
+}
 
 class KeyboardRepository(private val database: () -> AppDatabase) {
     constructor(db: AppDatabase) : this({ db })

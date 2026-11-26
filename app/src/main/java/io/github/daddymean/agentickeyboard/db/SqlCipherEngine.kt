@@ -63,7 +63,7 @@ class SqlCipherEngine : KeyboardDbEngine {
     override fun verify(file: File, sqlKey: ByteArray): DbSnapshot {
         val db = SQLiteDatabase.openDatabase(file.path, sqlKey, null, SQLiteDatabase.OPEN_READONLY, KeepFile(), null)
         try {
-            // cipher_integrity_check returns no rows when every page's HMAC checks out.
+            // Full checks are for migration and the occasional background pass, not every IME open.
             db.rawQuery("PRAGMA cipher_integrity_check", null).use { check(it.count == 0) { "cipher integrity" } }
             db.rawQuery("PRAGMA integrity_check", null).use { c ->
                 check(c.moveToFirst() && c.getString(0) == "ok" && c.count == 1) { "integrity" }
@@ -73,6 +73,35 @@ class SqlCipherEngine : KeyboardDbEngine {
             throw withoutKey(t, sqlKey)
         } finally {
             db.close()
+        }
+    }
+
+    override fun integrity(file: File, sqlKey: ByteArray, quick: Boolean): IntegrityProbe {
+        return try {
+            val db = SQLiteDatabase.openDatabase(file.path, sqlKey, null, SQLiteDatabase.OPEN_READONLY, KeepFile(), null)
+            try {
+                if (quick) {
+                    // quick_check is cheap enough for every open; a non-ok row is real corruption.
+                    db.rawQuery("PRAGMA quick_check", null).use { c ->
+                        if (c.count == 1 && c.moveToFirst() && c.getString(0) == "ok") IntegrityProbe.Ok
+                        else IntegrityProbe.Corrupt
+                    }
+                } else {
+                    db.rawQuery("PRAGMA cipher_integrity_check", null).use {
+                        if (it.count != 0) return IntegrityProbe.Corrupt
+                    }
+                    db.rawQuery("PRAGMA integrity_check", null).use { c ->
+                        if (c.moveToFirst() && c.getString(0) == "ok" && c.count == 1) IntegrityProbe.Ok
+                        else IntegrityProbe.Corrupt
+                    }
+                }
+            } finally {
+                db.close()
+            }
+        } catch (t: Throwable) {
+            // Only a real corruption exception or a non-ok pragma result is Corrupt.
+            // Disk I/O, busy, and OOM stay Transient so one blip cannot set the database aside.
+            if (classifyOpenFailure(t) == OpenProbe.Unopenable) IntegrityProbe.Corrupt else IntegrityProbe.Transient
         }
     }
 
@@ -95,7 +124,8 @@ class SqlCipherEngine : KeyboardDbEngine {
         }
         OpenProbe.Ok
     } catch (t: Throwable) {
-        classifyOpenFailure(withoutKey(t, sqlKey))
+        // Classify the original exception first: withoutKey must not change the result.
+        classifyOpenFailure(t)
     }
 
     override fun factory(sqlKey: ByteArray, onCorruption: (File) -> Unit): SupportSQLiteOpenHelper.Factory =
@@ -119,13 +149,25 @@ sealed interface OpenProbe {
     data object Transient : OpenProbe
 }
 
+/** Result of [KeyboardDbEngine.integrity]. Not the same as a thrown exception. */
+sealed interface IntegrityProbe {
+    data object Ok : IntegrityProbe
+    /** The check returned a non-ok result, or SQLite reported a corrupt / malformed image. */
+    data object Corrupt : IntegrityProbe
+    /** Disk I/O, busy, OOM, or any other failure: do not flag or move the file. */
+    data object Transient : IntegrityProbe
+}
+
 /** True for SQLITE_NOTADB / corruption only, not for transient I/O or busy. */
 fun classifyOpenFailure(t: Throwable): OpenProbe {
     var e: Throwable? = t
     while (e != null) {
         if (e is android.database.sqlite.SQLiteDatabaseCorruptException) return OpenProbe.Unopenable
         val msg = e.message.orEmpty().lowercase()
-        if (msg.contains("file is not a database") || msg.contains("not a database")) return OpenProbe.Unopenable
+        if (msg.contains("file is not a database") || msg.contains("not a database") ||
+            msg.contains("database disk image is malformed") || msg.contains("disk image is malformed")) {
+            return OpenProbe.Unopenable
+        }
         e = e.cause
     }
     return OpenProbe.Transient
@@ -206,7 +248,8 @@ internal fun isRawKey(sqlKey: ByteArray): Boolean {
 
 /**
  * Returns a new exception chain whose messages do not contain the raw-key bytes. The original
- * throwable is not used as a cause, so a later log of this result cannot leak the key.
+ * class is kept so callers can still classify corruption. The original throwable is not used
+ * as a cause, so a later log of this result cannot leak the key.
  */
 internal fun withoutKey(t: Throwable, sqlKey: ByteArray): Throwable {
     val needles = buildList {
@@ -221,8 +264,14 @@ internal fun withoutKey(t: Throwable, sqlKey: ByteArray): Throwable {
         for (n in needles) out = out.replace(n, "<redacted>")
         return out
     }
+    fun sameClass(e: Throwable, msg: String): Throwable {
+        val cls = e.javaClass
+        return runCatching { cls.getConstructor(String::class.java).newInstance(msg) as Throwable }
+            .recoverCatching { cls.getDeclaredConstructor(String::class.java).apply { isAccessible = true }.newInstance(msg) as Throwable }
+            .getOrElse { Exception(msg) }
+    }
     fun copyAll(e: Throwable): Throwable {
-        val out = Exception(clean(e.message) ?: "error")
+        val out = sameClass(e, clean(e.message) ?: "error")
         out.stackTrace = e.stackTrace
         e.cause?.let { runCatching { out.initCause(copyAll(it)) } }
         return out

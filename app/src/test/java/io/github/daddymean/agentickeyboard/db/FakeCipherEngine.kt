@@ -20,6 +20,10 @@ class FakeCipherEngine : KeyboardDbEngine {
     var corruptCopy = false
     var exports = 0
     var forcedProbe: OpenProbe? = null
+    /** One-shot error consumed by [integrity]; classified, never thrown to the caller. */
+    var integrityError: Throwable? = null
+    /** When set, [integrity] returns this and ignores the file. */
+    var integrityForced: IntegrityProbe? = null
 
     override fun load() {
         if (loadFails) throw UnsatisfiedLinkError("no sqlcipher here")
@@ -56,6 +60,28 @@ class FakeCipherEngine : KeyboardDbEngine {
         try {
             db.rawQuery("PRAGMA integrity_check", null).use { check(it.moveToFirst() && it.getString(0) == "ok") }
             return snapshot(db)
+        } finally {
+            db.close()
+        }
+    }
+
+    override fun integrity(file: File, sqlKey: ByteArray, quick: Boolean): IntegrityProbe {
+        integrityError?.let { err ->
+            integrityError = null
+            return if (classifyOpenFailure(err) == OpenProbe.Unopenable) IntegrityProbe.Corrupt else IntegrityProbe.Transient
+        }
+        integrityForced?.let { return it }
+        if (canOpen(file, sqlKey) != OpenProbe.Ok) {
+            return if (canOpen(file, sqlKey) == OpenProbe.Unopenable) IntegrityProbe.Corrupt else IntegrityProbe.Transient
+        }
+        val db = SQLiteDatabase.openDatabase(file.path, null, SQLiteDatabase.OPEN_READONLY)
+        try {
+            val pragma = if (quick) "PRAGMA quick_check" else "PRAGMA integrity_check"
+            return db.rawQuery(pragma, null).use { c ->
+                if (c.moveToFirst() && c.getString(0) == "ok") IntegrityProbe.Ok else IntegrityProbe.Corrupt
+            }
+        } catch (t: Throwable) {
+            return if (classifyOpenFailure(t) == OpenProbe.Unopenable) IntegrityProbe.Corrupt else IntegrityProbe.Transient
         } finally {
             db.close()
         }

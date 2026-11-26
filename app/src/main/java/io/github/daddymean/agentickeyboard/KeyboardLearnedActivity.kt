@@ -95,6 +95,11 @@ class KeyboardLearnedActivity : Activity() {
         text("What the keyboard has learned", 22f)
         text(NOTICE, 14f)
         KeyboardDbUserStatus.banner(AppDatabase.lastStatus)?.let { text(it, 14f) }
+        val kept = AppDatabase.keptOlderCopyCount(this)
+        if (kept > 0) {
+            text(if (kept == 1) "1 older copy is kept on the phone." else "$kept older copies are kept on the phone.", 14f)
+            button("Delete kept older copies") { confirmDeleteKeptCopies() }
+        }
         KeyboardDbUserStatus.resetLabel(AppDatabase.lastStatus)?.let { label ->
             button(label) { confirmReset() }
         }
@@ -156,9 +161,28 @@ class KeyboardLearnedActivity : Activity() {
     private fun confirmClearAll() {
         val parts = KeyboardStore.values().filter { (counts[it] ?: 0) > 0 }.map { "${counts[it]} ${it.title.lowercase()}" }
         if (parts.isEmpty()) { toast("Nothing to delete."); return }
-        confirm("Delete everything the keyboard has learned: ${parts.joinToString(", ")}? The twin's data isn't touched; it has its own screen.") {
-            it.clearAll()
+        confirm("Delete everything the keyboard has learned: ${parts.joinToString(", ")}? This also deletes any older copies kept on the phone. The twin's data isn't touched; it has its own screen.") {
+            val result = it.clearAll()
+            AppDatabase.deleteKeptOlderCopies(this@KeyboardLearnedActivity)
+            result
         }
+    }
+
+    private fun confirmDeleteKeptCopies() {
+        // Own showSecure dialog: this must work even in the in-memory fallback, and must
+        // never go through confirm() or the live-database refusal (those protect the live database).
+        AlertDialog.Builder(this).setTitle("Delete older copies?")
+            .setMessage(KeyboardDbUserStatus.DELETE_KEPT_EXPLAIN)
+            .setPositiveButton("Delete") { _, _ ->
+                scope.launch {
+                    val deleted = withContext(Dispatchers.IO) {
+                        AppDatabase.deleteKeptOlderCopies(this@KeyboardLearnedActivity)
+                    }
+                    toast(if (deleted) "Older copies were deleted." else "Nothing to delete.")
+                    reload()
+                }
+            }
+            .setNegativeButton("Cancel", null).showSecure()
     }
 
     private fun confirmReset() {

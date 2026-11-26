@@ -2,6 +2,7 @@ package io.github.daddymean.agentickeyboard.util
 
 import androidx.room.withTransaction
 import io.github.daddymean.agentickeyboard.db.AppDatabase
+import io.github.daddymean.agentickeyboard.db.KeyboardDbUserStatus
 import io.github.daddymean.agentickeyboard.db.KeyboardRepository
 import io.github.daddymean.agentickeyboard.db.UserVocabulary
 import kotlinx.coroutines.Dispatchers
@@ -26,7 +27,12 @@ class KeyboardPassportTransfer(
     private val settings: KeyboardSettings
 ) {
 
+    private fun refuseIfInMemory() {
+        KeyboardDbUserStatus.passportBlocked(AppDatabase.lastStatus)?.let { error(it) }
+    }
+
     suspend fun createPassport(options: KeyboardPassportOptions): String = withContext(Dispatchers.IO) {
+        refuseIfInMemory()
         KeyboardPassport.create(
             input = snapshot().toInput(),
             options = options
@@ -43,6 +49,7 @@ class KeyboardPassportTransfer(
         mode: KeyboardPassportImportMode,
         unverifiedReplaceAcknowledged: Boolean = false
     ): KeyboardPassportApplyResult = withContext(Dispatchers.IO) {
+        refuseIfInMemory()
         check(KeyboardPassportImportPolicy.canConfirm(opened.preview, mode, unverifiedReplaceAcknowledged)) {
             if (opened.preview.compatible) {
                 "Replacing data with an unverified file needs explicit confirmation."

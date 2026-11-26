@@ -71,6 +71,22 @@ class KeyboardDbSqlCipherTest {
         assertEquals(500, again.userVocabularyDao().count())
         assertFalse(status!!.migrated)
         android.util.Log.i("KeyboardDbSqlCipherTest", "reopen prepare ms=${status!!.prepareMillis}")
+        val sqlKey = (KeyboardDbKey(
+            KeyboardDbKey.keyFile(context.applicationContext.noBackupFilesDir),
+            KeystoreDbKeyWrapper(),
+        ).read() as KeyboardDbKey.Read.Ok).sqlKey
+        val eng = SqlCipherEngine().also { it.load() }
+        fun timed(block: () -> Unit): Long {
+            val t0 = android.os.SystemClock.elapsedRealtime()
+            block()
+            return android.os.SystemClock.elapsedRealtime() - t0
+        }
+        val quickMs = timed { check(eng.integrity(main, sqlKey, quick = true) == IntegrityProbe.Ok) }
+        val fullMs = timed { check(eng.integrity(main, sqlKey, quick = false) == IntegrityProbe.Ok) }
+        android.util.Log.i(
+            "KeyboardDbSqlCipherTest",
+            "start-cost 500-word db: reopen=${status!!.prepareMillis}ms quick_check=${quickMs}ms full_integrity=${fullMs}ms",
+        )
         again.close()
     }
 

@@ -9,6 +9,8 @@ import androidx.sqlite.db.SupportSQLiteStatement
 import androidx.sqlite.db.framework.FrameworkSQLiteOpenHelperFactory
 import java.io.File
 import java.io.RandomAccessFile
+import java.util.concurrent.Executor
+import java.util.concurrent.Executors
 
 /** A copy of a database's shape: user_version, row counts (including sqlite_sequence) and schema size. */
 data class DbSnapshot(val userVersion: Int, val counts: Map<String, Long>, val schemaEntries: Int = 0)
@@ -27,8 +29,16 @@ interface KeyboardDbEngine {
      */
     fun exportEncrypted(plain: File, dest: File, sqlKey: ByteArray): DbSnapshot
 
-    /** Opens encrypted [file] with [sqlKey], runs the integrity checks and returns its snapshot. Throws on any failure. */
+    /** Opens encrypted [file] with [sqlKey], runs the full integrity checks and returns its snapshot. Throws on any failure. */
     fun verify(file: File, sqlKey: ByteArray): DbSnapshot
+
+    /**
+     * Integrity probe used on every open. Never throws: a non-ok check or a corrupt / malformed
+     * image is [IntegrityProbe.Corrupt]; disk I/O, busy, and OOM are [IntegrityProbe.Transient].
+     * [quick] uses `PRAGMA quick_check`; a full `cipher_integrity_check` + `integrity_check` is
+     * for migration and a background pass, not the IME start path.
+     */
+    fun integrity(file: File, sqlKey: ByteArray, quick: Boolean): IntegrityProbe
 
     /** Snapshot of a plaintext SQLite file (empty key). */
     fun snapshotPlaintext(file: File): DbSnapshot
@@ -77,8 +87,10 @@ interface KeyboardDbEngine {
  * process), the learned-data screen offers a one-tap reset. The newest 3 asides are kept
  * together; an aside that is still readable is never shredded.
  *
- * A damaged page during an open only flags the file. The move-aside runs at the next
- * [prepare], before any connection is opened, so in-use connections never see a renamed inode.
+ * A damaged page during an open only flags the file when the integrity check itself returns
+ * a non-ok result (or SQLite reports a corrupt / malformed image). A disk I/O error is not
+ * treated as corruption. The next [prepare] re-checks before moving anything, so a one-shot
+ * failure cannot set a healthy file aside. In-use connections never see a renamed inode.
  *
  * Residue: flash storage doesn't overwrite in place, so the zeros written in step 5 (and
  * `secure_delete`) may land on new blocks while the old plaintext blocks wait for the flash
@@ -106,19 +118,15 @@ class KeyboardDbMigrator(
     }
 
     fun prepare(main: File): Outcome {
-        // N1: if a previous launch flagged corruption, move the file aside before anything opens.
-        if (consumeCorruptMarker(main) && main.isFile) {
-            val stamp = now()
-            setAside(main, stamp)
-            key.copyAside(stamp)
-            capPairedAsides(main)
-        }
         val engineOk = runCatching { engine.load() }.isSuccess
         val recovered = recover(main)
         if (recovered == Recovered.Stuck) {
             health.recordMigrationFailure("recover")
             return Outcome.InMemory("recover")
         }
+        // Re-check a previous flag before moving: a one-shot I/O error must not set a healthy file aside.
+        // The marker is deleted only after a successful move (or when the file now checks out).
+        if (engineOk) confirmPendingCorruption(main)
         val kind = kind(main)
         if (kind == Kind.MISSING) companions(main).forEach(::shred)
         if (!engineOk) {
@@ -152,9 +160,13 @@ class KeyboardDbMigrator(
         if (sqlKey != null) {
             when (engine.canOpen(main, sqlKey)) {
                 OpenProbe.Ok -> {
-                    if (runCatching { engine.verify(main, sqlKey) }.isFailure) {
-                        // Flag only: Room may still open this launch. Move-aside waits for the next prepare.
-                        flagCorruption(main)
+                    when (engine.integrity(main, sqlKey, quick = true)) {
+                        IntegrityProbe.Corrupt -> {
+                            // Flag only this launch. The next prepare must see the failure again before moving.
+                            flagCorruption(main)
+                        }
+                        IntegrityProbe.Transient -> Unit
+                        IntegrityProbe.Ok -> maybeScheduleFullIntegrity(main, sqlKey)
                     }
                     health.recordSuccess()
                     return Outcome.Encrypted(sqlKey, migrated = false)
@@ -173,6 +185,7 @@ class KeyboardDbMigrator(
             runCatching { key.create() }.getOrNull()
         }
         capPairedAsides(main)
+        if (!main.isFile) runCatching { sibling(main, CORRUPT).delete() }
         return newKey?.let {
             health.recordSuccess()
             Outcome.Encrypted(it, migrated = false)
@@ -385,11 +398,91 @@ class KeyboardDbMigrator(
         }
     }
 
+    /**
+     * If a previous launch flagged corruption, re-run the cheap integrity probe. Move the file
+     * aside only when the failure repeats. The marker is deleted after a successful move, or
+     * when the file now checks out. A transient I/O error leaves the marker for the next launch.
+     */
+    internal fun confirmPendingCorruption(main: File) {
+        val marker = sibling(main, CORRUPT)
+        if (!marker.isFile) return
+        if (!main.isFile) {
+            runCatching { marker.delete() }
+            return
+        }
+        val sqlKey = (key.read() as? KeyboardDbKey.Read.Ok)?.sqlKey ?: return
+        when (engine.integrity(main, sqlKey, quick = true)) {
+            IntegrityProbe.Ok -> runCatching { marker.delete() }
+            IntegrityProbe.Transient -> Unit
+            IntegrityProbe.Corrupt -> {
+                val stamp = now()
+                if (setAside(main, stamp)) {
+                    key.copyAside(stamp)
+                    capPairedAsides(main)
+                    runCatching { marker.delete() }
+                }
+            }
+        }
+    }
+
+    /** @deprecated Kept for tests that still call the old name; use [confirmPendingCorruption]. */
     internal fun consumeCorruptMarker(main: File): Boolean {
         val marker = sibling(main, CORRUPT)
         if (!marker.isFile) return false
-        runCatching { marker.delete() }
-        return true
+        confirmPendingCorruption(main)
+        return !marker.isFile && !main.isFile
+    }
+
+    private fun maybeScheduleFullIntegrity(main: File, sqlKey: ByteArray) {
+        if (!scheduleFullIntegrity) return
+        synchronized(lock) {
+            if (fullIntegrityScheduledThisProcess) return
+            fullIntegrityScheduledThisProcess = true
+        }
+        val keyCopy = sqlKey.copyOf()
+        fullIntegrityExecutor.execute {
+            try {
+                if (engine.integrity(main, keyCopy, quick = false) == IntegrityProbe.Corrupt) {
+                    flagCorruption(main)
+                }
+            } finally {
+                keyCopy.fill(0)
+            }
+        }
+    }
+
+    /** True when a leftover `.kbcrypt-plain` or any set-aside copy is still on the phone. */
+    fun hasKeptAsides(main: File): Boolean = keptAsideCount(main) > 0
+
+    fun keptAsideCount(main: File): Int = listKeptCopies(main, key.file).size
+
+    /**
+     * Securely deletes every set-aside DB/key unit and any leftover plaintext copy. Never
+     * touches the live database, the live key, a mid-migration `.kbcrypt-tmp`, or a shredding
+     * leftover. Returns true when at least one file was removed.
+     */
+    fun shredKeptAsides(main: File): Boolean {
+        val liveDb = runCatching { main.canonicalFile }.getOrDefault(main)
+        val liveKey = runCatching { key.file.canonicalFile }.getOrDefault(key.file)
+        val copies = listKeptCopies(main, key.file)
+        var removed = false
+        for (c in copies) {
+            c.db?.let { f ->
+                val canon = runCatching { f.canonicalFile }.getOrDefault(f)
+                if (canon != liveDb && f.name != main.name) {
+                    shredAll(f)
+                    removed = true
+                }
+            }
+            c.keyAside?.let { f ->
+                val canon = runCatching { f.canonicalFile }.getOrDefault(f)
+                if (canon != liveKey && f.name != key.file.name) {
+                    shred(f)
+                    removed = true
+                }
+            }
+        }
+        return removed
     }
 
     /** Moves the live DB and its wrapped key aside under one stamp and starts a new encrypted database. */
@@ -443,6 +536,8 @@ class KeyboardDbMigrator(
             dbByStamp[stamp] = Pair(stamp, prev?.db, f, prev?.plaintext == true, stampValue)
         }
         val pairs = dbByStamp.values.toList()
+        // Under the cap there is nothing to shred, so skip every readability probe (L3).
+        if (pairs.size <= cap) return
         fun readable(p: Pair): Boolean {
             if (p.db == null) return false
             // Plaintext leftovers are still user data (L4). Anything else is only kept if a
@@ -478,6 +573,13 @@ class KeyboardDbMigrator(
     }
 
     companion object {
+        private val lock = Any()
+        @Volatile internal var scheduleFullIntegrity: Boolean = true
+        @Volatile internal var fullIntegrityScheduledThisProcess: Boolean = false
+        internal var fullIntegrityExecutor: Executor = Executors.newSingleThreadExecutor { r ->
+            Thread(r, "kb-db-integrity").apply { isDaemon = true }
+        }
+
         internal const val TMP = "kbcrypt-tmp"
         internal const val OLD = "kbcrypt-plain"
         internal const val UNREADABLE = "kbcrypt-unreadable"
@@ -530,6 +632,37 @@ class KeyboardDbMigrator(
         }
 
         private fun fsync(file: File) = RandomAccessFile(file, "rw").use { it.fd.sync() }
+
+        data class KeptCopy(val db: File?, val keyAside: File?)
+
+        /** Set-aside DB/key units plus a leftover `.kbcrypt-plain`, if present. Never the live files. */
+        fun listKeptCopies(main: File, keyFile: File): List<KeptCopy> {
+            val out = mutableListOf<KeptCopy>()
+            val leftover = sibling(main, OLD)
+            if (leftover.isFile) out += KeptCopy(leftover, null)
+            val dbDir = main.parentFile
+            val keyDir = keyFile.parentFile
+            val unreadable = Regex("^${Regex.escape(main.name)}\\.${UNREADABLE}-(\\d+)$")
+            val unconfirmed = Regex("^${Regex.escape(main.name)}\\.${UNCONFIRMED}-(\\d+)$")
+            val lostKey = Regex("^${Regex.escape(keyFile.name)}\\.lost-(\\d+)$")
+            val dbByStamp = mutableMapOf<String, KeptCopy>()
+            dbDir?.listFiles()?.forEach { f ->
+                unreadable.matchEntire(f.name)?.let { dbByStamp[it.groupValues[1]] = KeptCopy(f, dbByStamp[it.groupValues[1]]?.keyAside) }
+                unconfirmed.matchEntire(f.name)?.let { dbByStamp[it.groupValues[1]] = KeptCopy(f, dbByStamp[it.groupValues[1]]?.keyAside) }
+            }
+            keyDir?.listFiles()?.forEach { f ->
+                val m = lostKey.matchEntire(f.name) ?: return@forEach
+                val stamp = m.groupValues[1]
+                val prev = dbByStamp[stamp]
+                dbByStamp[stamp] = KeptCopy(prev?.db, f)
+            }
+            out += dbByStamp.values
+            return out
+        }
+
+        fun leftoverPlaintextExists(main: File): Boolean = sibling(main, OLD).isFile
+
+        fun corruptionFlagged(main: File): Boolean = sibling(main, CORRUPT).isFile
     }
 }
 
@@ -541,7 +674,11 @@ data class KeyboardDbStatus(
     val unavailableCount: Int = 0,
     val migrationFailures: Int = 0,
     val lastFailure: String? = null,
+    val keptOlderCount: Int = 0,
+    val plaintextLeftover: Boolean = false,
+    val corruptionFlagged: Boolean = false,
 ) {
+    val keptOlderCopy: Boolean get() = keptOlderCount > 0
     val kind: String get() = state.substringBefore(':')
     /** True when writes and deletes reach the on-disk database (encrypted or still-plaintext). */
     val writesReachDisk: Boolean get() = kind == "encrypted" || kind == "plaintext"
@@ -552,14 +689,30 @@ data class KeyboardDbStatus(
 
 /** User-visible copy for the learned-data screen. No secrets, no file paths. */
 object KeyboardDbUserStatus {
-    fun banner(status: KeyboardDbStatus?): String? = when {
-        status == null || status.kind == "encrypted" -> null
-        status.kind == "memory" ->
-            "The keyboard couldn't open its encrypted data this time. Nothing new is being saved to the phone, and deleting here wouldn't change what's stored."
-        status.state == "plaintext:backoff" || status.kind == "plaintext" ->
-            "The keyboard is still using the unencrypted database while it retries encryption."
-        else -> "The keyboard's saved data isn't in its usual encrypted state."
+    fun banner(status: KeyboardDbStatus?): String? {
+        if (status == null) return null
+        val parts = mutableListOf<String>()
+        when {
+            status.kind == "memory" -> parts +=
+                "The keyboard couldn't open its encrypted data this time. Nothing new is being saved to the phone, and deleting here wouldn't change what's stored."
+            status.state == "plaintext:backoff" || status.kind == "plaintext" -> parts +=
+                "The keyboard is still using the unencrypted database while it retries encryption."
+            status.kind != "encrypted" -> parts +=
+                "The keyboard's saved data isn't in its usual encrypted state."
+        }
+        if (status.corruptionFlagged) parts +=
+            "The keyboard found a problem in its saved data. If it happens again, an older copy will be kept and you can restore or delete it from this screen."
+        if (status.keptOlderCount > 0) parts +=
+            "An older copy of the keyboard's data is still kept on the phone. You can delete it from this screen."
+        if (status.plaintextLeftover) parts +=
+            "A leftover unencrypted copy from encryption is still on the phone. You can delete older copies from this screen."
+        return parts.takeIf { it.isNotEmpty() }?.joinToString(" ")
     }
+
+    fun passportBlocked(status: KeyboardDbStatus?): String? =
+        if (status?.ephemeral == true || status?.writesReachDisk == false)
+            "The keyboard's encrypted data isn't available, so a passport can't be imported or exported."
+        else null
 
     fun refuseDelete(status: KeyboardDbStatus?): String? =
         if (status?.writesReachDisk == true) null
@@ -569,7 +722,10 @@ object KeyboardDbUserStatus {
         if (status?.offerReset == true) "Start a new encrypted database" else null
 
     const val RESET_EXPLAIN =
-        "The unreadable file and its key are moved aside together, not deleted. The newest 3 asides are kept; an aside that is still readable is never removed. A new empty encrypted database starts. You can only do this after several failed launches."
+        "The unreadable file and its key are moved aside together, not deleted. The newest 3 asides are kept; an aside that is still readable is never removed automatically. You can delete kept older copies from this screen. A new empty encrypted database starts. You can only do this after several failed launches."
+
+    const val DELETE_KEPT_EXPLAIN =
+        "This deletes older copies of the keyboard's data kept on the phone. They may hold earlier learned words and corrections. The current data is not removed."
 }
 
 /**
@@ -616,19 +772,29 @@ class KeyboardDbOpenHelperFactory(
             val name = config.name ?: return neverDeleteFramework().create(config)
             val started = SystemClock.elapsedRealtime()
             val migrator = migrator(config.context)
-            val outcome = migrator.prepare(config.context.getDatabasePath(name))
+            val dbFile = config.context.getDatabasePath(name)
+            val outcome = migrator.prepare(dbFile)
             val ms = SystemClock.elapsedRealtime() - started
+            val copies = KeyboardDbMigrator.listKeptCopies(dbFile, KeyboardDbKey.keyFile(config.context.noBackupFilesDir))
+            val leftover = KeyboardDbMigrator.leftoverPlaintextExists(dbFile)
+            val flagged = KeyboardDbMigrator.corruptionFlagged(dbFile)
+            fun report(state: String, migrated: Boolean) = status(
+                state, migrated, ms, migrator.health,
+                keptOlderCount = copies.size,
+                plaintextLeftover = leftover,
+                corruptionFlagged = flagged,
+            )
             return when (outcome) {
                 is KeyboardDbMigrator.Outcome.Encrypted -> {
-                    onStatus(status("encrypted", outcome.migrated, ms, migrator.health))
+                    onStatus(report("encrypted", outcome.migrated))
                     engine.factory(outcome.sqlKey) { file -> migrator.flagCorruption(file) }.create(config)
                 }
                 is KeyboardDbMigrator.Outcome.Plaintext -> {
-                    onStatus(status("plaintext:${outcome.reason}", false, ms, migrator.health))
+                    onStatus(report("plaintext:${outcome.reason}", false))
                     neverDeleteFramework { file -> migrator.flagCorruption(file) }.create(config)
                 }
                 is KeyboardDbMigrator.Outcome.InMemory -> {
-                    onStatus(status("memory:${outcome.reason}", false, ms, migrator.health))
+                    onStatus(report("memory:${outcome.reason}", false))
                     WriteBlockingOpenHelper(
                         neverDeleteFramework().create(
                             SupportSQLiteOpenHelper.Configuration.builder(config.context)
@@ -644,13 +810,24 @@ class KeyboardDbOpenHelperFactory(
     }
 }
 
-internal fun status(state: String, migrated: Boolean, ms: Long, health: KeyboardDbHealth?) = KeyboardDbStatus(
+internal fun status(
+    state: String,
+    migrated: Boolean,
+    ms: Long,
+    health: KeyboardDbHealth?,
+    keptOlderCount: Int = 0,
+    plaintextLeftover: Boolean = false,
+    corruptionFlagged: Boolean = false,
+) = KeyboardDbStatus(
     state = state,
     migrated = migrated,
     prepareMillis = ms,
     unavailableCount = health?.unavailableCount ?: 0,
     migrationFailures = health?.migrationFailures ?: 0,
     lastFailure = health?.lastReason,
+    keptOlderCount = keptOlderCount,
+    plaintextLeftover = plaintextLeftover,
+    corruptionFlagged = corruptionFlagged,
 )
 
 /** Framework factory whose Room callback never deletes or moves the file on corruption; it only flags. */
