@@ -856,8 +856,98 @@ class KeyboardDbEncryptionTest {
         assertTrue(leftover!!.contains("leftover unencrypted copy"))
         val flagged = KeyboardDbUserStatus.banner(KeyboardDbStatus("encrypted", false, 0, corruptionFlagged = true))
         assertTrue(flagged!!.contains("problem in its saved data"))
+        assertFalse(flagged.contains("restore"))
         assertNull(KeyboardDbUserStatus.passportBlocked(null))
         assertNull(KeyboardDbUserStatus.passportBlocked(KeyboardDbStatus("encrypted", false, 0)))
         assertNotNull(KeyboardDbUserStatus.passportBlocked(KeyboardDbStatus("memory:key", false, 0, unavailableCount = 3)))
+    }
+
+    @Test
+    fun aFlaggedPlaintextDatabaseIsReCheckedAsPlaintextAndNotMovedAside() = runBlocking {
+        seedPlaintext()
+        engine.exportFails = true
+        encrypted().done()
+        assertEquals("plaintext:copy", status?.state)
+        assertTrue(keyFile.isFile)
+        val bytes = main.readBytes()
+        migrator().flagCorruption(main)
+        assertTrue(File(main.path + ".kbcrypt-corrupt").isFile)
+        val next = encrypted()
+        assertSeedIntact(next)
+        assertEquals("plaintext", status?.kind)
+        assertFalse(leftovers().any { it.contains("unreadable") })
+        assertArrayEquals(bytes, main.readBytes())
+        assertFalse(File(main.path + ".kbcrypt-corrupt").exists())
+        next.done()
+        engine.exportFails = false
+    }
+
+    @Test
+    fun listKeptCopiesSeparatesSameStampAndIgnoresOrphanKeysAndOnlyLeftover() {
+        val dbDir = main.parentFile!!
+        dbDir.mkdirs()
+        keyFile.parentFile!!.mkdirs()
+        main.writeBytes("SQLite format 3\u0000".toByteArray(Charsets.US_ASCII) + ByteArray(16))
+        File(dbDir, "$name.kbcrypt-unreadable-1").writeBytes(ByteArray(8) { 1 })
+        File(dbDir, "$name.kbcrypt-unconfirmed-1").writeBytes(ByteArray(8) { 2 })
+        File(dbDir, "$name.kbcrypt-unconfirmed-6-wal").writeBytes(ByteArray(8) { 3 })
+        File(keyFile.path + ".lost-99").writeBytes(ByteArray(8) { 4 })
+        val copies = KeyboardDbMigrator.listKeptCopies(main, keyFile)
+        assertEquals(3, copies.size)
+        val names = copies.flatMap { listOfNotNull(it.db, *it.sides.toTypedArray()) }.map { it.name }.toSet()
+        assertTrue(names.any { it.endsWith("unreadable-1") })
+        assertTrue(names.any { it.endsWith("unconfirmed-1") })
+        assertTrue(names.any { it.endsWith("unconfirmed-6-wal") })
+        assertTrue(copies.none { it.keyAside != null && it.db == null && it.sides.isEmpty() })
+
+        val leftover = File(main.path + ".kbcrypt-plain")
+        leftover.writeBytes(ByteArray(8) { 5 })
+        assertEquals(4, KeyboardDbMigrator.listKeptCopies(main, keyFile).size)
+        main.delete()
+        val withoutMain = KeyboardDbMigrator.listKeptCopies(main, keyFile)
+        assertTrue(withoutMain.none { it.db?.name?.endsWith(".kbcrypt-plain") == true || it.db == leftover })
+        assertTrue(leftover.isFile)
+        val m = KeyboardDbMigrator(KeyboardDbKey(keyFile, wrapper), engine, { clock }, health)
+        m.shredKeptAsides(main)
+        assertTrue("only remaining plaintext must be kept", leftover.isFile)
+        leftover.delete()
+    }
+
+    @Test
+    fun deleteKeptOlderCopiesRefreshesTheBannerStatus() {
+        AppDatabase.lastStatus = KeyboardDbStatus("encrypted", false, 0, keptOlderCount = 2, plaintextLeftover = true)
+        AppDatabase.refreshKeptCopyStatus(context)
+        assertEquals(0, AppDatabase.lastStatus?.keptOlderCount)
+        assertFalse(AppDatabase.lastStatus?.plaintextLeftover == true)
+    }
+
+    @Test
+    fun getDatabaseOnTheMainThreadDoesNotWaitForTheRetryLock() {
+        seedPlaintext()
+        val realMain = context.getDatabasePath(AppDatabase.NAME)
+        realMain.parentFile?.listFiles()?.filter { it.name.startsWith(AppDatabase.NAME) }?.forEach { it.delete() }
+        File(context.noBackupFilesDir, "keyboard_db").listFiles()?.forEach { it.delete() }
+        AppDatabase.clearInstanceForTests()
+        AppDatabase.engineForTests = engine
+        AppDatabase.wrapperForTests = wrapper
+        AppDatabase.fallbackRetryExecutor = java.util.concurrent.Executor { }
+        AppDatabase.isCallingThreadMain = { false }
+        val first = AppDatabase.getDatabase(context)
+        first.openHelper.writableDatabase
+        AppDatabase.lastStatus = KeyboardDbStatus("memory:key", false, 0, unavailableCount = 1)
+        AppDatabase.isCallingThreadMain = { true }
+        AppDatabase.databaseLock.lock()
+        try {
+            val started = System.nanoTime()
+            val got = AppDatabase.getDatabase(context)
+            val waitedMs = (System.nanoTime() - started) / 1_000_000
+            assertTrue(got === first)
+            assertTrue("main thread waited ${waitedMs}ms for the retry lock", waitedMs < 250)
+        } finally {
+            AppDatabase.databaseLock.unlock()
+            AppDatabase.engineForTests = null
+            AppDatabase.wrapperForTests = null
+            AppDatabase.clearInstanceForTests()
+        }
     }
 }

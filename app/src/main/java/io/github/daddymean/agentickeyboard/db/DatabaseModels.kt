@@ -25,6 +25,7 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.flatMapLatest
 import java.util.concurrent.Executor
+import java.util.concurrent.locks.ReentrantLock
 
 @Entity(tableName = "shortcut_templates")
 data class ShortcutTemplate(
@@ -556,38 +557,56 @@ abstract class AppDatabase : RoomDatabase() {
         @Volatile private var fallbackRetryScheduled = false
         @Volatile private var fallbackApp: Context? = null
         @Volatile internal var databaseBuildCount: Int = 0
+        /** Shared by [getDatabase] and [resetBrokenDatabase]. Main-thread callers use tryLock. */
+        internal val databaseLock = ReentrantLock()
 
         fun getDatabase(context: Context): AppDatabase {
             val app = context.applicationContext
-            synchronized(this) {
-                val existing = INSTANCE
-                if (existing != null && !shouldRecycle(lastStatus)) return existing
-                if (existing != null && shouldRecycle(lastStatus)) {
-                    val now = nowElapsed()
-                    val onMain = isCallingThreadMain()
-                    if (!shouldAttemptFallbackRetry(now, lastFallbackRetryElapsed, onMain)) {
-                        scheduleFallbackRetryLocked(app)
-                        return existing
-                    }
-                    lastFallbackRetryElapsed = now
-                    val instance = buildDatabase(app)
-                    // Force prepare so lastStatus is current before we decide.
-                    runCatching { instance.openHelper.writableDatabase }
-                    if (lastStatus?.ephemeral == true) {
-                        runCatching { instance.close() }
-                        scheduleFallbackRetryLocked(app)
-                        return existing
-                    }
-                    // Key came back: install the recovered instance. Do not close [existing].
-                    INSTANCE = instance
-                    instanceGeneration.value = instanceGeneration.value + 1
-                    return instance
+            val onMain = isCallingThreadMain()
+            if (onMain) {
+                // Never wait for a background retry's Keystore unwrap / integrity check.
+                if (!databaseLock.tryLock()) {
+                    INSTANCE?.let { return it }
+                    databaseLock.lock()
                 }
+            } else {
+                databaseLock.lock()
+            }
+            try {
+                return getDatabaseUnderLock(app)
+            } finally {
+                if (databaseLock.isHeldByCurrentThread) databaseLock.unlock()
+            }
+        }
+
+        private fun getDatabaseUnderLock(app: Context): AppDatabase {
+            val existing = INSTANCE
+            if (existing != null && !shouldRecycle(lastStatus)) return existing
+            if (existing != null && shouldRecycle(lastStatus)) {
+                val now = nowElapsed()
+                val onMain = isCallingThreadMain()
+                if (!shouldAttemptFallbackRetry(now, lastFallbackRetryElapsed, onMain)) {
+                    scheduleFallbackRetryLocked(app)
+                    return existing
+                }
+                lastFallbackRetryElapsed = now
                 val instance = buildDatabase(app)
+                // Force prepare so lastStatus is current before we decide.
+                runCatching { instance.openHelper.writableDatabase }
+                if (lastStatus?.ephemeral == true) {
+                    runCatching { instance.close() }
+                    scheduleFallbackRetryLocked(app)
+                    return existing
+                }
+                // Key came back: install the recovered instance. Do not close [existing].
                 INSTANCE = instance
                 instanceGeneration.value = instanceGeneration.value + 1
                 return instance
             }
+            val instance = buildDatabase(app)
+            INSTANCE = instance
+            instanceGeneration.value = instanceGeneration.value + 1
+            return instance
         }
 
         private fun scheduleFallbackRetryLocked(app: Context) {
@@ -664,7 +683,22 @@ abstract class AppDatabase : RoomDatabase() {
             val keyFile = KeyboardDbKey.keyFile(app.noBackupFilesDir)
             val key = KeyboardDbKey(keyFile, wrapperForTests ?: KeystoreDbKeyWrapper())
             val engine = engineForTests ?: SqlCipherEngine()
-            return KeyboardDbMigrator(key, engine).shredKeptAsides(main)
+            val removed = KeyboardDbMigrator(key, engine).shredKeptAsides(main)
+            refreshKeptCopyStatus(app)
+            return removed
+        }
+
+        /** Updates the learned-data banner after a delete; does not reopen the database. */
+        fun refreshKeptCopyStatus(context: Context) {
+            val current = lastStatus ?: return
+            val app = context.applicationContext
+            val main = app.getDatabasePath(NAME)
+            val keyFile = KeyboardDbKey.keyFile(app.noBackupFilesDir)
+            lastStatus = current.copy(
+                keptOlderCount = KeyboardDbMigrator.listKeptCopies(main, keyFile).size,
+                plaintextLeftover = KeyboardDbMigrator.leftoverPlaintextExists(main),
+                corruptionFlagged = KeyboardDbMigrator.corruptionFlagged(main),
+            )
         }
 
         /**
@@ -672,7 +706,9 @@ abstract class AppDatabase : RoomDatabase() {
          * stale "unavailable" status cannot move a healthy database aside. The previous
          * Room instance is not closed; holders pick up the new one through the provider.
          */
-        fun resetBrokenDatabase(context: Context): KeyboardDbResetResult = synchronized(this) {
+        fun resetBrokenDatabase(context: Context): KeyboardDbResetResult {
+            databaseLock.lock()
+            try {
             val app = context.applicationContext
             val engine = engineForTests ?: SqlCipherEngine()
             val wrapper = wrapperForTests ?: KeystoreDbKeyWrapper()
@@ -708,7 +744,10 @@ abstract class AppDatabase : RoomDatabase() {
             )
             INSTANCE = null
             instanceGeneration.value = instanceGeneration.value + 1
-            if (outcome is KeyboardDbMigrator.Outcome.Encrypted) KeyboardDbResetResult.CreatedNew else KeyboardDbResetResult.Failed
+            return if (outcome is KeyboardDbMigrator.Outcome.Encrypted) KeyboardDbResetResult.CreatedNew else KeyboardDbResetResult.Failed
+            } finally {
+                if (databaseLock.isHeldByCurrentThread) databaseLock.unlock()
+            }
         }
     }
 }

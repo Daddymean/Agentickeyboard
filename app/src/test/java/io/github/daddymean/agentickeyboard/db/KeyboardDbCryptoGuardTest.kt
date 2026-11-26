@@ -18,7 +18,7 @@ class KeyboardDbCryptoGuardTest {
     @Test
     fun everySqlCipherOpenKeepsTheFileOnError() {
         val opens = Regex("SQLiteDatabase\\.openDatabase\\(([^\\n]*)\\)").findAll(engine).map { it.groupValues[1] }.toList()
-        assertEquals(5, opens.size)
+        assertEquals(6, opens.size)
         assertTrue(opens.all { it.contains("KeepFile") })
         assertTrue(engine.contains("class KeepFile"))
         assertTrue(engine.contains("SqlCipherOpenHelperFactory"))

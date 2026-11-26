@@ -105,6 +105,23 @@ class SqlCipherEngine : KeyboardDbEngine {
         }
     }
 
+    override fun integrityPlaintext(file: File, quick: Boolean): IntegrityProbe {
+        return try {
+            val db = SQLiteDatabase.openDatabase(file.path, ByteArray(0), null, SQLiteDatabase.OPEN_READONLY, KeepFile(), null)
+            try {
+                val pragma = if (quick) "PRAGMA quick_check" else "PRAGMA integrity_check"
+                db.rawQuery(pragma, null).use { c ->
+                    if (c.count == 1 && c.moveToFirst() && c.getString(0) == "ok") IntegrityProbe.Ok
+                    else IntegrityProbe.Corrupt
+                }
+            } finally {
+                db.close()
+            }
+        } catch (t: Throwable) {
+            if (classifyOpenFailure(t) == OpenProbe.Unopenable) IntegrityProbe.Corrupt else IntegrityProbe.Transient
+        }
+    }
+
     override fun snapshotPlaintext(file: File): DbSnapshot {
         val db = SQLiteDatabase.openDatabase(file.path, ByteArray(0), null, SQLiteDatabase.OPEN_READONLY, KeepFile(), null)
         try {

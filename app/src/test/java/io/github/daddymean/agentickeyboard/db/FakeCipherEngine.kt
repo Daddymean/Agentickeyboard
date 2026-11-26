@@ -87,6 +87,25 @@ class FakeCipherEngine : KeyboardDbEngine {
         }
     }
 
+    override fun integrityPlaintext(file: File, quick: Boolean): IntegrityProbe {
+        integrityError?.let { err ->
+            integrityError = null
+            return if (classifyOpenFailure(err) == OpenProbe.Unopenable) IntegrityProbe.Corrupt else IntegrityProbe.Transient
+        }
+        integrityForced?.let { return it }
+        val db = SQLiteDatabase.openDatabase(file.path, null, SQLiteDatabase.OPEN_READONLY)
+        try {
+            val pragma = if (quick) "PRAGMA quick_check" else "PRAGMA integrity_check"
+            return db.rawQuery(pragma, null).use { c ->
+                if (c.moveToFirst() && c.getString(0) == "ok") IntegrityProbe.Ok else IntegrityProbe.Corrupt
+            }
+        } catch (t: Throwable) {
+            return if (classifyOpenFailure(t) == OpenProbe.Unopenable) IntegrityProbe.Corrupt else IntegrityProbe.Transient
+        } finally {
+            db.close()
+        }
+    }
+
     override fun snapshotPlaintext(file: File): DbSnapshot {
         val db = SQLiteDatabase.openDatabase(file.path, null, SQLiteDatabase.OPEN_READONLY)
         try { return snapshot(db) } finally { db.close() }

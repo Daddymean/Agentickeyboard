@@ -40,6 +40,12 @@ interface KeyboardDbEngine {
      */
     fun integrity(file: File, sqlKey: ByteArray, quick: Boolean): IntegrityProbe
 
+    /**
+     * Integrity probe for a plaintext SQLite file (empty key). Never uses the SQLCipher key,
+     * so "file is not a database" cannot be a false positive on a still-plaintext main.
+     */
+    fun integrityPlaintext(file: File, quick: Boolean): IntegrityProbe
+
     /** Snapshot of a plaintext SQLite file (empty key). */
     fun snapshotPlaintext(file: File): DbSnapshot
 
@@ -410,8 +416,21 @@ class KeyboardDbMigrator(
             runCatching { marker.delete() }
             return
         }
-        val sqlKey = (key.read() as? KeyboardDbKey.Read.Ok)?.sqlKey ?: return
-        when (engine.integrity(main, sqlKey, quick = true)) {
+        // Kind first: a still-plaintext file (failed migration / backoff) must be
+        // re-checked with the empty key. Opening it with the SQLCipher key fails
+        // with "not a database", which is not corruption.
+        val probe = when (kind(main)) {
+            Kind.MISSING -> {
+                runCatching { marker.delete() }
+                return
+            }
+            Kind.PLAINTEXT -> engine.integrityPlaintext(main, quick = true)
+            Kind.ENCRYPTED -> {
+                val sqlKey = (key.read() as? KeyboardDbKey.Read.Ok)?.sqlKey ?: return
+                engine.integrity(main, sqlKey, quick = true)
+            }
+        }
+        when (probe) {
             IntegrityProbe.Ok -> runCatching { marker.delete() }
             IntegrityProbe.Transient -> Unit
             IntegrityProbe.Corrupt -> {
@@ -457,29 +476,49 @@ class KeyboardDbMigrator(
     fun keptAsideCount(main: File): Int = listKeptCopies(main, key.file).size
 
     /**
-     * Securely deletes every set-aside DB/key unit and any leftover plaintext copy. Never
-     * touches the live database, the live key, a mid-migration `.kbcrypt-tmp`, or a shredding
-     * leftover. Returns true when at least one file was removed.
+     * Securely deletes set-aside DB/key units and leftover plaintext that is not the only
+     * remaining copy. Never touches the live database, the live key, a mid-migration
+     * `.kbcrypt-tmp`, a shredding leftover, or a `.kbcrypt-plain` that is the only data
+     * (crash-recovery, main missing). Returns true when at least one file was removed.
      */
     fun shredKeptAsides(main: File): Boolean {
         val liveDb = runCatching { main.canonicalFile }.getOrDefault(main)
         val liveKey = runCatching { key.file.canonicalFile }.getOrDefault(key.file)
         val copies = listKeptCopies(main, key.file)
         var removed = false
+        fun safe(file: File, live: File, liveName: String): Boolean {
+            val canon = runCatching { file.canonicalFile }.getOrDefault(file)
+            return canon != live && file.name != liveName
+        }
         for (c in copies) {
             c.db?.let { f ->
-                val canon = runCatching { f.canonicalFile }.getOrDefault(f)
-                if (canon != liveDb && f.name != main.name) {
-                    shredAll(f)
+                if (safe(f, liveDb, main.name)) {
+                    // A main aside or leftover is shredded with its sidecars; an orphan
+                    // sidecar is shredded on its own (shredAll would look for the wrong names).
+                    if (c.orphanSidecar) shred(f) else shredAll(f)
+                    removed = true
+                }
+            }
+            for (s in c.sides) {
+                if (safe(s, liveDb, main.name)) {
+                    shred(s)
                     removed = true
                 }
             }
             c.keyAside?.let { f ->
-                val canon = runCatching { f.canonicalFile }.getOrDefault(f)
-                if (canon != liveKey && f.name != key.file.name) {
+                if (safe(f, liveKey, key.file.name)) {
                     shred(f)
                     removed = true
                 }
+            }
+        }
+        // Orphan .lost-* keys are not counted as copies, but they are leftover key
+        // material and are cleaned up with a confirmed delete of older copies.
+        val lostKey = Regex("^${Regex.escape(key.file.name)}\\.lost-(\\d+)$")
+        key.file.parentFile?.listFiles()?.forEach { f ->
+            if (lostKey.matches(f.name) && safe(f, liveKey, key.file.name)) {
+                shred(f)
+                removed = true
             }
         }
         return removed
@@ -633,34 +672,62 @@ class KeyboardDbMigrator(
 
         private fun fsync(file: File) = RandomAccessFile(file, "rw").use { it.fd.sync() }
 
-        data class KeptCopy(val db: File?, val keyAside: File?)
+        data class KeptCopy(
+            val db: File?,
+            val keyAside: File?,
+            val sides: List<File> = emptyList(),
+            val orphanSidecar: Boolean = false,
+        )
 
-        /** Set-aside DB/key units plus a leftover `.kbcrypt-plain`, if present. Never the live files. */
+        /**
+         * Set-aside DB units plus a leftover `.kbcrypt-plain` when the live main still exists.
+         * Unreadable and unconfirmed asides with the same stamp are separate entries.
+         * Orphan `-wal`/`-shm`/`-journal` side files with no aside are listed.
+         * A `.lost-*` key with no matching DB is not counted as a copy.
+         * A leftover plaintext is omitted when [main] is missing (it may be the only data).
+         */
         fun listKeptCopies(main: File, keyFile: File): List<KeptCopy> {
             val out = mutableListOf<KeptCopy>()
             val leftover = sibling(main, OLD)
-            if (leftover.isFile) out += KeptCopy(leftover, null)
+            if (leftover.isFile && main.isFile) out += KeptCopy(leftover, null)
             val dbDir = main.parentFile
             val keyDir = keyFile.parentFile
-            val unreadable = Regex("^${Regex.escape(main.name)}\\.${UNREADABLE}-(\\d+)$")
-            val unconfirmed = Regex("^${Regex.escape(main.name)}\\.${UNCONFIRMED}-(\\d+)$")
+            val dbAside = Regex("^${Regex.escape(main.name)}\\.(${UNREADABLE}|${UNCONFIRMED})-(\\d+)$")
+            val dbSide = Regex("^${Regex.escape(main.name)}\\.(${UNREADABLE}|${UNCONFIRMED})-(\\d+)(-wal|-shm|-journal)$")
             val lostKey = Regex("^${Regex.escape(keyFile.name)}\\.lost-(\\d+)$")
-            val dbByStamp = mutableMapOf<String, KeptCopy>()
+            data class Id(val kind: String, val stamp: String)
+            val byId = linkedMapOf<Id, KeptCopy>()
             dbDir?.listFiles()?.forEach { f ->
-                unreadable.matchEntire(f.name)?.let { dbByStamp[it.groupValues[1]] = KeptCopy(f, dbByStamp[it.groupValues[1]]?.keyAside) }
-                unconfirmed.matchEntire(f.name)?.let { dbByStamp[it.groupValues[1]] = KeptCopy(f, dbByStamp[it.groupValues[1]]?.keyAside) }
+                dbAside.matchEntire(f.name)?.let { m ->
+                    val id = Id(m.groupValues[1], m.groupValues[2])
+                    val prev = byId[id]
+                    byId[id] = KeptCopy(f, prev?.keyAside, prev?.sides.orEmpty())
+                }
+                dbSide.matchEntire(f.name)?.let { m ->
+                    val id = Id(m.groupValues[1], m.groupValues[2])
+                    val prev = byId[id]
+                    if (prev?.db != null && !prev.orphanSidecar) {
+                        // Main aside already listed; shredAll will take the sidecars.
+                    } else {
+                        val sides = prev?.sides.orEmpty() + f
+                        byId[id] = KeptCopy(prev?.db, prev?.keyAside, sides, orphanSidecar = prev?.db == null)
+                    }
+                }
             }
+            // Attach a matching key to at most one DB unit of the same stamp (prefer unreadable).
             keyDir?.listFiles()?.forEach { f ->
                 val m = lostKey.matchEntire(f.name) ?: return@forEach
                 val stamp = m.groupValues[1]
-                val prev = dbByStamp[stamp]
-                dbByStamp[stamp] = KeptCopy(prev?.db, f)
+                val id = listOf(UNREADABLE, UNCONFIRMED).map { Id(it, stamp) }.firstOrNull { it in byId } ?: return@forEach
+                val prev = byId[id]!!
+                if (prev.keyAside == null) byId[id] = prev.copy(keyAside = f)
             }
-            out += dbByStamp.values
+            out += byId.values
             return out
         }
 
-        fun leftoverPlaintextExists(main: File): Boolean = sibling(main, OLD).isFile
+        fun leftoverPlaintextExists(main: File): Boolean = sibling(main, OLD).isFile && main.isFile
+
 
         fun corruptionFlagged(main: File): Boolean = sibling(main, CORRUPT).isFile
     }
@@ -701,7 +768,7 @@ object KeyboardDbUserStatus {
                 "The keyboard's saved data isn't in its usual encrypted state."
         }
         if (status.corruptionFlagged) parts +=
-            "The keyboard found a problem in its saved data. If it happens again, an older copy will be kept and you can restore or delete it from this screen."
+            "The keyboard found a problem in its saved data. If it happens again, an older copy will be kept on the phone. You can delete kept copies from this screen."
         if (status.keptOlderCount > 0) parts +=
             "An older copy of the keyboard's data is still kept on the phone. You can delete it from this screen."
         if (status.plaintextLeftover) parts +=
@@ -725,7 +792,7 @@ object KeyboardDbUserStatus {
         "The unreadable file and its key are moved aside together, not deleted. The newest 3 asides are kept; an aside that is still readable is never removed automatically. You can delete kept older copies from this screen. A new empty encrypted database starts. You can only do this after several failed launches."
 
     const val DELETE_KEPT_EXPLAIN =
-        "This deletes older copies of the keyboard's data kept on the phone. They may hold earlier learned words and corrections. The current data is not removed."
+        "This deletes older copies of the keyboard's data kept on the phone. They may hold earlier learned words and corrections. The database the keyboard is using now is not removed. A leftover copy that is the only remaining data is kept."
 }
 
 /**
