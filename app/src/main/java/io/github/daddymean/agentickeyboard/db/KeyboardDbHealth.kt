@@ -1,6 +1,7 @@
 package io.github.daddymean.agentickeyboard.db
 
 import java.io.File
+import java.util.Collections
 
 /**
  * Persistent counters for keyboard-database open and migration failures, kept next to the
@@ -23,7 +24,12 @@ class KeyboardDbHealth(
     var lastAt: Long = 0L
         private set
 
-    init { load() }
+    private val persistEpoch = Companion.persistEpoch
+
+    init {
+        persistedFiles.add(file)
+        load()
+    }
 
     fun offerReset(): Boolean = unavailableCount >= resetAfter
 
@@ -83,6 +89,7 @@ class KeyboardDbHealth(
     }
 
     private fun save() {
+        if (persistEpoch != Companion.persistEpoch) return
         runCatching {
             file.parentFile?.mkdirs()
             val tmp = File(file.path + ".tmp")
@@ -105,10 +112,29 @@ class KeyboardDbHealth(
 
         @Volatile
         private var unavailableCountedThisProcess = false
+        @Volatile
+        private var persistEpoch = 0
+        private val persistedFiles: MutableSet<File> = Collections.synchronizedSet(mutableSetOf())
 
         /** For tests: the next [recordUnavailable] counts as a new app launch. */
         fun newLaunch() {
             unavailableCountedThisProcess = false
+        }
+
+        /**
+         * Test-only: drop on-disk health counters and ignore [save] from earlier instances,
+         * so a previous test's engine/key failure cannot force [plaintext:backoff] here.
+         */
+        fun resetPersistedForTests() {
+            persistEpoch += 1
+            unavailableCountedThisProcess = false
+            val files = synchronized(persistedFiles) {
+                persistedFiles.toList().also { persistedFiles.clear() }
+            }
+            files.forEach { f ->
+                runCatching { f.delete() }
+                runCatching { File(f.path + ".tmp").delete() }
+            }
         }
 
         fun file(dir: File) = File(dir, "health")

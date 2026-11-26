@@ -20,6 +20,8 @@ import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 import java.io.File
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
 
 /**
  * KEYBOARD-048: the keyboard database migration, with real files, real SQLite and real Room.
@@ -755,26 +757,24 @@ class KeyboardDbEncryptionTest {
         val realMain = context.getDatabasePath(AppDatabase.NAME)
         realMain.parentFile?.listFiles()?.filter { it.name.startsWith(AppDatabase.NAME) }?.forEach { it.delete() }
         File(context.noBackupFilesDir, "keyboard_db").listFiles()?.forEach { it.delete() }
-        AppDatabase.clearInstanceForTests()
-        AppDatabase.engineForTests = engine
-        AppDatabase.wrapperForTests = wrapper
-        AppDatabase.fallbackRetryExecutor = java.util.concurrent.Executor { }
-        AppDatabase.isCallingThreadMain = { false }
-        AppDatabase.nowElapsed = { 0L }
+        // Install the test engine under the database lock so Application cleanup
+        // cannot leave an uninstrumented INSTANCE (lastStatus stays null) or open
+        // with failUnwraps still 0 before the memory-fallback half of this test.
+        AppDatabase.resetForTests(engine, wrapper)
         val created = AppDatabase.getDatabase(context)
         created.openHelper.writableDatabase
-        assertEquals("encrypted", AppDatabase.lastStatus?.kind)
+        // Push the FakeCipher application_id stamp out of WAL into the main file.
+        // A 0-byte (or uncheckpointed) main is Kind.MISSING/PLAINTEXT, and a later
+        // failed unwrap then reports plaintext:key instead of memory.
+        created.openHelper.writableDatabase.query("PRAGMA wal_checkpoint(TRUNCATE)").use { }
+        assertTrue("encrypted main should be on disk, bytes=${realMain.length()}", realMain.length() > 0)
+        assertEquals("status=${AppDatabase.lastStatus}", "encrypted", AppDatabase.lastStatus?.kind)
         created.close()
-        AppDatabase.clearInstanceForTests()
-        AppDatabase.engineForTests = engine
-        AppDatabase.wrapperForTests = wrapper
-        AppDatabase.fallbackRetryExecutor = java.util.concurrent.Executor { }
-        AppDatabase.isCallingThreadMain = { false }
-        AppDatabase.nowElapsed = { 0L }
         wrapper.failUnwraps = 99
+        AppDatabase.resetForTests(engine, wrapper)
         val first = AppDatabase.getDatabase(context)
         first.openHelper.writableDatabase
-        assertEquals("memory", AppDatabase.lastStatus?.kind)
+        assertEquals("status=${AppDatabase.lastStatus}", "memory", AppDatabase.lastStatus?.kind)
         val builds = AppDatabase.databaseBuildCount
         AppDatabase.isCallingThreadMain = { true }
         AppDatabase.nowElapsed = { 60_000L }
@@ -794,9 +794,7 @@ class KeyboardDbEncryptionTest {
         assertTrue(first === AppDatabase.getDatabase(context))
         assertEquals(builds + 2, AppDatabase.databaseBuildCount)
         wrapper.failUnwraps = 0
-        AppDatabase.engineForTests = null
-        AppDatabase.wrapperForTests = null
-        AppDatabase.clearInstanceForTests()
+        AppDatabase.resetForTests()
     }
 
     @Test
@@ -805,9 +803,7 @@ class KeyboardDbEncryptionTest {
         val realMain = context.getDatabasePath(AppDatabase.NAME)
         realMain.parentFile?.listFiles()?.filter { it.name.startsWith(AppDatabase.NAME) }?.forEach { it.delete() }
         File(context.noBackupFilesDir, "keyboard_db").listFiles()?.forEach { it.delete() }
-        AppDatabase.clearInstanceForTests()
-        AppDatabase.engineForTests = engine
-        AppDatabase.wrapperForTests = wrapper
+        AppDatabase.resetForTests(engine, wrapper)
         val db = AppDatabase.getDatabase(context)
         db.openHelper.writableDatabase
         assertTrue(realMain.isFile)
@@ -820,9 +816,7 @@ class KeyboardDbEncryptionTest {
         assertArrayEquals(keyBytes, keyPath.readBytes())
         assertFalse(realMain.parentFile!!.listFiles()!!.any { it.name.contains("unreadable") })
         engine.forcedProbe = null
-        AppDatabase.engineForTests = null
-        AppDatabase.wrapperForTests = null
-        AppDatabase.clearInstanceForTests()
+        AppDatabase.resetForTests()
     }
 
     @Test
@@ -969,27 +963,38 @@ class KeyboardDbEncryptionTest {
         val realMain = context.getDatabasePath(AppDatabase.NAME)
         realMain.parentFile?.listFiles()?.filter { it.name.startsWith(AppDatabase.NAME) }?.forEach { it.delete() }
         File(context.noBackupFilesDir, "keyboard_db").listFiles()?.forEach { it.delete() }
-        AppDatabase.clearInstanceForTests()
-        AppDatabase.engineForTests = engine
-        AppDatabase.wrapperForTests = wrapper
-        AppDatabase.fallbackRetryExecutor = java.util.concurrent.Executor { }
-        AppDatabase.isCallingThreadMain = { false }
+        AppDatabase.resetForTests(engine, wrapper)
         val first = AppDatabase.getDatabase(context)
         first.openHelper.writableDatabase
-        AppDatabase.lastStatus = KeyboardDbStatus("memory:key", false, 0, unavailableCount = 1)
         AppDatabase.isCallingThreadMain = { true }
-        AppDatabase.databaseLock.lock()
+        // Hold the lock on another thread so tryLock actually fails (ReentrantLock
+        // would succeed on this thread). Set lastStatus after the lock is held so
+        // a background getDatabase cannot recycle INSTANCE first.
+        val startHold = CountDownLatch(1)
+        val held = CountDownLatch(1)
+        val release = CountDownLatch(1)
+        Thread({
+            startHold.await()
+            AppDatabase.databaseLock.lock()
+            try {
+                held.countDown()
+                release.await(5, TimeUnit.SECONDS)
+            } finally {
+                if (AppDatabase.databaseLock.isHeldByCurrentThread) AppDatabase.databaseLock.unlock()
+            }
+        }, "kb-db-test-hold-lock").apply { isDaemon = true; start() }
+        startHold.countDown()
+        assertTrue(held.await(2, TimeUnit.SECONDS))
+        AppDatabase.lastStatus = KeyboardDbStatus("memory:key", false, 0, unavailableCount = 1)
         try {
             val started = System.nanoTime()
             val got = AppDatabase.getDatabase(context)
             val waitedMs = (System.nanoTime() - started) / 1_000_000
-            assertTrue(got === first)
+            assertTrue("expected the cached instance, status=${AppDatabase.lastStatus}", got === first)
             assertTrue("main thread waited ${waitedMs}ms for the retry lock", waitedMs < 250)
         } finally {
-            AppDatabase.databaseLock.unlock()
-            AppDatabase.engineForTests = null
-            AppDatabase.wrapperForTests = null
-            AppDatabase.clearInstanceForTests()
+            release.countDown()
+            AppDatabase.resetForTests()
         }
     }
 }

@@ -536,11 +536,17 @@ abstract class AppDatabase : RoomDatabase() {
             now: () -> Long = System::currentTimeMillis,
             health: KeyboardDbHealth = KeyboardDbHealth(KeyboardDbHealth.file(KeyboardDbKey.keyFile(app.noBackupFilesDir).parentFile!!), now),
             statusGeneration: Int? = null,
+            statusOrdinal: Int? = null,
         ) = KeyboardDbOpenHelperFactory(
             migrator = { KeyboardDbMigrator(KeyboardDbKey(KeyboardDbKey.keyFile(app.noBackupFilesDir), wrapper), engine, now, health) },
             engine = engine,
             onStatus = { status ->
-                if (statusGeneration == null || statusGeneration == openGeneration.get()) lastStatus = status
+                // In tests, only the most recent build may write lastStatus, so a late
+                // prepare from an earlier open cannot clobber it (same generation, stale instance).
+                val stale = testIsolation && statusOrdinal != null && statusOrdinal != openOrdinal.get()
+                if (!stale && (statusGeneration == null || statusGeneration == openGeneration.get())) {
+                    lastStatus = status
+                }
             }
         )
 
@@ -649,6 +655,7 @@ abstract class AppDatabase : RoomDatabase() {
             // still succeed for later UI tests in the same JVM, but must not overwrite
             // lastStatus (Robolectric Application cleanup used to flake the db suite).
             val generation = if (testIsolation && engineForTests == null) -1 else openGeneration.get()
+            val ordinal = if (testIsolation) openOrdinal.incrementAndGet() else null
             return Room.databaseBuilder(
                 app,
                 AppDatabase::class.java,
@@ -662,7 +669,7 @@ abstract class AppDatabase : RoomDatabase() {
             .addCallback(SECURE_DELETE)
             // KEYBOARD-048: SQLCipher, with a one-time in-place migration of the old
             // plaintext file. secure_delete and the post-delete WAL checkpoint work as before.
-            .openHelperFactory(encryptedFactory(app, engineForTests ?: SqlCipherEngine(), wrapperForTests ?: KeystoreDbKeyWrapper(), statusGeneration = generation))
+            .openHelperFactory(encryptedFactory(app, engineForTests ?: SqlCipherEngine(), wrapperForTests ?: KeystoreDbKeyWrapper(), statusGeneration = generation, statusOrdinal = ordinal))
             .build()
         }
 
@@ -673,45 +680,58 @@ abstract class AppDatabase : RoomDatabase() {
         @Volatile
         internal var testIsolation: Boolean = false
         private val openGeneration = AtomicInteger(0)
+        private val openOrdinal = AtomicInteger(0)
 
         /**
          * Test-only: drop cached instances and statics, join or disable background retry /
          * integrity work, and install a deterministic clock and no-op executors so one
          * test cannot leak state into the next.
+         *
+         * Holds [databaseLock] so a concurrent [getDatabase] (Robolectric Application
+         * cleanup) cannot install an uninstrumented INSTANCE between the reset and the
+         * caller's [engine]/[wrapper] assignment. Pass the test engine here, then open.
          */
-        internal fun resetForTests() {
-            testIsolation = true
-            openGeneration.incrementAndGet()
-            fallbackApp = null
-            fallbackRetryDelay = { }
-            fallbackRetryExecutor = Executor { }
-            fallbackRetryThread?.let { t ->
-                t.interrupt()
-                runCatching { t.join(2_000) }
-            }
-            fallbackRetryThread = null
-            Thread.getAllStackTraces().keys
-                .filter { it.name.startsWith("kb-db-") && it != Thread.currentThread() }
-                .forEach { t ->
+        internal fun resetForTests(
+            engine: KeyboardDbEngine? = null,
+            wrapper: DbKeyWrapper? = null,
+        ) {
+            databaseLock.lock()
+            try {
+                testIsolation = true
+                engineForTests = engine
+                wrapperForTests = wrapper
+                openGeneration.incrementAndGet()
+                fallbackApp = null
+                fallbackRetryDelay = { }
+                fallbackRetryExecutor = Executor { }
+                fallbackRetryThread?.let { t ->
                     t.interrupt()
                     runCatching { t.join(2_000) }
                 }
-            KeyboardDbMigrator.scheduleFullIntegrity = false
-            KeyboardDbMigrator.fullIntegrityScheduledThisProcess = false
-            KeyboardDbMigrator.fullIntegrityExecutor = Executor { }
-            INSTANCE?.let { runCatching { it.close() } }
-            INSTANCE = null
-            lastStatus = null
-            lastFallbackRetryElapsed = 0L
-            fallbackRetryScheduled = false
-            databaseBuildCount = 0
-            engineForTests = null
-            wrapperForTests = null
-            nowElapsed = { 0L }
-            isCallingThreadMain = { false }
-            fallbackRetryExecutor = Executor { }
-            fallbackRetryDelay = { }
-            KeyboardDbHealth.newLaunch()
+                fallbackRetryThread = null
+                Thread.getAllStackTraces().keys
+                    .filter { it.name.startsWith("kb-db-") && it != Thread.currentThread() }
+                    .forEach { t ->
+                        t.interrupt()
+                        runCatching { t.join(2_000) }
+                    }
+                KeyboardDbMigrator.scheduleFullIntegrity = false
+                KeyboardDbMigrator.fullIntegrityScheduledThisProcess = false
+                KeyboardDbMigrator.fullIntegrityExecutor = Executor { }
+                INSTANCE?.let { runCatching { it.close() } }
+                INSTANCE = null
+                lastStatus = null
+                lastFallbackRetryElapsed = 0L
+                fallbackRetryScheduled = false
+                databaseBuildCount = 0
+                nowElapsed = { 0L }
+                isCallingThreadMain = { false }
+                fallbackRetryExecutor = Executor { }
+                fallbackRetryDelay = { }
+                KeyboardDbHealth.resetPersistedForTests()
+            } finally {
+                if (databaseLock.isHeldByCurrentThread) databaseLock.unlock()
+            }
         }
 
         internal fun clearInstanceForTests() = resetForTests()
