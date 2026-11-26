@@ -31,6 +31,7 @@ class KeyboardDbSqlCipherTest {
     @Before
     @After
     fun clean() {
+        KeyboardDbMigrator.scheduleFullIntegrity = false
         main.parentFile?.listFiles()?.filter { it.name.startsWith(name) }?.forEach { it.delete() }
         keyFile.delete()
         java.security.KeyStore.getInstance("AndroidKeyStore").apply { load(null) }.deleteEntry("agentic_keyboard_db_key_test")
@@ -71,10 +72,7 @@ class KeyboardDbSqlCipherTest {
         assertEquals(500, again.userVocabularyDao().count())
         assertFalse(status!!.migrated)
         android.util.Log.i("KeyboardDbSqlCipherTest", "reopen prepare ms=${status!!.prepareMillis}")
-        val sqlKey = (KeyboardDbKey(
-            KeyboardDbKey.keyFile(context.applicationContext.noBackupFilesDir),
-            KeystoreDbKeyWrapper(),
-        ).read() as KeyboardDbKey.Read.Ok).sqlKey
+        val sqlKey = (KeyboardDbKey(keyFile, wrapper).read() as KeyboardDbKey.Read.Ok).sqlKey
         val eng = SqlCipherEngine().also { it.load() }
         fun timed(block: () -> Unit): Long {
             val t0 = android.os.SystemClock.elapsedRealtime()
