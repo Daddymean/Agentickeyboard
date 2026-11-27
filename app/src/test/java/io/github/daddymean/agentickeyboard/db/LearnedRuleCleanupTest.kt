@@ -29,6 +29,7 @@ class LearnedRuleCleanupTest {
 
     @Before
     fun setUp() {
+        AppDatabase.resetForTests()
         prefs.edit().clear().commit()
         db = Room.inMemoryDatabaseBuilder(context, AppDatabase::class.java).build()
         repository = KeyboardRepository(db)
@@ -49,6 +50,7 @@ class LearnedRuleCleanupTest {
     @After
     fun tearDown() {
         db.close()
+        AppDatabase.resetForTests()
     }
 
     private fun rules() = runBlocking { repository.getAllCorrectionsOnce().associate { it.typo to it.correction } }

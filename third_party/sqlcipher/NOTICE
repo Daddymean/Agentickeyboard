@@ -1,0 +1,12 @@
+This app uses the following third-party component to encrypt the keyboard's
+own database (agentic_keyboard_database) on the device (KEYBOARD-048).
+
+1. SQLCipher for Android (Community Edition)
+   Artifact: net.zetetic:sqlcipher-android:4.20.0
+   License: BSD-3-Clause (BSD-style), Copyright (c) 2008-2023, ZETETIC LLC
+   https://github.com/sqlcipher/sqlcipher-android
+   https://www.zetetic.net/sqlcipher/license/
+   The full licence text ships in the APK as assets/third_party/SQLCipher-LICENSE.txt.
+   The native library bundles SQLite (public domain) and LibTomCrypt (public
+   domain / Unlicense) as its crypto provider; no OpenSSL, no GPL code.
+   Declared dependencies: kotlin-stdlib (Apache-2.0), androidx.sqlite (Apache-2.0).

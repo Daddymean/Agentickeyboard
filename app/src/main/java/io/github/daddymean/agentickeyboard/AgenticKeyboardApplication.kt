@@ -23,8 +23,10 @@ import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.launch
 
 class AgenticKeyboardApplication : Application() {
-    val database by lazy { AppDatabase.getDatabase(this) }
-    val repository by lazy { KeyboardRepository(database) }
+    // Getters, not lazy: the repository is a provider, so a recovered database is
+    // picked up without a process restart, and in-flight holders keep their handle.
+    val database get() = AppDatabase.getDatabase(this)
+    val repository get() = KeyboardRepository { AppDatabase.getDatabase(this) }
     val settings by lazy { KeyboardSettings(this) }
 
     private val appScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)

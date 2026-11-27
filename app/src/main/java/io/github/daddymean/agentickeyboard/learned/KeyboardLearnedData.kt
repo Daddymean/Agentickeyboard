@@ -35,10 +35,11 @@ data class KeyboardEntry(val store: KeyboardStore, val key: String, val text: St
  * transaction with `secure_delete` on, then checkpoints the WAL so the deleted text doesn't wait
  * in `-wal` (see [scrubWal]). Nothing here logs, touches the network or the twin.
  *
- * **Residue** (documented in the PR): the keyboard database is not app-encrypted (Android's
- * file-based encryption still covers it at rest). `secure_delete` zeroes freed cells in the
- * database file and the TRUNCATE checkpoint empties `-wal`, but flash wear-levelling can keep old
- * blocks that only the device's own encryption protects. SharedPreferences are rewritten whole by
+ * **Residue** (documented in the PR): since KEYBOARD-048 the keyboard database and its `-wal` are
+ * SQLCipher-encrypted ([io.github.daddymean.agentickeyboard.db.KeyboardDbMigrator]), so blocks
+ * flash wear-levelling keeps hold ciphertext. `secure_delete` zeroes freed cells in the database
+ * file and the TRUNCATE checkpoint empties `-wal`. Plaintext blocks written before the migration can
+ * still linger in free flash, protected only by the device's own encryption. SharedPreferences are rewritten whole by
  * Android (old file renamed to `.bak`, then unlinked), so the previous XML can linger in free flash
  * blocks the same way. Must be called off the main thread.
  */
