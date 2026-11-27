@@ -236,7 +236,7 @@ fun ExportTab(viewModel: KeyboardViewModel) {
                     )
                     SettingSwitchRow(
                         title = "Pause learning",
-                        description = "Incognito for the personalization engine: stop learning vocabulary, word pairs, and corrections.",
+                        description = "Incognito for the personalization engine: stop learning vocabulary, word pairs, and corrections, and stop grammar fix and tone check from saving to the writing log.",
                         checked = isLearningPaused,
                         onCheckedChange = { viewModel.setLearningPaused(it) }
                     )
