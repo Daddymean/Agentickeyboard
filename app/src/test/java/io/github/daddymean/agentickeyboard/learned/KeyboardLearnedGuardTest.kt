@@ -45,6 +45,10 @@ class KeyboardLearnedGuardTest {
         for (m in calls) assertTrue(activity.substring(maxOf(0, m.range.first - 400), m.range.first).contains("confirm("))
         assertTrue(activity.substringAfter("private fun confirm(").contains("setPositiveButton(\"Delete\")"))
         assertFalse(Regex("data\\(\\)\\.(delete|clear)").containsMatchIn(activity))
+        assertTrue(activity.contains("confirmDeleteKeptCopies"))
+        assertTrue(activity.substringAfter("private fun confirmDeleteKeptCopies()").contains(".showSecure()"))
+        assertTrue(activity.substringAfter("private fun confirmDeleteKeptCopies()").contains("Older copies were deleted."))
+        assertFalse(activity.substringAfter("private fun confirmDeleteKeptCopies()").substringBefore("private fun ").contains("refuseDelete"))
     }
 
     @Test

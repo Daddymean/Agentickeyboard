@@ -990,6 +990,7 @@ class AgenticKeyboardService : InputMethodService(), LifecycleOwner, ViewModelSt
     }
 
     override fun onStartInput(info: EditorInfo?, restarting: Boolean) {
+        repository = (application as AgenticKeyboardApplication).repository
         editorMirror.invalidate() // LAB-009: a new or restarted field
         super.onStartInput(info, restarting)
         lifecycleRegistry.handleLifecycleEvent(Lifecycle.Event.ON_START)
