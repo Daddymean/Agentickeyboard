@@ -24,10 +24,12 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import io.github.daddymean.agentickeyboard.AgenticKeyboardApplication
 import io.github.daddymean.agentickeyboard.SettingSwitchRow
+import io.github.daddymean.agentickeyboard.ui.theme.LocalCompanionColors
 
 @Composable
 fun GemmaSettingsSection() {
     val context = LocalContext.current
+    val colors = LocalCompanionColors.current
     val app = context.applicationContext as AgenticKeyboardApplication
     val controller = app.localGemma
     val settings = app.settings
@@ -64,13 +66,13 @@ fun GemmaSettingsSection() {
         Spacer(modifier = Modifier.height(10.dp))
         Text(
             "Local Gemma 4 E2B",
-            color = Color(0xFF1C1B1F),
+            color = colors.textPrimary,
             fontWeight = FontWeight.Bold,
             fontSize = 12.sp
         )
         Text(
             statusText,
-            color = Color(0xFF5F5D6B),
+            color = colors.textSecondary,
             fontSize = 10.sp
         )
         SettingSwitchRow(
@@ -86,7 +88,7 @@ fun GemmaSettingsSection() {
         if (enabled && !ready) {
             Text(
                 "Download size: $sizeLabel. SHA-256 starts ${artifact.sha256.take(12)}… License: ${artifact.license}.",
-                color = Color(0xFF5F5D6B),
+                color = colors.textSecondary,
                 fontSize = 10.sp,
                 modifier = Modifier.padding(top = 4.dp)
             )

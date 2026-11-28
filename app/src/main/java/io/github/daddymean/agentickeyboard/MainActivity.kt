@@ -49,10 +49,13 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.lifecycle.ViewModelProvider
 import io.github.daddymean.agentickeyboard.ui.KeyboardViewModel
 import io.github.daddymean.agentickeyboard.ui.KeyboardViewModelFactory
-import io.github.daddymean.agentickeyboard.ui.theme.MyApplicationTheme
+import io.github.daddymean.agentickeyboard.ui.theme.CompanionTheme
+import io.github.daddymean.agentickeyboard.ui.theme.LocalCompanionColors
+import io.github.daddymean.agentickeyboard.ui.theme.resolveDarkTheme
 
 class MainActivity : ComponentActivity() {
     companion object {
@@ -71,7 +74,9 @@ class MainActivity : ComponentActivity() {
         val viewModel = ViewModelProvider(this, factory)[KeyboardViewModel::class.java]
 
         setContent {
-            MyApplicationTheme {
+            val themeOverride by viewModel.themeOverride.collectAsState()
+            val darkTheme = resolveDarkTheme(themeOverride, isSystemInDarkTheme())
+            CompanionTheme(darkTheme = darkTheme) {
                 MainAppScreen(viewModel, initialTab = intent.getIntExtra(EXTRA_TAB, 0))
             }
         }
@@ -83,9 +88,7 @@ class MainActivity : ComponentActivity() {
 fun MainAppScreen(viewModel: KeyboardViewModel, initialTab: Int = 0) {
     var selectedTab by remember { mutableStateOf(initialTab.coerceIn(0, 3)) }
     val isOfflineMode by viewModel.isOfflineMode.collectAsState()
-
-    // Light-theme slate/grey background matching Bento style
-    val lightBgColor = Color(0xFFF3F4F9)
+    val colors = LocalCompanionColors.current
 
     Scaffold(
         topBar = {
@@ -94,7 +97,7 @@ fun MainAppScreen(viewModel: KeyboardViewModel, initialTab: Int = 0) {
                     Column {
                         Text(
                             "Lumina AI Keyboard",
-                            color = Color(0xFF1C1B1F),
+                            color = colors.textPrimary,
                             fontWeight = FontWeight.Bold,
                             fontSize = 20.sp,
                             letterSpacing = (-0.5).sp
@@ -107,12 +110,12 @@ fun MainAppScreen(viewModel: KeyboardViewModel, initialTab: Int = 0) {
                                 modifier = Modifier
                                     .size(8.dp)
                                     .clip(CircleShape)
-                                    .background(if (isOfflineMode) Color(0xFF2E7D32) else Color(0xFF6750A4))
+                                    .background(if (isOfflineMode) colors.success else colors.accent)
                             )
                             Spacer(modifier = Modifier.width(6.dp))
                             Text(
                                 if (isOfflineMode) "ON-DEVICE ACTIVE (🔒 PRIVATE)" else "CLOUD AI ASSIST ACTIVE",
-                                color = Color(0xFF5F5D6B),
+                                color = colors.textSecondary,
                                 fontSize = 10.sp,
                                 fontWeight = FontWeight.Bold,
                                 letterSpacing = 0.5.sp
@@ -128,28 +131,28 @@ fun MainAppScreen(viewModel: KeyboardViewModel, initialTab: Int = 0) {
                             .padding(end = 8.dp)
                             .size(44.dp)
                             .clip(RoundedCornerShape(12.dp))
-                            .background(Color.White)
-                            .border(1.dp, Color(0xFFE2E8F0), RoundedCornerShape(12.dp))
+                            .background(colors.card)
+                            .border(1.dp, colors.border, RoundedCornerShape(12.dp))
                     ) {
                         Icon(
                             imageVector = if (isOfflineMode) Icons.Default.Lock else Icons.Default.Settings,
                             contentDescription = "Toggle Privacy",
-                            tint = Color(0xFF6750A4),
+                            tint = colors.accent,
                             modifier = Modifier.size(20.dp)
                         )
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = lightBgColor,
-                    scrolledContainerColor = lightBgColor
+                    containerColor = colors.background,
+                    scrolledContainerColor = colors.background
                 )
             )
         },
         bottomBar = {
             NavigationBar(
-                containerColor = lightBgColor,
+                containerColor = colors.background,
                 tonalElevation = 8.dp,
-                modifier = Modifier.border(BorderStroke(1.dp, Color(0xFFE2E8F0)))
+                modifier = Modifier.border(BorderStroke(1.dp, colors.border))
             ) {
                 val items = listOf(
                     Triple("Console", Icons.Default.Home, 0),
@@ -164,23 +167,23 @@ fun MainAppScreen(viewModel: KeyboardViewModel, initialTab: Int = 0) {
                         icon = { Icon(icon, contentDescription = label) },
                         label = { Text(label, fontSize = 11.sp, fontWeight = FontWeight.Medium) },
                         colors = NavigationBarItemDefaults.colors(
-                            selectedIconColor = Color(0xFF6750A4),
-                            unselectedIconColor = Color(0xFF5F5D6B),
-                            selectedTextColor = Color(0xFF6750A4),
-                            unselectedTextColor = Color(0xFF5F5D6B),
-                            indicatorColor = Color(0xFFE8DEF8)
+                            selectedIconColor = colors.accent,
+                            unselectedIconColor = colors.textSecondary,
+                            selectedTextColor = colors.accent,
+                            unselectedTextColor = colors.textSecondary,
+                            indicatorColor = colors.cardAccent
                         ),
                         modifier = Modifier.testTag("nav_item_$index")
                     )
                 }
             }
         },
-        containerColor = lightBgColor
+        containerColor = colors.background
     ) { innerPadding ->
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .background(lightBgColor)
+                .background(colors.background)
                 .padding(innerPadding)
         ) {
             when (selectedTab) {

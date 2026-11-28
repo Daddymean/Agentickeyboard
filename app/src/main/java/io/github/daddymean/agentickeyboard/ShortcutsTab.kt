@@ -46,6 +46,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import io.github.daddymean.agentickeyboard.ui.KeyboardViewModel
+import io.github.daddymean.agentickeyboard.ui.theme.LocalCompanionColors
 import io.github.daddymean.agentickeyboard.util.TextExpansion
 
 @Composable
@@ -57,6 +58,13 @@ fun ShortcutsTab(viewModel: KeyboardViewModel) {
 
     val shortcuts by viewModel.shortcuts.collectAsState()
     val customCommands by viewModel.customCommands.collectAsState()
+    val colors = LocalCompanionColors.current
+    val inputColors = OutlinedTextFieldDefaults.colors(
+        focusedBorderColor = colors.accent,
+        unfocusedBorderColor = colors.borderStrong,
+        focusedTextColor = colors.textPrimary,
+        unfocusedTextColor = colors.textPrimary
+    )
 
     LazyColumn(
         modifier = Modifier
@@ -68,14 +76,14 @@ fun ShortcutsTab(viewModel: KeyboardViewModel) {
             Spacer(modifier = Modifier.height(4.dp))
             Text(
                 "Quick Templates",
-                color = Color(0xFF1C1B1F),
+                color = colors.textPrimary,
                 fontSize = 24.sp,
                 fontWeight = FontWeight.Bold,
                 letterSpacing = (-0.8).sp
             )
             Text(
                 "Configure on-device templates. Typing an abbreviation suggests full phrases offline.",
-                color = Color(0xFF5F5D6B),
+                color = colors.textSecondary,
                 fontSize = 12.sp,
                 lineHeight = 16.sp
             )
@@ -87,30 +95,25 @@ fun ShortcutsTab(viewModel: KeyboardViewModel) {
                 modifier = Modifier
                     .fillMaxWidth()
                     .shadow(1.dp, RoundedCornerShape(28.dp)),
-                colors = CardDefaults.cardColors(containerColor = Color.White),
+                colors = CardDefaults.cardColors(containerColor = colors.card),
                 shape = RoundedCornerShape(28.dp),
-                border = BorderStroke(1.dp, Color(0xFFE2E8F0))
+                border = BorderStroke(1.dp, colors.border)
             ) {
                 Column(modifier = Modifier.padding(20.dp)) {
                     Text(
                         "Add Custom Template",
-                        color = Color(0xFF1C1B1F),
+                        color = colors.textPrimary,
                         fontWeight = FontWeight.Bold,
                         fontSize = 15.sp
                     )
                     Spacer(modifier = Modifier.height(12.dp))
-                    
+
                     OutlinedTextField(
                         value = newShortcut,
                         onValueChange = { newShortcut = it },
                         label = { Text("Shortcut key (e.g. omw)") },
                         placeholder = { Text("omw") },
-                        colors = OutlinedTextFieldDefaults.colors(
-                            focusedBorderColor = Color(0xFF6750A4),
-                            unfocusedBorderColor = Color(0xFFCBD5E1),
-                            focusedTextColor = Color(0xFF1C1B1F),
-                            unfocusedTextColor = Color(0xFF1C1B1F)
-                        ),
+                        colors = inputColors,
                         shape = RoundedCornerShape(12.dp),
                         modifier = Modifier
                             .fillMaxWidth()
@@ -127,12 +130,7 @@ fun ShortcutsTab(viewModel: KeyboardViewModel) {
                         // Same live preview as the Snippet Vault editor, so tokens are
                         // discoverable from whichever screen the user reaches first.
                         supportingText = { Text(TextExpansion.editorHint(newTemplate)) },
-                        colors = OutlinedTextFieldDefaults.colors(
-                            focusedBorderColor = Color(0xFF6750A4),
-                            unfocusedBorderColor = Color(0xFFCBD5E1),
-                            focusedTextColor = Color(0xFF1C1B1F),
-                            unfocusedTextColor = Color(0xFF1C1B1F)
-                        ),
+                        colors = inputColors,
                         shape = RoundedCornerShape(12.dp),
                         modifier = Modifier
                             .fillMaxWidth()
@@ -149,15 +147,15 @@ fun ShortcutsTab(viewModel: KeyboardViewModel) {
                                 newTemplate = ""
                             }
                         },
-                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF6750A4)),
+                        colors = ButtonDefaults.buttonColors(containerColor = colors.accent),
                         shape = RoundedCornerShape(12.dp),
                         modifier = Modifier
                             .fillMaxWidth()
                             .testTag("add_shortcut_button")
                     ) {
-                        Icon(Icons.Default.Add, contentDescription = "Add", tint = Color.White)
+                        Icon(Icons.Default.Add, contentDescription = "Add", tint = colors.onAccent)
                         Spacer(modifier = Modifier.width(6.dp))
-                        Text("Save Template", color = Color.White, fontWeight = FontWeight.Bold)
+                        Text("Save Template", color = colors.onAccent, fontWeight = FontWeight.Bold)
                     }
                 }
             }
@@ -166,7 +164,7 @@ fun ShortcutsTab(viewModel: KeyboardViewModel) {
         item {
             Text(
                 "Active Shortcuts (${shortcuts.size})",
-                color = Color(0xFF1C1B1F),
+                color = colors.textPrimary,
                 fontWeight = FontWeight.Bold,
                 fontSize = 14.sp,
                 modifier = Modifier.padding(top = 8.dp)
@@ -178,9 +176,9 @@ fun ShortcutsTab(viewModel: KeyboardViewModel) {
                 modifier = Modifier
                     .fillMaxWidth()
                     .shadow(1.dp, RoundedCornerShape(20.dp)),
-                colors = CardDefaults.cardColors(containerColor = Color.White),
+                colors = CardDefaults.cardColors(containerColor = colors.card),
                 shape = RoundedCornerShape(20.dp),
-                border = BorderStroke(1.dp, Color(0xFFE2E8F0))
+                border = BorderStroke(1.dp, colors.border)
             ) {
                 Row(
                     modifier = Modifier
@@ -193,12 +191,12 @@ fun ShortcutsTab(viewModel: KeyboardViewModel) {
                         Box(
                             modifier = Modifier
                                 .clip(RoundedCornerShape(8.dp))
-                                .background(Color(0xFFE8DEF8))
+                                .background(colors.cardAccent)
                                 .padding(horizontal = 8.dp, vertical = 4.dp)
                         ) {
                             Text(
                                 shortcut.shortcut,
-                                color = Color(0xFF21005D),
+                                color = colors.onAccentContainer,
                                 fontWeight = FontWeight.Bold,
                                 fontSize = 11.sp
                             )
@@ -206,7 +204,7 @@ fun ShortcutsTab(viewModel: KeyboardViewModel) {
                         Spacer(modifier = Modifier.height(6.dp))
                         Text(
                             shortcut.template,
-                            color = Color(0xFF1C1B1F),
+                            color = colors.textPrimary,
                             fontSize = 14.sp,
                             fontWeight = FontWeight.Medium
                         )
@@ -218,7 +216,7 @@ fun ShortcutsTab(viewModel: KeyboardViewModel) {
                         Icon(
                             imageVector = Icons.Default.Delete,
                             contentDescription = "Delete Template",
-                            tint = Color(0xFFC62828)
+                            tint = colors.danger
                         )
                     }
                 }
@@ -229,7 +227,7 @@ fun ShortcutsTab(viewModel: KeyboardViewModel) {
         item {
             Text(
                 "Slash Commands",
-                color = Color(0xFF1C1B1F),
+                color = colors.textPrimary,
                 fontSize = 24.sp,
                 fontWeight = FontWeight.Bold,
                 letterSpacing = (-0.8).sp,
@@ -237,7 +235,7 @@ fun ShortcutsTab(viewModel: KeyboardViewModel) {
             )
             Text(
                 "Your own /commands: start a draft with the token and the keyboard rewrites it with your saved instruction. Built-in commands always win on a name clash.",
-                color = Color(0xFF5F5D6B),
+                color = colors.textSecondary,
                 fontSize = 12.sp,
                 lineHeight = 16.sp
             )
@@ -248,14 +246,14 @@ fun ShortcutsTab(viewModel: KeyboardViewModel) {
                 modifier = Modifier
                     .fillMaxWidth()
                     .shadow(1.dp, RoundedCornerShape(28.dp)),
-                colors = CardDefaults.cardColors(containerColor = Color.White),
+                colors = CardDefaults.cardColors(containerColor = colors.card),
                 shape = RoundedCornerShape(28.dp),
-                border = BorderStroke(1.dp, Color(0xFFE2E8F0))
+                border = BorderStroke(1.dp, colors.border)
             ) {
                 Column(modifier = Modifier.padding(20.dp)) {
                     Text(
                         "Add Slash Command",
-                        color = Color(0xFF1C1B1F),
+                        color = colors.textPrimary,
                         fontWeight = FontWeight.Bold,
                         fontSize = 15.sp
                     )
@@ -266,12 +264,7 @@ fun ShortcutsTab(viewModel: KeyboardViewModel) {
                         onValueChange = { newCommandToken = it },
                         label = { Text("Command (e.g. /boss)") },
                         placeholder = { Text("/boss") },
-                        colors = OutlinedTextFieldDefaults.colors(
-                            focusedBorderColor = Color(0xFF6750A4),
-                            unfocusedBorderColor = Color(0xFFCBD5E1),
-                            focusedTextColor = Color(0xFF1C1B1F),
-                            unfocusedTextColor = Color(0xFF1C1B1F)
-                        ),
+                        colors = inputColors,
                         shape = RoundedCornerShape(12.dp),
                         modifier = Modifier
                             .fillMaxWidth()
@@ -285,12 +278,7 @@ fun ShortcutsTab(viewModel: KeyboardViewModel) {
                         onValueChange = { newCommandInstruction = it },
                         label = { Text("Rewrite instruction") },
                         placeholder = { Text("formal but friendly, for my manager") },
-                        colors = OutlinedTextFieldDefaults.colors(
-                            focusedBorderColor = Color(0xFF6750A4),
-                            unfocusedBorderColor = Color(0xFFCBD5E1),
-                            focusedTextColor = Color(0xFF1C1B1F),
-                            unfocusedTextColor = Color(0xFF1C1B1F)
-                        ),
+                        colors = inputColors,
                         shape = RoundedCornerShape(12.dp),
                         modifier = Modifier
                             .fillMaxWidth()
@@ -307,15 +295,15 @@ fun ShortcutsTab(viewModel: KeyboardViewModel) {
                                 newCommandInstruction = ""
                             }
                         },
-                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF6750A4)),
+                        colors = ButtonDefaults.buttonColors(containerColor = colors.accent),
                         shape = RoundedCornerShape(12.dp),
                         modifier = Modifier
                             .fillMaxWidth()
                             .testTag("add_command_button")
                     ) {
-                        Icon(Icons.Default.Add, contentDescription = "Add", tint = Color.White)
+                        Icon(Icons.Default.Add, contentDescription = "Add", tint = colors.onAccent)
                         Spacer(modifier = Modifier.width(6.dp))
-                        Text("Save Command", color = Color.White, fontWeight = FontWeight.Bold)
+                        Text("Save Command", color = colors.onAccent, fontWeight = FontWeight.Bold)
                     }
                 }
             }
@@ -324,7 +312,7 @@ fun ShortcutsTab(viewModel: KeyboardViewModel) {
         item {
             Text(
                 "Custom Commands (${customCommands.size})",
-                color = Color(0xFF1C1B1F),
+                color = colors.textPrimary,
                 fontWeight = FontWeight.Bold,
                 fontSize = 14.sp,
                 modifier = Modifier.padding(top = 8.dp)
@@ -336,9 +324,9 @@ fun ShortcutsTab(viewModel: KeyboardViewModel) {
                 modifier = Modifier
                     .fillMaxWidth()
                     .shadow(1.dp, RoundedCornerShape(20.dp)),
-                colors = CardDefaults.cardColors(containerColor = Color.White),
+                colors = CardDefaults.cardColors(containerColor = colors.card),
                 shape = RoundedCornerShape(20.dp),
-                border = BorderStroke(1.dp, Color(0xFFE2E8F0))
+                border = BorderStroke(1.dp, colors.border)
             ) {
                 Row(
                     modifier = Modifier
@@ -351,12 +339,12 @@ fun ShortcutsTab(viewModel: KeyboardViewModel) {
                         Box(
                             modifier = Modifier
                                 .clip(RoundedCornerShape(8.dp))
-                                .background(Color(0xFFE8DEF8))
+                                .background(colors.cardAccent)
                                 .padding(horizontal = 8.dp, vertical = 4.dp)
                         ) {
                             Text(
                                 command.token,
-                                color = Color(0xFF21005D),
+                                color = colors.onAccentContainer,
                                 fontWeight = FontWeight.Bold,
                                 fontSize = 11.sp
                             )
@@ -364,7 +352,7 @@ fun ShortcutsTab(viewModel: KeyboardViewModel) {
                         Spacer(modifier = Modifier.height(6.dp))
                         Text(
                             command.instruction,
-                            color = Color(0xFF1C1B1F),
+                            color = colors.textPrimary,
                             fontSize = 14.sp,
                             fontWeight = FontWeight.Medium
                         )
@@ -376,7 +364,7 @@ fun ShortcutsTab(viewModel: KeyboardViewModel) {
                         Icon(
                             imageVector = Icons.Default.Delete,
                             contentDescription = "Delete Command",
-                            tint = Color(0xFFC62828)
+                            tint = colors.danger
                         )
                     }
                 }
