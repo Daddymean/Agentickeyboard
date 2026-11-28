@@ -265,6 +265,21 @@ class StealthInkCodecTest {
     }
 
     @Test
+    fun drawerShowsLimitationsAndAvoidsDeletionLanguage() {
+        val roots = listOf(File("app/src/main/java"), File("src/main/java"))
+        val srcRoot = roots.first { it.exists() }
+        val panel = File(srcRoot, "io/github/daddymean/agentickeyboard/ui/StealthInkPanel.kt").readText()
+        assertTrue(panel.contains("StealthInkNotices.INVISIBLE_INK"))
+        assertTrue(panel.contains("StealthInkNotices.EXPIRY"))
+        assertTrue(panel.contains("StealthInkNotices.SHARED_KEY"))
+        val lower = panel.lowercase()
+        for (word in listOf("burns in", "burn ttl", "self-destruct", "self destruct", "unbreakable", "untraceable", "undetectable")) {
+            assertFalse("Panel must not say '$word'", lower.contains(word))
+        }
+        assertTrue(panel.contains("(not deletion)"))
+    }
+
+    @Test
     fun strengthAndRemainingFormatters() {
         assertEquals("expired", StealthInkCodec.formatRemaining(0))
         assertEquals("45s", StealthInkCodec.formatRemaining(45))

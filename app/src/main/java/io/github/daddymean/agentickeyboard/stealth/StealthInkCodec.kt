@@ -27,7 +27,11 @@ enum class StealthMode(val code: Byte) {
     }
 }
 
-/** Optional authenticated self-destruct lifetime bound into GCM AAD. */
+/**
+ * Optional expiry bound into GCM AAD. Advisory only: it stops this keyboard from opening the
+ * message after the time passes. It does not delete anything, and anyone with the passphrase and
+ * the ciphertext can still decrypt it with other software (see [StealthInkNotices.EXPIRY]).
+ */
 enum class StealthTtl(val seconds: Long, val label: String) {
     NONE(0L, "∞"),
     FIVE_MIN(300L, "5m"),
@@ -86,7 +90,7 @@ sealed interface StealthOpenResult {
  * - **PBKDF2WithHmacSHA256** (600,000 iterations by default, 16-byte random salt, NFC-normalised passphrase)
  * - **AES-256-GCM** (12-byte random IV, 128-bit authentication tag)
  * - **Authenticated AAD header**: `[version(1B) | mode(1B) | flags(1B) | expiresAtEpochSec(8B)]`
- *   so transport mode, compression flag, and self-destruct TTL cannot be altered without
+ *   so transport mode, compression flag, and the expiry time cannot be altered without
  *   failing GCM verification.
  * - **Invisible Ink steganography**: bijective 1-codepoint-per-byte encoding via Unicode
  *   Variation Selectors (`U+FE00..U+FE0F` for `0x00..0x0F`, `U+E0100..U+E01EF` for

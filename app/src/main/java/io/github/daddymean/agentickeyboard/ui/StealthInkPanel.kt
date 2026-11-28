@@ -48,6 +48,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import io.github.daddymean.agentickeyboard.stealth.PassphraseStrength
 import io.github.daddymean.agentickeyboard.stealth.StealthInkCodec
+import io.github.daddymean.agentickeyboard.stealth.StealthInkNotices
 import io.github.daddymean.agentickeyboard.stealth.StealthMode
 import io.github.daddymean.agentickeyboard.stealth.StealthOpenResult
 import io.github.daddymean.agentickeyboard.stealth.StealthTtl
@@ -72,8 +73,9 @@ private const val EPHEMERAL_PEEK_SECONDS = 15
  * ephemeral Peek previews.
  *
  * Security invariants:
- * - Passphrase and decrypted plaintext live strictly in volatile Compose memory
- *   and are wiped on close, sensitive-field transition, or after 15s of Peek.
+ * - Passphrase and decrypted plaintext are kept in memory only (never written to disk) and
+ *   are dropped on close, sensitive-field transition, or after 15s of Peek. Best effort:
+ *   JVM Strings are immutable, so copies may linger in memory until garbage collected.
  * - Passphrase typing is routed directly from the IME keys below without ever
  *   touching the host app's InputConnection, EditTimeline, or Twin.
  * - Zero network calls and zero disk persistence.
@@ -214,7 +216,7 @@ fun StealthInkPanel(
                 )
                 val displayText = when {
                     passphrase.isEmpty() && passphraseFocused -> "Type key on keyboard below…"
-                    passphrase.isEmpty() -> "Tap to enter shared key (RAM only)"
+                    passphrase.isEmpty() -> "Tap to type a shared passphrase (12+ characters)"
                     showPassphrase -> passphrase
                     else -> "•".repeat(passphrase.length.coerceAtMost(24))
                 }
@@ -289,13 +291,13 @@ fun StealthInkPanel(
             // --- Tab Body ---
             when (activeTab) {
                 StealthTab.SEAL, StealthTab.INVISIBLE -> {
-                    // Self-destruct TTL selector
+                    // Expiry selector (advisory: see StealthInkNotices.EXPIRY)
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(5.dp)
                     ) {
-                        Text("Burn TTL:", color = colors.textMuted, fontSize = 10.sp)
+                        Text("Expires:", color = colors.textMuted, fontSize = 10.sp)
                         StealthTtl.entries.forEach { ttl ->
                             val picked = selectedTtl == ttl
                             Text(
@@ -312,6 +314,20 @@ fun StealthInkPanel(
                             )
                         }
                     }
+
+                    // Plain-language limitations, always visible next to the controls.
+                    val notices = buildList {
+                        if (activeTab == StealthTab.INVISIBLE) add(StealthInkNotices.INVISIBLE_INK)
+                        if (selectedTtl != StealthTtl.NONE) add(StealthInkNotices.EXPIRY)
+                        add(StealthInkNotices.SHARED_KEY)
+                        if (!sealReady) add("Use 12+ characters and avoid common words or simple patterns.")
+                    }
+                    Text(
+                        text = notices.joinToString(" "),
+                        color = colors.textMuted,
+                        fontSize = 9.sp,
+                        modifier = Modifier.fillMaxWidth().testTag("stealth_limitations")
+                    )
 
                     // Cover phrase picker for Invisible Ink mode
                     if (activeTab == StealthTab.INVISIBLE) {
@@ -347,9 +363,9 @@ fun StealthInkPanel(
                     ) {
                         Text(
                             text = if (activeTab == StealthTab.INVISIBLE) {
-                                "Hides AES-256-GCM payload inside cover text"
+                                "Hides the encrypted payload in cover text (detectable)"
                             } else {
-                                "Replaces draft with AES-256-GCM 🔐AK1 envelope"
+                                "Replaces draft with an AES-256-GCM 🔐AK1 envelope"
                             },
                             color = colors.textMuted,
                             fontSize = 9.sp,
@@ -392,9 +408,9 @@ fun StealthInkPanel(
                                         }
                                         isWorking = false
                                         sealed.onSuccess { output ->
-                                            val ttlNote = if (ttlNow == StealthTtl.NONE) "" else " • burns in ${ttlNow.label}"
+                                            val ttlNote = if (ttlNow == StealthTtl.NONE) "" else " • expires in ${ttlNow.label} (not deletion)"
                                             val msg = if (tabNow == StealthTab.INVISIBLE) {
-                                                "👻 Hidden in cover text$ttlNote"
+                                                "👻 Hidden in cover text, apps may detect or strip it$ttlNote"
                                             } else {
                                                 "🔐 Sealed AES-256-GCM$ttlNote"
                                             }
@@ -448,7 +464,7 @@ fun StealthInkPanel(
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
                                 val ttlSuffix = unlocked.remainingSeconds?.let {
-                                    " • TTL ${StealthInkCodec.formatRemaining(it)}"
+                                    " • expires in ${StealthInkCodec.formatRemaining(it)}"
                                 }.orEmpty()
                                 val modeTag = if (unlocked.mode == StealthMode.INVISIBLE_INK) "👻 Invisible" else "📦 Envelope"
                                 Text(
@@ -561,7 +577,7 @@ fun StealthInkPanel(
                                                 when (result) {
                                                     is StealthOpenResult.Success -> peekSuccess = result
                                                     is StealthOpenResult.Expired -> {
-                                                        statusError = "⏳ Message expired — plaintext unavailable"
+                                                        statusError = "⏳ Expired: this keyboard won't open it. The message itself is not deleted."
                                                     }
                                                     StealthOpenResult.WrongPassphraseOrTampered -> {
                                                         statusError = "🚫 Wrong key or message was tampered with"
