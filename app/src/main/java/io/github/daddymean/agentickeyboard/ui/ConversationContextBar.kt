@@ -105,6 +105,7 @@ fun ConversationContextResult(
                             TextButton(onClick = { onInsert(reply) }) { Text(reply) }
                         }
                         AiPanelState.Loading -> Text("Working…", color = colors.text)
+                        is AiPanelState.Error -> Text(panel.message, color = colors.error, fontSize = 12.sp)
                         else -> {
                             val text = when (panel) {
                                 is AiPanelState.Summary -> panel.text

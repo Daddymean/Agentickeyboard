@@ -88,4 +88,12 @@ class GeminiManagerTest {
             GeminiManager.parseReplyLines("\nOne\n\n  \nTwo\n- \nThree\nFour")
         )
     }
+
+    @Test(expected = kotlinx.coroutines.CancellationException::class)
+    fun cloudActionsPropagateCancellationException(): Unit = kotlinx.coroutines.runBlocking {
+        val cancelled = kotlinx.coroutines.Job().apply { cancel() }
+        kotlinx.coroutines.withContext(cancelled) {
+            GeminiManager.rewriteWithTone("hello world", "Professional")
+        }
+    }
 }

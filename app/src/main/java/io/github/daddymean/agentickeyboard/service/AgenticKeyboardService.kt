@@ -14,6 +14,7 @@ import android.view.inputmethod.ExtractedTextRequest
 import android.view.inputmethod.InputMethodManager
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
@@ -228,8 +229,6 @@ class AgenticKeyboardService : InputMethodService(), LifecycleOwner, ViewModelSt
             val keyHeightScale by viewModel.keyHeightScale.collectAsState()
             val navInsetPx by navigationBarInsetPx.collectAsState()
             val capturedContext by conversationContext.collectAsState()
-            val mood by moodBadge.collectAsState()
-            val draftText by viewModel.inputText.collectAsState()
             val themeOverride by viewModel.themeOverride.collectAsState()
             val offline by viewModel.isOfflineMode.collectAsState()
             val contextResultActive by contextToolActive.collectAsState()
@@ -241,43 +240,17 @@ class AgenticKeyboardService : InputMethodService(), LifecycleOwner, ViewModelSt
             ProvideKeyboardMetrics(keyHeightScale) {
                 Column {
                     TrustPrismBanner(viewModel)
-                    val pressure by pressureFlags.collectAsState()
-                    mood?.takeIf { !sensitiveField }?.let { badge ->
-                        IncomingMoodBadge(
-                            badge = badge,
-                            pressure = pressure,
-                            themeOverride = themeOverride,
-                            hasDraft = draftText.isNotBlank(),
-                            onMatchTone = { matchToneForDraft() },
-                            onDismiss = { clearIncomingMood() }
-                        )
-                    }
-                    // Haggle mode (opt-in): counter ideas from Flip medians. Shown only; never inserted or sent.
-                    if (!sensitiveField && draftText.isNotBlank()) {
-                        viewModel.haggleAdviceFor(draftText)?.let { advice ->
-                            androidx.compose.material3.Text(
-                                "💬 Counter ideas: " + advice.counters.joinToString(" / ") {
-                                    io.github.daddymean.agentickeyboard.util.HaggleAdvisor.money(it)
-                                } + " · " + advice.summary,
-                                fontSize = 11.sp,
-                                maxLines = 2,
-                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 2.dp).testTag("haggle_hint")
-                            )
-                        }
-                    }
-                    // Tone mirror (opt-in): how the draft will likely land. A hint only; nothing is changed or sent.
-                    if (!sensitiveField && draftText.isNotBlank()) {
-                        viewModel.toneHintFor(draftText)
-                            ?.takeIf { it.tone != io.github.daddymean.agentickeyboard.util.ToneMirror.Tone.NEUTRAL }
-                            ?.let { hint ->
-                                androidx.compose.material3.Text(
-                                    "✍️ ${hint.tone.label}" + if (hint.reason.isNotEmpty()) " · ${hint.reason}" else "",
-                                    fontSize = 11.sp,
-                                    maxLines = 1,
-                                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 2.dp).testTag("tone_mirror_hint")
-                                )
-                            }
-                    }
+                    // Isolated child composable so collecting viewModel.inputText does not
+                    // recompose the root IME Column and AgenticKeyboardLayout on every keystroke.
+                    DraftMoodAndHintStrip(
+                        viewModel = viewModel,
+                        moodBadgeFlow = moodBadge,
+                        pressureFlagsFlow = pressureFlags,
+                        sensitiveField = sensitiveField,
+                        themeOverride = themeOverride,
+                        onMatchTone = { matchToneForDraft() },
+                        onDismissMood = { clearIncomingMood() }
+                    )
                     if (aiToolsExpanded && !sensitiveField) {
                         ConversationContextBar(
                             state = capturedContext,
@@ -990,7 +963,6 @@ class AgenticKeyboardService : InputMethodService(), LifecycleOwner, ViewModelSt
     }
 
     override fun onStartInput(info: EditorInfo?, restarting: Boolean) {
-        repository = (application as AgenticKeyboardApplication).repository
         editorMirror.invalidate() // LAB-009: a new or restarted field
         super.onStartInput(info, restarting)
         lifecycleRegistry.handleLifecycleEvent(Lifecycle.Event.ON_START)
@@ -1120,5 +1092,62 @@ class AgenticKeyboardService : InputMethodService(), LifecycleOwner, ViewModelSt
         // Flushes queued notes (bounded) and unbinds in the background.
         if (::contextClient.isInitialized) contextClient.close()
         super.onDestroy()
+    }
+}
+
+/**
+ * Isolated draft-aware strip for incoming mood, haggle advice, and tone mirror hints.
+ * Collecting [KeyboardViewModel.inputText] here keeps per-keystroke recompositions
+ * out of [AgenticKeyboardService.onCreateInputView]'s root scope and [AgenticKeyboardLayout].
+ */
+@Composable
+private fun DraftMoodAndHintStrip(
+    viewModel: KeyboardViewModel,
+    moodBadgeFlow: kotlinx.coroutines.flow.StateFlow<IncomingMoodSession.Badge?>,
+    pressureFlagsFlow: kotlinx.coroutines.flow.StateFlow<List<io.github.daddymean.agentickeyboard.util.ToneMirror.Pressure>>,
+    sensitiveField: Boolean,
+    themeOverride: String,
+    onMatchTone: () -> Unit,
+    onDismissMood: () -> Unit
+) {
+    if (sensitiveField) return
+    val mood by moodBadgeFlow.collectAsState()
+    val pressure by pressureFlagsFlow.collectAsState()
+    val draftText by viewModel.inputText.collectAsState()
+    val hasDraft = draftText.isNotBlank()
+
+    mood?.let { badge ->
+        IncomingMoodBadge(
+            badge = badge,
+            pressure = pressure,
+            themeOverride = themeOverride,
+            hasDraft = hasDraft,
+            onMatchTone = { _ -> onMatchTone() },
+            onDismiss = onDismissMood
+        )
+    }
+    // Haggle mode (opt-in): counter ideas from Flip medians. Shown only; never inserted or sent.
+    if (hasDraft) {
+        viewModel.haggleAdviceFor(draftText)?.let { advice ->
+            androidx.compose.material3.Text(
+                "💬 Counter ideas: " + advice.counters.joinToString(" / ") {
+                    io.github.daddymean.agentickeyboard.util.HaggleAdvisor.money(it)
+                } + " · " + advice.summary,
+                fontSize = 11.sp,
+                maxLines = 2,
+                modifier = Modifier.padding(horizontal = 10.dp, vertical = 2.dp).testTag("haggle_hint")
+            )
+        }
+        // Tone mirror (opt-in): how the draft will likely land. A hint only; nothing is changed or sent.
+        viewModel.toneHintFor(draftText)
+            ?.takeIf { it.tone != io.github.daddymean.agentickeyboard.util.ToneMirror.Tone.NEUTRAL }
+            ?.let { hint ->
+                androidx.compose.material3.Text(
+                    "✍️ ${hint.tone.label}" + if (hint.reason.isNotEmpty()) " · ${hint.reason}" else "",
+                    fontSize = 11.sp,
+                    maxLines = 1,
+                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 2.dp).testTag("tone_mirror_hint")
+                )
+            }
     }
 }

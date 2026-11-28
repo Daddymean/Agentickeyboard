@@ -2,6 +2,7 @@ package io.github.daddymean.agentickeyboard.ui
 
 import io.github.daddymean.agentickeyboard.network.GrammarCorrectionResponse
 import io.github.daddymean.agentickeyboard.network.ToneAnalysisResponse
+import io.github.daddymean.agentickeyboard.util.SafeLog
 
 /**
  * The single active AI surface shown by the keyboard.
@@ -23,6 +24,7 @@ sealed interface AiPanelState {
     data class Compose(val text: String) : AiPanelState
     data class Explanation(val text: String) : AiPanelState
     data class Continuation(val text: String) : AiPanelState
+    data class Error(val message: String) : AiPanelState
 
     /** Text accepted by the result-refinement chips, matching prior behavior. */
     val refinableText: String?
@@ -53,3 +55,11 @@ sealed interface AiPanelState {
             else -> true
         }
 }
+
+/**
+ * User-visible AI error. The exception contributes only its class name
+ * (via [SafeLog.errorName]), never its message, so an API key or the
+ * user's prompt cannot appear on the keyboard.
+ */
+internal fun aiPanelError(prefix: String, error: Throwable): AiPanelState.Error =
+    AiPanelState.Error("$prefix: ${SafeLog.errorName(error)}")
