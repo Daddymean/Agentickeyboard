@@ -1085,8 +1085,11 @@ class KeyboardRepository(private val database: () -> AppDatabase) {
     suspend fun recordWordsUsage(words: Collection<String>) {
         if (words.isEmpty()) return
         val now = System.currentTimeMillis()
-        db.withTransaction {
-            val dao = db.userVocabularyDao()
+        // Capture once: the db getter can return a different instance mid-call
+        // if #234 recovery or reset swaps AppDatabase.INSTANCE.
+        val d = db
+        d.withTransaction {
+            val dao = d.userVocabularyDao()
             for (word in words) {
                 dao.upsert(word, now)
             }

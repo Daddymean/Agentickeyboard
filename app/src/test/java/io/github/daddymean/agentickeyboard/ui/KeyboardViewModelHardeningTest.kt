@@ -16,6 +16,7 @@ import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeout
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Assert.fail
 import org.junit.Before
@@ -102,5 +103,33 @@ class KeyboardViewModelHardeningTest {
         } catch (_: CancellationException) {
             assertTrue(true)
         }
+    }
+
+    @Test
+    fun recordWordUsageDoesNotWriteWhenLearningIsPaused() = runBlocking {
+        val viewModel = KeyboardViewModel(repo, settings).also { created += it }
+        shadowOf(Looper.getMainLooper()).idle()
+        viewModel.setLearningPaused(true)
+        viewModel.recordWordUsage("xylophone quokka fjord")
+        shadowOf(Looper.getMainLooper()).idle()
+        assertNull(repo.getWord("xylophone"))
+        assertNull(repo.getWord("quokka"))
+        assertNull(repo.getWord("fjord"))
+    }
+
+    @Test
+    fun recordWordUsageWritesWhenLearningIsAllowed() = runBlocking {
+        val viewModel = KeyboardViewModel(repo, settings).also { created += it }
+        shadowOf(Looper.getMainLooper()).idle()
+        viewModel.recordWordUsage("xylophone quokka fjord")
+        withTimeout(5_000) {
+            while (repo.getWord("xylophone")?.count != 1) {
+                shadowOf(Looper.getMainLooper()).idle()
+                kotlinx.coroutines.delay(20)
+            }
+        }
+        assertEquals(1, repo.getWord("xylophone")?.count)
+        assertEquals(1, repo.getWord("quokka")?.count)
+        assertEquals(1, repo.getWord("fjord")?.count)
     }
 }

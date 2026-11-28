@@ -959,6 +959,9 @@ class KeyboardViewModel(
         }
         if (wordsToRecord.isEmpty()) return
         viewModelScope.launch {
+            // Re-check: learning may have been paused, or the field may have
+            // become sensitive, between the gate above and this write.
+            if (!isLearningAllowed()) return@launch
             repository.recordWordsUsage(wordsToRecord)
         }
     }
@@ -1392,7 +1395,7 @@ class KeyboardViewModel(
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
-                publishAiPanel(AiPanelState.Error("Grammar check failed: ${e.localizedMessage ?: e.javaClass.simpleName}"))
+                publishAiPanel(aiPanelError("Grammar check failed", e))
             }
         }
     }
@@ -1502,7 +1505,7 @@ class KeyboardViewModel(
                 throw e
             } catch (e: Exception) {
                 if (!contextIsValid(ephemeralContext)) return@launchAi
-                publishAiPanel(AiPanelState.Error("Failed to summarize text: ${e.localizedMessage ?: e.javaClass.simpleName}"))
+                publishAiPanel(aiPanelError("Failed to summarize text", e))
             }
         }
     }
@@ -1527,7 +1530,7 @@ class KeyboardViewModel(
                 throw e
             } catch (e: Exception) {
                 if (!contextIsValid(ephemeralContext)) return@launchAi
-                publishAiPanel(AiPanelState.Error("Translation error: ${e.localizedMessage ?: e.javaClass.simpleName}"))
+                publishAiPanel(aiPanelError("Translation error", e))
             }
         }
     }
@@ -1550,7 +1553,7 @@ class KeyboardViewModel(
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
-                publishAiPanel(AiPanelState.Error("Rewrite error: ${e.localizedMessage ?: e.javaClass.simpleName}"))
+                publishAiPanel(aiPanelError("Rewrite error", e))
             }
         }
     }
@@ -1579,7 +1582,7 @@ class KeyboardViewModel(
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
-                publishAiPanel(AiPanelState.Error("Rewrite error: ${e.localizedMessage ?: e.javaClass.simpleName}"))
+                publishAiPanel(aiPanelError("Rewrite error", e))
             }
         }
     }
@@ -1602,7 +1605,7 @@ class KeyboardViewModel(
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
-                publishAiPanel(AiPanelState.Error("Compose error: ${e.localizedMessage ?: e.javaClass.simpleName}"))
+                publishAiPanel(aiPanelError("Compose error", e))
             }
         }
     }
@@ -1626,7 +1629,7 @@ class KeyboardViewModel(
                 throw e
             } catch (e: Exception) {
                 if (!contextIsValid(ephemeralContext)) return@launchAi
-                publishAiPanel(AiPanelState.Error("Explanation error: ${e.localizedMessage ?: e.javaClass.simpleName}"))
+                publishAiPanel(aiPanelError("Explanation error", e))
             }
         }
     }
@@ -1702,7 +1705,7 @@ class KeyboardViewModel(
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
-                publishAiPanel(AiPanelState.Error("Tone analysis failed: ${e.localizedMessage ?: e.javaClass.simpleName}"))
+                publishAiPanel(aiPanelError("Tone analysis failed", e))
             }
         }
     }

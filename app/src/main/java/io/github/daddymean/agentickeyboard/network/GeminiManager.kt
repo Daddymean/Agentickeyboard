@@ -295,7 +295,7 @@ object GeminiManager {
             call = { generateText(Prompts.explainText(text)) },
             onMissingKey = { "[Offline: explanations need cloud mode]" },
             onNullResult = { "[Explanation failed]" },
-            onError = { e -> "[Explanation error] ${e.localizedMessage}" }
+            onError = { e -> "[Explanation error] ${SafeLog.errorName(e)}" }
         )
     }
 
