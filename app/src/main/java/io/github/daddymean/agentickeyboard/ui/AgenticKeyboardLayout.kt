@@ -255,6 +255,7 @@ fun AgenticKeyboardLayout(
     var stealthPeekPayload by remember { mutableStateOf<String?>(null) }
     var stealthPassphrase by remember { mutableStateOf("") }
     var stealthPassphraseFocused by remember { mutableStateOf(false) }
+    val capturingSecret = showStealthInk && stealthPassphraseFocused
 
     fun closeAndWipeStealthInk() {
         showStealthInk = false
@@ -268,6 +269,12 @@ fun AgenticKeyboardLayout(
     }
     DisposableEffect(Unit) {
         onDispose { closeAndWipeStealthInk() }
+    }
+    // While the passphrase bar has focus: no suggestion chips computed or shown,
+    // and the mic must not hand off to a voice IME (same class of leak as swipe).
+    DisposableEffect(capturingSecret) {
+        viewModel.setPredictiveSuggestionsPaused(capturingSecret)
+        onDispose { viewModel.setPredictiveSuggestionsPaused(false) }
     }
 
     // Swipe-to-Type Gesture States
@@ -398,7 +405,7 @@ fun AgenticKeyboardLayout(
 
     /** Routes single-key presses to the volatile StealthInk passphrase buffer when focused. */
     fun dispatchKeyChar(text: String) {
-        if (showStealthInk && stealthPassphraseFocused) {
+        if (capturingSecret) {
             if (stealthPassphrase.length + text.length <= StealthInkCodec.MAX_PASSPHRASE_CHARS) {
                 stealthPassphrase += text
             }
@@ -415,7 +422,7 @@ fun AgenticKeyboardLayout(
      * (KEYBOARD-006).
      */
     fun handleSpace() {
-        if (showStealthInk && stealthPassphraseFocused) {
+        if (capturingSecret) {
             if (stealthPassphrase.length < StealthInkCodec.MAX_PASSPHRASE_CHARS) {
                 stealthPassphrase += " "
             }
@@ -495,7 +502,7 @@ fun AgenticKeyboardLayout(
      * learned rule twice deletes that rule.
      */
     fun handleBackspace() {
-        if (showStealthInk && stealthPassphraseFocused) {
+        if (capturingSecret) {
             if (stealthPassphrase.isNotEmpty()) {
                 stealthPassphrase = stealthPassphrase.dropLast(1)
             }
@@ -643,7 +650,7 @@ fun AgenticKeyboardLayout(
                         dispatchKeyChar(" ") // routed to the passphrase while StealthInk captures it
                     } else {
                         gestureAlert = "Gesture: Backspace"
-                        if (showStealthInk && stealthPassphraseFocused) {
+                        if (capturingSecret) {
                             if (stealthPassphrase.isNotEmpty()) stealthPassphrase = stealthPassphrase.dropLast(1)
                         } else {
                             onDelete()
@@ -1347,7 +1354,7 @@ fun AgenticKeyboardLayout(
                                                 fontWeight = FontWeight.Bold
                                             )
                                         }
-                                    } else if (predictiveSuggestions.isNotEmpty() && !isSensitiveField) {
+                                    } else if (predictiveSuggestions.isNotEmpty() && !isSensitiveField && !capturingSecret) {
                                         LazyRow(
                                             horizontalArrangement = Arrangement.spacedBy(6.dp),
                                             modifier = Modifier.fillMaxWidth().padding(top = 2.dp)
@@ -1360,6 +1367,7 @@ fun AgenticKeyboardLayout(
                                                         .clip(RoundedCornerShape(8.dp))
                                                         .background(keyboardColors.chipAlt)
                                                         .clickable {
+                                                            if (capturingSecret) return@clickable
                                                             buzz(HapticFeedbackType.TextHandleMove)
                                                             val text = currentText(fresh = true)
                                                             val lastWord = text.takeLastWhile { !it.isWhitespace() }
@@ -2087,7 +2095,7 @@ fun AgenticKeyboardLayout(
                                 }
                             },
                             onDragEnd = {
-                                if (showStealthInk && stealthPassphraseFocused) {
+                                if (capturingSecret) {
                                     // The StealthInk passphrase is typed key by key. A swiped word would
                                     // be committed to the host field and fed to the twin, so drop it.
                                     swipePathPoints.clear()
@@ -2233,7 +2241,6 @@ fun AgenticKeyboardLayout(
                                                 } else trainingStep = next
                                             }
                                         } else {
-                                            val capturingSecret = showStealthInk && stealthPassphraseFocused
                                             val resolved = if (isSensitiveField || capturingSecret) char[0] else
                                                 calibration.resolve(char[0], x, y, letterBounds)
                                             // KEYBOARD-019: remember where this letter was tapped (memory
@@ -2371,7 +2378,11 @@ fun AgenticKeyboardLayout(
                 text = "🎤",
                 onClick = {
                     buzz(HapticFeedbackType.LongPress)
-                    if (inPlaygroundMode) {
+                    if (capturingSecret) {
+                        // Do not switch to a voice IME: that would capture audio
+                        // and type into the host field, not the passphrase buffer.
+                        gestureAlert = "Voice input is off while typing the passphrase"
+                    } else if (inPlaygroundMode) {
                         gestureAlert = "Voice input works when used as your keyboard 🎤"
                     } else {
                         onMicPress()
@@ -2458,7 +2469,7 @@ fun AgenticKeyboardLayout(
                 text = "Enter",
                 onClick = {
                     buzz(HapticFeedbackType.LongPress)
-                    if (showStealthInk && stealthPassphraseFocused) {
+                    if (capturingSecret) {
                         stealthPassphraseFocused = false
                     } else {
                         onAction()
