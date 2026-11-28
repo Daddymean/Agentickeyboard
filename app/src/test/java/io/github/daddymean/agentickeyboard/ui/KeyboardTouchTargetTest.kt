@@ -144,6 +144,32 @@ class KeyboardTouchTargetTest {
         composeTestRule.onNodeWithText("Was:", substring = true).performScrollTo().assertIsDisplayed()
     }
 
+    @Test
+    fun `error panel shows failure without apply or iterate actions`() {
+        val viewModel = showKeyboard(1.15f)
+        publishPanel(viewModel, AiPanelState.Error("Rewrite error: network unavailable"))
+        composeTestRule.onNodeWithTag("ai_error_panel").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Apply").assertDoesNotExist()
+        composeTestRule.onNodeWithText("Replace").assertDoesNotExist()
+        composeTestRule.onNodeWithText("Insert").assertDoesNotExist()
+        composeTestRule.onNodeWithTag("regenerate_result").assertExists()
+        composeTestRule.onNodeWithTag("dismiss_results").assertExists()
+        composeTestRule.onNodeWithTag("expand_result").performClick()
+        composeTestRule.mainClock.advanceTimeBy(300)
+        composeTestRule.onNodeWithTag("iterate_chips").assertDoesNotExist()
+    }
+
+    @Test
+    fun `explanation panel uses expandable preview`() {
+        val viewModel = showKeyboard(1.15f)
+        val longExplanation = "Plain language explanation sentence. ".repeat(30)
+        publishPanel(viewModel, AiPanelState.Explanation(longExplanation))
+        composeTestRule.onNodeWithText("Plain-language explanation: ▼").assertIsDisplayed()
+        composeTestRule.onNodeWithTag("expand_result").performClick()
+        composeTestRule.mainClock.advanceTimeBy(300)
+        composeTestRule.onNodeWithText("Plain-language explanation: ▲").assertIsDisplayed()
+    }
+
     /** Taps at ([xDp], [yDp]) in root coordinates; returns what was typed, lower-cased. */
     private fun tapAt(xDp: Float, yDp: Float): String {
         typed.clear()

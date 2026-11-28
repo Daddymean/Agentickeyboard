@@ -28,24 +28,26 @@ object RetrofitClient {
     // so adapters come from KSP codegen; no reflection factory is registered.
     val moshi: Moshi = Moshi.Builder().build()
 
-    private val okHttpClient = OkHttpClient.Builder()
-        .connectTimeout(30, TimeUnit.SECONDS)
-        .readTimeout(60, TimeUnit.SECONDS)
-        .writeTimeout(60, TimeUnit.SECONDS)
-        // Last-mile privacy guard: sanitize the serialized request body before it
-        // leaves the device, covering every Gemini action through one boundary.
-        .addInterceptor(CloudRedactionInterceptor())
-        .apply {
-            // A keyboard handles everything the user types; never log request bodies
-            // in release builds, and never log the API key header at all.
-            if (BuildConfig.DEBUG) {
-                addInterceptor(HttpLoggingInterceptor().apply {
-                    level = HttpLoggingInterceptor.Level.BASIC
-                    redactHeader("x-goog-api-key")
-                })
+    private val okHttpClient by lazy {
+        OkHttpClient.Builder()
+            .connectTimeout(30, TimeUnit.SECONDS)
+            .readTimeout(60, TimeUnit.SECONDS)
+            .writeTimeout(60, TimeUnit.SECONDS)
+            // Last-mile privacy guard: sanitize the serialized request body before it
+            // leaves the device, covering every Gemini action through one boundary.
+            .addInterceptor(CloudRedactionInterceptor())
+            .apply {
+                // A keyboard handles everything the user types; never log request bodies
+                // in release builds, and never log the API key header at all.
+                if (BuildConfig.DEBUG) {
+                    addInterceptor(HttpLoggingInterceptor().apply {
+                        level = HttpLoggingInterceptor.Level.BASIC
+                        redactHeader("x-goog-api-key")
+                    })
+                }
             }
-        }
-        .build()
+            .build()
+    }
 
     val service: GeminiApiService by lazy {
         val retrofit = Retrofit.Builder()

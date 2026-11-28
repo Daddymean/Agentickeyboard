@@ -30,6 +30,9 @@ object GeminiManager {
         get() = userApiKey?.takeIf { it.isNotBlank() }.orEmpty()
 
     private val moshi: Moshi = RetrofitClient.moshi
+    private val grammarAdapter by lazy { moshi.adapter(GrammarCorrectionResponse::class.java) }
+    private val suggestionsAdapter by lazy { moshi.adapter(SuggestionsResponse::class.java) }
+    private val toneAdapter by lazy { moshi.adapter(ToneAnalysisResponse::class.java) }
 
     /**
      * Separate typed caches avoid the former shared `Any` map and its unchecked
@@ -103,286 +106,242 @@ object GeminiManager {
         return response.candidates?.firstOrNull()?.content?.parts?.firstOrNull()?.text?.trim()
     }
 
+    /** Runs a JSON-mode generation request and parses the body with [parse]. */
+    private suspend fun <T : Any> generateJson(prompt: String, parse: (String) -> T?): T? {
+        val request = GenerateContentRequest(
+            contents = listOf(Content(parts = listOf(Part(text = prompt)))),
+            // Gemini 3 models are tuned for default sampling settings; only the
+            // response mime type is pinned for structured output.
+            generationConfig = GenerationConfig(responseMimeType = "application/json")
+        )
+        val response = RetrofitClient.service.generateContent(BuildConfig.GEMINI_MODEL, apiKey, request)
+        val jsonText = response.candidates?.firstOrNull()?.content?.parts?.firstOrNull()?.text
+        return jsonText?.let { parse(extractJson(it)) }
+    }
+
+    /**
+     * Shared cloud execution path: checks API key, reads/writes [cache], always
+     * propagates [CancellationException] to preserve structured concurrency, and
+     * delegates failures or empty responses to [fallback].
+     */
+    private suspend fun <T : Any> runCachedCloud(
+        action: String,
+        cache: AiResponseCache<T>,
+        cacheKey: AiCacheKey,
+        bypassCache: Boolean,
+        cacheResponse: Boolean = true,
+        call: suspend () -> T?,
+        onMissingKey: suspend () -> T,
+        onNullResult: suspend () -> T = onMissingKey,
+        onError: suspend (Exception) -> T = { onMissingKey() }
+    ): T = withContext(Dispatchers.IO) {
+        if (!isApiKeyAvailable()) return@withContext onMissingKey()
+        if (cacheResponse && !bypassCache) cache.get(cacheKey)?.let { return@withContext it }
+        try {
+            val result = call()
+            if (result != null) {
+                if (cacheResponse) cache.put(cacheKey, result)
+                result
+            } else {
+                onNullResult()
+            }
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            SafeLog.e(TAG, "Error in $action", e)
+            onError(e)
+        }
+    }
+
     /**
      * Corrects grammar and spelling errors. Returns a structured GrammarCorrectionResponse.
      */
-    suspend fun fixGrammar(text: String, personalizationContext: String = "", bypassCache: Boolean = false): GrammarCorrectionResponse = withContext(Dispatchers.IO) {
-        if (!isApiKeyAvailable()) {
-            return@withContext offlineGrammarFix(text)
-        }
-
-        val prompt = Prompts.fixGrammar(personalizationContext, text)
-        val cacheKey = AiCacheKeys.grammar(BuildConfig.GEMINI_MODEL, personalizationContext, text)
-        if (!bypassCache) grammarCache.get(cacheKey)?.let { return@withContext it }
-
-        try {
-            val request = GenerateContentRequest(
-                contents = listOf(Content(parts = listOf(Part(text = prompt)))),
-                // Gemini 3 models are tuned for default sampling settings; only the
-                // response mime type is pinned for structured output.
-                generationConfig = GenerationConfig(responseMimeType = "application/json")
-            )
-            val response = RetrofitClient.service.generateContent(BuildConfig.GEMINI_MODEL, apiKey, request)
-            val jsonText = response.candidates?.firstOrNull()?.content?.parts?.firstOrNull()?.text
-            val parsed = jsonText?.let { moshi.adapter(GrammarCorrectionResponse::class.java).fromJson(extractJson(it)) }
-            if (parsed != null) {
-                grammarCache.put(cacheKey, parsed)
-                parsed
-            } else {
-                offlineGrammarFix(text)
-            }
-        } catch (e: kotlinx.coroutines.CancellationException) {
-            throw e
-        } catch (e: Exception) {
-            SafeLog.e(TAG, "Error in fixGrammar", e)
-            offlineGrammarFix(text)
-        }
-    }
+    suspend fun fixGrammar(
+        text: String,
+        personalizationContext: String = "",
+        bypassCache: Boolean = false
+    ): GrammarCorrectionResponse = runCachedCloud(
+        action = "fixGrammar",
+        cache = grammarCache,
+        cacheKey = AiCacheKeys.grammar(BuildConfig.GEMINI_MODEL, personalizationContext, text),
+        bypassCache = bypassCache,
+        call = { generateJson(Prompts.fixGrammar(personalizationContext, text), grammarAdapter::fromJson) },
+        onMissingKey = { offlineGrammarFix(text) }
+    )
 
     /**
      * Suggests smart response replies based on input message context.
      */
-    suspend fun suggestReplies(contextMessage: String, personalizationContext: String = "", intent: String = "", bypassCache: Boolean = false, cacheResponse: Boolean = true): SuggestionsResponse = withContext(Dispatchers.IO) {
-        if (!isApiKeyAvailable()) {
-            return@withContext offlineReplies(contextMessage, personalizationContext, intent)
-        }
-
-        val prompt = Prompts.suggestReplies(contextMessage, personalizationContext, intent)
-        val cacheKey = AiCacheKeys.replies(
-            BuildConfig.GEMINI_MODEL,
-            intent,
-            personalizationContext,
-            contextMessage
-        )
-        if (cacheResponse && !bypassCache) suggestionsCache.get(cacheKey)?.let { return@withContext it }
-
-        try {
-            val request = GenerateContentRequest(
-                contents = listOf(Content(parts = listOf(Part(text = prompt)))),
-                generationConfig = GenerationConfig(responseMimeType = "application/json")
-            )
-            val response = RetrofitClient.service.generateContent(BuildConfig.GEMINI_MODEL, apiKey, request)
-            val jsonText = response.candidates?.firstOrNull()?.content?.parts?.firstOrNull()?.text
-            val parsed = jsonText?.let { moshi.adapter(SuggestionsResponse::class.java).fromJson(extractJson(it)) }
-            if (parsed != null) {
-                if (cacheResponse) suggestionsCache.put(cacheKey, parsed)
-                parsed
-            } else {
-                offlineReplies(contextMessage, personalizationContext, intent)
-            }
-        } catch (e: Exception) {
-            SafeLog.e(TAG, "Error in suggestReplies", e)
-            offlineReplies(contextMessage, personalizationContext, intent)
-        }
-    }
+    suspend fun suggestReplies(
+        contextMessage: String,
+        personalizationContext: String = "",
+        intent: String = "",
+        bypassCache: Boolean = false,
+        cacheResponse: Boolean = true
+    ): SuggestionsResponse = runCachedCloud(
+        action = "suggestReplies",
+        cache = suggestionsCache,
+        cacheKey = AiCacheKeys.replies(BuildConfig.GEMINI_MODEL, intent, personalizationContext, contextMessage),
+        bypassCache = bypassCache,
+        cacheResponse = cacheResponse,
+        call = { generateJson(Prompts.suggestReplies(contextMessage, personalizationContext, intent), suggestionsAdapter::fromJson) },
+        onMissingKey = { offlineReplies(contextMessage, personalizationContext, intent) }
+    )
 
     /**
      * Summarizes long input message text.
      */
-    suspend fun summarizeMessage(text: String, personalizationContext: String = "", bypassCache: Boolean = false, cacheResponse: Boolean = true): String = withContext(Dispatchers.IO) {
-        if (text.wordCount() < 10) {
-            return@withContext "Message is too short to summarize."
-        }
-
-        if (!isApiKeyAvailable()) {
-            return@withContext offlineSummary(text)
-        }
-
-        val prompt = Prompts.summarizeMessage(personalizationContext, text)
-        val cacheKey = AiCacheKeys.summary(BuildConfig.GEMINI_MODEL, personalizationContext, text)
-        if (cacheResponse && !bypassCache) textCache.get(cacheKey)?.let { return@withContext it }
-
-        try {
-            val result = generateText(prompt)
-            if (cacheResponse && result != null) textCache.put(cacheKey, result)
-            result ?: offlineSummary(text)
-        } catch (e: Exception) {
-            SafeLog.e(TAG, "Error in summarizeMessage", e)
-            offlineSummary(text)
-        }
+    suspend fun summarizeMessage(
+        text: String,
+        personalizationContext: String = "",
+        bypassCache: Boolean = false,
+        cacheResponse: Boolean = true
+    ): String {
+        if (text.wordCount() < 10) return "Message is too short to summarize."
+        return runCachedCloud(
+            action = "summarizeMessage",
+            cache = textCache,
+            cacheKey = AiCacheKeys.summary(BuildConfig.GEMINI_MODEL, personalizationContext, text),
+            bypassCache = bypassCache,
+            cacheResponse = cacheResponse,
+            call = { generateText(Prompts.summarizeMessage(personalizationContext, text)) },
+            onMissingKey = { offlineSummary(text) }
+        )
     }
 
     /**
      * Translates text into target language.
      */
-    suspend fun translateText(text: String, sourceLang: String, targetLang: String, personalizationContext: String = "", bypassCache: Boolean = false, cacheResponse: Boolean = true): String = withContext(Dispatchers.IO) {
-        if (text.isBlank()) return@withContext ""
-
-        if (!isApiKeyAvailable()) {
-            return@withContext "[Offline Preview] Translated text from $sourceLang to $targetLang: $text"
-        }
-
-        val prompt = Prompts.translateText(sourceLang, targetLang, personalizationContext, text)
-        val cacheKey = AiCacheKeys.translation(
-            BuildConfig.GEMINI_MODEL,
-            sourceLang,
-            targetLang,
-            personalizationContext,
-            text
+    suspend fun translateText(
+        text: String,
+        sourceLang: String,
+        targetLang: String,
+        personalizationContext: String = "",
+        bypassCache: Boolean = false,
+        cacheResponse: Boolean = true
+    ): String {
+        if (text.isBlank()) return ""
+        return runCachedCloud(
+            action = "translateText",
+            cache = textCache,
+            cacheKey = AiCacheKeys.translation(BuildConfig.GEMINI_MODEL, sourceLang, targetLang, personalizationContext, text),
+            bypassCache = bypassCache,
+            cacheResponse = cacheResponse,
+            call = { generateText(Prompts.translateText(sourceLang, targetLang, personalizationContext, text)) },
+            onMissingKey = { "[Offline Preview] Translated text from $sourceLang to $targetLang: $text" },
+            onNullResult = { "[Translation Failed] $text" },
+            onError = { "[Translation Error] $text" }
         )
-        if (cacheResponse && !bypassCache) textCache.get(cacheKey)?.let { return@withContext it }
-
-        try {
-            val result = generateText(prompt)
-            if (cacheResponse && result != null) textCache.put(cacheKey, result)
-            result ?: "[Translation Failed] $text"
-        } catch (e: Exception) {
-            SafeLog.e(TAG, "Error in translateText", e)
-            "[Translation Error] $text"
-        }
     }
 
     /**
      * Rewrites text to match a target tone/persona while preserving meaning.
      */
-    suspend fun rewriteWithTone(text: String, targetTone: String, personalizationContext: String = "", preserveVoice: Boolean = false, bypassCache: Boolean = false): String = withContext(Dispatchers.IO) {
-        if (text.isBlank()) return@withContext ""
-
-        if (!isApiKeyAvailable()) {
-            return@withContext offlineRewrite(text, targetTone)
-        }
-
-        val prompt = Prompts.rewriteWithTone(targetTone, personalizationContext, preserveVoice, text)
-        val cacheKey = AiCacheKeys.rewrite(
-            BuildConfig.GEMINI_MODEL,
-            preserveVoice,
-            targetTone,
-            personalizationContext,
-            text
+    suspend fun rewriteWithTone(
+        text: String,
+        targetTone: String,
+        personalizationContext: String = "",
+        preserveVoice: Boolean = false,
+        bypassCache: Boolean = false
+    ): String {
+        if (text.isBlank()) return ""
+        return runCachedCloud(
+            action = "rewriteWithTone",
+            cache = textCache,
+            cacheKey = AiCacheKeys.rewrite(BuildConfig.GEMINI_MODEL, preserveVoice, targetTone, personalizationContext, text),
+            bypassCache = bypassCache,
+            call = { generateText(Prompts.rewriteWithTone(targetTone, personalizationContext, preserveVoice, text)) },
+            onMissingKey = { offlineRewrite(text, targetTone) }
         )
-        if (!bypassCache) textCache.get(cacheKey)?.let { return@withContext it }
-
-        try {
-            val result = generateText(prompt)
-            if (result != null) textCache.put(cacheKey, result)
-            result ?: offlineRewrite(text, targetTone)
-        } catch (e: Exception) {
-            SafeLog.e(TAG, "Error in rewriteWithTone", e)
-            offlineRewrite(text, targetTone)
-        }
     }
 
     /**
      * Drafts a complete message from a short instruction the user typed, e.g.
      * "tell her I'll be 20 minutes late, apologetic" -> an actual message.
      */
-    suspend fun composeMessage(instruction: String, targetTone: String, personalizationContext: String = "", preserveVoice: Boolean = false, bypassCache: Boolean = false): String = withContext(Dispatchers.IO) {
-        if (instruction.isBlank()) return@withContext ""
-
-        if (!isApiKeyAvailable()) {
-            return@withContext offlineCompose(instruction, targetTone, personalizationContext, preserveVoice)
-        }
-
-        val prompt = Prompts.composeMessage(instruction, targetTone, personalizationContext, preserveVoice)
-        val cacheKey = AiCacheKeys.compose(
-            BuildConfig.GEMINI_MODEL,
-            preserveVoice,
-            targetTone,
-            personalizationContext,
-            instruction
+    suspend fun composeMessage(
+        instruction: String,
+        targetTone: String,
+        personalizationContext: String = "",
+        preserveVoice: Boolean = false,
+        bypassCache: Boolean = false
+    ): String {
+        if (instruction.isBlank()) return ""
+        return runCachedCloud(
+            action = "composeMessage",
+            cache = textCache,
+            cacheKey = AiCacheKeys.compose(BuildConfig.GEMINI_MODEL, preserveVoice, targetTone, personalizationContext, instruction),
+            bypassCache = bypassCache,
+            call = { generateText(Prompts.composeMessage(instruction, targetTone, personalizationContext, preserveVoice)) },
+            onMissingKey = { offlineCompose(instruction, targetTone, personalizationContext, preserveVoice) }
         )
-        if (!bypassCache) textCache.get(cacheKey)?.let { return@withContext it }
-
-        try {
-            val result = generateText(prompt)
-            if (result != null) textCache.put(cacheKey, result)
-            result ?: offlineCompose(instruction, targetTone, personalizationContext, preserveVoice)
-        } catch (e: Exception) {
-            SafeLog.e(TAG, "Error in composeMessage", e)
-            offlineCompose(instruction, targetTone, personalizationContext, preserveVoice)
-        }
     }
 
     /**
      * Explains dense or jargon-heavy text (e.g. from the clipboard) in plain language.
      */
-    suspend fun explainText(text: String, bypassCache: Boolean = false, cacheResponse: Boolean = true): String = withContext(Dispatchers.IO) {
-        if (text.isBlank()) return@withContext ""
-
-        if (!isApiKeyAvailable()) {
-            return@withContext "[Offline: explanations need cloud mode]"
-        }
-
-        val prompt = Prompts.explainText(text)
-        val cacheKey = AiCacheKeys.explanation(BuildConfig.GEMINI_MODEL, text)
-        if (cacheResponse && !bypassCache) textCache.get(cacheKey)?.let { return@withContext it }
-
-        try {
-            val result = generateText(prompt)
-            if (cacheResponse && result != null) textCache.put(cacheKey, result)
-            result ?: "[Explanation failed]"
-        } catch (e: Exception) {
-            SafeLog.e(TAG, "Error in explainText", e)
-            "[Explanation error] ${e.localizedMessage}"
-        }
+    suspend fun explainText(
+        text: String,
+        bypassCache: Boolean = false,
+        cacheResponse: Boolean = true
+    ): String {
+        if (text.isBlank()) return ""
+        return runCachedCloud(
+            action = "explainText",
+            cache = textCache,
+            cacheKey = AiCacheKeys.explanation(BuildConfig.GEMINI_MODEL, text),
+            bypassCache = bypassCache,
+            cacheResponse = cacheResponse,
+            call = { generateText(Prompts.explainText(text)) },
+            onMissingKey = { "[Offline: explanations need cloud mode]" },
+            onNullResult = { "[Explanation failed]" },
+            onError = { e -> "[Explanation error] ${e.localizedMessage}" }
+        )
     }
 
     /**
      * Continues the user's draft mid-thought in their own voice. Returns only the
      * continuation (not the original text).
      */
-    suspend fun continueText(text: String, personalizationContext: String = "", preserveVoice: Boolean = false, bypassCache: Boolean = false): String = withContext(Dispatchers.IO) {
-        if (text.isBlank()) return@withContext ""
-
-        if (!isApiKeyAvailable()) {
-            return@withContext offlineContinue(text, personalizationContext, preserveVoice)
-        }
-
-        val prompt = Prompts.continueText(text, personalizationContext, preserveVoice)
-        val cacheKey = AiCacheKeys.continuation(
-            BuildConfig.GEMINI_MODEL,
-            preserveVoice,
-            personalizationContext,
-            text
+    suspend fun continueText(
+        text: String,
+        personalizationContext: String = "",
+        preserveVoice: Boolean = false,
+        bypassCache: Boolean = false
+    ): String {
+        if (text.isBlank()) return ""
+        return runCachedCloud(
+            action = "continueText",
+            cache = textCache,
+            cacheKey = AiCacheKeys.continuation(BuildConfig.GEMINI_MODEL, preserveVoice, personalizationContext, text),
+            bypassCache = bypassCache,
+            call = { generateText(Prompts.continueText(text, personalizationContext, preserveVoice)) },
+            onMissingKey = { offlineContinue(text, personalizationContext, preserveVoice) }
         )
-        if (!bypassCache) textCache.get(cacheKey)?.let { return@withContext it }
-
-        try {
-            val result = generateText(prompt)
-            if (result != null) textCache.put(cacheKey, result)
-            result ?: offlineContinue(text, personalizationContext, preserveVoice)
-        } catch (e: Exception) {
-            SafeLog.e(TAG, "Error in continueText", e)
-            offlineContinue(text, personalizationContext, preserveVoice)
-        }
     }
 
     /**
      * Distills the sentiment and analyzes the tone.
      */
-    suspend fun analyzeTone(text: String, personalizationContext: String = ""): ToneAnalysisResponse = withContext(Dispatchers.IO) {
+    suspend fun analyzeTone(
+        text: String,
+        personalizationContext: String = ""
+    ): ToneAnalysisResponse {
         if (text.isBlank()) {
-            return@withContext ToneAnalysisResponse("Neutral", 1.0f, listOf("No text provided to analyze."))
+            return ToneAnalysisResponse("Neutral", 1.0f, listOf("No text provided to analyze."))
         }
-
-        if (!isApiKeyAvailable()) {
-            return@withContext offlineTone(text, personalizationContext)
-        }
-
-        val prompt = Prompts.analyzeTone(personalizationContext, text)
-        val cacheKey = AiCacheKeys.tone(BuildConfig.GEMINI_MODEL, personalizationContext, text)
-        toneCache.get(cacheKey)?.let { return@withContext it }
-
-        try {
-            val request = GenerateContentRequest(
-                contents = listOf(Content(parts = listOf(Part(text = prompt)))),
-                generationConfig = GenerationConfig(responseMimeType = "application/json")
-            )
-            val response = RetrofitClient.service.generateContent(BuildConfig.GEMINI_MODEL, apiKey, request)
-            val jsonText = response.candidates?.firstOrNull()?.content?.parts?.firstOrNull()?.text
-            val parsed = jsonText?.let { moshi.adapter(ToneAnalysisResponse::class.java).fromJson(extractJson(it)) }
-                // Length is computable locally, so never trust the model for it.
-                ?.copy(lengthLabel = WritingQualityMeter.lengthLabel(text))
-            if (parsed != null) {
-                toneCache.put(cacheKey, parsed)
-                parsed
-            } else {
-                offlineTone(text, personalizationContext)
-            }
-        } catch (e: Exception) {
-            SafeLog.e(TAG, "Error in analyzeTone", e)
-            offlineTone(text, personalizationContext)
-        }
+        return runCachedCloud(
+            action = "analyzeTone",
+            cache = toneCache,
+            cacheKey = AiCacheKeys.tone(BuildConfig.GEMINI_MODEL, personalizationContext, text),
+            bypassCache = false,
+            call = {
+                generateJson(Prompts.analyzeTone(personalizationContext, text), toneAdapter::fromJson)
+                    // Length is computable locally, so never trust the model for it.
+                    ?.copy(lengthLabel = WritingQualityMeter.lengthLabel(text))
+            },
+            onMissingKey = { offlineTone(text, personalizationContext) }
+        )
     }
 
     // --- Offline routing: on-device Gemini Nano when available, else heuristics ---

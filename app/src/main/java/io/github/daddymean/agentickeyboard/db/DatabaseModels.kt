@@ -1081,6 +1081,18 @@ class KeyboardRepository(private val database: () -> AppDatabase) {
         db.userVocabularyDao().upsert(word, System.currentTimeMillis())
     }
 
+    /** Atomically bumps usage counts for multiple words in a single transaction. */
+    suspend fun recordWordsUsage(words: Collection<String>) {
+        if (words.isEmpty()) return
+        val now = System.currentTimeMillis()
+        db.withTransaction {
+            val dao = db.userVocabularyDao()
+            for (word in words) {
+                dao.upsert(word, now)
+            }
+        }
+    }
+
     suspend fun getWord(word: String): UserVocabulary? {
         return db.userVocabularyDao().getWord(word)
     }

@@ -23,6 +23,7 @@ sealed interface AiPanelState {
     data class Compose(val text: String) : AiPanelState
     data class Explanation(val text: String) : AiPanelState
     data class Continuation(val text: String) : AiPanelState
+    data class Error(val message: String) : AiPanelState
 
     /** Text accepted by the result-refinement chips, matching prior behavior. */
     val refinableText: String?

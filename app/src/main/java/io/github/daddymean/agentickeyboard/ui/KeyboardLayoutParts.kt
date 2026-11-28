@@ -37,12 +37,16 @@ import androidx.compose.ui.semantics.role
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import io.github.daddymean.agentickeyboard.ui.theme.LocalKeyboardColors
+import io.github.daddymean.agentickeyboard.util.WordDiff
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
@@ -62,6 +66,11 @@ internal fun ExpandableResult(
     modifier: Modifier = Modifier
 ) {
     val colors = LocalKeyboardColors.current
+    val diffOriginal = original?.takeIf { expanded && it.isNotBlank() && it != result }
+    val diffSpans = remember(diffOriginal, result) {
+        if (diffOriginal != null) WordDiff.diff(diffOriginal, result) else emptyList()
+    }
+    val showDiff = diffOriginal != null
     Column(modifier = modifier.clickable { onToggle() }) {
         Text(
             text = "$label ${if (expanded) "▲" else "▼"}",
@@ -69,22 +78,62 @@ internal fun ExpandableResult(
             fontSize = 11.sp,
             fontWeight = FontWeight.Bold
         )
-        Text(
-            text = result,
-            color = colors.text,
-            fontSize = 13.sp,
-            maxLines = if (expanded) 10 else 1,
-            overflow = TextOverflow.Ellipsis
-        )
-        if (expanded && !original.isNullOrBlank() && original != result) {
-            Spacer(modifier = Modifier.height(4.dp))
+        if (showDiff) {
+            val annotatedResult = remember(diffSpans, colors.text, colors.success) {
+                buildAnnotatedString {
+                    for (span in diffSpans) {
+                        when (span.op) {
+                            WordDiff.Op.EQUAL -> append(span.text)
+                            WordDiff.Op.INSERT -> withStyle(
+                                SpanStyle(
+                                    color = colors.success,
+                                    fontWeight = FontWeight.SemiBold
+                                )
+                            ) { append(span.text) }
+                            WordDiff.Op.DELETE -> Unit
+                        }
+                    }
+                }
+            }
             Text(
-                text = "Was: $original",
+                text = annotatedResult,
+                color = colors.text,
+                fontSize = 13.sp,
+                maxLines = 10,
+                overflow = TextOverflow.Ellipsis
+            )
+            Spacer(modifier = Modifier.height(4.dp))
+            val annotatedOriginal = remember(diffSpans, colors.textMuted, colors.error) {
+                buildAnnotatedString {
+                    append("Was: ")
+                    for (span in diffSpans) {
+                        when (span.op) {
+                            WordDiff.Op.EQUAL -> append(span.text)
+                            WordDiff.Op.DELETE -> withStyle(
+                                SpanStyle(
+                                    color = colors.error,
+                                    textDecoration = TextDecoration.LineThrough
+                                )
+                            ) { append(span.text) }
+                            WordDiff.Op.INSERT -> Unit
+                        }
+                    }
+                }
+            }
+            Text(
+                text = annotatedOriginal,
                 color = colors.textMuted,
                 fontSize = 11.sp,
                 maxLines = 4,
-                overflow = TextOverflow.Ellipsis,
-                textDecoration = TextDecoration.LineThrough
+                overflow = TextOverflow.Ellipsis
+            )
+        } else {
+            Text(
+                text = result,
+                color = colors.text,
+                fontSize = 13.sp,
+                maxLines = if (expanded) 10 else 1,
+                overflow = TextOverflow.Ellipsis
             )
         }
     }

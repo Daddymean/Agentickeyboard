@@ -17,6 +17,7 @@ class AiPanelStateTest {
         assertFalse(AiPanelState.ReplyIntent("message").hasResult)
         assertTrue(AiPanelState.Replies(listOf("Sure")).hasResult)
         assertTrue(AiPanelState.Explanation("Plain language").hasResult)
+        assertTrue(AiPanelState.Error("Network timeout").hasResult)
     }
 
     @Test
@@ -32,6 +33,7 @@ class AiPanelStateTest {
         assertEquals("continue", AiPanelState.Continuation("continue").refinableText)
         assertNull(AiPanelState.Explanation("explain").refinableText)
         assertNull(AiPanelState.Tone(ToneAnalysisResponse("Neutral", 0.8f, emptyList())).refinableText)
+        assertNull(AiPanelState.Error("Rewrite failed").refinableText)
     }
 
     @Test
@@ -44,5 +46,6 @@ class AiPanelStateTest {
         assertEquals("translation source", AiPanelState.Translation("hola", "translation source").sourceText)
         assertEquals("rewrite source", AiPanelState.Rewrite("new", "rewrite source", "Warm").sourceText)
         assertNull(AiPanelState.Compose("draft").sourceText)
+        assertNull(AiPanelState.Error("failed").sourceText)
     }
 }

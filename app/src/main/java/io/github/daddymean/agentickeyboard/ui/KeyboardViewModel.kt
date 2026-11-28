@@ -530,18 +530,12 @@ class KeyboardViewModel(
     private fun publishAiPanel(state: AiPanelState) {
         _aiPanelState.value = state
         val candidate = when (state) {
-            is AiPanelState.Grammar -> state.result.corrected.takeUnless {
-                state.result.explanation.startsWith("Error", ignoreCase = true)
-            }
+            is AiPanelState.Grammar -> state.result.corrected
             is AiPanelState.Rewrite -> state.text
             is AiPanelState.Compose -> state.text
             is AiPanelState.Continuation -> state.text
             else -> null
-        }?.takeUnless {
-            it.startsWith("Rewrite error", ignoreCase = true) ||
-                it.startsWith("Compose error", ignoreCase = true) ||
-                it.startsWith("[Offline:", ignoreCase = true)
-        }
+        }?.takeUnless { it.startsWith("[Offline:", ignoreCase = true) }
 
         val score = candidate
             ?.takeIf { !_isSensitiveField.value }
@@ -835,7 +829,7 @@ class KeyboardViewModel(
     fun requestAiApply(text: String): Boolean {
         if (!_isAiApplyConfirmEnabled.value || _isSensitiveField.value) return false
         val where = activeAppLabel.ifBlank { "this app" }
-        val flat = text.replace(Regex("\\s+"), " ").trim()
+        val flat = text.replace(WHITESPACE_REGEX, " ").trim()
         val preview = if (flat.length > AI_APPLY_PREVIEW_CHARS) flat.take(AI_APPLY_PREVIEW_CHARS).trimEnd() + "…" else flat
         _pendingAiApply.value = PendingAiApply(where, preview)
         return true
@@ -959,14 +953,13 @@ class KeyboardViewModel(
      */
     fun recordWordUsage(text: String) {
         if (text.isBlank() || !isLearningAllowed()) return
+        val wordsToRecord = text.split(WHITESPACE_REGEX).mapNotNull { w ->
+            val cleaned = w.replace(NON_ALPHA_REGEX, "").lowercase().trim()
+            cleaned.takeIf { it.length > 2 && !STOP_WORDS.contains(it) }
+        }
+        if (wordsToRecord.isEmpty()) return
         viewModelScope.launch {
-            val words = text.split(WHITESPACE_REGEX)
-            for (w in words) {
-                val cleaned = w.replace(NON_ALPHA_REGEX, "").lowercase().trim()
-                if (cleaned.length > 2 && !STOP_WORDS.contains(cleaned)) {
-                    repository.recordWordUsage(cleaned)
-                }
-            }
+            repository.recordWordsUsage(wordsToRecord)
         }
     }
 
@@ -1040,8 +1033,18 @@ class KeyboardViewModel(
      * vocabulary records typed words as they were typed, so a single count may be
      * a typo; three is a word the user means.
      */
-    private fun personalAutoFixGuard(): Set<String> =
-        personalAutoFixWords.value + autoFixKeptThisSession + autoFixNeverWords.value + glossaryGuardWords.value
+    private fun personalAutoFixGuard(): Set<String> {
+        val personal = personalAutoFixWords.value
+        val never = autoFixNeverWords.value
+        val glossary = glossaryGuardWords.value
+        if (autoFixKeptThisSession.isEmpty() && never.isEmpty() && glossary.isEmpty()) return personal
+        return buildSet(personal.size + autoFixKeptThisSession.size + never.size + glossary.size) {
+            addAll(personal)
+            addAll(autoFixKeptThisSession)
+            addAll(never)
+            addAll(glossary)
+        }
+    }
 
     /**
      * Whether smart space may rewrite text the user already typed (the double-space
@@ -1389,11 +1392,7 @@ class KeyboardViewModel(
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
-                publishAiPanel(
-                    AiPanelState.Grammar(
-                        GrammarCorrectionResponse(text, text, "Error: ${e.localizedMessage}", 0)
-                    )
-                )
+                publishAiPanel(AiPanelState.Error("Grammar check failed: ${e.localizedMessage ?: e.javaClass.simpleName}"))
             }
         }
     }
@@ -1503,9 +1502,7 @@ class KeyboardViewModel(
                 throw e
             } catch (e: Exception) {
                 if (!contextIsValid(ephemeralContext)) return@launchAi
-                _aiPanelState.value = AiPanelState.Summary(
-                    "Failed to summarize text: ${e.localizedMessage}", text
-                )
+                publishAiPanel(AiPanelState.Error("Failed to summarize text: ${e.localizedMessage ?: e.javaClass.simpleName}"))
             }
         }
     }
@@ -1530,9 +1527,7 @@ class KeyboardViewModel(
                 throw e
             } catch (e: Exception) {
                 if (!contextIsValid(ephemeralContext)) return@launchAi
-                _aiPanelState.value = AiPanelState.Translation(
-                    "Translation error: ${e.localizedMessage}", text
-                )
+                publishAiPanel(AiPanelState.Error("Translation error: ${e.localizedMessage ?: e.javaClass.simpleName}"))
             }
         }
     }
@@ -1555,11 +1550,7 @@ class KeyboardViewModel(
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
-                publishAiPanel(
-                    AiPanelState.Rewrite(
-                        "Rewrite error: ${e.localizedMessage}", text, targetTone
-                    )
-                )
+                publishAiPanel(AiPanelState.Error("Rewrite error: ${e.localizedMessage ?: e.javaClass.simpleName}"))
             }
         }
     }
@@ -1584,15 +1575,11 @@ class KeyboardViewModel(
                 } else {
                     GeminiManager.rewriteWithTone(text, styleInstruction, getPersonalizationContext(), _isVoiceLockEnabled.value, bypassCache)
                 }
-                publishAiPanel(AiPanelState.Rewrite(result, text, styleInstruction))
+                publishAiPanel(AiPanelState.Rewrite(result, source, styleInstruction))
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
-                publishAiPanel(
-                    AiPanelState.Rewrite(
-                        "Rewrite error: ${e.localizedMessage}", text, styleInstruction
-                    )
-                )
+                publishAiPanel(AiPanelState.Error("Rewrite error: ${e.localizedMessage ?: e.javaClass.simpleName}"))
             }
         }
     }
@@ -1615,7 +1602,7 @@ class KeyboardViewModel(
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
-                publishAiPanel(AiPanelState.Compose("Compose error: ${e.localizedMessage}"))
+                publishAiPanel(AiPanelState.Error("Compose error: ${e.localizedMessage ?: e.javaClass.simpleName}"))
             }
         }
     }
@@ -1639,7 +1626,7 @@ class KeyboardViewModel(
                 throw e
             } catch (e: Exception) {
                 if (!contextIsValid(ephemeralContext)) return@launchAi
-                _aiPanelState.value = AiPanelState.Explanation("Explanation error: ${e.localizedMessage}")
+                publishAiPanel(AiPanelState.Error("Explanation error: ${e.localizedMessage ?: e.javaClass.simpleName}"))
             }
         }
     }
@@ -1715,9 +1702,7 @@ class KeyboardViewModel(
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
-                _aiPanelState.value = AiPanelState.Tone(
-                    ToneAnalysisResponse("Neutral", 0.5f, listOf("Error during analysis."))
-                )
+                publishAiPanel(AiPanelState.Error("Tone analysis failed: ${e.localizedMessage ?: e.javaClass.simpleName}"))
             }
         }
     }
