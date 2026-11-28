@@ -80,6 +80,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import io.github.daddymean.agentickeyboard.network.CloudPrivacyPolicy
+import io.github.daddymean.agentickeyboard.stealth.StealthInkCodec
 import io.github.daddymean.agentickeyboard.ui.theme.KeyboardTheme
 import io.github.daddymean.agentickeyboard.ui.theme.LocalKeyboardColors
 import io.github.daddymean.agentickeyboard.util.AiApplyGuard
@@ -248,6 +249,27 @@ fun AgenticKeyboardLayout(
     var showClipboardActions by remember { mutableStateOf(false) }
     var clipboardText by remember { mutableStateOf<String?>(null) }
 
+    // StealthInk: volatile RAM-only drawer state for E2EE envelopes & Invisible Ink.
+    var showStealthInk by remember { mutableStateOf(false) }
+    var stealthInitialTab by remember { mutableStateOf(StealthTab.SEAL) }
+    var stealthPeekPayload by remember { mutableStateOf<String?>(null) }
+    var stealthPassphrase by remember { mutableStateOf("") }
+    var stealthPassphraseFocused by remember { mutableStateOf(false) }
+
+    fun closeAndWipeStealthInk() {
+        showStealthInk = false
+        stealthPassphraseFocused = false
+        stealthPassphrase = ""
+        stealthPeekPayload = null
+    }
+
+    LaunchedEffect(isSensitiveField) {
+        if (isSensitiveField) closeAndWipeStealthInk()
+    }
+    DisposableEffect(Unit) {
+        onDispose { closeAndWipeStealthInk() }
+    }
+
     // Swipe-to-Type Gesture States
     var keysAreaWidth by remember { mutableFloatStateOf(0f) }
     var keysAreaHeight by remember { mutableFloatStateOf(0f) }
@@ -374,6 +396,17 @@ fun AgenticKeyboardLayout(
         return true
     }
 
+    /** Routes single-key presses to the volatile StealthInk passphrase buffer when focused. */
+    fun dispatchKeyChar(text: String) {
+        if (showStealthInk && stealthPassphraseFocused) {
+            if (stealthPassphrase.length + text.length <= StealthInkCodec.MAX_PASSPHRASE_CHARS) {
+                stealthPassphrase += text
+            }
+            return
+        }
+        onKeyPress(text) // twin: single key
+    }
+
     /**
      * Smart space: double-tap inserts ". ", a committed word is expanded from
      * shortcut templates or auto-corrected from learned typo rules (revertible
@@ -382,6 +415,12 @@ fun AgenticKeyboardLayout(
      * (KEYBOARD-006).
      */
     fun handleSpace() {
+        if (showStealthInk && stealthPassphraseFocused) {
+            if (stealthPassphrase.length < StealthInkCodec.MAX_PASSPHRASE_CHARS) {
+                stealthPassphrase += " "
+            }
+            return
+        }
         val text = currentText()
         val now = System.currentTimeMillis()
 
@@ -456,6 +495,12 @@ fun AgenticKeyboardLayout(
      * learned rule twice deletes that rule.
      */
     fun handleBackspace() {
+        if (showStealthInk && stealthPassphraseFocused) {
+            if (stealthPassphrase.isNotEmpty()) {
+                stealthPassphrase = stealthPassphrase.dropLast(1)
+            }
+            return
+        }
         val pending = viewModel.peekPendingUndo()
         val text = currentText()
         // Exact-range revert first: it is the only one that can find a replacement
@@ -1459,12 +1504,25 @@ fun AgenticKeyboardLayout(
                         maxLines = 1
                     )
                     Spacer(modifier = Modifier.height(6.dp))
+                    val clipStealthKind = remember(clipboardText) {
+                        clipboardText?.let(StealthInkCodec::detect)
+                    }
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
                             .horizontalScroll(rememberScrollState()),
                         horizontalArrangement = Arrangement.spacedBy(6.dp)
                     ) {
+                        if (clipStealthKind != null) {
+                            ClipActionChip("🔓 Peek StealthInk") {
+                                buzz(HapticFeedbackType.TextHandleMove)
+                                stealthPeekPayload = clipboardText
+                                stealthInitialTab = StealthTab.PEEK
+                                showStealthInk = true
+                                stealthPassphraseFocused = stealthPassphrase.isEmpty()
+                                showClipboardActions = false
+                            }
+                        }
                         ClipActionChip("Paste") {
                             onInsertText(clipboardText ?: "") // twin: inserted (Clipboard Intelligence Paste chip)
                             showClipboardActions = false
@@ -1488,6 +1546,30 @@ fun AgenticKeyboardLayout(
                     }
                 }
             }
+        }
+
+        // --- STEALTHINK DRAWER (zero-knowledge E2EE envelopes & Invisible Ink) ---
+        AnimatedVisibility(
+            visible = showStealthInk && !isSensitiveField,
+            enter = fadeIn(),
+            exit = fadeOut()
+        ) {
+            StealthInkPanel(
+                initialTab = stealthInitialTab,
+                initialPeekPayload = stealthPeekPayload,
+                passphrase = stealthPassphrase,
+                passphraseFocused = stealthPassphraseFocused,
+                isCompact = metrics.isCompact,
+                onTogglePassphraseFocus = { focused -> stealthPassphraseFocused = focused },
+                onSetPassphrase = { updated -> stealthPassphrase = updated },
+                readDraftText = { aiSourceText(fresh = true) },
+                onCommitSealed = { sealedText, statusMessage ->
+                    replaceActiveText(sealedText)
+                    closeAndWipeStealthInk()
+                    gestureAlert = statusMessage
+                },
+                onClose = { closeAndWipeStealthInk() }
+            )
         }
 
         // --- REPLY INTENT CHIPS PANEL ---
@@ -1795,6 +1877,26 @@ fun AgenticKeyboardLayout(
                         modifier = Modifier.testTag("action_tone")
                     )
 
+                    AiActionButton(
+                        label = "StealthInk",
+                        icon = "🔐",
+                        highlighted = showStealthInk,
+                        onClick = {
+                            buzz(HapticFeedbackType.TextHandleMove)
+                            if (showStealthInk) {
+                                closeAndWipeStealthInk()
+                            } else {
+                                val existing = aiSourceText(fresh = true)
+                                val hasStealth = StealthInkCodec.detect(existing) != null
+                                stealthPeekPayload = if (hasStealth) existing else null
+                                stealthInitialTab = if (hasStealth) StealthTab.PEEK else StealthTab.SEAL
+                                showStealthInk = true
+                                stealthPassphraseFocused = stealthPassphrase.isEmpty()
+                            }
+                        },
+                        modifier = Modifier.testTag("action_stealth_ink")
+                    )
+
                     // Local note to the personal context service; no model, no
                     // cloud call here. Only exists inside the IME (the row is
                     // already hidden in sensitive fields).
@@ -2096,7 +2198,7 @@ fun AgenticKeyboardLayout(
                                 text = keyText,
                                 onClick = {
                                     buzz(HapticFeedbackType.TextHandleMove)
-                                    if (trainingStep == null) onKeyPress(keyText) // twin: single key
+                                    if (trainingStep == null) dispatchKeyChar(keyText) // twin: single key
                                     // One-shot shift consumes itself after a letter
                                     if (shiftState == ShiftState.SHIFT && isLetter) {
                                         shiftState = ShiftState.OFF
@@ -2122,12 +2224,13 @@ fun AgenticKeyboardLayout(
                                                 } else trainingStep = next
                                             }
                                         } else {
-                                            val resolved = if (isSensitiveField) char[0] else
+                                            val capturingSecret = showStealthInk && stealthPassphraseFocused
+                                            val resolved = if (isSensitiveField || capturingSecret) char[0] else
                                                 calibration.resolve(char[0], x, y, letterBounds)
                                             // KEYBOARD-019: remember where this letter was tapped (memory
                                             // only) so spelling suggestions can tell which neighbour was meant.
                                             val resolvedBounds = letterBounds[resolved]
-                                            if (!isSensitiveField && !isLearningPaused && resolvedBounds != null &&
+                                            if (!isSensitiveField && !capturingSecret && !isLearningPaused && resolvedBounds != null &&
                                                 resolvedBounds.width > 0f && resolvedBounds.height > 0f
                                             ) {
                                                 TapTrail.record(
@@ -2139,7 +2242,7 @@ fun AgenticKeyboardLayout(
                                                 )
                                             }
                                             buzz(HapticFeedbackType.TextHandleMove)
-                                            onKeyPress(if (shiftActive) resolved.uppercaseChar().toString() else resolved.toString()) // twin: single key
+                                            dispatchKeyChar(if (shiftActive) resolved.uppercaseChar().toString() else resolved.toString()) // twin: single key
                                             if (shiftState == ShiftState.SHIFT) shiftState = ShiftState.OFF
                                         }
                                     }
@@ -2147,7 +2250,7 @@ fun AgenticKeyboardLayout(
                                 longPressVariants = if (trainingStep == null) variants else emptyList(),
                                 onVariant = { variant ->
                                     buzz(HapticFeedbackType.LongPress)
-                                    onKeyPress(variant) // twin: single key (accent / punctuation variant)
+                                    dispatchKeyChar(variant) // twin: single key (accent / punctuation variant)
                                     if (shiftState == ShiftState.SHIFT && isLetter) {
                                         shiftState = ShiftState.OFF
                                     }
@@ -2277,7 +2380,7 @@ fun AgenticKeyboardLayout(
                 text = ",",
                 onClick = {
                     buzz(HapticFeedbackType.TextHandleMove)
-                    onKeyPress(",")
+                    dispatchKeyChar(",")
                 },
                 modifier = Modifier.width(metrics.smallKeyWidth).testTag("key_comma")
             )
@@ -2327,12 +2430,12 @@ fun AgenticKeyboardLayout(
                 text = ".",
                 onClick = {
                     buzz(HapticFeedbackType.TextHandleMove)
-                    onKeyPress(".")
+                    dispatchKeyChar(".")
                 },
                 longPressVariants = keyVariants["."].orEmpty(),
                 onVariant = { variant ->
                     buzz(HapticFeedbackType.LongPress)
-                    onKeyPress(variant) // twin: single key (accent / punctuation variant)
+                    dispatchKeyChar(variant) // twin: single key (accent / punctuation variant)
                 },
                 modifier = Modifier
                     .width(metrics.smallKeyWidth)
@@ -2346,7 +2449,11 @@ fun AgenticKeyboardLayout(
                 text = "Enter",
                 onClick = {
                     buzz(HapticFeedbackType.LongPress)
-                    onAction()
+                    if (showStealthInk && stealthPassphraseFocused) {
+                        stealthPassphraseFocused = false
+                    } else {
+                        onAction()
+                    }
                 },
                 isSpecial = true,
                 modifier = Modifier
