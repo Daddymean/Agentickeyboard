@@ -1552,7 +1552,7 @@ fun AgenticKeyboardLayout(
             }
         }
 
-        // --- STEALTHINK DRAWER (zero-knowledge E2EE envelopes & Invisible Ink) ---
+        // --- STEALTHINK DRAWER (passphrase-encrypted envelopes & Invisible Ink) ---
         AnimatedVisibility(
             visible = showStealthInk && !isSensitiveField,
             enter = fadeIn(),

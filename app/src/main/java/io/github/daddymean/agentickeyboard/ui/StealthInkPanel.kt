@@ -67,7 +67,7 @@ enum class StealthTab(val label: String) {
 private const val EPHEMERAL_PEEK_SECONDS = 15
 
 /**
- * Keyboard-native StealthInk drawer for zero-knowledge AES-256-GCM envelopes,
+ * Keyboard-native StealthInk drawer for passphrase-based AES-256-GCM envelopes,
  * Unicode Variation Selector invisible-ink steganography, and self-wiping
  * ephemeral Peek previews.
  *

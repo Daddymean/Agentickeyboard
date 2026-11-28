@@ -248,6 +248,23 @@ class StealthInkCodecTest {
     }
 
     @Test
+    fun noZeroKnowledgeClaimsAnywhereInStealthInkSources() {
+        val roots = listOf(File("app/src/main/java"), File("src/main/java"))
+        val srcRoot = roots.first { it.exists() }
+        val banned = listOf("zero" + "-knowledge", "zero" + " knowledge")
+        val files = listOf(
+            File(srcRoot, "io/github/daddymean/agentickeyboard/stealth/StealthInkCodec.kt"),
+            File(srcRoot, "io/github/daddymean/agentickeyboard/ui/StealthInkPanel.kt"),
+            File(srcRoot, "io/github/daddymean/agentickeyboard/ui/AgenticKeyboardLayout.kt")
+        )
+        for (file in files) {
+            assertTrue("Expected source file: ${file.path}", file.exists())
+            val source = file.readText().lowercase()
+            for (claim in banned) assertFalse("${file.name} must not claim '$claim'", source.contains(claim))
+        }
+    }
+
+    @Test
     fun strengthAndRemainingFormatters() {
         assertEquals("expired", StealthInkCodec.formatRemaining(0))
         assertEquals("45s", StealthInkCodec.formatRemaining(45))
