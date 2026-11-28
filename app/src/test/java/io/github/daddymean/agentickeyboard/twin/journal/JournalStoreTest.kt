@@ -44,7 +44,14 @@ class JournalStoreTest {
         dir.deleteRecursively()
     }
 
-    private val secret = "ZebraMarmalade I never told anyone about the lake house"
+    // Long unique sentinels: a 3-letter needle such as "Sam" can appear by chance
+    // in ciphertext and fail CI (run 46131474965, answersTranscriptsAndAudioAreEncryptedAtRest).
+    private val secret = "JT-SECRET-9f3c2a7b-4d18-4e6c-a1b0-c8e55f0d2a91 lake-house-memory"
+    private val promptId = "JT-PROMPT-7c1e0b44-9a52-4f3d-b8c6-11d4e2a90f73"
+    private val childA = "JT-CHILD-A-b6d21e8f-0c47-4a19-9e3d-5f8a12c0b774"
+    private val childB = "JT-CHILD-B-e0a94c31-2f65-48d0-b7a2-3c19de6f81aa"
+    private val partner = "JT-PARTNER-55a8d0c2-1e7b-4f9a-8c34-d2b6e0f19c47"
+    private val transcriptMarker = "JT-TRANSCRIPT-c4f8a012-6d3e-4b91-a7c5-20e9b1d84f06"
 
     private fun recording(): Pair<String, ByteArray> {
         val pcm = IntArray(20_000) { (kotlin.math.sin(it / 20.0) * 9000).toInt() + Random(it).nextInt(-50, 50) }
@@ -68,12 +75,13 @@ class JournalStoreTest {
     fun answersTranscriptsAndAudioAreEncryptedAtRest() {
         val (audioId, flac) = recording()
         assertEquals("fLaC", String(flac, 0, 4, Charsets.US_ASCII))
-        val body = JSONObject().put("promptId", "LS-001").put("text", secret).put("transcript", "Transcript $secret")
-            .put("child", "Ava").put("audio", JSONArray().put(JSONObject().put("file", audioId).put("ms", 400)))
+        val body = JSONObject().put("promptId", promptId).put("text", secret).put("transcript", "$transcriptMarker $secret")
+            .put("child", childA).put("audio", JSONArray().put(JSONObject().put("file", audioId).put("ms", 400)))
         store.add(JournalKinds.ANSWER, body, 1_000)
-        store.add(JournalKinds.SETTINGS, JournalSettings(listOf("Ava", "Ben"), "Sam").toJson(), 2_000)
+        store.add(JournalKinds.SETTINGS, JournalSettings(listOf(childA, childB), partner).toJson(), 2_000)
         store.close()
-        assertNoPlaintext("ZebraMarmalade", "lake house", "Transcript", "fLaC", "LS-001", "\"Ben\"", "Sam")
+        // "fLaC" stays: it is the real FLAC magic, not a chosen secret.
+        assertNoPlaintext(secret, promptId, childA, childB, partner, transcriptMarker, "fLaC")
         // Reopened with the key, everything is there.
         val r = JournalStore(context, dir, cipher)
         assertEquals(secret, r.all().first().body.getString("text"))
