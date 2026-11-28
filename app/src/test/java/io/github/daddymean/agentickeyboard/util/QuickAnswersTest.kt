@@ -96,4 +96,44 @@ class QuickAnswersTest {
         println("LAB-007 taps for ${tasks.size} sample answers: app switch + retype = $manual, chip = $chip")
         tasks.forEach { (input, answer) -> assert(QuickAnswers.answer(input)!!.label.contains(answer)) { input } }
     }
+
+    @Test
+    fun relativeDatesResolveDeterministically() {
+        // Wednesday, Nov 25, 2026
+        val wed = java.time.LocalDate.of(2026, 11, 25)
+        fun date(text: String) = QuickAnswers.answer(text, wed)?.takeIf { it.kind == Kind.DATE }
+
+        assertEquals("📅 Nov 27", date("see you this friday")!!.label)
+        assertEquals("friday (Nov 27)", date("see you this friday")!!.replacement)
+        assertEquals("Friday (Nov 27)", date("see you this Friday")!!.replacement)
+
+        // Calendar-week semantics: on Wed Nov 25, "next monday" is Nov 30 and "next friday" is Dec 4.
+        assertEquals("📅 Nov 30", date("let's meet next monday")!!.label)
+        assertEquals("📅 Dec 2", date("next wednesday")!!.label)
+        assertEquals("📅 Dec 4", date("next friday")!!.label)
+
+        // Past weekdays
+        assertEquals("📅 Nov 23", date("last monday")!!.label)
+        assertEquals("📅 Nov 20", date("last friday")!!.label)
+        assertEquals("📅 Nov 18", date("last wednesday")!!.label)
+
+        // Forward and backward offsets
+        assertEquals("📅 Sat, Nov 28", date("back in 3 days")!!.label)
+        assertEquals("days (Sat, Nov 28)", date("back in 3 days")!!.replacement)
+        assertEquals("📅 Wed, Dec 9", date("due in 2 weeks")!!.label)
+        assertEquals("📅 Fri, Dec 25", date("in 1 month")!!.label)
+        assertEquals("📅 Sun, Nov 22", date("sent 3 days ago")!!.label)
+        assertEquals("ago (Sun, Nov 22)", date("sent 3 days ago")!!.replacement)
+        assertEquals("📅 Wed, Nov 11", date("2 weeks ago")!!.label)
+
+        // Year boundary includes year
+        val dec28 = java.time.LocalDate.of(2026, 12, 28)
+        assertEquals("📅 Jan 8, 2027", QuickAnswers.answer("next friday", dec28)!!.label)
+        assertEquals("📅 Mon, Jan 4, 2027", QuickAnswers.answer("in 7 days", dec28)!!.label)
+
+        // Rejects standalone words, trailing whitespace, and out-of-range offsets
+        for (nonDate in listOf("friday", "today", "tomorrow", "next friday ", "in 0 days", "in 999 days", "in 5 min", "some days ago")) {
+            assertNull(nonDate, date(nonDate))
+        }
+    }
 }

@@ -3,6 +3,10 @@ package io.github.daddymean.agentickeyboard.util
 import java.math.BigDecimal
 import java.math.MathContext
 import java.math.RoundingMode
+import java.time.DayOfWeek
+import java.time.LocalDate
+import java.time.format.DateTimeFormatter
+import java.util.Locale
 
 /**
  * LAB-007: offline "quick answers" for the suggestion strip.
@@ -11,6 +15,9 @@ import java.math.RoundingMode
  *   e.g. `12*7=`, `(3+4)x2=`, `15%*80=`, `2^10=`. The chip completes it in place: `12*7=84`.
  * - **Units:** the last two words are a number and a unit, e.g. `5 km`, `72 F`,
  *   `3.5 lb`, `60mph`. The chip appends the conversion: `km (≈3.11 mi)`.
+ * - **Dates:** explicit relative date phrases like `this friday`, `next monday`,
+ *   `last thursday`, `in 3 days`, `in 2 weeks`, or `3 days ago`. The chip appends
+ *   the resolved calendar date: `friday (Dec 4)` or `days (Mon, Nov 30)`.
  *
  * Pure and offline: nothing is stored, sent or learned. The keyboard shows the
  * strip only outside sensitive fields, and a pick is committed as inserted text
@@ -21,14 +28,16 @@ object QuickAnswers {
     /** [label] is what the chip shows; [replacement] replaces the word being typed. */
     data class Answer(val label: String, val replacement: String, val kind: Kind)
 
-    enum class Kind { MATH, UNIT }
+    enum class Kind { MATH, UNIT, DATE }
 
     private const val MAX_CHARS = 64
 
-    fun answer(text: String): Answer? {
+    fun answer(text: String): Answer? = answer(text, LocalDate.now())
+
+    fun answer(text: String, today: LocalDate): Answer? {
         if (text.isEmpty() || text.last().isWhitespace()) return null
         val word = text.takeLastWhile { !it.isWhitespace() }
-        return math(word) ?: unit(text, word)
+        return math(word) ?: unit(text, word) ?: relativeDate(text, word, today)
     }
 
     // --- math ------------------------------------------------------------------------
@@ -173,6 +182,109 @@ object QuickAnswers {
         val shown = format(BigDecimal(conversion.convert(value)).round(MathContext(3, RoundingMode.HALF_EVEN))) ?: return null
         val approx = "≈$shown ${conversion.target}"
         return Answer(label = approx, replacement = "$word ($approx)", kind = Kind.UNIT)
+    }
+
+    // --- relative dates --------------------------------------------------------------
+
+    private val WEEKDAYS: Map<String, DayOfWeek> = mapOf(
+        "monday" to DayOfWeek.MONDAY,
+        "tuesday" to DayOfWeek.TUESDAY,
+        "wednesday" to DayOfWeek.WEDNESDAY,
+        "thursday" to DayOfWeek.THURSDAY,
+        "friday" to DayOfWeek.FRIDAY,
+        "saturday" to DayOfWeek.SATURDAY,
+        "sunday" to DayOfWeek.SUNDAY
+    )
+    private val DATE_UNITS = setOf("day", "days", "week", "weeks", "month", "months")
+    private val DATE_TRIGGERS = WEEKDAYS.keys + DATE_UNITS + "ago"
+
+    private val FMT_SAME_YEAR = DateTimeFormatter.ofPattern("MMM d", Locale.US)
+    private val FMT_OTHER_YEAR = DateTimeFormatter.ofPattern("MMM d, yyyy", Locale.US)
+    private val FMT_DOW_SAME_YEAR = DateTimeFormatter.ofPattern("EEE, MMM d", Locale.US)
+    private val FMT_DOW_OTHER_YEAR = DateTimeFormatter.ofPattern("EEE, MMM d, yyyy", Locale.US)
+
+    private fun relativeDate(text: String, word: String, today: LocalDate): Answer? {
+        if (word.length > MAX_CHARS) return null
+        val lower = word.lowercase(Locale.ROOT)
+        if (lower !in DATE_TRIGGERS) return null
+
+        val beforeWord = text.dropLast(word.length).trimEnd()
+        if (beforeWord.length == text.length - word.length) return null // requires preceding word
+        val prev1Raw = beforeWord.takeLastWhile { !it.isWhitespace() }
+        val prev1 = prev1Raw.lowercase(Locale.ROOT)
+
+        // 1. "this <weekday>", "next <weekday>", "last <weekday>"
+        val targetDow = WEEKDAYS[lower]
+        if (targetDow != null) {
+            val todayDow = today.dayOfWeek.value
+            val dow = targetDow.value
+            val resolved = when (prev1) {
+                "this" -> {
+                    val diff = (dow - todayDow + 7) % 7
+                    today.plusDays(diff.toLong())
+                }
+                "next" -> {
+                    // Calendar-week semantics: "next <weekday>" resolves to that weekday
+                    // in the following Mon–Sun week (so on Wed, "next monday" is +5d and
+                    // "next friday" is +9d).
+                    val offset = if (dow > todayDow) (dow - todayDow + 7) else {
+                        val until = (dow - todayDow + 7) % 7
+                        if (until == 0) 7 else until
+                    }
+                    today.plusDays(offset.toLong())
+                }
+                "last" -> {
+                    val back = (todayDow - dow + 7) % 7
+                    today.minusDays((if (back == 0) 7 else back).toLong())
+                }
+                else -> return null
+            }
+            val formatted = formatDate(resolved, today, includeWeekday = false)
+            return Answer(label = "📅 $formatted", replacement = "$word ($formatted)", kind = Kind.DATE)
+        }
+
+        // Look back one more token for 3-word phrases: "in <N> <unit>" or "<N> <unit> ago".
+        val beforePrev1 = beforeWord.dropLast(prev1Raw.length).trimEnd()
+        if (beforePrev1.length == beforeWord.length - prev1Raw.length) return null
+        val prev2 = beforePrev1.takeLastWhile { !it.isWhitespace() }.lowercase(Locale.ROOT)
+
+        // 2. "in <N> day(s)/week(s)/month(s)"
+        if (lower in DATE_UNITS && prev2 == "in") {
+            val resolved = offsetDate(today, prev1, lower, forward = true) ?: return null
+            val formatted = formatDate(resolved, today, includeWeekday = true)
+            return Answer(label = "📅 $formatted", replacement = "$word ($formatted)", kind = Kind.DATE)
+        }
+
+        // 3. "<N> day(s)/week(s)/month(s) ago"
+        if (lower == "ago" && prev1 in DATE_UNITS) {
+            val resolved = offsetDate(today, prev2, prev1, forward = false) ?: return null
+            val formatted = formatDate(resolved, today, includeWeekday = true)
+            return Answer(label = "📅 $formatted", replacement = "$word ($formatted)", kind = Kind.DATE)
+        }
+
+        return null
+    }
+
+    private fun offsetDate(today: LocalDate, countText: String, unit: String, forward: Boolean): LocalDate? {
+        if (countText.isEmpty() || countText.any { !it.isDigit() }) return null
+        val n = countText.toLongOrNull() ?: return null
+        return when (unit) {
+            "day", "days" -> if (n in 1..365) (if (forward) today.plusDays(n) else today.minusDays(n)) else null
+            "week", "weeks" -> if (n in 1..52) (if (forward) today.plusWeeks(n) else today.minusWeeks(n)) else null
+            "month", "months" -> if (n in 1..24) (if (forward) today.plusMonths(n) else today.minusMonths(n)) else null
+            else -> null
+        }
+    }
+
+    private fun formatDate(date: LocalDate, today: LocalDate, includeWeekday: Boolean): String {
+        val sameYear = date.year == today.year
+        val fmt = when {
+            includeWeekday && sameYear -> FMT_DOW_SAME_YEAR
+            includeWeekday -> FMT_DOW_OTHER_YEAR
+            sameYear -> FMT_SAME_YEAR
+            else -> FMT_OTHER_YEAR
+        }
+        return fmt.format(date)
     }
 
     // --- formatting --------------------------------------------------------------------

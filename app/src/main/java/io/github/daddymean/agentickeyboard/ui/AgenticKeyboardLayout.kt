@@ -85,7 +85,9 @@ import io.github.daddymean.agentickeyboard.ui.theme.LocalKeyboardColors
 import io.github.daddymean.agentickeyboard.util.AiApplyGuard
 import io.github.daddymean.agentickeyboard.util.AutoCapitalization
 import io.github.daddymean.agentickeyboard.util.ClipboardSensitivity
+import io.github.daddymean.agentickeyboard.util.CloudTextSanitizer
 import io.github.daddymean.agentickeyboard.util.CommandPalette
+import io.github.daddymean.agentickeyboard.util.CommitmentDetector
 import io.github.daddymean.agentickeyboard.util.CommittedEditUndo
 import io.github.daddymean.agentickeyboard.util.ContextNotes
 import io.github.daddymean.agentickeyboard.util.EditClipboardAction
@@ -94,6 +96,7 @@ import io.github.daddymean.agentickeyboard.util.ReplyIntents
 import io.github.daddymean.agentickeyboard.util.SelectionCommand
 import io.github.daddymean.agentickeyboard.util.SelectionTransform
 import io.github.daddymean.agentickeyboard.util.EditTimeline
+import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.first
 import io.github.daddymean.agentickeyboard.util.LatencyMeter
@@ -243,6 +246,9 @@ fun AgenticKeyboardLayout(
     // LAB-014: "⟲ Rewind" offer after a backspace, then the versions to jump to.
     var rewindOffered by remember { mutableStateOf(false) }
     var rewindChoices by remember { mutableStateOf<List<EditTimeline.Version>>(emptyList()) }
+    // Quiet, dismissible follow-up offer when the draft contains an actionable commitment.
+    var detectedCommitment by remember { mutableStateOf<CommitmentDetector.DetectedCommitment?>(null) }
+    var dismissedCommitmentNote by remember { mutableStateOf<String?>(null) }
     var dragPreview by remember { mutableStateOf<String?>(null) }
     var showGestureGuide by remember { mutableStateOf(false) }
     var showClipboardActions by remember { mutableStateOf(false) }
@@ -338,6 +344,25 @@ fun AgenticKeyboardLayout(
             viewModel.registerAiApply(original, newText, editorUndo, caretInside)
             gestureAlert = if (caretInside == null || editorUndo != null) "Applied ✨ (⌫ undoes)" else "Applied ✨"
         }
+    }
+
+    /**
+     * Locally scrubs PII and secrets from the active selection or draft using
+     * [CloudTextSanitizer] with zero network calls and full backspace undo.
+     */
+    fun scrubActiveText() {
+        val source = aiSourceText(fresh = true)
+        if (source.isBlank()) {
+            gestureAlert = "Nothing to scrub 🛡️"
+            return
+        }
+        val redacted = CloudTextSanitizer.sanitizeDetailed(source)
+        if (!redacted.changed) {
+            gestureAlert = "🛡️ Nothing sensitive found to scrub"
+            return
+        }
+        replaceActiveText(redacted.text)
+        gestureAlert = "🛡️ Scrubbed ${redacted.summaryLabel()} (⌫ undoes)"
     }
 
     /**
@@ -717,15 +742,57 @@ fun AgenticKeyboardLayout(
                         )
                     }
                 }
-            } else gestureAlert?.let { message ->
+            } else if (gestureAlert != null) {
                 Text(
-                    text = message,
+                    text = gestureAlert!!,
                     color = keyboardColors.keyActive,
                     fontSize = 11.sp,
                     textAlign = TextAlign.Center,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
+            } else detectedCommitment?.let { commitment ->
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                    modifier = Modifier.testTag("commitment_strip")
+                ) {
+                    Text(
+                        text = commitment.chipLabel,
+                        color = keyboardColors.text,
+                        fontSize = 11.sp,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(10.dp))
+                            .background(keyboardColors.keySpecial)
+                            .clickable {
+                                buzz(HapticFeedbackType.TextHandleMove)
+                                dismissedCommitmentNote = commitment.noteText
+                                detectedCommitment = null
+                                gestureAlert = if (viewModel.saveNote(commitment.noteText)) {
+                                    "Follow-up saved 📌"
+                                } else {
+                                    "Could not save follow-up"
+                                }
+                            }
+                            .padding(horizontal = 8.dp, vertical = 2.dp)
+                            .testTag("commitment_save_chip")
+                    )
+                    Text(
+                        text = "✕",
+                        color = keyboardColors.textMuted,
+                        fontSize = 10.sp,
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(10.dp))
+                            .clickable {
+                                dismissedCommitmentNote = commitment.noteText
+                                detectedCommitment = null
+                            }
+                            .padding(horizontal = 5.dp, vertical = 2.dp)
+                            .testTag("commitment_dismiss_chip")
+                    )
+                }
             }
         }
         // Chips go away after 8 s or at the next edit. The text is watched through
@@ -750,6 +817,26 @@ fun AgenticKeyboardLayout(
             val message = gestureAlert ?: return@LaunchedEffect
             delay(1500)
             if (gestureAlert == message) gestureAlert = null
+        }
+        // Debounced local commitment catcher: reads the draft via snapshotFlow so
+        // rapid typing never recomposes the keyboard body, and stays completely off
+        // in sensitive fields or when personal note saving is unavailable.
+        androidx.compose.runtime.LaunchedEffect(isSensitiveField, inPlaygroundMode, viewModel.canSaveNotes) {
+            if (!CommitmentDetector.shouldOffer(isSensitiveField, inPlaygroundMode, viewModel.canSaveNotes)) {
+                detectedCommitment = null
+                return@LaunchedEffect
+            }
+            androidx.compose.runtime.snapshotFlow { trackedInputTextState.value }
+                .collectLatest { draft ->
+                    if (draft.isBlank()) {
+                        detectedCommitment = null
+                        dismissedCommitmentNote = null
+                        return@collectLatest
+                    }
+                    delay(450)
+                    val found = CommitmentDetector.detect(draft)
+                    detectedCommitment = found?.takeUnless { it.noteText == dismissedCommitmentNote }
+                }
         }
 
         // --- AI RESULTS & INTERACTIVE SHELF BAR ---
@@ -1459,6 +1546,9 @@ fun AgenticKeyboardLayout(
                         maxLines = 1
                     )
                     Spacer(modifier = Modifier.height(6.dp))
+                    val clipRedaction = remember(clipboardText) {
+                        clipboardText?.let(CloudTextSanitizer::sanitizeDetailed)
+                    }
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -1468,6 +1558,14 @@ fun AgenticKeyboardLayout(
                         ClipActionChip("Paste") {
                             onInsertText(clipboardText ?: "") // twin: inserted (Clipboard Intelligence Paste chip)
                             showClipboardActions = false
+                        }
+                        if (clipRedaction?.changed == true) {
+                            ClipActionChip("Safe Paste 🛡️") {
+                                buzz(HapticFeedbackType.TextHandleMove)
+                                onInsertText(clipRedaction.text) // twin: inserted (Clipboard Intelligence Safe Paste chip)
+                                showClipboardActions = false
+                                gestureAlert = "🛡️ Safe-pasted (${clipRedaction.summaryLabel()})"
+                            }
                         }
                         ClipActionChip("Reply Ideas 💡") {
                             viewModel.requestReplyIdeas(clipboardText ?: "")
@@ -1651,12 +1749,21 @@ fun AgenticKeyboardLayout(
                         val body = CommandPalette.stripToken(currentText())
                         if (body.isBlank()) {
                             gestureAlert = "Type your text after ${cmd.token} first ⌨️"
+                        } else if (cmd.action == CommandPalette.Action.REDACT) {
+                            val redacted = CloudTextSanitizer.sanitizeDetailed(body)
+                            replaceActiveText(if (redacted.changed) redacted.text else body)
+                            gestureAlert = if (redacted.changed) {
+                                "🛡️ Scrubbed ${redacted.summaryLabel()} (⌫ undoes)"
+                            } else {
+                                "🛡️ Nothing sensitive found to scrub"
+                            }
                         } else {
                             replaceActiveText(body)
                             when (cmd.action) {
                                 CommandPalette.Action.REWRITE -> viewModel.rewriteWithStyle(body, cmd.instruction)
                                 CommandPalette.Action.PROOFREAD -> viewModel.fixGrammar(body)
                                 CommandPalette.Action.TRANSLATE -> viewModel.translateText(body)
+                                CommandPalette.Action.REDACT -> Unit
                             }
                         }
                     }
@@ -1793,6 +1900,18 @@ fun AgenticKeyboardLayout(
                             viewModel.analyzeTone(aiSourceText())
                         },
                         modifier = Modifier.testTag("action_tone")
+                    )
+
+                    // Local PII/secret scrub for the active selection or draft; zero
+                    // network calls, works in offline mode, and registers backspace undo.
+                    AiActionButton(
+                        label = "Scrub PII",
+                        icon = "🛡️",
+                        onClick = {
+                            buzz(HapticFeedbackType.TextHandleMove)
+                            scrubActiveText()
+                        },
+                        modifier = Modifier.testTag("action_scrub_pii")
                     )
 
                     // Local note to the personal context service; no model, no

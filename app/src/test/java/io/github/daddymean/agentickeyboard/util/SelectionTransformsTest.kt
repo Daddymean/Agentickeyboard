@@ -72,4 +72,18 @@ class SelectionTransformsTest {
         println("SelectionTransforms.suggest: %.1f µs/call".format(us))
         assertTrue(us < 16_000)
     }
+
+    @Test fun offersRedactChipFirstForSensitiveSelections() {
+        val sensitive = SelectionTransforms.suggest(
+            "Contact alice@example.com with api_key=secret123",
+            la,
+            day,
+            Locale.US
+        )
+        assertEquals("🛡️ Redact", sensitive.first().label)
+        assertEquals("Contact [REDACTED_EMAIL] with api_key=[REDACTED_SECRET]", sensitive.first().output)
+
+        val ordinary = SelectionTransforms.suggest("hello world", la, day, Locale.US)
+        assertTrue(ordinary.none { it.label.contains("Redact") })
+    }
 }

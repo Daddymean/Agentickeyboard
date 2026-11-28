@@ -8,7 +8,7 @@ package io.github.daddymean.agentickeyboard.util
 object CommandPalette {
 
     /** What the keyboard should run for a command. */
-    enum class Action { REWRITE, PROOFREAD, TRANSLATE }
+    enum class Action { REWRITE, PROOFREAD, TRANSLATE, REDACT }
 
     /**
      * @param token leading token including the slash, e.g. "/firm"
@@ -36,7 +36,8 @@ object CommandPalette {
         Command("/apologize", "Apology", Action.REWRITE, "a sincere, accountable apology without overexplaining"),
         Command("/proof", "Proofread", Action.PROOFREAD),
         Command("/extract", "Extract key facts", Action.REWRITE, "a compact bullet list of the key facts, dates, amounts, promises, unanswered questions, and action items"),
-        Command("/translate", "Translate", Action.TRANSLATE)
+        Command("/translate", "Translate", Action.TRANSLATE),
+        Command("/redact", "Scrub PII & secrets", Action.REDACT)
     )
 
     /**
