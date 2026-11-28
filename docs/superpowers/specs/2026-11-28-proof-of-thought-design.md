@@ -46,32 +46,44 @@ Every verifier output carries the caveat line. The UI never uses the word "proof
 
 ## 4. Origin ledger
 
+Built in slice 1 (`app/.../provenance/`).
+
 ### 4.1 Model
 
-For each editor session, the keyboard keeps an **origin array** aligned with its view of the field text (the LAB-009 `EditorTextMirror`). It holds one origin tag per character, stored as run-length segments:
+For each editor session, `OriginLedger` keeps its own memory-only model of the field: the text, plus one origin tag per UTF-16 unit. (An earlier draft aligned the tags with the LAB-009 `EditorTextMirror`. That doesn't work, because the mirror only holds a window of text before the caret.)
 
 | Tag | Source |
 |---|---|
-| `TYPED` | Key taps committed by `onKeyPress` |
+| `TYPED` | A single code point committed through `commitText` (a key tap) |
 | `SWIPED` | Swipe-decoded words |
-| `ASSISTED` | A human choice of a keyboard-proposed word: suggestion-chip picks and autocorrect replacements. Reported separately so the typed share isn't inflated |
-| `AI` | Gemini or Gemma results applied (rewrite, compose, continue, reply), quick answers, transforms |
-| `PASTED` | Clipboard history, snippets, templates, the 📋 chip |
-| `UNWITNESSED` | Anything the keyboard didn't insert itself: app-side edits, a physical keyboard, another IME, text already in the field when the session started |
+| `ASSISTED` | `commitTyped` by default: suggestion-chip picks, auto-fix of the typed word, double-space period. A human choice of a keyboard-shaped word, reported separately so the typed share isn't inflated |
+| `AI` | AI results applied through the result panel, and conversation-context replies |
+| `PASTED` | Clipboard-history inserts |
+| `INSERTED` | Any other keyboard insert not yet labelled more precisely (templates, palette, smart-reply and continuation chips, undo restores). Never counted as human |
+| `UNWITNESSED` | Anything the keyboard didn't insert itself: app-side edits, the editor's own paste, rich content, a physical keyboard, text already in the field |
+
+Mislabelling between `AI`, `PASTED` and `INSERTED` can't raise the human share, so finer labels for the remaining `INSERTED` sites can come later.
 
 ### 4.2 Hook points
 
-`AgenticKeyboardService` already marks every insert path with a `// twin: inserted (...)` comment (17 sites). Each of these becomes a call that tags the inserted range: `ledger.insert(range, origin)`. Deletions shrink the array, whatever deleted them. When `onUpdateSelection` (or a fresh read) shows a change the keyboard didn't make, the changed span is retagged `UNWITNESSED`.
+`ProvenanceInputConnection` is the outermost wrapper on every connection the service hands out (`getCurrentInputConnection` and `trackedInputConnection`), so each edit is recorded exactly once. It applies an edit to the ledger only after the editor accepted it. The twin's connection is wrapped, not changed. Known paths sharpen the default label with `InputConnection.withOrigin(origin) { … }`, which runs the block unchanged when the ledger is off.
 
-The ledger is updated alongside `TwinTrackingInputConnection`, not inside it. That keeps twin code untouched and means the ledger has no persistence at all.
+Edits whose text the keyboard can't see (the editor's paste, `commitContent`) mark the selection as an unknown insert. The next caret reported by `onUpdateSelection` gives the inserted length, and the resync fills in the real text as `UNWITNESSED` without shifting the text after it.
 
-### 4.3 Reconciliation at receipt time
+### 4.3 Self-checks
 
-Before signing, the keyboard reads the field fresh (the same rule #232 set for edit-sizing paths) and diffs it against the mirror. Spans that don't match become `UNWITNESSED`. If the field is over 20,000 characters, or the keyboard can't read it whole, no receipt is issued. A receipt never covers text the keyboard couldn't read.
+- **Every `onUpdateSelection`**: the service already reads the text before the caret. The ledger compares its model with that read (`resyncBefore`), which costs no extra binder call.
+- **Before a receipt** (slice 2): a fresh read of the whole field (`reconcile`).
+
+Both trim the common prefix and suffix and retag the differing middle `UNWITNESSED`. **Invariant:** a resync never creates a tag, so no origin's count can exceed the characters the keyboard inserted with it. This is checked by a randomized test over 400 edit sequences that include app-side edits.
+
+**Known limitation:** an app-side insert in the middle of the text, away from where the keyboard last edited (rare), misaligns the model until the caret returns. The result under-claims: typed text gets counted as unwitnessed, never the reverse.
+
+Fields over 20,000 characters stop recording, drop the model, and are flagged `overflowed`: no receipt.
 
 ### 4.4 Lifetime
 
-The ledger lives in memory only and is dropped in `onFinishInput`, on process death and when the session switches fields. It is never written to Room, writing logs, the twin or backups.
+The ledger lives in memory only. It is reset in `onFinishInput`, on every new field, and when a restarted field turns sensitive. It is never written to Room, writing logs, the twin or backups. It is off unless `KeyboardSettings.isProofOfThoughtEnabled` is set (default false; the settings toggle arrives in slice 2), and it never runs in sensitive fields (`EditorPrivacy`).
 
 ## 5. Composition stats
 
@@ -169,7 +181,7 @@ One long-lived key would link every receipt a person ever shares, and that is a 
 
 ## 11. Slices (one PR each)
 
-1. **Origin ledger and composition counters.** Pure Kotlin, hooked into the insert sites, plus a debug-only overlay of the live mix. No crypto, nothing persisted. HOLD, because it touches the input-connection path next to the twin wrapper.
+1. **Origin ledger and composition counters** (built). Pure Kotlin, wired into the service behind an off-by-default flag. No crypto, nothing persisted. HOLD, because it touches the input-connection path next to the twin wrapper. The debug overlay of the live mix moves to slice 2, which adds the settings toggle that makes it reachable.
 2. **Receipt, keys and UI.** Keystore attestation, signing, the 🧾 action, the key card screen and the settings toggle. HOLD, second reviewer (crypto).
 3. **Verifier.** Python CLI, static HTML and cross-verified golden vectors. Normal review (off-device tooling, no app data).
 4. **Touch-authenticity signal and stats tuning.** Recalibrate bucket thresholds against Keith's own on-device runs (counts only, kept on the phone).

@@ -65,6 +65,8 @@ import androidx.compose.ui.semantics.onClick
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.boundsInRoot
+import io.github.daddymean.agentickeyboard.provenance.Origin
+import io.github.daddymean.agentickeyboard.provenance.withOrigin
 import io.github.daddymean.agentickeyboard.util.TapOffset
 import io.github.daddymean.agentickeyboard.util.TapTrail
 import io.github.daddymean.agentickeyboard.util.TouchBounds
@@ -316,7 +318,7 @@ fun AgenticKeyboardLayout(
      * replaces everything before the cursor. commitText on its own already
      * replaces a selection, so only the no-selection case needs a delete first.
      */
-    fun replaceActiveText(newText: String, cursorOffset: Int? = null) {
+    fun replaceActiveText(newText: String, cursorOffset: Int? = null, origin: Origin = Origin.INSERTED) {
         // One fresh read serves both the undo record and the delete length.
         val selection = selectedText()
         val before = if (selection == null) currentText(fresh = true) else null
@@ -329,7 +331,7 @@ fun AgenticKeyboardLayout(
                 if (conn.getSelectedText(0).isNullOrEmpty()) {
                     conn.deleteSurroundingText((before ?: currentText(fresh = true)).length, 0)
                 }
-                conn.commitTextWithCaret(newText, cursorOffset) // twin: inserted (AI apply, template, palette)
+                conn.withOrigin(origin) { conn.commitTextWithCaret(newText, cursorOffset) } // twin: inserted (AI apply, template, palette)
                 editorUndo = conn.captureCommittedEditUndo(original, newText, cursorOffset)
             }
         }
@@ -370,7 +372,7 @@ fun AgenticKeyboardLayout(
             gestureAlert = RedactionApplyGuard.blockedMessage(introduced)
             return false
         }
-        replaceActiveText(result)
+        replaceActiveText(result, origin = Origin.AI)
         return true
     }
 

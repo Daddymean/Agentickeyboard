@@ -54,6 +54,7 @@ class KeyboardSettings(context: Context) {
         const val KEY_MASTERY_COMPANION_VISIBLE = "mastery_companion_visible"
         const val KEY_MASTERY_AURA = "mastery_aura"
         const val KEY_HAGGLE_MODE = "haggle_mode"
+        const val KEY_PROOF_OF_THOUGHT = "proof_of_thought"
         const val KEY_HAGGLE_CACHE = "haggle_price_cache"
         const val KEY_TONE_MIRROR_OUTGOING = "tone_mirror_outgoing"
         const val KEY_TONE_MIRROR_INCOMING = "tone_mirror_incoming"
@@ -105,6 +106,15 @@ class KeyboardSettings(context: Context) {
     var autoFixNeverWords: Set<String>
         get() = prefs.getStringSet(KEY_AUTO_FIX_NEVER, emptySet()).orEmpty().toSet()
         set(value) = prefs.edit().putStringSet(KEY_AUTO_FIX_NEVER, value.toSet()).apply()
+
+    /**
+     * Proof of Thought (docs/superpowers/specs/2026-11-28-proof-of-thought-design.md):
+     * the keyboard keeps a memory-only record of where each character came from.
+     * Off by default; never runs in sensitive fields.
+     */
+    var isProofOfThoughtEnabled: Boolean
+        get() = prefs.getBoolean(KEY_PROOF_OF_THOUGHT, false)
+        set(value) = prefs.edit().putBoolean(KEY_PROOF_OF_THOUGHT, value).apply()
 
     /** Haggle mode suggestions. Off by default; suggestions only, never inserts or sends. */
     var isHaggleModeEnabled: Boolean

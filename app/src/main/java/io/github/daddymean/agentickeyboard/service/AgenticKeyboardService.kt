@@ -47,6 +47,10 @@ import io.github.daddymean.agentickeyboard.MainActivity
 import io.github.daddymean.agentickeyboard.SnippetVaultActivity
 import io.github.daddymean.agentickeyboard.db.ClipboardHistoryItem
 import io.github.daddymean.agentickeyboard.db.KeyboardRepository
+import io.github.daddymean.agentickeyboard.provenance.Origin
+import io.github.daddymean.agentickeyboard.provenance.OriginLedger
+import io.github.daddymean.agentickeyboard.provenance.ProvenanceInputConnection
+import io.github.daddymean.agentickeyboard.provenance.withOrigin
 import io.github.daddymean.agentickeyboard.ui.AgenticKeyboardLayout
 import io.github.daddymean.agentickeyboard.ui.ConversationContextPreview
 import io.github.daddymean.agentickeyboard.ui.ConversationContextResult
@@ -137,6 +141,8 @@ class AgenticKeyboardService : InputMethodService(), LifecycleOwner, ViewModelSt
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     // KEYBOARD-024: length bookkeeping only on the main thread; the store work is queued.
     private val twinSession = TwinCaptureSession()
+    /** Proof of Thought slice 1: memory-only origin of each character; inactive unless enabled. */
+    private val originLedger = OriginLedger()
     private lateinit var twinPrefs: TwinPreferences
     private val clipboardHistoryEnabled = MutableStateFlow(false)
     private val clipboardHistoryPaused = MutableStateFlow(false)
@@ -305,7 +311,9 @@ class AgenticKeyboardService : InputMethodService(), LifecycleOwner, ViewModelSt
                                     trackedInputConnection()?.commitInserted(text, 1) // twin: inserted
                                 },
                                 onTypedWord = { word ->
-                                    trackedInputConnection()?.commitTyped(word, 1) // twin: typed (swipe word)
+                                    trackedInputConnection()?.let { ic ->
+                                        ic.withOrigin(Origin.SWIPED) { ic.commitTyped(word, 1) } // twin: typed (swipe word)
+                                    }
                                 },
                                 onDelete = {
                                     trackedInputConnection()?.deleteSurroundingText(1, 0)
@@ -346,7 +354,9 @@ class AgenticKeyboardService : InputMethodService(), LifecycleOwner, ViewModelSt
                                     onInsert = { text ->
                                         if (validateConversationContext()) {
                                             twinSession.markInserted(System.currentTimeMillis())
-                                            currentInputConnection?.commitText(text, 1) // twin: inserted (context reply)
+                                            currentInputConnection?.let { ic ->
+                                                ic.withOrigin(Origin.AI) { ic.commitText(text, 1) } // twin: inserted (context reply)
+                                            }
                                             clearConversationContext()
                                             syncEditorText()
                                         }
@@ -382,7 +392,8 @@ class AgenticKeyboardService : InputMethodService(), LifecycleOwner, ViewModelSt
     private fun insertClipboardItem(item: ClipboardHistoryItem) {
         if (viewModel.isSensitiveField.value) return
         twinSession.markInserted(System.currentTimeMillis())
-        currentInputConnection?.commitText(item.content, 1) ?: return // twin: inserted (clipboard history)
+        val ic = currentInputConnection ?: return
+        ic.withOrigin(Origin.PASTED) { ic.commitText(item.content, 1) } // twin: inserted (clipboard history)
         clipboardStatus.value = "Inserted from local history."
         serviceScope.launch { repository.recordClipboardUse(item.id) }
     }
@@ -813,6 +824,8 @@ class AgenticKeyboardService : InputMethodService(), LifecycleOwner, ViewModelSt
         val textBefore = read ?: ""
         // LAB-009: a real read for a known caret; the layout's next reads reuse it.
         if (read != null) editorMirror.record(read, selStart, selEnd, ic) else editorMirror.invalidate()
+        // Proof of Thought: the read ends at the reported caret, so the ledger can check itself against it.
+        if (read != null && selStart >= 0 && selStart == originLedger.selStart) originLedger.resyncBefore(read)
         viewModel.setInputText(textBefore)
         // LAB-014: memory-only draft timeline; never fed from sensitive fields.
         if (viewModel.isSensitiveField.value) editTimeline.clear() else editTimeline.observe(textBefore)
@@ -906,8 +919,25 @@ class AgenticKeyboardService : InputMethodService(), LifecycleOwner, ViewModelSt
      */
     private fun trackedInputConnection(serveCachedReads: Boolean = false): InputConnection? =
         rawInputConnection()?.let {
-            TwinTrackingInputConnection(editorMirror.wrap(it, it, serveCachedReads), twinSession)
+            withProvenance(TwinTrackingInputConnection(editorMirror.wrap(it, it, serveCachedReads), twinSession))
         }
+
+    /**
+     * Proof of Thought: while the ledger records, every connection handed out gets the
+     * provenance wrapper as its outermost layer, so each edit is applied to the ledger
+     * exactly once. Off (the default) or in a sensitive field, nothing is wrapped.
+     */
+    private fun withProvenance(ic: InputConnection): InputConnection =
+        if (originLedger.active) ProvenanceInputConnection(ic, originLedger) else ic
+
+    /** A new field: record only when Proof of Thought is on and the field is not sensitive. */
+    private fun startOriginLedger(info: EditorInfo?) {
+        if (settings.isProofOfThoughtEnabled && !viewModel.isSensitiveField.value && info != null) {
+            originLedger.begin(info.initialSelStart, info.initialSelEnd, System.currentTimeMillis())
+        } else {
+            originLedger.reset()
+        }
+    }
 
     // --- LAB-009: editor text mirror -------------------------------------------------
     private val editorMirror = EditorTextMirror(CONTEXT_CHARS)
@@ -928,7 +958,7 @@ class AgenticKeyboardService : InputMethodService(), LifecycleOwner, ViewModelSt
             mirroredFor = raw
             mirroredConnection = editorMirror.wrap(raw, raw, serveReads = false)
         }
-        return mirroredConnection
+        return mirroredConnection?.let(::withProvenance)
     }
 
     /** Send/Go: the whole field must equal what was typed here (checked in the session). */
@@ -983,6 +1013,9 @@ class AgenticKeyboardService : InputMethodService(), LifecycleOwner, ViewModelSt
         if (!restarting) {
             // KEYBOARD-024: a new field. Whatever it already holds was not typed here.
             startTwinSession(info)
+            startOriginLedger(info)
+        } else if (viewModel.isSensitiveField.value) {
+            originLedger.reset()
         }
 
         if (!restarting) {
@@ -1008,6 +1041,7 @@ class AgenticKeyboardService : InputMethodService(), LifecycleOwner, ViewModelSt
         candidatesEnd: Int
     ) {
         super.onUpdateSelection(oldSelStart, oldSelEnd, newSelStart, newSelEnd, candidatesStart, candidatesEnd)
+        originLedger.select(newSelStart, newSelEnd)
         syncEditorText(newSelStart, newSelEnd)
     }
 
@@ -1069,6 +1103,7 @@ class AgenticKeyboardService : InputMethodService(), LifecycleOwner, ViewModelSt
         mirroredFor = null // drop the finished field's connection
         mirroredConnection = null
         editTimeline.clear() // LAB-014: the draft history dies with the field
+        originLedger.reset() // Proof of Thought: the origin record dies with the field too
         // The field is gone: cancel any in-flight AI action so its result cannot
         // appear later in a different editor.
         viewModel.dismissResults()
