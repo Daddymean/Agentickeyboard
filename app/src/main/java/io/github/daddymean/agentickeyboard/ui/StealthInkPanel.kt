@@ -121,7 +121,10 @@ fun StealthInkPanel(
     }
 
     val strength = remember(passphrase) { StealthInkCodec.passphraseStrength(passphrase) }
-    val passphraseReady = passphrase.length >= StealthInkCodec.MIN_PASSPHRASE_CHARS
+    // Sealing needs an acceptable (12+ characters, not weak) passphrase; opening only needs the
+    // minimum length because the sender already chose the passphrase.
+    val sealReady = strength.acceptable
+    val openReady = passphrase.codePointCount(0, passphrase.length) >= StealthInkCodec.MIN_PASSPHRASE_CHARS
 
     Surface(
         modifier = Modifier
@@ -226,7 +229,7 @@ fun StealthInkPanel(
                 )
                 if (passphrase.isNotEmpty()) {
                     val strengthColor = when (strength) {
-                        PassphraseStrength.TOO_SHORT -> colors.error
+                        PassphraseStrength.TOO_SHORT, PassphraseStrength.WEAK -> colors.error
                         PassphraseStrength.FAIR -> colors.textMuted
                         PassphraseStrength.GOOD -> colors.accent
                         PassphraseStrength.STRONG -> colors.success
@@ -355,7 +358,7 @@ fun StealthInkPanel(
                             modifier = Modifier.weight(1f)
                         )
                         Spacer(modifier = Modifier.width(6.dp))
-                        val actionEnabled = passphraseReady && !isWorking
+                        val actionEnabled = sealReady && !isWorking
                         Box(
                             modifier = Modifier
                                 .clip(RoundedCornerShape(8.dp))
@@ -539,7 +542,7 @@ fun StealthInkPanel(
                                         }
                                         .padding(horizontal = 7.dp, vertical = 5.dp)
                                 )
-                                val canUnlock = activePayload != null && passphraseReady && !isWorking
+                                val canUnlock = activePayload != null && openReady && !isWorking
                                 Box(
                                     modifier = Modifier
                                         .clip(RoundedCornerShape(8.dp))

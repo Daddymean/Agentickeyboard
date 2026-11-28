@@ -37,10 +37,27 @@ enum class StealthTtl(val seconds: Long, val label: String) {
 
 /** Qualitative passphrase strength indicator shown in the StealthInk drawer. */
 enum class PassphraseStrength(val label: String) {
-    TOO_SHORT("Min 4 chars"),
+    TOO_SHORT("Min 12 chars"),
+    WEAK("Too common or simple"),
     FAIR("Fair"),
     GOOD("Good"),
-    STRONG("Strong")
+    STRONG("Strong");
+
+    /** Only FAIR or better may be used to seal. */
+    val acceptable: Boolean get() = this == FAIR || this == GOOD || this == STRONG
+}
+
+/**
+ * User-facing limitation notices. Kept in one place so the UI, tests and docs say the same
+ * plain thing: StealthInk is encryption with a shared passphrase, not a vanishing message.
+ */
+object StealthInkNotices {
+    const val INVISIBLE_INK =
+        "Invisible ink can be detected and stripped by many apps. It hides text from the eye, not from software."
+    const val EXPIRY =
+        "Expiry is not deletion: copies of the message can persist. It only stops this keyboard from opening it."
+    const val SHARED_KEY =
+        "Anyone who has the passphrase can read, and forge, messages. Share it in person, not in the same chat."
 }
 
 /** Result of attempting to open a StealthInk payload. */
@@ -59,10 +76,14 @@ sealed interface StealthOpenResult {
 }
 
 /**
- * Zero-knowledge, keyboard-native authenticated encryption & steganography codec.
+ * Keyboard-native authenticated encryption and steganography codec.
+ *
+ * Limitations (see [StealthInkNotices]): invisible ink is detectable and strippable, expiry is
+ * advisory and is not deletion, the passphrase is a shared symmetric secret (no sender
+ * authentication, no forward secrecy), and ciphertext length reveals plaintext length.
  *
  * Turns any text field in any app into an end-to-end encrypted channel using:
- * - **PBKDF2WithHmacSHA256** (210,000 iterations by default, 16-byte random salt)
+ * - **PBKDF2WithHmacSHA256** (600,000 iterations by default, 16-byte random salt, NFC-normalised passphrase)
  * - **AES-256-GCM** (12-byte random IV, 128-bit authentication tag)
  * - **Authenticated AAD header**: `[version(1B) | mode(1B) | flags(1B) | expiresAtEpochSec(8B)]`
  *   so transport mode, compression flag, and self-destruct TTL cannot be altered without
@@ -78,8 +99,8 @@ object StealthInkCodec {
 
     const val FORMAT_VERSION: Byte = 0x01
     const val ENVELOPE_PREFIX = "🔐AK1:"
-    const val DEFAULT_PBKDF2_ITERATIONS = 210_000
-    const val MIN_PASSPHRASE_CHARS = 4
+    const val DEFAULT_PBKDF2_ITERATIONS = 600_000
+    const val MIN_PASSPHRASE_CHARS = 12
     const val MAX_PASSPHRASE_CHARS = 128
     const val MAX_PLAINTEXT_BYTES = 2_048
 
@@ -98,6 +119,31 @@ object StealthInkCodec {
     private const val VS_SUPP_START = 0xE0100
     private const val VS_SUPP_END = 0xE01EF
     private const val STEGO_SENTINEL = 0x2063 // U+2063 INVISIBLE SEPARATOR
+
+    private val LEET = mapOf('0' to 'o', '1' to 'l', '3' to 'e', '4' to 'a', '5' to 's', '7' to 't', '@' to 'a', '$' to 's')
+
+    /** Very common passphrases and phrases, compared after lower-casing, leet-folding and removing symbols. */
+    private val COMMON_PASSPHRASES = setOf(
+        "passwordpassword", "password123456", "passwordpassword1", "iloveyouiloveyou", "iloveyou123456",
+        "letmeinletmein", "welcomewelcome", "administrator", "adminadminadmin", "qwertyuiopasdf",
+        "qwertyuiop123", "qwertyqwerty", "qwertyqwertyqwerty", "1q2w3e4r5t6y", "1qaz2wsx3edc",
+        "trustno1trustno1", "changemechangeme", "monkeymonkey", "dragondragon", "footballfootball",
+        "baseballbaseball", "supermansuperman", "sunshinesunshine", "princessprincess", "starwarsstarwars",
+        "thequickbrownfox", "correcthorsebatterystaple", "opensesame", "openthedoor", "letmeinplease",
+        "mypasswordismypassword", "thisismypassword", "myverysecretpassword", "secretsecretsecret",
+        "keyboardkeyboard", "stealthinkstealthink", "agentickeyboard", "agentickeyboard1"
+    )
+
+    private val COMMON_ROOTS = setOf(
+        "password", "letmein", "iloveyou", "welcome", "admin", "qwerty", "qwertyuiop", "monkey",
+        "dragon", "football", "baseball", "superman", "sunshine", "princess", "starwars", "secret",
+        "changeme", "trustno", "opensesame", "stealthink", "agentickeyboard"
+    )
+
+    private val KEYBOARD_WALKS = listOf(
+        "qwertyuiopasdfghjklzxcvbnm", "qazwsxedcrfvtgbyhnujmikolp", "1q2w3e4r5t6y7u8i9o0p",
+        "1qaz2wsx3edc4rfv5tgb", "zxcvbnmasdfghjklqwertyuiop", "poiuytrewqlkjhgfdsamnbvcxz"
+    )
 
     private val ENVELOPE_REGEX = Regex("""🔐AK1:([A-Za-z0-9_-]{40,})""")
     private val SECURE_RANDOM = SecureRandom()
@@ -192,18 +238,69 @@ object StealthInkCodec {
         return decryptBlob(blob, expectedMode, passphrase, nowEpochSec, iterations)
     }
 
+    /**
+     * Rates [passphrase] for sealing. This is a deliberately simple local heuristic, not an
+     * entropy estimate: it rejects short, very common, repeated, sequential and low-variety
+     * passphrases. Anyone holding a ciphertext can guess passphrases offline, so the
+     * passphrase, not the cipher, is the weakest link.
+     */
     fun passphraseStrength(passphrase: String): PassphraseStrength {
-        if (passphrase.length < MIN_PASSPHRASE_CHARS) return PassphraseStrength.TOO_SHORT
-        var score = 0
-        if (passphrase.length >= 8) score++
-        if (passphrase.length >= 12) score++
-        if (passphrase.any { it.isDigit() }) score++
-        if (passphrase.any { it.isUpperCase() } && passphrase.any { it.isLowerCase() }) score++
-        if (passphrase.any { !it.isLetterOrDigit() }) score++
+        val length = passphrase.codePointCount(0, passphrase.length)
+        if (length < MIN_PASSPHRASE_CHARS) return PassphraseStrength.TOO_SHORT
+        if (length > MAX_PASSPHRASE_CHARS) return PassphraseStrength.WEAK
+        if (isLowVariety(passphrase) || isCommonPassphrase(passphrase)) return PassphraseStrength.WEAK
+
+        var classes = 0
+        if (passphrase.any { it.isLowerCase() }) classes++
+        if (passphrase.any { it.isUpperCase() }) classes++
+        if (passphrase.any { it.isDigit() }) classes++
+        if (passphrase.any { !it.isLetterOrDigit() }) classes++ // symbols and spaces
         return when {
-            score >= 4 -> PassphraseStrength.STRONG
-            score >= 2 -> PassphraseStrength.GOOD
+            length >= 20 || (length >= 16 && classes >= 3) -> PassphraseStrength.STRONG
+            length >= 16 || classes >= 3 -> PassphraseStrength.GOOD
             else -> PassphraseStrength.FAIR
+        }
+    }
+
+    /** True when [passphrase] may be used to seal (length 12..128 and not weak). */
+    fun isAcceptablePassphrase(passphrase: String): Boolean =
+        passphraseStrength(passphrase).acceptable
+
+    /** Fewer than 6 distinct characters, one repeated unit, or a plain ascending/descending run. */
+    private fun isLowVariety(passphrase: String): Boolean {
+        val points = passphrase.codePoints().toArray()
+        if (points.toSet().size < 6) return true
+        // Repeated short unit, e.g. "abcabcabcabc" or "hellohellohello".
+        for (unit in 1..points.size / 2) {
+            if (points.size % unit != 0) continue
+            var repeats = true
+            for (i in unit until points.size) {
+                if (points[i] != points[i - unit]) { repeats = false; break }
+            }
+            if (repeats) return true
+        }
+        // Monotone run, e.g. "123456789012" or "abcdefghijkl" (allow up to 1 break in 12).
+        var steps = 0
+        for (i in 1 until points.size) {
+            val d = points[i] - points[i - 1]
+            if (d == 1 || d == -1) steps++
+        }
+        return steps >= points.size - 2
+    }
+
+    private fun isCommonPassphrase(passphrase: String): Boolean {
+        val lower = passphrase.lowercase()
+        // Also compare with any trailing digits/symbols (years, "123!") removed before folding.
+        val bases = listOf(lower, lower.trimEnd { !it.isLetter() })
+        val candidates = bases.flatMap { base ->
+            val plain = base.filter { it.isLetterOrDigit() }
+            val leet = base.map { LEET[it] ?: it }.filter { it.isLetterOrDigit() }.joinToString("")
+            listOf(plain, leet)
+        }.toSet()
+        return candidates.any { c ->
+            c in COMMON_PASSPHRASES ||
+                COMMON_ROOTS.any { root -> c == root || c == root + root } ||
+                (c.length >= 10 && KEYBOARD_WALKS.any { walk -> walk.contains(c) })
         }
     }
 
@@ -229,8 +326,11 @@ object StealthInkCodec {
         nowEpochSec: Long,
         iterations: Int
     ): ByteArray {
-        require(passphrase.length in MIN_PASSPHRASE_CHARS..MAX_PASSPHRASE_CHARS) {
+        require(passphrase.codePointCount(0, passphrase.length) in MIN_PASSPHRASE_CHARS..MAX_PASSPHRASE_CHARS) {
             "Passphrase must be $MIN_PASSPHRASE_CHARS..$MAX_PASSPHRASE_CHARS characters"
+        }
+        require(isAcceptablePassphrase(passphrase)) {
+            "Passphrase is too common or too simple; use a longer, less predictable phrase"
         }
         val rawBytes = plaintext.toByteArray(StandardCharsets.UTF_8)
         require(rawBytes.isNotEmpty() && rawBytes.size <= MAX_PLAINTEXT_BYTES) {
@@ -339,7 +439,8 @@ object StealthInkCodec {
     }
 
     private fun deriveKey(passphrase: String, salt: ByteArray, iterations: Int): ByteArray {
-        val chars = passphrase.toCharArray()
+        // NFC-normalise so the same visible passphrase typed on different keyboards derives one key.
+        val chars = java.text.Normalizer.normalize(passphrase, java.text.Normalizer.Form.NFC).toCharArray()
         val spec = PBEKeySpec(chars, salt, iterations, KEY_BITS)
         return try {
             SecretKeyFactory.getInstance("PBKDF2WithHmacSHA256").generateSecret(spec).encoded
