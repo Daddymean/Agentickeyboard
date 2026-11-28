@@ -20,11 +20,6 @@ file in the same PR that ships a milestone: move it to **Shipped** with the PR n
 - On-device AI, Phase 3 — Gemma/LiteRT-LM tier for non-AICore devices, only if
   mid-range coverage becomes a goal; host outside the IME process with an
   opt-in download. (Phases 1 and 2 shipped in PR #22 and PR #24.)
-- Word-level diff highlighting in the expanded result preview — the current
-  compare shows the whole original struck through ("Was: …"); highlighting
-  only the changed spans would make short edits scannable.
-- Expandable preview for the Explanation panel (the one result panel still
-  capped to a fixed-height shelf).
 - Multi-step undo: the AI-apply undo holds a single pending entry; an undo
   chip in the shelf could offer a small history instead of backspace-only.
 - Long-press accent/symbol popups on keys.
@@ -43,6 +38,20 @@ file in the same PR that ships a milestone: move it to **Shipped** with the PR n
   reusable `ChoiceOptionChip`; and decomposed the 1,085-line `ExportTab`
   composable into 8 self-contained section composables so state updates no
   longer recompose the entire Style Hub.
+- **IME performance, AI state hardening & expanded diff
+  preview**: isolated `viewModel.inputText` collection out of
+  `AgenticKeyboardService`'s root composition (`DraftMoodAndHintStrip`) so
+  keystrokes no longer recompose the full IME host; added `AiPanelState.Error`
+  so failed AI actions never render Apply buttons or VoiceMatch scores; fixed
+  `rewriteWithStyle` losing the original draft `source` across chained
+  refinements; refactored `GeminiManager` cloud helpers to propagate
+  `CancellationException` consistently and cache Moshi adapters; made
+  `AgenticKeyboardApplication.repository` and `RetrofitClient.okHttpClient`
+  lazy; batched `recordWordUsage` in a single transaction; replaced the 16 `!!`
+  assertions in `AgenticKeyboardLayout` with an exhaustive `when (aiPanelState)`;
+  upgraded `AiPanelState.Explanation` to `ExpandableResult`; and added bounded
+  zero-regex word-level diff highlighting (`WordDiff`) in expanded result
+  comparisons.
 
 - **Dynamic snippet and shortcut tokens** — saved snippets and shortcut templates
   were dead strings: "On my way!" could only ever be that. They are now small

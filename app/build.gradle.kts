@@ -90,8 +90,8 @@ android {
     }
   }
   compileOptions {
-    sourceCompatibility = JavaVersion.VERSION_11
-    targetCompatibility = JavaVersion.VERSION_11
+    sourceCompatibility = JavaVersion.VERSION_17
+    targetCompatibility = JavaVersion.VERSION_17
   }
   buildFeatures {
     compose = true
@@ -100,10 +100,9 @@ android {
   testOptions { unitTests { isIncludeAndroidResources = true } }
 }
 
-// litertlm-android 0.19.1 is published with Java 21 class files, and this
-// project compiles for Java 11. We call the AAR only from Java via reflection
-// (LiteRtGemmaEngine and LiteRtTextEmbedder). Do not import
-// com.google.ai.edge.litertlm from Kotlin.
+// litertlm-android 0.19.1 ships Java 21 class files and Kotlin 2.4 metadata, so
+// building requires JDK 21 (Kotlin 2.4.21 compiles directly against the AAR in
+// LiteRtGemmaEngine, LiteRtTextEmbedder, and the debug LiteRtBenchRunner).
 
 // Room schema history (exportSchema = true) so migrations are auditable.
 //

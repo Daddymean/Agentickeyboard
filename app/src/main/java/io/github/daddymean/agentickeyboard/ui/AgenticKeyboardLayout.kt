@@ -199,18 +199,6 @@ fun AgenticKeyboardLayout(
     val aiPanelState = if (suppressAiPanels) AiPanelState.Idle else collectedAiPanelState
     val voiceMatch by viewModel.voiceMatch.collectAsState()
     val isLoading = aiPanelState == AiPanelState.Loading
-    val suggestions = (aiPanelState as? AiPanelState.Replies)?.suggestions.orEmpty()
-    val grammarCorrection = (aiPanelState as? AiPanelState.Grammar)?.result
-    val toneAnalysis = (aiPanelState as? AiPanelState.Tone)?.result
-    val summary = (aiPanelState as? AiPanelState.Summary)?.text
-    val translation = (aiPanelState as? AiPanelState.Translation)?.text
-    val rewriteState = aiPanelState as? AiPanelState.Rewrite
-    val rewrite = rewriteState?.text
-    val composeResult = (aiPanelState as? AiPanelState.Compose)?.text
-    val explanation = (aiPanelState as? AiPanelState.Explanation)?.text
-    val continuation = (aiPanelState as? AiPanelState.Continuation)?.text
-    val aiResultSource = aiPanelState.sourceText
-    val replyIntentContext = (aiPanelState as? AiPanelState.ReplyIntent)?.contextMessage
     val proofreadHint by viewModel.proofreadHint.collectAsState()
     val isOfflineMode by viewModel.isOfflineMode.collectAsState()
     val predictiveSuggestions by viewModel.predictiveSuggestions.collectAsState()
@@ -765,10 +753,7 @@ fun AgenticKeyboardLayout(
         }
 
         // --- AI RESULTS & INTERACTIVE SHELF BAR ---
-        val hasAiResult = grammarCorrection != null || toneAnalysis != null || summary != null ||
-            translation != null || rewrite != null || composeResult != null ||
-            explanation != null || continuation != null || suggestions.isNotEmpty() ||
-            sendGuardWarning != null || pendingAiApply != null
+        val hasAiResult = aiPanelState.hasResult || sendGuardWarning != null || pendingAiApply != null
 
         // Tap a result's text to expand the shelf and read the full output
         // (plus the original it replaces) before applying. Resets per result.
@@ -803,16 +788,17 @@ fun AgenticKeyboardLayout(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Column(modifier = Modifier.weight(1f)) {
-                    if (pendingAiApply != null) {
-                        val pending = pendingAiApply!!
+                    val activePendingApply = pendingAiApply
+                    val activeSendGuard = sendGuardWarning
+                    if (activePendingApply != null) {
                         Row(
                             modifier = Modifier.fillMaxWidth().testTag("ai_apply_confirm"),
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.SpaceBetween
                         ) {
                             Column(modifier = Modifier.weight(1f)) {
-                                Text("Insert into ${pending.where}?", color = keyboardColors.text, fontSize = 12.sp, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                                Text("\u201C${pending.preview}\u201D", color = keyboardColors.textMuted, fontSize = 10.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                Text("Insert into ${activePendingApply.where}?", color = keyboardColors.text, fontSize = 12.sp, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                Text("\u201C${activePendingApply.preview}\u201D", color = keyboardColors.textMuted, fontSize = 10.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
                             }
                             ClipActionChip("Cancel") {
                                 buzz(HapticFeedbackType.TextHandleMove)
@@ -834,7 +820,7 @@ fun AgenticKeyboardLayout(
                                 Text("Confirm", color = keyboardColors.onAccent, fontSize = 11.sp, fontWeight = FontWeight.Bold)
                             }
                         }
-                    } else if (sendGuardWarning != null) {
+                    } else if (activeSendGuard != null) {
                         Row(
                             modifier = Modifier.fillMaxWidth(),
                             verticalAlignment = Alignment.CenterVertically,
@@ -862,495 +848,524 @@ fun AgenticKeyboardLayout(
                                 Text("Send anyway", color = keyboardColors.onError, fontSize = 11.sp, fontWeight = FontWeight.Bold)
                             }
                         }
-                    } else if (grammarCorrection != null) {
-                        val correction = grammarCorrection!!
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.SpaceBetween
-                        ) {
-                            ExpandableResult(
-                                label = "Corrected:",
-                                labelColor = keyboardColors.success,
-                                result = correction.corrected,
-                                expanded = resultExpanded,
-                                onToggle = { toggleResultDetails() },
-                                original = correction.original,
-                                modifier = Modifier.weight(1f)
-                            )
-                            Button(
-                                onClick = {
-                                    buzz(HapticFeedbackType.LongPress)
-                                    val result = correction.corrected
-                                    confirmThenApply(result) {
-                                        if (applyAiResult(result)) {
-                                            viewModel.recordAiApplyStat()
-                                            viewModel.dismissResults()
-                                        }
-                                    }
-                                },
-                                colors = ButtonDefaults.buttonColors(containerColor = keyboardColors.accent),
-                                modifier = Modifier.height(32.dp),
-                                contentPadding = RowDefaultsButtonPadding
+                    } else when (val panel = aiPanelState) {
+                        is AiPanelState.Grammar -> {
+                            val correction = panel.result
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.SpaceBetween
                             ) {
-                                Text("Apply", color = keyboardColors.onAccent, fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                            }
-                        }
-                    } else if (toneAnalysis != null) {
-                        val analysis = toneAnalysis!!
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Column {
-                                Text(
-                                    text = "🎭 ${analysis.sentiment} (${(analysis.toneScore * 100).toInt()}%)",
-                                    color = keyboardColors.onChip,
-                                    fontWeight = FontWeight.Bold,
-                                    fontSize = 13.sp
+                                ExpandableResult(
+                                    label = "Corrected:",
+                                    labelColor = keyboardColors.success,
+                                    result = correction.corrected,
+                                    expanded = resultExpanded,
+                                    onToggle = { toggleResultDetails() },
+                                    original = correction.original,
+                                    modifier = Modifier.weight(1f)
                                 )
-                                analysis.note?.let { note ->
-                                    Text(note, color = keyboardColors.textMuted, fontSize = 9.sp, maxLines = 1)
-                                }
-                            }
-                            Spacer(modifier = Modifier.width(8.dp))
-                            LazyRow(
-                                horizontalArrangement = Arrangement.spacedBy(6.dp),
-                                modifier = Modifier.weight(1f)
-                            ) {
-                                // Compact writing-quality meter chips
-                                val meterChips = listOfNotNull(
-                                    analysis.clarity?.let { "🔍 $it" },
-                                    analysis.warmth?.let { "🤝 $it" },
-                                    analysis.firmness?.let { "💪 $it" },
-                                    analysis.risk?.let { "⚠️ Risk $it" },
-                                    analysis.lengthLabel?.let { "📏 $it" }
-                                )
-                                items(meterChips) { chip ->
-                                    Box(
-                                        modifier = Modifier
-                                            .clip(RoundedCornerShape(12.dp))
-                                            .background(keyboardColors.keyActive)
-                                            .padding(horizontal = 8.dp, vertical = 4.dp)
-                                    ) {
-                                        Text(chip, color = keyboardColors.onChip, fontSize = 11.sp, fontWeight = FontWeight.Medium)
-                                    }
-                                }
-                                // Tone-matched emoji, insertable with a tap
-                                items(viewModel.emojisForSentiment(analysis.sentiment)) { emoji ->
-                                    Box(
-                                        modifier = Modifier
-                                            .clip(RoundedCornerShape(12.dp))
-                                            .background(keyboardColors.emojiChip)
-                                            .clickable {
-                                                buzz(HapticFeedbackType.TextHandleMove)
-                                                onInsertText(emoji) // twin: inserted (tone emoji chip)
-                                            }
-                                            .padding(horizontal = 8.dp, vertical = 4.dp)
-                                    ) {
-                                        Text(emoji, fontSize = 13.sp)
-                                    }
-                                }
-                                items(analysis.suggestions) { tip ->
-                                    Box(
-                                        modifier = Modifier
-                                            .clip(RoundedCornerShape(12.dp))
-                                            .background(keyboardColors.chip)
-                                            .padding(horizontal = 10.dp, vertical = 4.dp)
-                                    ) {
-                                        Text(tip, color = keyboardColors.onChip, fontSize = 11.sp, fontWeight = FontWeight.Medium)
-                                    }
-                                }
-                            }
-                        }
-                    } else if (summary != null) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.SpaceBetween
-                        ) {
-                            ExpandableResult(
-                                label = "Summary:",
-                                labelColor = keyboardColors.labelSummary,
-                                result = summary!!,
-                                expanded = resultExpanded,
-                                onToggle = { toggleResultDetails() },
-                                original = aiResultSource,
-                                modifier = Modifier.weight(1f)
-                            )
-                            Button(
-                                onClick = {
-                                    val result = summary!!
-                                    confirmThenApply(result) {
-                                        if (applyAiResult(result)) {
-                                            viewModel.recordAiApplyStat()
-                                            viewModel.dismissResults()
-                                        }
-                                    }
-                                },
-                                colors = ButtonDefaults.buttonColors(containerColor = keyboardColors.accent),
-                                modifier = Modifier.height(32.dp),
-                                contentPadding = RowDefaultsButtonPadding
-                            ) {
-                                Text("Replace", color = keyboardColors.onAccent, fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                            }
-                        }
-                    } else if (translation != null) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.SpaceBetween
-                        ) {
-                            ExpandableResult(
-                                label = "Translated:",
-                                labelColor = keyboardColors.labelTranslate,
-                                result = translation!!,
-                                expanded = resultExpanded,
-                                onToggle = { toggleResultDetails() },
-                                original = aiResultSource,
-                                modifier = Modifier.weight(1f)
-                            )
-                            Button(
-                                onClick = {
-                                    val result = translation!!
-                                    confirmThenApply(result) {
-                                        if (applyAiResult(result)) {
-                                            viewModel.recordAiApplyStat()
-                                            viewModel.dismissResults()
-                                        }
-                                    }
-                                },
-                                colors = ButtonDefaults.buttonColors(containerColor = keyboardColors.accent),
-                                modifier = Modifier.height(32.dp),
-                                contentPadding = RowDefaultsButtonPadding
-                            ) {
-                                Text("Insert", color = keyboardColors.onAccent, fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                            }
-                        }
-                    } else if (rewrite != null) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.SpaceBetween
-                        ) {
-                            ExpandableResult(
-                                label = "Rewritten (${rewriteState?.styleLabel ?: viewModel.effectivePersona()}):",
-                                labelColor = keyboardColors.labelRewrite,
-                                result = rewrite!!,
-                                expanded = resultExpanded,
-                                onToggle = { toggleResultDetails() },
-                                original = aiResultSource,
-                                modifier = Modifier.weight(1f)
-                            )
-                            Button(
-                                onClick = {
-                                    buzz(HapticFeedbackType.LongPress)
-                                    val result = rewrite!!
-                                    confirmThenApply(result) {
-                                        if (applyAiResult(result)) {
-                                            viewModel.recordAiApplyStat()
-                                            viewModel.dismissResults()
-                                        }
-                                    }
-                                },
-                                colors = ButtonDefaults.buttonColors(containerColor = keyboardColors.accent),
-                                modifier = Modifier.height(32.dp),
-                                contentPadding = RowDefaultsButtonPadding
-                            ) {
-                                Text("Apply", color = keyboardColors.onAccent, fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                            }
-                        }
-                    } else if (composeResult != null) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.SpaceBetween
-                        ) {
-                            ExpandableResult(
-                                label = "Composed draft:",
-                                labelColor = keyboardColors.labelCompose,
-                                result = composeResult!!,
-                                expanded = resultExpanded,
-                                onToggle = { toggleResultDetails() },
-                                modifier = Modifier.weight(1f)
-                            )
-                            Button(
-                                onClick = {
-                                    buzz(HapticFeedbackType.LongPress)
-                                    val result = composeResult!!
-                                    confirmThenApply(result) {
-                                        if (applyAiResult(result)) {
-                                            viewModel.recordAiApplyStat()
-                                            viewModel.dismissResults()
-                                        }
-                                    }
-                                },
-                                colors = ButtonDefaults.buttonColors(containerColor = keyboardColors.accent),
-                                modifier = Modifier.height(32.dp),
-                                contentPadding = RowDefaultsButtonPadding
-                            ) {
-                                Text("Use", color = keyboardColors.onAccent, fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                            }
-                        }
-                    } else if (continuation != null) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.SpaceBetween
-                        ) {
-                            ExpandableResult(
-                                label = "Continue with:",
-                                labelColor = keyboardColors.labelContinue,
-                                result = continuation!!,
-                                expanded = resultExpanded,
-                                onToggle = { toggleResultDetails() },
-                                modifier = Modifier.weight(1f)
-                            )
-                            Button(
-                                onClick = {
-                                    buzz(HapticFeedbackType.LongPress)
-                                    val continuationText = continuation!!
-                                    confirmThenApply(continuationText) {
-                                        val text = currentText()
-                                        val introduced = RedactionApplyGuard.introducedMarkers(text, continuationText)
-                                        if (introduced.isNotEmpty()) {
-                                            gestureAlert = RedactionApplyGuard.blockedMessage(introduced)
-                                        } else {
-                                            val separator = if (text.isEmpty() || text.last().isWhitespace()) "" else " "
-                                            onInsertText(separator + continuationText) // twin: inserted (AI continuation)
-                                            // Undo of an append restores by deleting it (empty original)
-                                            viewModel.registerAiApply("", separator + continuationText)
-                                            gestureAlert = "Appended ✨ (⌫ undoes)"
-                                            viewModel.recordAiApplyStat()
-                                            viewModel.dismissResults()
-                                        }
-                                    }
-                                },
-                                colors = ButtonDefaults.buttonColors(containerColor = keyboardColors.accent),
-                                modifier = Modifier.height(32.dp),
-                                contentPadding = RowDefaultsButtonPadding
-                            ) {
-                                Text("Append", color = keyboardColors.onAccent, fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                            }
-                        }
-                    } else if (explanation != null) {
-                        Column(modifier = Modifier.fillMaxWidth()) {
-                            Text("Plain-language explanation:", color = keyboardColors.success, fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                            Text(explanation!!, color = keyboardColors.text, fontSize = 12.sp, maxLines = 2)
-                        }
-                    } else if (suggestions.isNotEmpty()) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Text("💡", fontSize = 12.sp, modifier = Modifier.padding(end = 4.dp))
-                            LazyRow(
-                                horizontalArrangement = Arrangement.spacedBy(6.dp),
-                                modifier = Modifier.weight(1f)
-                            ) {
-                                items(suggestions) { reply ->
-                                    Box(
-                                        modifier = Modifier
-                                            .clip(RoundedCornerShape(16.dp))
-                                            .background(keyboardColors.chip)
-                                            .clickable {
-                                                buzz(HapticFeedbackType.TextHandleMove)
-                                                onInsertText(reply) // twin: inserted (smart reply)
+                                Button(
+                                    onClick = {
+                                        buzz(HapticFeedbackType.LongPress)
+                                        val result = correction.corrected
+                                        confirmThenApply(result) {
+                                            if (applyAiResult(result)) {
                                                 viewModel.recordAiApplyStat()
                                                 viewModel.dismissResults()
                                             }
-                                            .padding(horizontal = 12.dp, vertical = 6.dp)
-                                    ) {
-                                        Text(reply, color = keyboardColors.onChip, fontSize = 12.sp, fontWeight = FontWeight.Medium, maxLines = 1)
+                                        }
+                                    },
+                                    colors = ButtonDefaults.buttonColors(containerColor = keyboardColors.accent),
+                                    modifier = Modifier.height(32.dp),
+                                    contentPadding = RowDefaultsButtonPadding
+                                ) {
+                                    Text("Apply", color = keyboardColors.onAccent, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                }
+                            }
+                        }
+                        is AiPanelState.Tone -> {
+                            val analysis = panel.result
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Column {
+                                    Text(
+                                        text = "🎭 ${analysis.sentiment} (${(analysis.toneScore * 100).toInt()}%)",
+                                        color = keyboardColors.onChip,
+                                        fontWeight = FontWeight.Bold,
+                                        fontSize = 13.sp
+                                    )
+                                    analysis.note?.let { note ->
+                                        Text(note, color = keyboardColors.textMuted, fontSize = 9.sp, maxLines = 1)
+                                    }
+                                }
+                                Spacer(modifier = Modifier.width(8.dp))
+                                LazyRow(
+                                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                    modifier = Modifier.weight(1f)
+                                ) {
+                                    // Compact writing-quality meter chips
+                                    val meterChips = listOfNotNull(
+                                        analysis.clarity?.let { "🔍 $it" },
+                                        analysis.warmth?.let { "🤝 $it" },
+                                        analysis.firmness?.let { "💪 $it" },
+                                        analysis.risk?.let { "⚠️ Risk $it" },
+                                        analysis.lengthLabel?.let { "📏 $it" }
+                                    )
+                                    items(meterChips) { chip ->
+                                        Box(
+                                            modifier = Modifier
+                                                .clip(RoundedCornerShape(12.dp))
+                                                .background(keyboardColors.keyActive)
+                                                .padding(horizontal = 8.dp, vertical = 4.dp)
+                                        ) {
+                                            Text(chip, color = keyboardColors.onChip, fontSize = 11.sp, fontWeight = FontWeight.Medium)
+                                        }
+                                    }
+                                    // Tone-matched emoji, insertable with a tap
+                                    items(viewModel.emojisForSentiment(analysis.sentiment)) { emoji ->
+                                        Box(
+                                            modifier = Modifier
+                                                .clip(RoundedCornerShape(12.dp))
+                                                .background(keyboardColors.emojiChip)
+                                                .clickable {
+                                                    buzz(HapticFeedbackType.TextHandleMove)
+                                                    onInsertText(emoji) // twin: inserted (tone emoji chip)
+                                                }
+                                                .padding(horizontal = 8.dp, vertical = 4.dp)
+                                        ) {
+                                            Text(emoji, fontSize = 13.sp)
+                                        }
+                                    }
+                                    items(analysis.suggestions) { tip ->
+                                        Box(
+                                            modifier = Modifier
+                                                .clip(RoundedCornerShape(12.dp))
+                                                .background(keyboardColors.chip)
+                                                .padding(horizontal = 10.dp, vertical = 4.dp)
+                                        ) {
+                                            Text(tip, color = keyboardColors.onChip, fontSize = 11.sp, fontWeight = FontWeight.Medium)
+                                        }
                                     }
                                 }
                             }
                         }
-                    } else {
-                        // Standard Active Input display with Predictive Autocomplete options!
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.SpaceBetween
-                        ) {
-                            // Slim toolbar (Gboard-style): settings, AI tools toggle, privacy
-                            // status icon, then suggestions in the remaining space.
-                            if (onOpenSettings != null) {
-                                IconButton(
-                                    onClick = {
-                                        buzz(HapticFeedbackType.TextHandleMove)
-                                        onOpenSettings()
-                                    },
-                                    modifier = Modifier.size(36.dp).testTag("open_settings")
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.Default.Settings,
-                                        contentDescription = "Keyboard settings",
-                                        tint = keyboardColors.textMuted,
-                                        modifier = Modifier.size(20.dp)
-                                    )
-                                }
-                            }
-                            if (!isSensitiveField) {
-                                IconButton(
-                                    onClick = {
-                                        buzz(HapticFeedbackType.TextHandleMove)
-                                        viewModel.setAiToolsExpanded(!showAiActions)
-                                    },
-                                    modifier = Modifier
-                                        .size(36.dp)
-                                        .clip(RoundedCornerShape(18.dp))
-                                        .background(if (showAiActions) keyboardColors.keyActive else Color.Transparent)
-                                        .testTag("toggle_ai_tools")
-                                ) {
-                                    Text("✨", fontSize = 16.sp)
-                                }
-                            }
-                            val prism = TrustPrism.resolve(
-                                isOfflineMode = isOfflineMode,
-                                isSensitiveField = isSensitiveField,
-                                cloudRedactionEnabled = CloudPrivacyPolicy.redactionEnabled
-                            )
-                            IconButton(
-                                onClick = {
-                                    gestureAlert = if (isLearningPaused && !isSensitiveField) {
-                                        "${prism.label} · learning paused"
-                                    } else {
-                                        prism.label
-                                    }
-                                },
-                                modifier = Modifier.size(32.dp).testTag("privacy_status")
+                        is AiPanelState.Summary -> {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.SpaceBetween
                             ) {
-                                Text(prism.icon, fontSize = 14.sp)
-                            }
-                            // KEYBOARD-002: pause learned typo fixes for this field only.
-                            // Shown when there is something to pause (or it is paused),
-                            // so it does not take suggestion space from new users. Hidden in the
-                            // companion playground, like the edit bar: only the IME service marks
-                            // new input sessions, so a pause there would never be cleared.
-                            if (!inPlaygroundMode && !isSensitiveField &&
-                                (correctionsPaused || learnedCorrectionRules.isNotEmpty())
-                            ) {
-                                Box(
-                                    modifier = Modifier
-                                        .padding(horizontal = 2.dp)
-                                        .clip(RoundedCornerShape(12.dp))
-                                        .background(if (correctionsPaused) keyboardColors.keyActive else Color.Transparent)
-                                        .clickable {
-                                            buzz(HapticFeedbackType.TextHandleMove)
-                                            val pause = !correctionsPaused
-                                            viewModel.setCorrectionsPaused(pause)
-                                            gestureAlert = if (pause) {
-                                                "Learned fixes off for this field · shortcuts still expand"
-                                            } else {
-                                                "Learned fixes back on"
+                                ExpandableResult(
+                                    label = "Summary:",
+                                    labelColor = keyboardColors.labelSummary,
+                                    result = panel.text,
+                                    expanded = resultExpanded,
+                                    onToggle = { toggleResultDetails() },
+                                    original = panel.original,
+                                    modifier = Modifier.weight(1f)
+                                )
+                                Button(
+                                    onClick = {
+                                        val result = panel.text
+                                        confirmThenApply(result) {
+                                            if (applyAiResult(result)) {
+                                                viewModel.recordAiApplyStat()
+                                                viewModel.dismissResults()
                                             }
                                         }
-                                        .padding(horizontal = 8.dp, vertical = 4.dp)
-                                        .testTag("toggle_learned_fixes")
+                                    },
+                                    colors = ButtonDefaults.buttonColors(containerColor = keyboardColors.accent),
+                                    modifier = Modifier.height(32.dp),
+                                    contentPadding = RowDefaultsButtonPadding
                                 ) {
-                                    Text(
-                                        if (correctionsPaused) "Fixes off" else "Fixes",
-                                        color = if (correctionsPaused) keyboardColors.accent else keyboardColors.textMuted,
-                                        fontSize = 11.sp,
-                                        fontWeight = FontWeight.Bold,
-                                        maxLines = 1
-                                    )
+                                    Text("Replace", color = keyboardColors.onAccent, fontSize = 11.sp, fontWeight = FontWeight.Bold)
                                 }
                             }
-                            val activeLine: @Composable () -> Unit = {
-                                if (liveSwipePreviewWord != null) {
-                                    Text(
-                                        text = "Swiping: ${liveSwipePreviewWord!!} ✍️",
-                                        color = keyboardColors.accent,
-                                        fontSize = 14.sp,
-                                        fontWeight = FontWeight.Bold,
-                                        modifier = Modifier.padding(vertical = 4.dp)
-                                    )
-                                } else if (proofreadHint != null && !isSensitiveField) {
-                                    Box(
-                                        modifier = Modifier
-                                            .padding(top = 2.dp)
-                                            .clip(RoundedCornerShape(8.dp))
-                                            .background(keyboardColors.successChip)
-                                            .clickable { viewModel.promoteProofreadHint() }
-                                            .padding(horizontal = 10.dp, vertical = 4.dp)
-                                            .testTag("proofread_hint")
+                        }
+                        is AiPanelState.Translation -> {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                ExpandableResult(
+                                    label = "Translated:",
+                                    labelColor = keyboardColors.labelTranslate,
+                                    result = panel.text,
+                                    expanded = resultExpanded,
+                                    onToggle = { toggleResultDetails() },
+                                    original = panel.original,
+                                    modifier = Modifier.weight(1f)
+                                )
+                                Button(
+                                    onClick = {
+                                        val result = panel.text
+                                        confirmThenApply(result) {
+                                            if (applyAiResult(result)) {
+                                                viewModel.recordAiApplyStat()
+                                                viewModel.dismissResults()
+                                            }
+                                        }
+                                    },
+                                    colors = ButtonDefaults.buttonColors(containerColor = keyboardColors.accent),
+                                    modifier = Modifier.height(32.dp),
+                                    contentPadding = RowDefaultsButtonPadding
+                                ) {
+                                    Text("Insert", color = keyboardColors.onAccent, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                }
+                            }
+                        }
+                        is AiPanelState.Rewrite -> {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                ExpandableResult(
+                                    label = "Rewritten (${panel.styleLabel}):",
+                                    labelColor = keyboardColors.labelRewrite,
+                                    result = panel.text,
+                                    expanded = resultExpanded,
+                                    onToggle = { toggleResultDetails() },
+                                    original = panel.original,
+                                    modifier = Modifier.weight(1f)
+                                )
+                                Button(
+                                    onClick = {
+                                        buzz(HapticFeedbackType.LongPress)
+                                        val result = panel.text
+                                        confirmThenApply(result) {
+                                            if (applyAiResult(result)) {
+                                                viewModel.recordAiApplyStat()
+                                                viewModel.dismissResults()
+                                            }
+                                        }
+                                    },
+                                    colors = ButtonDefaults.buttonColors(containerColor = keyboardColors.accent),
+                                    modifier = Modifier.height(32.dp),
+                                    contentPadding = RowDefaultsButtonPadding
+                                ) {
+                                    Text("Apply", color = keyboardColors.onAccent, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                }
+                            }
+                        }
+                        is AiPanelState.Compose -> {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                ExpandableResult(
+                                    label = "Composed draft:",
+                                    labelColor = keyboardColors.labelCompose,
+                                    result = panel.text,
+                                    expanded = resultExpanded,
+                                    onToggle = { toggleResultDetails() },
+                                    modifier = Modifier.weight(1f)
+                                )
+                                Button(
+                                    onClick = {
+                                        buzz(HapticFeedbackType.LongPress)
+                                        val result = panel.text
+                                        confirmThenApply(result) {
+                                            if (applyAiResult(result)) {
+                                                viewModel.recordAiApplyStat()
+                                                viewModel.dismissResults()
+                                            }
+                                        }
+                                    },
+                                    colors = ButtonDefaults.buttonColors(containerColor = keyboardColors.accent),
+                                    modifier = Modifier.height(32.dp),
+                                    contentPadding = RowDefaultsButtonPadding
+                                ) {
+                                    Text("Use", color = keyboardColors.onAccent, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                }
+                            }
+                        }
+                        is AiPanelState.Continuation -> {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                ExpandableResult(
+                                    label = "Continue with:",
+                                    labelColor = keyboardColors.labelContinue,
+                                    result = panel.text,
+                                    expanded = resultExpanded,
+                                    onToggle = { toggleResultDetails() },
+                                    modifier = Modifier.weight(1f)
+                                )
+                                Button(
+                                    onClick = {
+                                        buzz(HapticFeedbackType.LongPress)
+                                        val continuationText = panel.text
+                                        confirmThenApply(continuationText) {
+                                            val text = currentText()
+                                            val introduced = RedactionApplyGuard.introducedMarkers(text, continuationText)
+                                            if (introduced.isNotEmpty()) {
+                                                gestureAlert = RedactionApplyGuard.blockedMessage(introduced)
+                                            } else {
+                                                val separator = if (text.isEmpty() || text.last().isWhitespace()) "" else " "
+                                                onInsertText(separator + continuationText) // twin: inserted (AI continuation)
+                                                // Undo of an append restores by deleting it (empty original)
+                                                viewModel.registerAiApply("", separator + continuationText)
+                                                gestureAlert = "Appended ✨ (⌫ undoes)"
+                                                viewModel.recordAiApplyStat()
+                                                viewModel.dismissResults()
+                                            }
+                                        }
+                                    },
+                                    colors = ButtonDefaults.buttonColors(containerColor = keyboardColors.accent),
+                                    modifier = Modifier.height(32.dp),
+                                    contentPadding = RowDefaultsButtonPadding
+                                ) {
+                                    Text("Append", color = keyboardColors.onAccent, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                }
+                            }
+                        }
+                        is AiPanelState.Explanation -> {
+                            ExpandableResult(
+                                label = "Plain-language explanation:",
+                                labelColor = keyboardColors.success,
+                                result = panel.text,
+                                expanded = resultExpanded,
+                                onToggle = { toggleResultDetails() },
+                                modifier = Modifier.fillMaxWidth()
+                            )
+                        }
+                        is AiPanelState.Error -> {
+                            Column(modifier = Modifier.fillMaxWidth().testTag("ai_error_panel")) {
+                                Text("AI action failed", color = keyboardColors.error, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                Text(
+                                    panel.message,
+                                    color = keyboardColors.text,
+                                    fontSize = 12.sp,
+                                    maxLines = if (resultExpanded) Int.MAX_VALUE else 2,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                            }
+                        }
+                        is AiPanelState.Replies -> {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text("💡", fontSize = 12.sp, modifier = Modifier.padding(end = 4.dp))
+                                LazyRow(
+                                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                    modifier = Modifier.weight(1f)
+                                ) {
+                                    items(panel.suggestions) { reply ->
+                                        Box(
+                                            modifier = Modifier
+                                                .clip(RoundedCornerShape(16.dp))
+                                                .background(keyboardColors.chip)
+                                                .clickable {
+                                                    buzz(HapticFeedbackType.TextHandleMove)
+                                                    onInsertText(reply) // twin: inserted (smart reply)
+                                                    viewModel.recordAiApplyStat()
+                                                    viewModel.dismissResults()
+                                                }
+                                                .padding(horizontal = 12.dp, vertical = 6.dp)
+                                        ) {
+                                            Text(reply, color = keyboardColors.onChip, fontSize = 12.sp, fontWeight = FontWeight.Medium, maxLines = 1)
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        AiPanelState.Idle, AiPanelState.Loading, is AiPanelState.ReplyIntent -> {
+                            // Standard Active Input display with Predictive Autocomplete options!
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                // Slim toolbar (Gboard-style): settings, AI tools toggle, privacy
+                                // status icon, then suggestions in the remaining space.
+                                if (onOpenSettings != null) {
+                                    IconButton(
+                                        onClick = {
+                                            buzz(HapticFeedbackType.TextHandleMove)
+                                            onOpenSettings()
+                                        },
+                                        modifier = Modifier.size(36.dp).testTag("open_settings")
                                     ) {
-                                        Text(
-                                            "📝 ${proofreadHint!!.correctionsCount} fix(es) found — tap to review",
-                                            color = keyboardColors.success,
-                                            fontSize = 11.sp,
-                                            fontWeight = FontWeight.Bold
+                                        Icon(
+                                            imageVector = Icons.Default.Settings,
+                                            contentDescription = "Keyboard settings",
+                                            tint = keyboardColors.textMuted,
+                                            modifier = Modifier.size(20.dp)
                                         )
                                     }
-                                } else if (predictiveSuggestions.isNotEmpty() && !isSensitiveField) {
-                                    LazyRow(
-                                        horizontalArrangement = Arrangement.spacedBy(6.dp),
-                                        modifier = Modifier.fillMaxWidth().padding(top = 2.dp)
-                                    ) {
-                                        items(predictiveSuggestions) { chip ->
-                                            val suggestion = chip.word
-                                            Box(
-                                                modifier = Modifier
-                                                    .testTag("suggestion_chip")
-                                                    .clip(RoundedCornerShape(8.dp))
-                                                    .background(keyboardColors.chipAlt)
-                                                    .clickable {
-                                                        buzz(HapticFeedbackType.TextHandleMove)
-                                                        val text = currentText(fresh = true)
-                                                        val lastWord = text.takeLastWhile { !it.isWhitespace() }
-                                                        if (inPlaygroundMode) {
-                                                            onPlaygroundTextChange(text.dropLast(lastWord.length) + suggestion + " ")
-                                                        } else {
-                                                            inputConnectionProvider()?.let { conn ->
-                                                                // twin: typed when it completes/corrects the current word (bounded), else inserted
-                                                                conn.commitSuggestionPick(lastWord, suggestion, chip.sourceWord)
-                                                            }
-                                                        }
-                                                        if (chip.quickAnswer) viewModel.onQuickAnswerCommitted()
-                                                        else viewModel.onWordCommitted(suggestion)
-                                                    }
-                                                    .padding(horizontal = 10.dp, vertical = 4.dp)
-                                            ) {
-                                                Text(chip.label, color = keyboardColors.onChip, fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                                            }
-                                        }
-                                    }
-                                } else {
-                                    // Idle: leave the strip empty rather than echo the field.
                                 }
-                            }
-                            Box(
-                                modifier = Modifier.weight(1f).padding(start = 4.dp),
-                                contentAlignment = Alignment.CenterStart
-                            ) { activeLine() }
-                            if (!isSensitiveField) {
+                                if (!isSensitiveField) {
+                                    IconButton(
+                                        onClick = {
+                                            buzz(HapticFeedbackType.TextHandleMove)
+                                            viewModel.setAiToolsExpanded(!showAiActions)
+                                        },
+                                        modifier = Modifier
+                                            .size(36.dp)
+                                            .clip(RoundedCornerShape(18.dp))
+                                            .background(if (showAiActions) keyboardColors.keyActive else Color.Transparent)
+                                            .testTag("toggle_ai_tools")
+                                    ) {
+                                        Text("✨", fontSize = 16.sp)
+                                    }
+                                }
+                                val prism = TrustPrism.resolve(
+                                    isOfflineMode = isOfflineMode,
+                                    isSensitiveField = isSensitiveField,
+                                    cloudRedactionEnabled = CloudPrivacyPolicy.redactionEnabled
+                                )
                                 IconButton(
                                     onClick = {
-                                        // One read: text and sensitivity flag come from the same ClipData.
-                                        val systemClipboard = context.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as? android.content.ClipboardManager
-                                        val snapshot = systemClipboard?.let { manager ->
-                                            runCatching { ClipboardSensitivity.readPrimaryClip(manager) }.getOrNull()
-                                        }
-                                        val clip = snapshot?.text
-                                        if (clip.isNullOrBlank()) {
-                                            gestureAlert = "Clipboard is empty 📋"
-                                        } else if (snapshot?.flaggedSensitive != false) {
-                                            // A clip the source app marked sensitive never reaches AI actions.
-                                            clipboardText = null
-                                            showClipboardActions = false
-                                            gestureAlert = "Clip marked sensitive 🔒"
+                                        gestureAlert = if (isLearningPaused && !isSensitiveField) {
+                                            "${prism.label} · learning paused"
                                         } else {
-                                            clipboardText = clip
-                                            showClipboardActions = !showClipboardActions
-                                            // Clipper check: address changed since the keyboard last saw it.
-                                            viewModel.clipboardPasteWarning(clip)?.let { gestureAlert = it }
+                                            prism.label
                                         }
                                     },
-                                    modifier = Modifier.size(36.dp).testTag("clipboard_actions")
+                                    modifier = Modifier.size(32.dp).testTag("privacy_status")
                                 ) {
-                                    Text("📋", fontSize = 14.sp)
+                                    Text(prism.icon, fontSize = 14.sp)
+                                }
+                                // KEYBOARD-002: pause learned typo fixes for this field only.
+                                // Shown when there is something to pause (or it is paused),
+                                // so it does not take suggestion space from new users. Hidden in the
+                                // companion playground, like the edit bar: only the IME service marks
+                                // new input sessions, so a pause there would never be cleared.
+                                if (!inPlaygroundMode && !isSensitiveField &&
+                                    (correctionsPaused || learnedCorrectionRules.isNotEmpty())
+                                ) {
+                                    Box(
+                                        modifier = Modifier
+                                            .padding(horizontal = 2.dp)
+                                            .clip(RoundedCornerShape(12.dp))
+                                            .background(if (correctionsPaused) keyboardColors.keyActive else Color.Transparent)
+                                            .clickable {
+                                                buzz(HapticFeedbackType.TextHandleMove)
+                                                val pause = !correctionsPaused
+                                                viewModel.setCorrectionsPaused(pause)
+                                                gestureAlert = if (pause) {
+                                                    "Learned fixes off for this field · shortcuts still expand"
+                                                } else {
+                                                    "Learned fixes back on"
+                                                }
+                                            }
+                                            .padding(horizontal = 8.dp, vertical = 4.dp)
+                                            .testTag("toggle_learned_fixes")
+                                    ) {
+                                        Text(
+                                            if (correctionsPaused) "Fixes off" else "Fixes",
+                                            color = if (correctionsPaused) keyboardColors.accent else keyboardColors.textMuted,
+                                            fontSize = 11.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            maxLines = 1
+                                        )
+                                    }
+                                }
+                                val activeLine: @Composable () -> Unit = {
+                                    val swipePreview = liveSwipePreviewWord
+                                    val activeProofread = proofreadHint
+                                    if (swipePreview != null) {
+                                        Text(
+                                            text = "Swiping: $swipePreview ✍️",
+                                            color = keyboardColors.accent,
+                                            fontSize = 14.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            modifier = Modifier.padding(vertical = 4.dp)
+                                        )
+                                    } else if (activeProofread != null && !isSensitiveField) {
+                                        Box(
+                                            modifier = Modifier
+                                                .padding(top = 2.dp)
+                                                .clip(RoundedCornerShape(8.dp))
+                                                .background(keyboardColors.successChip)
+                                                .clickable { viewModel.promoteProofreadHint() }
+                                                .padding(horizontal = 10.dp, vertical = 4.dp)
+                                                .testTag("proofread_hint")
+                                        ) {
+                                            Text(
+                                                "📝 ${activeProofread.correctionsCount} fix(es) found — tap to review",
+                                                color = keyboardColors.success,
+                                                fontSize = 11.sp,
+                                                fontWeight = FontWeight.Bold
+                                            )
+                                        }
+                                    } else if (predictiveSuggestions.isNotEmpty() && !isSensitiveField) {
+                                        LazyRow(
+                                            horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                            modifier = Modifier.fillMaxWidth().padding(top = 2.dp)
+                                        ) {
+                                            items(predictiveSuggestions) { chip ->
+                                                val suggestion = chip.word
+                                                Box(
+                                                    modifier = Modifier
+                                                        .testTag("suggestion_chip")
+                                                        .clip(RoundedCornerShape(8.dp))
+                                                        .background(keyboardColors.chipAlt)
+                                                        .clickable {
+                                                            buzz(HapticFeedbackType.TextHandleMove)
+                                                            val text = currentText(fresh = true)
+                                                            val lastWord = text.takeLastWhile { !it.isWhitespace() }
+                                                            if (inPlaygroundMode) {
+                                                                onPlaygroundTextChange(text.dropLast(lastWord.length) + suggestion + " ")
+                                                            } else {
+                                                                inputConnectionProvider()?.let { conn ->
+                                                                    // twin: typed when it completes/corrects the current word (bounded), else inserted
+                                                                    conn.commitSuggestionPick(lastWord, suggestion, chip.sourceWord)
+                                                                }
+                                                            }
+                                                            if (chip.quickAnswer) viewModel.onQuickAnswerCommitted()
+                                                            else viewModel.onWordCommitted(suggestion)
+                                                        }
+                                                        .padding(horizontal = 10.dp, vertical = 4.dp)
+                                                ) {
+                                                    Text(chip.label, color = keyboardColors.onChip, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                                }
+                                            }
+                                        }
+                                    } else {
+                                        // Idle: leave the strip empty rather than echo the field.
+                                    }
+                                }
+                                Box(
+                                    modifier = Modifier.weight(1f).padding(start = 4.dp),
+                                    contentAlignment = Alignment.CenterStart
+                                ) { activeLine() }
+                                if (!isSensitiveField) {
+                                    IconButton(
+                                        onClick = {
+                                            // One read: text and sensitivity flag come from the same ClipData.
+                                            val systemClipboard = context.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as? android.content.ClipboardManager
+                                            val snapshot = systemClipboard?.let { manager ->
+                                                runCatching { ClipboardSensitivity.readPrimaryClip(manager) }.getOrNull()
+                                            }
+                                            val clip = snapshot?.text
+                                            if (clip.isNullOrBlank()) {
+                                                gestureAlert = "Clipboard is empty 📋"
+                                            } else if (snapshot?.flaggedSensitive != false) {
+                                                // A clip the source app marked sensitive never reaches AI actions.
+                                                clipboardText = null
+                                                showClipboardActions = false
+                                                gestureAlert = "Clip marked sensitive 🔒"
+                                            } else {
+                                                clipboardText = clip
+                                                showClipboardActions = !showClipboardActions
+                                                // Clipper check: address changed since the keyboard last saw it.
+                                                viewModel.clipboardPasteWarning(clip)?.let { gestureAlert = it }
+                                            }
+                                        },
+                                        modifier = Modifier.size(36.dp).testTag("clipboard_actions")
+                                    ) {
+                                        Text("📋", fontSize = 14.sp)
+                                    }
                                 }
                             }
                         }
@@ -1398,10 +1413,8 @@ fun AgenticKeyboardLayout(
         }
 
         // --- ITERATE CHIPS (refine the AI text result that is showing) ---
-        val hasRefinableResult = grammarCorrection != null || summary != null || translation != null ||
-            rewrite != null || composeResult != null || continuation != null
         AnimatedVisibility(
-            visible = resultExpanded && hasRefinableResult && !isLoading,
+            visible = resultExpanded && aiPanelState.refinableText != null && !isLoading,
             enter = fadeIn(),
             exit = fadeOut()
         ) {
@@ -1481,7 +1494,7 @@ fun AgenticKeyboardLayout(
         // Shown after "Reply Ideas" is tapped: the user picks the direction the
         // generated replies should take before anything is sent to the model.
         AnimatedVisibility(
-            visible = replyIntentContext != null && !isSensitiveField,
+            visible = aiPanelState is AiPanelState.ReplyIntent && !isSensitiveField,
             enter = fadeIn(),
             exit = fadeOut()
         ) {
