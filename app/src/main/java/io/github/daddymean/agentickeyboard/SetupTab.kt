@@ -29,6 +29,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import io.github.daddymean.agentickeyboard.ui.KeyboardViewModel
+import io.github.daddymean.agentickeyboard.ui.theme.LocalCompanionColors
 import io.github.daddymean.agentickeyboard.util.KeyboardSetupStatus
 
 /** Reads whether this keyboard is enabled and active; see [KeyboardSetupStatus]. */
@@ -47,6 +48,7 @@ private fun readKeyboardSetupStatus(context: Context): KeyboardSetupStatus {
 fun SetupTab(viewModel: KeyboardViewModel) {
     val context = LocalContext.current
     val isOfflineMode by viewModel.isOfflineMode.collectAsState()
+    val colors = LocalCompanionColors.current
 
     // Both setup actions leave this window (system settings, the picker dialog) and
     // come back to it, so re-read the status each time the window regains focus.
@@ -66,14 +68,14 @@ fun SetupTab(viewModel: KeyboardViewModel) {
             Spacer(modifier = Modifier.height(4.dp))
             Text(
                 "Setup Guide",
-                color = Color(0xFF1C1B1F),
+                color = colors.textPrimary,
                 fontSize = 24.sp,
                 fontWeight = FontWeight.Bold,
                 letterSpacing = (-0.8).sp
             )
             Text(
                 "Activate Lumina AI system-wide for access inside Signal, WhatsApp, or other messengers.",
-                color = Color(0xFF5F5D6B),
+                color = colors.textSecondary,
                 fontSize = 12.sp,
                 lineHeight = 16.sp
             )

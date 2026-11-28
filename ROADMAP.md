@@ -25,9 +25,6 @@ file in the same PR that ships a milestone: move it to **Shipped** with the PR n
   only the changed spans would make short edits scannable.
 - Expandable preview for the Explanation panel (the one result panel still
   capped to a fixed-height shelf).
-- Theme the companion app's playground chrome (MainActivity still has a few
-  hardcoded `Color(0xFF...)` around the simulation banner) for consistency
-  with the now-themed keyboard.
 - Multi-step undo: the AI-apply undo holds a single pending entry; an undo
   chip in the shelf could offer a small history instead of backspace-only.
 - Long-press accent/symbol popups on keys.
@@ -35,6 +32,17 @@ file in the same PR that ships a milestone: move it to **Shipped** with the PR n
 - Streaming for Continue so the suggestion appears as it generates.
 
 ## Shipped
+
+- **(this branch)** — **Companion app Light/Dark theming & Style Hub
+  decomposition**: added `CompanionTheme` (`CompanionColors`,
+  `LightCompanionColors`, `DarkCompanionColors`, `LocalCompanionColors`,
+  `resolveDarkTheme`) wired into `MainActivity` using the user's `themeOverride`
+  setting (`System`/`Light`/`Dark`); replaced 199 hardcoded `Color(0xFF...)`
+  literals across `MainActivity`, `MainScreenComponents`, `PlaygroundTab`,
+  `ShortcutsTab`, `SetupTab`, `ExportTab`, and `GemmaSettingsSection`; extracted
+  reusable `ChoiceOptionChip`; and decomposed the 1,085-line `ExportTab`
+  composable into 8 self-contained section composables so state updates no
+  longer recompose the entire Style Hub.
 
 - **Dynamic snippet and shortcut tokens** — saved snippets and shortcut templates
   were dead strings: "On my way!" could only ever be that. They are now small

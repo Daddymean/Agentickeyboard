@@ -40,12 +40,14 @@ import androidx.compose.ui.unit.sp
 import io.github.daddymean.agentickeyboard.ui.AgenticKeyboardLayout
 import io.github.daddymean.agentickeyboard.ui.AiPanelState
 import io.github.daddymean.agentickeyboard.ui.KeyboardViewModel
+import io.github.daddymean.agentickeyboard.ui.theme.LocalCompanionColors
 
 @Composable
 fun PlaygroundTab(viewModel: KeyboardViewModel, onNavigateToShortcuts: () -> Unit) {
     var testText by remember { mutableStateOf("") }
     val isOfflineMode by viewModel.isOfflineMode.collectAsState()
-    
+    val colors = LocalCompanionColors.current
+
     val aiPanelState by viewModel.aiPanelState.collectAsState()
     val grammarCorrection = (aiPanelState as? AiPanelState.Grammar)?.result
     val toneAnalysis = (aiPanelState as? AiPanelState.Tone)?.result
@@ -63,14 +65,14 @@ fun PlaygroundTab(viewModel: KeyboardViewModel, onNavigateToShortcuts: () -> Uni
             Spacer(modifier = Modifier.height(4.dp))
             Text(
                 "Bento Workspace",
-                color = Color(0xFF1C1B1F),
+                color = colors.textPrimary,
                 fontSize = 24.sp,
                 fontWeight = FontWeight.Bold,
                 letterSpacing = (-0.8).sp
             )
             Text(
                 "Experience modular cognitive assistance below. Type in the interactive bento sandbox.",
-                color = Color(0xFF5F5D6B),
+                color = colors.textSecondary,
                 fontSize = 12.sp,
                 lineHeight = 16.sp
             )
@@ -82,9 +84,9 @@ fun PlaygroundTab(viewModel: KeyboardViewModel, onNavigateToShortcuts: () -> Uni
                 modifier = Modifier
                     .fillMaxWidth()
                     .shadow(1.dp, RoundedCornerShape(28.dp)),
-                colors = CardDefaults.cardColors(containerColor = Color.White),
+                colors = CardDefaults.cardColors(containerColor = colors.card),
                 shape = RoundedCornerShape(28.dp),
-                border = BorderStroke(1.dp, Color(0xFFE2E8F0))
+                border = BorderStroke(1.dp, colors.border)
             ) {
                 Column(modifier = Modifier.padding(18.dp)) {
                     Row(
@@ -94,19 +96,19 @@ fun PlaygroundTab(viewModel: KeyboardViewModel, onNavigateToShortcuts: () -> Uni
                     ) {
                         Text(
                             "Simulation Text Sandbox",
-                            color = Color(0xFF1C1B1F),
+                            color = colors.textPrimary,
                             fontWeight = FontWeight.Bold,
                             fontSize = 14.sp
                         )
                         Box(
                             modifier = Modifier
                                 .clip(RoundedCornerShape(8.dp))
-                                .background(Color(0xFFF1F5F9))
+                                .background(colors.surfaceMuted)
                                 .padding(horizontal = 8.dp, vertical = 4.dp)
                         ) {
                             Text(
                                 "Live Input",
-                                color = Color(0xFF475569),
+                                color = colors.textTertiary,
                                 fontSize = 10.sp,
                                 fontWeight = FontWeight.Bold
                             )
@@ -123,14 +125,19 @@ fun PlaygroundTab(viewModel: KeyboardViewModel, onNavigateToShortcuts: () -> Uni
                         modifier = Modifier
                             .fillMaxWidth()
                             .testTag("playground_input"),
-                        placeholder = { Text("Start typing to observe AI insights or expand abbreviations...", color = Color.Gray) },
+                        placeholder = {
+                            Text(
+                                "Start typing to observe AI insights or expand abbreviations...",
+                                color = colors.textSecondary
+                            )
+                        },
                         colors = OutlinedTextFieldDefaults.colors(
-                            focusedBorderColor = Color(0xFF6750A4),
-                            unfocusedBorderColor = Color(0xFFCBD5E1),
-                            focusedTextColor = Color(0xFF1C1B1F),
-                            unfocusedTextColor = Color(0xFF1C1B1F),
-                            focusedContainerColor = Color(0xFFF8FAFC),
-                            unfocusedContainerColor = Color(0xFFF8FAFC)
+                            focusedBorderColor = colors.accent,
+                            unfocusedBorderColor = colors.borderStrong,
+                            focusedTextColor = colors.textPrimary,
+                            unfocusedTextColor = colors.textPrimary,
+                            focusedContainerColor = colors.cardSubtle,
+                            unfocusedContainerColor = colors.cardSubtle
                         ),
                         shape = RoundedCornerShape(16.dp),
                         minLines = 3,
@@ -142,17 +149,17 @@ fun PlaygroundTab(viewModel: KeyboardViewModel, onNavigateToShortcuts: () -> Uni
 
         // --- BENTO GRID CARDS: COGNITIVE INSIGHTS COHORT ---
         // We arrange metrics as beautiful, structured Bento grid elements!
-        
+
         // Bento Card: Tone / Sentiment Analysis
         item {
             val sentimentText = toneAnalysis?.sentiment ?: "Awaiting text..."
             val scoreText = toneAnalysis?.let { "${(it.toneScore * 100).toInt()}% Match" } ?: "No analysis"
-            
+
             Card(
                 modifier = Modifier
                     .fillMaxWidth()
                     .shadow(1.dp, RoundedCornerShape(28.dp)),
-                colors = CardDefaults.cardColors(containerColor = Color(0xFFE8DEF8)),
+                colors = CardDefaults.cardColors(containerColor = colors.cardAccent),
                 shape = RoundedCornerShape(28.dp)
             ) {
                 Column(
@@ -170,7 +177,7 @@ fun PlaygroundTab(viewModel: KeyboardViewModel, onNavigateToShortcuts: () -> Uni
                             modifier = Modifier
                                 .size(36.dp)
                                 .clip(CircleShape)
-                                .background(Color.White.copy(alpha = 0.5f)),
+                                .background(colors.card.copy(alpha = 0.5f)),
                             contentAlignment = Alignment.Center
                         ) {
                             Text("🎭", fontSize = 18.sp)
@@ -178,31 +185,31 @@ fun PlaygroundTab(viewModel: KeyboardViewModel, onNavigateToShortcuts: () -> Uni
                         Box(
                             modifier = Modifier
                                 .clip(RoundedCornerShape(12.dp))
-                                .background(Color(0xFFD0BCFF))
+                                .background(colors.cardAccentBadge)
                                 .padding(horizontal = 8.dp, vertical = 4.dp)
                         ) {
                             Text(
                                 "SENTIMENT ANALYSIS",
-                                color = Color(0xFF21005D),
+                                color = colors.onAccentContainer,
                                 fontSize = 10.sp,
                                 fontWeight = FontWeight.Bold,
                                 letterSpacing = 0.5.sp
                             )
                         }
                     }
-                    
+
                     Spacer(modifier = Modifier.height(16.dp))
-                    
+
                     Column {
                         Text(
                             "Current Tone Analysis",
-                            color = Color(0xFF49454F),
+                            color = colors.onAccentContainer.copy(alpha = 0.8f),
                             fontSize = 12.sp,
                             fontWeight = FontWeight.Medium
                         )
                         Text(
                             sentimentText,
-                            color = Color(0xFF21005D),
+                            color = colors.onAccentContainer,
                             fontSize = 20.sp,
                             fontWeight = FontWeight.Bold,
                             letterSpacing = (-0.5).sp
@@ -210,7 +217,7 @@ fun PlaygroundTab(viewModel: KeyboardViewModel, onNavigateToShortcuts: () -> Uni
                         if (toneAnalysis != null) {
                             Text(
                                 "Match confidence: $scoreText",
-                                color = Color(0xFF21005D).copy(alpha = 0.7f),
+                                color = colors.onAccentContainer.copy(alpha = 0.7f),
                                 fontSize = 11.sp,
                                 modifier = Modifier.padding(top = 4.dp)
                             )
@@ -232,9 +239,9 @@ fun PlaygroundTab(viewModel: KeyboardViewModel, onNavigateToShortcuts: () -> Uni
                         .weight(1.2f)
                         .height(170.dp)
                         .shadow(1.dp, RoundedCornerShape(28.dp)),
-                    colors = CardDefaults.cardColors(containerColor = Color(0xFFF7F2FA)),
+                    colors = CardDefaults.cardColors(containerColor = colors.cardTinted),
                     shape = RoundedCornerShape(28.dp),
-                    border = BorderStroke(1.dp, Color(0xFFE2E8F0))
+                    border = BorderStroke(1.dp, colors.border)
                 ) {
                     Column(
                         modifier = Modifier
@@ -247,7 +254,7 @@ fun PlaygroundTab(viewModel: KeyboardViewModel, onNavigateToShortcuts: () -> Uni
                                 modifier = Modifier
                                     .size(32.dp)
                                     .clip(CircleShape)
-                                    .background(Color(0xFFE8DEF8)),
+                                    .background(colors.cardAccent),
                                 contentAlignment = Alignment.Center
                             ) {
                                 Text("🔍", fontSize = 14.sp)
@@ -255,15 +262,15 @@ fun PlaygroundTab(viewModel: KeyboardViewModel, onNavigateToShortcuts: () -> Uni
                             Spacer(modifier = Modifier.height(10.dp))
                             Text(
                                 "SUMMARIZER",
-                                color = Color(0xFF49454F).copy(alpha = 0.7f),
+                                color = colors.textSecondary,
                                 fontSize = 10.sp,
                                 fontWeight = FontWeight.Bold
                             )
                         }
-                        
+
                         Text(
                             summary ?: "Type longer paragraphs to condense writing into main points.",
-                            color = Color(0xFF1C1B1F),
+                            color = colors.textPrimary,
                             fontSize = 12.sp,
                             fontWeight = FontWeight.Medium,
                             lineHeight = 16.sp,
@@ -279,7 +286,7 @@ fun PlaygroundTab(viewModel: KeyboardViewModel, onNavigateToShortcuts: () -> Uni
                         .height(170.dp)
                         .shadow(1.dp, RoundedCornerShape(28.dp))
                         .clickable { viewModel.toggleOfflineMode() },
-                    colors = CardDefaults.cardColors(containerColor = Color(0xFF1C1B1F)),
+                    colors = CardDefaults.cardColors(containerColor = colors.cardDark),
                     shape = RoundedCornerShape(28.dp)
                 ) {
                     Column(
@@ -293,7 +300,7 @@ fun PlaygroundTab(viewModel: KeyboardViewModel, onNavigateToShortcuts: () -> Uni
                                 modifier = Modifier
                                     .size(32.dp)
                                     .clip(CircleShape)
-                                    .background(Color(0xFF334155)),
+                                    .background(colors.cardDarkChip),
                                 contentAlignment = Alignment.Center
                             ) {
                                 Text("🛡️", fontSize = 14.sp)
@@ -301,22 +308,22 @@ fun PlaygroundTab(viewModel: KeyboardViewModel, onNavigateToShortcuts: () -> Uni
                             Spacer(modifier = Modifier.height(10.dp))
                             Text(
                                 "PRIVACY ENGINE",
-                                color = Color.White.copy(alpha = 0.6f),
+                                color = colors.onCardDark.copy(alpha = 0.6f),
                                 fontSize = 10.sp,
                                 fontWeight = FontWeight.Bold
                             )
                         }
-                        
+
                         Column {
                             Text(
                                 if (isOfflineMode) "100% Offline" else "Cloud Enabled",
-                                color = if (isOfflineMode) Color(0xFF4ADE80) else Color(0xFFFBBF24),
+                                color = if (isOfflineMode) colors.onCardDarkAccent else colors.warning,
                                 fontSize = 16.sp,
                                 fontWeight = FontWeight.Bold
                             )
                             Text(
                                 if (isOfflineMode) "Local Sandboxing active." else "Enhanced processing.",
-                                color = Color.Gray,
+                                color = colors.onCardDark.copy(alpha = 0.65f),
                                 fontSize = 10.sp,
                                 lineHeight = 12.sp
                             )
@@ -326,16 +333,16 @@ fun PlaygroundTab(viewModel: KeyboardViewModel, onNavigateToShortcuts: () -> Uni
             }
         }
 
-        // Bento Card: Quick Templates/Shortcuts Redirect Card (White with pink accent circle)
+        // Bento Card: Quick Templates/Shortcuts Redirect Card
         item {
             Card(
                 modifier = Modifier
                     .fillMaxWidth()
                     .shadow(1.dp, RoundedCornerShape(28.dp))
                     .clickable { onNavigateToShortcuts() },
-                colors = CardDefaults.cardColors(containerColor = Color.White),
+                colors = CardDefaults.cardColors(containerColor = colors.card),
                 shape = RoundedCornerShape(28.dp),
-                border = BorderStroke(1.dp, Color(0xFFE2E8F0))
+                border = BorderStroke(1.dp, colors.border)
             ) {
                 Row(
                     modifier = Modifier
@@ -348,36 +355,36 @@ fun PlaygroundTab(viewModel: KeyboardViewModel, onNavigateToShortcuts: () -> Uni
                         modifier = Modifier
                             .size(44.dp)
                             .clip(CircleShape)
-                            .background(Color(0xFFFFD8E4)),
+                            .background(colors.pinkContainer),
                         contentAlignment = Alignment.Center
                     ) {
                         Text("⚡", fontSize = 20.sp)
                     }
-                    
+
                     Column(modifier = Modifier.weight(1f)) {
                         Text(
                             "Quick Shortcut Templates",
-                            color = Color(0xFF31111D),
+                            color = colors.onPinkContainer,
                             fontSize = 14.sp,
                             fontWeight = FontWeight.Bold
                         )
                         Text(
                             if (shortcuts.isEmpty()) "Register abbreviations like 'omw' to speed up typing."
                             else "Active: ${shortcuts.joinToString(", ") { it.shortcut }}",
-                            color = Color(0xFF5F5D6B),
+                            color = colors.textSecondary,
                             fontSize = 11.sp,
                             maxLines = 1
                         )
                     }
-                    
+
                     Box(
                         modifier = Modifier
                             .size(32.dp)
                             .clip(CircleShape)
-                            .background(Color(0xFFF1F5F9)),
+                            .background(colors.surfaceMuted),
                         contentAlignment = Alignment.Center
                     ) {
-                        Text("➔", color = Color(0xFF475569), fontSize = 12.sp)
+                        Text("➔", color = colors.textTertiary, fontSize = 12.sp)
                     }
                 }
             }
@@ -390,14 +397,14 @@ fun PlaygroundTab(viewModel: KeyboardViewModel, onNavigateToShortcuts: () -> Uni
                     modifier = Modifier
                         .fillMaxWidth()
                         .shadow(1.dp, RoundedCornerShape(28.dp)),
-                    colors = CardDefaults.cardColors(containerColor = Color(0xFFF1F5F9)),
+                    colors = CardDefaults.cardColors(containerColor = colors.surfaceMuted),
                     shape = RoundedCornerShape(28.dp),
-                    border = BorderStroke(1.dp, Color(0xFFE2E8F0))
+                    border = BorderStroke(1.dp, colors.border)
                 ) {
                     Column(modifier = Modifier.padding(16.dp)) {
                         Text(
                             "AI Rewrite & Grammar Feed",
-                            color = Color(0xFF1C1B1F),
+                            color = colors.textPrimary,
                             fontWeight = FontWeight.Bold,
                             fontSize = 12.sp,
                             modifier = Modifier.padding(bottom = 8.dp)
@@ -406,16 +413,16 @@ fun PlaygroundTab(viewModel: KeyboardViewModel, onNavigateToShortcuts: () -> Uni
                         grammarCorrection?.let { grammar ->
                             if (grammar.correctionsCount > 0) {
                                 Row(modifier = Modifier.padding(vertical = 4.dp)) {
-                                    Text("Spelling: ", color = Color(0xFF475569), fontSize = 12.sp, fontWeight = FontWeight.Bold)
-                                    Text("${grammar.correctionsCount} correction(s) -> ${grammar.explanation}", color = Color(0xFF15803D), fontSize = 12.sp)
+                                    Text("Spelling: ", color = colors.textTertiary, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                                    Text("${grammar.correctionsCount} correction(s) -> ${grammar.explanation}", color = colors.success, fontSize = 12.sp)
                                 }
                             }
                         }
 
                         translation?.let { trans ->
                             Row(modifier = Modifier.padding(vertical = 4.dp)) {
-                                Text("Translation: ", color = Color(0xFF475569), fontSize = 12.sp, fontWeight = FontWeight.Bold)
-                                Text(trans, color = Color(0xFF0369A1), fontSize = 12.sp)
+                                Text("Translation: ", color = colors.textTertiary, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                                Text(trans, color = colors.info, fontSize = 12.sp)
                             }
                         }
                     }
@@ -429,21 +436,21 @@ fun PlaygroundTab(viewModel: KeyboardViewModel, onNavigateToShortcuts: () -> Uni
                 modifier = Modifier
                     .fillMaxWidth()
                     .shadow(2.dp, RoundedCornerShape(28.dp)),
-                colors = CardDefaults.cardColors(containerColor = Color(0xFFE6E1E5)),
+                colors = CardDefaults.cardColors(containerColor = colors.keyboardFrame),
                 shape = RoundedCornerShape(28.dp),
-                border = BorderStroke(1.dp, Color(0xFFE2E8F0))
+                border = BorderStroke(1.dp, colors.border)
             ) {
                 Column {
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .background(Color(0xFFF7F2FA))
+                            .background(colors.cardTinted)
                             .padding(vertical = 8.dp, horizontal = 16.dp),
                         contentAlignment = Alignment.Center
                     ) {
                         Text(
                             "⌨️ SIMULATION KEYBOARD ACCESS PLATFORM",
-                            color = Color(0xFF49454F),
+                            color = colors.textSecondary,
                             fontSize = 10.sp,
                             fontWeight = FontWeight.Bold,
                             letterSpacing = 0.5.sp
