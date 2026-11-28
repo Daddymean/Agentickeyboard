@@ -64,6 +64,9 @@ class LocalGemmaController(
 
     fun isReady(): Boolean = manager.isReady(artifact)
 
+    /** Bytes of an interrupted download that a new request would resume from, or 0. */
+    fun partialBytes(): Long = manager.partialBytes(artifact)
+
     fun isDeviceSupported(): Boolean =
         GemmaEligibility.deviceSupported(deviceAbis(), totalRamBytes())
 
@@ -117,16 +120,29 @@ class LocalGemmaController(
             }
             ModelDownloadPolicy.Decision.Start -> Unit
         }
-        _storeState.value = GemmaStoreState.Downloading(0L, artifact.sizeBytes)
+        _storeState.value = GemmaStoreState.Downloading(manager.partialBytes(artifact), artifact.sizeBytes)
         scope.launch {
-            val result = withContext(Dispatchers.IO) { manager.download(artifact) }
+            val result = withContext(Dispatchers.IO) {
+                manager.download(artifact) { bytes, total ->
+                    // StateFlow is thread-safe; the fetcher throttles how often this fires.
+                    // All bytes on disk means the SHA-256 pass is next.
+                    _storeState.value = if (bytes >= total) GemmaStoreState.Verifying
+                    else GemmaStoreState.Downloading(bytes, total)
+                }
+            }
             _storeState.value = when (result) {
                 is DownloadResult.Ready -> GemmaStoreState.Ready
                 DownloadResult.NotOptedIn -> GemmaStoreState.Refused(ModelDownloadPolicy.Reason.OPT_IN_REQUIRED)
                 is DownloadResult.HashMismatch -> {
                     GemmaStoreState.Failed("SHA-256 mismatch; the file was deleted.")
                 }
-                is DownloadResult.Failed -> GemmaStoreState.Failed(result.message)
+                is DownloadResult.Failed -> GemmaStoreState.Failed(
+                    if (manager.partialBytes(artifact) > 0) {
+                        "${result.message} The part already downloaded is kept; tap Download to resume."
+                    } else {
+                        result.message
+                    }
+                )
             }
             engine.refreshAvailability(isUsable())
         }
@@ -155,6 +171,11 @@ class LocalGemmaController(
                 0L
             }
         }
+
+        /** "958 MB" or "2.59 GB" for a progress line. */
+        fun formattedBytes(bytes: Long): String =
+            if (bytes >= 1_000_000_000L) String.format(Locale.US, "%.2f GB", bytes / 1_000_000_000.0)
+            else String.format(Locale.US, "%.0f MB", bytes / 1_000_000.0)
 
         fun formattedSize(spec: ModelSpec): String {
             val gb = spec.sizeBytes / 1_000_000_000.0
