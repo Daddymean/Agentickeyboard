@@ -50,7 +50,7 @@ install_sdk() {
   "$sdkmanager" "${PACKAGES[@]}" >/dev/null
 }
 
-command -v java >/dev/null || { echo "cloud-gradle: a JDK (17 or newer) is required" >&2; exit 2; }
+command -v java >/dev/null || { echo "cloud-gradle: a JDK (21 or newer) is required" >&2; exit 2; }
 installed || install_sdk
 installed || { echo "cloud-gradle: the Android SDK install is incomplete in $SDK" >&2; exit 2; }
 

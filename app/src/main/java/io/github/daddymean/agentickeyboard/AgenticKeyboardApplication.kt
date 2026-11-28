@@ -23,10 +23,14 @@ import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.launch
 
 class AgenticKeyboardApplication : Application() {
-    // Getters, not lazy: the repository is a provider, so a recovered database is
-    // picked up without a process restart, and in-flight holders keep their handle.
+    // database is a getter so a recovered or reset instance is picked up without
+    // a process restart. The repository is a single lazy instance, but it wraps
+    // the same provider (`KeyboardRepository { AppDatabase.getDatabase(this) }`)
+    // and reads `db` through a getter, so it also follows #234 recovery and
+    // reset. In-flight holders that already captured a Room instance keep that
+    // handle; recover/reset do not close the previous instance.
     val database get() = AppDatabase.getDatabase(this)
-    val repository get() = KeyboardRepository { AppDatabase.getDatabase(this) }
+    val repository by lazy { KeyboardRepository { AppDatabase.getDatabase(this) } }
     val settings by lazy { KeyboardSettings(this) }
 
     private val appScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
