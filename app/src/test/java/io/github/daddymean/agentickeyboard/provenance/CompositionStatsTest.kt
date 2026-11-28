@@ -25,12 +25,12 @@ class CompositionStatsTest {
         var t = 0L
         val gaps = longArrayOf(80, 400, 90, 1_500, 60, 700, 3_500, 110, 950, 70)
         repeat(100) { i -> t += gaps[i % gaps.size]; s.typedKey(t) }
-        s.deleted(40)
-        repeat(4) { s.nonlinearEdit() }
+        s.deleted(30)
+        repeat(3) { s.nonlinearEdit() }
         val snap = s.snapshot(finalChars = 80, nowMillis = t)
-        assertEquals(Level.HIGH, snap.revision) // 0.5 deleted per final char
-        assertEquals(Level.HIGH, snap.nonlinear) // 5 per 100
-        assertEquals(Level.HIGH, snap.longPauses) // 10 pauses over 2 s → 12.5 per 100
+        assertEquals(Level.HIGH, snap.revision) // 0.375 deleted per final char
+        assertEquals(Level.HIGH, snap.nonlinear) // 3.75 per 100
+        assertEquals(Level.VERY_HIGH, snap.longPauses) // 10 pauses over 2 s → 12.5 per 100
         assertTrue(snap.rhythm!! >= Level.HIGH)
     }
 

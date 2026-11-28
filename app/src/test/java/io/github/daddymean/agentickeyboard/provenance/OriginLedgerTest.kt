@@ -177,7 +177,7 @@ class OriginLedgerTest {
                 l.resyncBefore(editor.text.substring(0, editor.selStart))
             }
             l.reconcile(editor.text)
-            assertEquals("seed $seed", editor.text, l.textSnapshot())
+            assertEquals("seed $seed", editor.text.toString(), l.textSnapshot())
             val counts = l.counts()
             for (o in Origin.entries) {
                 if (o == Origin.UNWITNESSED) continue
