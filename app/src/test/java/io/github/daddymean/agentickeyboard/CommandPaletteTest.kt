@@ -39,6 +39,10 @@ class CommandPaletteTest {
         assertTrue(tokens.contains("/followup"))
         assertTrue(tokens.contains("/boundary"))
         assertTrue(tokens.contains("/extract"))
+        assertTrue(tokens.contains("/redact"))
+        val redact = CommandPalette.matches("/red").single()
+        assertEquals("/redact", redact.token)
+        assertEquals(CommandPalette.Action.REDACT, redact.action)
     }
 
     @Test

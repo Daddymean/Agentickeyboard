@@ -37,6 +37,8 @@ object SelectionTransforms {
         val text = selected.trim()
         if (text.isEmpty() || selected.length > MAX_CHARS) return emptyList()
         val out = ArrayList<SelectionTransform>()
+        val redacted = CloudTextSanitizer.sanitize(text)
+        if (redacted.changed) out += SelectionTransform("🛡️ Redact", redacted.text)
         convertUnit(text)?.let { out += it }
         out += convertTime(text, zone, today)
         evaluate(text)?.let { out += SelectionTransform("= $it", it) }

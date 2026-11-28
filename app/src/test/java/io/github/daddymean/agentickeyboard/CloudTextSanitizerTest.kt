@@ -279,6 +279,30 @@ class CloudTextSanitizerTest {
         }
     }
 
+    @Test
+    fun sanitizeDetailedTracksCategoriesAndFormatsLeakFreeSummaries() {
+        val singleEmail = CloudTextSanitizer.sanitizeDetailed("Reply to alice@example.com please")
+        assertTrue(singleEmail.changed)
+        assertEquals("1 email", singleEmail.summaryLabel())
+        assertFalse(singleEmail.summaryLabel().contains("alice"))
+
+        val twoEmails = CloudTextSanitizer.sanitizeDetailed("a@b.co and c@d.co")
+        assertEquals("2 emails", twoEmails.summaryLabel())
+
+        val mixed = CloudTextSanitizer.sanitizeDetailed(
+            "api_key=super_secret_123 email bob@example.com phone 555-867-5309"
+        )
+        assertTrue(mixed.changed)
+        assertEquals(3, mixed.replacements)
+        assertEquals("3 items (secret, email, phone)", mixed.summaryLabel())
+        assertFalse(mixed.summaryLabel().contains("super_secret"))
+        assertFalse(mixed.summaryLabel().contains("bob"))
+
+        val clean = CloudTextSanitizer.sanitizeDetailed("Nothing sensitive in this draft.")
+        assertFalse(clean.changed)
+        assertEquals("0 items", clean.summaryLabel())
+    }
+
     private fun assertRedacts(vararg cases: Pair<String, String>) {
         cases.forEach { (input, expected) ->
             assertEquals(input, expected, CloudTextSanitizer.sanitize(input).text)
