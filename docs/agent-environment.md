@@ -7,7 +7,7 @@ Details linked from [AGENTS.md](../AGENTS.md). Moved here from the old CLAUDE.md
 Agentic Keyboard (Lumina AI Keyboard) — an Android IME (custom keyboard) built
 with Kotlin, Jetpack Compose, Room, Retrofit/Moshi, and the Gemini API.
 
-- Android Gradle Plugin: **9.5.1** on **Gradle 9.9.1** (wrapper), **JDK 17+**
+- Android Gradle Plugin: **9.5.1** on **Gradle 9.9.1** (wrapper), **JDK 21**
 - `minSdk` 34 (required by `:core`, which `:app` depends on; this single-user
   platform targets Android 16), `compileSdk` 37.2, `targetSdk` 36
 

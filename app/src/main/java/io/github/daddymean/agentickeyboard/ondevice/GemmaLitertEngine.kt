@@ -11,8 +11,8 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 
 /**
- * Kotlin [OnDeviceAi] wrapper around [LiteRtGemmaEngine]. This file must not
- * import `com.google.ai.edge.litertlm` — the AAR ships Kotlin 2.4 metadata.
+ * Kotlin [OnDeviceAi] wrapper around [LiteRtGemmaEngine], adding timeout
+ * guarding, busy serialization, and output cleanup.
  */
 class GemmaLitertEngine(
     private val modelFile: () -> File?,
