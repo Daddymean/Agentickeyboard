@@ -33,6 +33,9 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.foundation.clickable
+import androidx.compose.ui.unit.TextUnit
+import io.github.daddymean.agentickeyboard.ui.theme.LocalCompanionColors
 import io.github.daddymean.agentickeyboard.util.LatencyMeter
 
 @Composable
@@ -42,6 +45,7 @@ fun SettingSwitchRow(
     checked: Boolean,
     onCheckedChange: (Boolean) -> Unit
 ) {
+    val colors = LocalCompanionColors.current
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -52,13 +56,13 @@ fun SettingSwitchRow(
         Column(modifier = Modifier.weight(1f)) {
             Text(
                 title,
-                color = Color(0xFF1C1B1F),
+                color = colors.textPrimary,
                 fontWeight = FontWeight.Bold,
                 fontSize = 12.sp
             )
             Text(
                 description,
-                color = Color(0xFF5F5D6B),
+                color = colors.textSecondary,
                 fontSize = 10.sp,
                 lineHeight = 12.sp
             )
@@ -67,9 +71,37 @@ fun SettingSwitchRow(
             checked = checked,
             onCheckedChange = onCheckedChange,
             colors = SwitchDefaults.colors(
-                checkedThumbColor = Color.White,
-                checkedTrackColor = Color(0xFF6750A4)
+                checkedThumbColor = colors.onAccent,
+                checkedTrackColor = colors.accent
             )
+        )
+    }
+}
+
+/** Selectable pill shared by theme, retention, persona, and export-format rows. */
+@Composable
+fun ChoiceOptionChip(
+    label: String,
+    selected: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    fontSize: TextUnit = 11.sp
+) {
+    val colors = LocalCompanionColors.current
+    Box(
+        modifier = modifier
+            .clip(RoundedCornerShape(12.dp))
+            .background(if (selected) colors.cardAccent else colors.surfaceMuted)
+            .clickable(onClick = onClick)
+            .border(1.dp, if (selected) colors.accent else Color.Transparent, RoundedCornerShape(12.dp))
+            .padding(vertical = 8.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        Text(
+            text = label,
+            color = if (selected) colors.onAccentContainer else colors.textSecondary,
+            fontSize = fontSize,
+            fontWeight = FontWeight.Bold
         )
     }
 }
@@ -77,16 +109,17 @@ fun SettingSwitchRow(
 /** Median / 95th-percentile milliseconds for one keyboard operation, or a dash before any sample. */
 @Composable
 fun LatencyStat(label: String, summary: LatencyMeter.Summary?) {
+    val colors = LocalCompanionColors.current
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
         Text(
             if (summary == null) "–" else "%.1f / %.1f".format(java.util.Locale.US, summary.medianMs, summary.p95Ms),
-            color = Color(0xFF4ADE80),
+            color = colors.onCardDarkAccent,
             fontSize = 14.sp,
             fontWeight = FontWeight.Bold
         )
         Text(
             label,
-            color = Color.White.copy(alpha = 0.7f),
+            color = colors.onCardDark.copy(alpha = 0.7f),
             fontSize = 10.sp
         )
     }
@@ -94,16 +127,17 @@ fun LatencyStat(label: String, summary: LatencyMeter.Summary?) {
 
 @Composable
 fun DashboardStat(label: String, value: Int) {
+    val colors = LocalCompanionColors.current
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
         Text(
             "$value",
-            color = Color(0xFF4ADE80),
+            color = colors.onCardDarkAccent,
             fontSize = 18.sp,
             fontWeight = FontWeight.Bold
         )
         Text(
             label,
-            color = Color.White.copy(alpha = 0.7f),
+            color = colors.onCardDark.copy(alpha = 0.7f),
             fontSize = 10.sp
         )
     }
@@ -118,13 +152,14 @@ fun SetupStepCard(
     done: Boolean = false,
     onAction: () -> Unit
 ) {
+    val colors = LocalCompanionColors.current
     Card(
         modifier = Modifier
             .fillMaxWidth()
             .shadow(1.dp, RoundedCornerShape(28.dp)),
-        colors = CardDefaults.cardColors(containerColor = Color.White),
+        colors = CardDefaults.cardColors(containerColor = colors.card),
         shape = RoundedCornerShape(28.dp),
-        border = BorderStroke(1.dp, Color(0xFFE2E8F0))
+        border = BorderStroke(1.dp, colors.border)
     ) {
         Column(modifier = Modifier.padding(20.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -132,12 +167,12 @@ fun SetupStepCard(
                     modifier = Modifier
                         .size(32.dp)
                         .clip(CircleShape)
-                        .background(if (done) Color(0xFF2E7D32) else Color(0xFFE8DEF8)),
+                        .background(if (done) colors.success else colors.cardAccent),
                     contentAlignment = Alignment.Center
                 ) {
                     Text(
                         if (done) "✓" else stepNumber,
-                        color = if (done) Color.White else Color(0xFF21005D),
+                        color = if (done) colors.onAccent else colors.onAccentContainer,
                         fontWeight = FontWeight.Bold,
                         fontSize = 14.sp
                     )
@@ -145,17 +180,17 @@ fun SetupStepCard(
                 Spacer(modifier = Modifier.width(12.dp))
                 Text(
                     title,
-                    color = Color(0xFF1C1B1F),
+                    color = colors.textPrimary,
                     fontWeight = FontWeight.Bold,
                     fontSize = 15.sp
                 )
             }
 
             Spacer(modifier = Modifier.height(10.dp))
-            
+
             Text(
                 description,
-                color = Color(0xFF5F5D6B),
+                color = colors.textSecondary,
                 fontSize = 13.sp,
                 lineHeight = 18.sp
             )
@@ -164,12 +199,12 @@ fun SetupStepCard(
 
             Button(
                 onClick = onAction,
-                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFF1F5F9)),
+                colors = ButtonDefaults.buttonColors(containerColor = colors.surfaceMuted),
                 shape = RoundedCornerShape(12.dp),
                 modifier = Modifier.fillMaxWidth(),
-                border = BorderStroke(1.dp, Color(0xFFCBD5E1))
+                border = BorderStroke(1.dp, colors.borderStrong)
             ) {
-                Text(actionLabel, color = Color(0xFF6750A4), fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                Text(actionLabel, color = colors.accent, fontSize = 12.sp, fontWeight = FontWeight.Bold)
             }
         }
     }

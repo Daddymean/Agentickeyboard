@@ -20,9 +20,6 @@ file in the same PR that ships a milestone: move it to **Shipped** with the PR n
 - On-device AI, Phase 3 — Gemma/LiteRT-LM tier for non-AICore devices, only if
   mid-range coverage becomes a goal; host outside the IME process with an
   opt-in download. (Phases 1 and 2 shipped in PR #22 and PR #24.)
-- Theme the companion app's playground chrome (MainActivity still has a few
-  hardcoded `Color(0xFF...)` around the simulation banner) for consistency
-  with the now-themed keyboard.
 - Multi-step undo: the AI-apply undo holds a single pending entry; an undo
   chip in the shelf could offer a small history instead of backspace-only.
 - Long-press accent/symbol popups on keys.
@@ -31,7 +28,17 @@ file in the same PR that ships a milestone: move it to **Shipped** with the PR n
 
 ## Shipped
 
-- **(this branch)** — **IME performance, AI state hardening & expanded diff
+- **(this branch)** — **Companion app Light/Dark theming & Style Hub
+  decomposition**: added `CompanionTheme` (`CompanionColors`,
+  `LightCompanionColors`, `DarkCompanionColors`, `LocalCompanionColors`,
+  `resolveDarkTheme`) wired into `MainActivity` using the user's `themeOverride`
+  setting (`System`/`Light`/`Dark`); replaced 199 hardcoded `Color(0xFF...)`
+  literals across `MainActivity`, `MainScreenComponents`, `PlaygroundTab`,
+  `ShortcutsTab`, `SetupTab`, `ExportTab`, and `GemmaSettingsSection`; extracted
+  reusable `ChoiceOptionChip`; and decomposed the 1,085-line `ExportTab`
+  composable into 8 self-contained section composables so state updates no
+  longer recompose the entire Style Hub.
+- **IME performance, AI state hardening & expanded diff
   preview**: isolated `viewModel.inputText` collection out of
   `AgenticKeyboardService`'s root composition (`DraftMoodAndHintStrip`) so
   keystrokes no longer recompose the full IME host; added `AiPanelState.Error`

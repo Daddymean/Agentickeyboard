@@ -24,10 +24,12 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import io.github.daddymean.agentickeyboard.AgenticKeyboardApplication
 import io.github.daddymean.agentickeyboard.SettingSwitchRow
+import io.github.daddymean.agentickeyboard.ui.theme.LocalCompanionColors
 
 @Composable
 fun GemmaSettingsSection() {
     val context = LocalContext.current
+    val colors = LocalCompanionColors.current
     val app = context.applicationContext as AgenticKeyboardApplication
     val controller = app.localGemma
     val settings = app.settings
@@ -43,7 +45,7 @@ fun GemmaSettingsSection() {
         storeState is GemmaStoreState.Downloading -> {
             val d = storeState as GemmaStoreState.Downloading
             val pct = if (d.total > 0) (d.bytes * 100 / d.total) else 0
-            "Downloading Gemma 4 E2B… $pct% (${d.bytes} of $sizeLabel)."
+            "Downloading Gemma 4 E2B… $pct% (${LocalGemmaController.formattedBytes(d.bytes)} of ${LocalGemmaController.formattedBytes(d.total)}). If the connection drops, the next try continues from here."
         }
         storeState is GemmaStoreState.Verifying -> "Verifying the SHA-256 hash…"
         storeState is GemmaStoreState.Failed -> "Download failed: ${(storeState as GemmaStoreState.Failed).message}"
@@ -55,6 +57,8 @@ fun GemmaSettingsSection() {
         ready && PowerBudget.read(context).pausesLocalModel ->
             "Paused while Battery Saver is on or the phone is too hot. Gemini Nano or the keyboard's local helpers are used instead; nothing goes to the cloud."
         ready -> "Ready — rewrite, proofread and tone can use Gemma 4 E2B on this phone when Gemini Nano is unavailable."
+        controller.partialBytes() > 0 ->
+            "A paused download is kept (${LocalGemmaController.formattedBytes(controller.partialBytes())} of $sizeLabel). Download continues from there."
         else -> "The model is $sizeLabel, Apache-2.0, stored only in this app's private storage. It is not in the install. Download uses Wi-Fi unless you allow cellular."
     }
 
@@ -62,13 +66,13 @@ fun GemmaSettingsSection() {
         Spacer(modifier = Modifier.height(10.dp))
         Text(
             "Local Gemma 4 E2B",
-            color = Color(0xFF1C1B1F),
+            color = colors.textPrimary,
             fontWeight = FontWeight.Bold,
             fontSize = 12.sp
         )
         Text(
             statusText,
-            color = Color(0xFF5F5D6B),
+            color = colors.textSecondary,
             fontSize = 10.sp
         )
         SettingSwitchRow(
@@ -84,7 +88,7 @@ fun GemmaSettingsSection() {
         if (enabled && !ready) {
             Text(
                 "Download size: $sizeLabel. SHA-256 starts ${artifact.sha256.take(12)}… License: ${artifact.license}.",
-                color = Color(0xFF5F5D6B),
+                color = colors.textSecondary,
                 fontSize = 10.sp,
                 modifier = Modifier.padding(top = 4.dp)
             )
@@ -97,7 +101,10 @@ fun GemmaSettingsSection() {
                     allowCellular = false
                     controller.requestDownload(context, allowMetered = false)
                 }) {
-                    Text("Download on Wi-Fi", fontSize = 12.sp)
+                    Text(
+                        if (controller.partialBytes() > 0) "Resume on Wi-Fi" else "Download on Wi-Fi",
+                        fontSize = 12.sp
+                    )
                 }
                 TextButton(onClick = {
                     settings.isLocalGemmaCellularAllowed = true

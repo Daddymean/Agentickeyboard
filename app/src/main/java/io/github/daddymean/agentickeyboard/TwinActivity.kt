@@ -112,6 +112,8 @@ class TwinActivity : Activity() {
             embedStatus.text = when {
                 !models.isOptedIn(embedSpec.id) -> "Embedding search is off."
                 models.isReady(embedSpec) -> "EmbeddingGemma 2 is on this phone and ready."
+                models.partialBytes(embedSpec) > 0 ->
+                    "A paused download is kept (${models.partialBytes(embedSpec) / 1_000_000} of ~165 MB). Tap Download to continue."
                 else -> "Opted in, but the model is not on this phone yet. Download it over Wi-Fi (~165 MB)."
             }
         }
@@ -128,12 +130,19 @@ class TwinActivity : Activity() {
                 }
                 embedStatus.text = "Downloading and verifying SHA-256…"
                 scope.launch {
-                    val result = withContext(Dispatchers.IO) { models.download(embedSpec) }
+                    val result = withContext(Dispatchers.IO) {
+                        models.download(embedSpec) { bytes, total ->
+                            embedStatus.post {
+                                embedStatus.text = if (bytes >= total) "Verifying SHA-256…"
+                                else "Downloading… ${bytes / 1_000_000} of ${total / 1_000_000} MB"
+                            }
+                        }
+                    }
                     embedStatus.text = when (result) {
                         is DownloadResult.Ready -> "EmbeddingGemma 2 is on this phone and ready."
                         is DownloadResult.NotOptedIn -> "Turn the option on first."
                         is DownloadResult.HashMismatch -> "Download discarded: the file did not match the pinned SHA-256."
-                        is DownloadResult.Failed -> "Download failed."
+                        is DownloadResult.Failed -> "Download failed. ${result.message} Tap Download to continue from where it stopped."
                     }
                 }
             }
