@@ -34,25 +34,25 @@ class ProvenanceInputConnection(
         if (text.isNotEmpty() && Character.codePointCount(text, 0, text.length) == 1) Origin.TYPED else Origin.INSERTED
 
     override fun commitText(text: CharSequence?, newCursorPosition: Int): Boolean {
-        val ok = super.commitText(text, newCursorPosition)
+        val ok = super.commitText(text, newCursorPosition) // twin: pass-through (the twin wrapper inside classifies)
         if (ok && text != null) record(text, keyOrInserted(text), newCursorPosition)
         return ok
     }
 
     override fun commitText(text: CharSequence, newCursorPosition: Int, textAttribute: TextAttribute?): Boolean {
-        val ok = super.commitText(text, newCursorPosition, textAttribute)
+        val ok = super.commitText(text, newCursorPosition, textAttribute) // twin: pass-through (classified inside)
         if (ok) record(text, keyOrInserted(text), newCursorPosition)
         return ok
     }
 
     override fun commitTypedText(text: CharSequence, newCursorPosition: Int): Boolean {
-        val ok = typingAwareBase?.commitTypedText(text, newCursorPosition) ?: super.commitText(text, newCursorPosition)
+        val ok = typingAwareBase?.commitTypedText(text, newCursorPosition) ?: super.commitText(text, newCursorPosition) // twin: pass-through (typed stays typed)
         if (ok) record(text, Origin.ASSISTED, newCursorPosition)
         return ok
     }
 
     override fun commitInsertedText(text: CharSequence, newCursorPosition: Int): Boolean {
-        val ok = typingAwareBase?.commitInsertedText(text, newCursorPosition) ?: super.commitText(text, newCursorPosition)
+        val ok = typingAwareBase?.commitInsertedText(text, newCursorPosition) ?: super.commitText(text, newCursorPosition) // twin: pass-through (inserted stays inserted)
         if (ok) record(text, Origin.INSERTED, newCursorPosition)
         return ok
     }
