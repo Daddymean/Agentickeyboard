@@ -984,6 +984,9 @@ class KeyboardViewModel(
         val previous = previousCommittedWord
         previousCommittedWord = if (cleaned.length in 2..24) cleaned else null
         viewModelScope.launch {
+            // Re-check: learning may have been paused, or the field may have
+            // become sensitive, between the gate above and this write.
+            if (!isLearningAllowed()) return@launch
             try {
                 if (cleaned.length > 2 && !STOP_WORDS.contains(cleaned)) {
                     repository.recordWordUsage(cleaned)

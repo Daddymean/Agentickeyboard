@@ -132,4 +132,38 @@ class KeyboardViewModelHardeningTest {
         assertEquals(1, repo.getWord("quokka")?.count)
         assertEquals(1, repo.getWord("fjord")?.count)
     }
+
+    @Test
+    fun onWordCommittedDoesNotWriteWhenLearningIsPausedAfterLaunch() = runBlocking {
+        val viewModel = KeyboardViewModel(repo, settings).also { created += it }
+        shadowOf(Looper.getMainLooper()).idle()
+
+        // Establish that commits write when learning stays allowed.
+        viewModel.onWordCommitted("xylophone")
+        withTimeout(5_000) {
+            while (repo.getWord("xylophone")?.count != 1) {
+                shadowOf(Looper.getMainLooper()).idle()
+                kotlinx.coroutines.delay(20)
+            }
+        }
+
+        // Call from a background thread so viewModelScope.launch (Main.immediate)
+        // posts the coroutine instead of starting it on this (main) thread.
+        val started = java.util.concurrent.CountDownLatch(1)
+        Thread {
+            viewModel.onWordCommitted("quokka")
+            started.countDown()
+        }.also { it.start(); it.join(5_000) }
+        assertTrue("onWordCommitted did not return", started.await(0, java.util.concurrent.TimeUnit.SECONDS))
+
+        // Pause after the outer gate passed, before the posted coroutine runs.
+        viewModel.setLearningPaused(true)
+        shadowOf(Looper.getMainLooper()).idle()
+        kotlinx.coroutines.delay(100)
+        shadowOf(Looper.getMainLooper()).idle()
+
+        assertNull(repo.getWord("quokka"))
+        assertTrue(repo.nextWords("xylophone").isEmpty())
+        assertEquals(1, repo.getWord("xylophone")?.count)
+    }
 }
