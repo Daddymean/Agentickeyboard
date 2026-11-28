@@ -640,10 +640,14 @@ fun AgenticKeyboardLayout(
                 } else if (abs(deltaX) > abs(deltaY) && abs(deltaX) > 120) {
                     if (deltaX > 0) {
                         gestureAlert = "Gesture: Space"
-                        onKeyPress(" ")
+                        dispatchKeyChar(" ") // routed to the passphrase while StealthInk captures it
                     } else {
                         gestureAlert = "Gesture: Backspace"
-                        onDelete()
+                        if (showStealthInk && stealthPassphraseFocused) {
+                            if (stealthPassphrase.isNotEmpty()) stealthPassphrase = stealthPassphrase.dropLast(1)
+                        } else {
+                            onDelete()
+                        }
                     }
                 } else if (abs(deltaY) > abs(deltaX) && abs(deltaY) > 120) {
                     if (deltaY < 0) {
@@ -2083,7 +2087,12 @@ fun AgenticKeyboardLayout(
                                 }
                             },
                             onDragEnd = {
-                                if (swipePathPoints.size > 1) {
+                                if (showStealthInk && stealthPassphraseFocused) {
+                                    // The StealthInk passphrase is typed key by key. A swiped word would
+                                    // be committed to the host field and fed to the twin, so drop it.
+                                    swipePathPoints.clear()
+                                    gestureAlert = "Tap keys to type the passphrase"
+                                } else if (swipePathPoints.size > 1) {
                                     val matches = LatencyMeter.time(LatencyMeter.Metric.SWIPE) {
                                         SwipeToTypeEngine.getSwipeWordMatches(
                                             swipePathPoints.toList(),
