@@ -347,6 +347,10 @@ class KeyboardViewModel(
     // initial (possibly empty) editor state still seeds predictions.
     private var lastSyncedText: String? = null
 
+    // StealthInk passphrase capture: no predictive chips computed or shown, so a
+    // tap cannot insert into the host field or call onWordCommitted.
+    private var predictiveSuggestionsPaused = false
+
     // Keeps this ViewModel in sync when the other component (companion app vs IME
     // service) changes a shared setting — they hold separate ViewModel instances.
     private val prefsListener = SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
@@ -1213,10 +1217,31 @@ class KeyboardViewModel(
      * a word was just committed, prefix completions from personal vocabulary while
      * a word is being typed, and frequent words as prompts when the field is empty.
      */
+    /**
+     * Pause or resume predictive suggestion computation. While paused the strip is
+     * cleared and [updatePredictiveSuggestions] is a no-op, so leftover chips cannot
+     * be tapped into the host field. Used while the StealthInk passphrase bar has
+     * focus. Resuming recomputes from the current editor text.
+     */
+    fun setPredictiveSuggestionsPaused(paused: Boolean) {
+        if (predictiveSuggestionsPaused == paused) return
+        predictiveSuggestionsPaused = paused
+        if (paused) {
+            predictionJob?.cancel()
+            _predictiveSuggestions.value = emptyList()
+        } else {
+            updatePredictiveSuggestions(_inputText.value)
+        }
+    }
+
     fun updatePredictiveSuggestions(activeText: String) {
         // One in-flight computation at a time: a slow bigram lookup for an old
         // keystroke must not land after (and overwrite) a newer result.
         predictionJob?.cancel()
+        if (predictiveSuggestionsPaused) {
+            _predictiveSuggestions.value = emptyList()
+            return
+        }
         val requestedAt = System.nanoTime()
         predictionJob = viewModelScope.launch {
             when {
